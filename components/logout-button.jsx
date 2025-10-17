@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react"; // ✅ import logout icon
 
-export function LogoutButton() {
+export function LogoutButton({ iconOnly = false }) {
   const router = useRouter();
 
   const logout = async () => {
@@ -13,5 +14,16 @@ export function LogoutButton() {
     router.push("/auth/login");
   };
 
-  return <Button onClick={logout}>Logout</Button>;
+  // Render nothing if iconOnly is null
+  if (iconOnly === null) return null;
+
+  return (
+      <Button
+          variant="danger"
+          size={iconOnly ? "icon" : "default"}
+          onClick={logout}
+      >
+        {iconOnly ? <LogOut size={16} /> : "Logout"} {/* Show icon if iconOnly */}
+      </Button>
+  );
 }

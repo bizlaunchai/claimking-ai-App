@@ -36,7 +36,7 @@ export function LoginForm({ className, ...props }) {
       });
       if (error) throw error;
       // Redirect to protected route
-      router.push("/protected");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
