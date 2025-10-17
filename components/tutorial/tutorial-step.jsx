@@ -3,9 +3,6 @@ import { Checkbox } from "../ui/checkbox";
 export function TutorialStep({
   title,
   children,
-}: {
-  title: string;
-  children: React.ReactNode;
 }) {
   return (
     <li className="relative">
