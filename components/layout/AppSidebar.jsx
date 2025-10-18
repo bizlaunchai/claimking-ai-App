@@ -5,28 +5,7 @@ import Link from "next/link";
 import {usePathname, useRouter} from "next/navigation";
 import {LogoutButton} from "@/components/logout-button";
 
-const menuItems = [
-    { name: "Dashboard", href: "/dashboard", icon: "📊" },
-    {
-        name: "Claims",
-        icon: "📁",
-        subItems: [
-            { name: "Active Claims", href: "/claims/active" },
-            { name: "Archived Claims", href: "/claims/archived" },
-            { name: "New Claim", href: "/claims/new" },
-        ],
-    },
-    {
-        name: "Policy",
-        icon: "📄",
-        subItems: [
-            { name: "Policy Analysis", href: "/policy/analysis" },
-            { name: "3D Mockups", href: "/policy/mockups" },
-        ],
-    },
-    { name: "Reports", href: "/reports", icon: "📈" },
-    { name: "Settings", href: "/settings", icon: "⚙️" },
-];
+
 
 const AppSidebar = ({ isCollapsed, setIsCollapsed, user }) => {
     const pathname = usePathname();
@@ -49,6 +28,36 @@ const AppSidebar = ({ isCollapsed, setIsCollapsed, user }) => {
         setIsMobileOpen(false);
         document.body.style.overflow = "";
     }, [pathname]);
+
+
+    const menuItems = [
+        { name: "Dashboard", href: "/dashboard", icon: "📊" },
+        (user?.role === 'member' || user?.role === 'admin') && {
+            name: "Claims",
+            icon: "📁",
+            subItems: [
+                { name: "Active Claims", href: "/claims/active" },
+                { name: "Archived Claims", href: "/claims/archived" },
+                { name: "New Claim", href: "/claims/new" },
+            ],
+        },
+        ...(user?.role === 'admin' ? [
+            {
+                name: "Policy",
+                icon: "📄",
+                subItems: [
+                    { name: "Policy Analysis", href: "/policy/analysis" },
+                    { name: "3D Mockups", href: "/policy/mockups" },
+                ],
+            },
+            { name: "Reports", href: "/reports", icon: "📈" },
+            { name: "Settings", href: "/settings", icon: "⚙️" },
+        ] : [])
+
+
+
+    ].filter(Boolean); // <-- Remove falsy items
+
 
     return (
         <>
@@ -75,8 +84,9 @@ const AppSidebar = ({ isCollapsed, setIsCollapsed, user }) => {
                            <Link href='/'><p>{!isCollapsed && <span className="text-lg font-semibold">ClaimKing.AI</span>}</p></Link>
                        </div>
                         {
-                            !isCollapsed &&  <p className='py-2'>Hi, {user?.email}</p>
+                            !isCollapsed &&  <p className='py-2'>Hi, {user?.full_name}</p>
                         }
+                        <p>Role: {user?.role}</p>
 
                     </div>
                     <button

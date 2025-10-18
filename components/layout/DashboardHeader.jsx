@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 
-const AppHeader = ({ title = "ClaimKing Dashboard" }) => {
+const DashboardHeader = ({ title = "ClaimKing Dashboard" }) => {
     useEffect(() => {
         document.title = title;
     }, [title]);
@@ -46,4 +46,4 @@ const AppHeader = ({ title = "ClaimKing Dashboard" }) => {
     );
 };
 
-export default AppHeader;
+export default DashboardHeader;
