@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import React, { useState } from "react";
 
 export function SignUpForm({ className, ...props }) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
@@ -42,6 +44,10 @@ export function SignUpForm({ className, ...props }) {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+          },
         },
       });
       if (error) throw error;
@@ -57,27 +63,57 @@ export function SignUpForm({ className, ...props }) {
       <div className={cn("flex flex-col gap-6", className)} {...props}>
         <Card>
           <CardHeader>
+            <CardTitle className='flex justify-center'><div className='flex items-center gap-2'>
+              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-md flex items-center justify-center text-white font-bold">
+                C
+              </div>
+              <Link href='/'><p> <span className="text-lg font-semibold">ClaimKing.AI</span></p></Link>
+            </div></CardTitle>
             <CardTitle className="text-2xl">Sign up</CardTitle>
             <CardDescription>Create a new account</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignUp}>
               <div className="flex flex-col gap-6">
+                {/* First Name */}
+                <div className="grid gap-2">
+                  <Label htmlFor="first-name">First Name</Label>
+                  <Input
+                      id="first-name"
+                      type="text"
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </div>
+
+                {/* Last Name */}
+                <div className="grid gap-2">
+                  <Label htmlFor="last-name">Last Name</Label>
+                  <Input
+                      id="last-name"
+                      type="text"
+                      required
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
+
+                {/* Email */}
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                       id="email"
                       type="email"
-                      placeholder="m@example.com"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
+
+                {/* Password */}
                 <div className="grid gap-2">
-                  <div className="flex items-center">
-                    <Label htmlFor="password">Password</Label>
-                  </div>
+                  <Label htmlFor="password">Password</Label>
                   <Input
                       id="password"
                       type="password"
@@ -86,10 +122,10 @@ export function SignUpForm({ className, ...props }) {
                       onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
+
+                {/* Repeat Password */}
                 <div className="grid gap-2">
-                  <div className="flex items-center">
-                    <Label htmlFor="repeat-password">Repeat Password</Label>
-                  </div>
+                  <Label htmlFor="repeat-password">Repeat Password</Label>
                   <Input
                       id="repeat-password"
                       type="password"
@@ -98,11 +134,17 @@ export function SignUpForm({ className, ...props }) {
                       onChange={(e) => setRepeatPassword(e.target.value)}
                   />
                 </div>
+
+                {/* Error Message */}
                 {error && <p className="text-sm text-red-500">{error}</p>}
+
+                {/* Submit */}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating an account..." : "Sign up"}
                 </Button>
               </div>
+
+              {/* Login Link */}
               <div className="mt-4 text-center text-sm">
                 Already have an account?{" "}
                 <Link href="/auth/login" className="underline underline-offset-4">
