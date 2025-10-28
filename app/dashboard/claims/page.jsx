@@ -181,14 +181,19 @@ const ClaimsManagement = () => {
 
     // Update Grid View
     const renderGridView = () => {
+        if (typeof window === 'undefined') return null; // prevent SSR error
+
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile && currentStage > 0) {
             return createStageColumn(currentStage);
         } else {
-            return Array.from({length: 9}, (_, i) => i + 1).map(stageNum => createStageColumn(stageNum));
+            return Array.from({ length: 9 }, (_, i) => i + 1).map(stageNum =>
+                createStageColumn(stageNum)
+            );
         }
     };
+
 
     // Show claim details
     const showClaimDetails = (claim) => {
@@ -685,12 +690,18 @@ const ClaimsManagement = () => {
                 <button
                     className="stage-nav-arrow left"
                     onClick={() => scrollStages('left')}
-                    style={{display: window.innerWidth <= 768 && currentStageScroll > 0 ? 'flex' : 'none'}}
+                    style={{
+                        display:
+                            typeof window !== 'undefined' && window.innerWidth <= 768 && currentStageScroll > 0
+                                ? 'flex'
+                                : 'none',
+                    }}
                 >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M10 13l-5-5 5-5v10z"/>
+                        <path d="M10 13l-5-5 5-5v10z" />
                     </svg>
                 </button>
+
                 <div className="stage-nav-container">
                     <div className="stage-nav-scroll" style={{transform: getStageTransform()}}>
                         {Array.from({length: 9}, (_, i) => i + 1).map(stageNum => (
@@ -707,12 +718,18 @@ const ClaimsManagement = () => {
                 <button
                     className="stage-nav-arrow right"
                     onClick={() => scrollStages('right')}
-                    style={{display: window.innerWidth <= 768 ? 'flex' : 'none'}}
+                    style={{
+                        display:
+                            typeof window !== 'undefined' && window.innerWidth <= 768
+                                ? 'flex'
+                                : 'none',
+                    }}
                 >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M6 13l5-5-5-5v10z"/>
+                        <path d="M6 13l5-5-5-5v10z" />
                     </svg>
                 </button>
+
             </div>
 
             {/* View Controls */}
