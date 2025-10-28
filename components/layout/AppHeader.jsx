@@ -47,7 +47,7 @@ const AppHeader = () => {
     }, [claims, value, team]);
 
     // Smooth scrolling
-    useEffect(() => {
+    /*useEffect(() => {
         const handleSmoothScroll = (e) => {
             e.preventDefault();
             const target = document.querySelector(e.target.getAttribute("href"));
@@ -62,7 +62,7 @@ const AppHeader = () => {
                 link.removeEventListener("click", handleSmoothScroll)
             );
         };
-    }, []);
+    }, []);*/
 
     // Close on Escape
     useEffect(() => {

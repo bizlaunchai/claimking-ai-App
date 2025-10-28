@@ -38,31 +38,53 @@ const DashboardLayout = ({ children }) => {
 
   }, [])
 
-  return (
-      <div className="flex min-h-screen bg-gray-50 text-gray-900 font-sans">
-        {/* Sidebar */}
+  /*return (
+      <div className="flex bg-gray-50 text-gray-900 font-sans">
+        {/!* Sidebar *!/}
         <AppSidebar
             isCollapsed={isSidebarCollapsed}
             setIsCollapsed={setIsSidebarCollapsed}
             user={user}
         />
 
-        {/* Main Content */}
+        {/!* Main Content *!/}
         <div className="flex flex-col flex-1 min-h-screen">
-          {/* Header */}
-          <header
+          {/!* Header *!/}
+          {/!*<header
               className={`fixed flex-1 top-0 z-40 w-full bg-white shadow-sm border-b border-gray-200 transition-all duration-300 `}
           >
-            {/*<DashboardHeader title="ClaimKing Dashboard" />*/}
-          </header>
+            <DashboardHeader title="ClaimKing Dashboard" />
+          </header>*!/}
 
-          {/* Page Content */}
+          {/!* Page Content *!/}
           <main>
             {children}
           </main>
         </div>
       </div>
-  );
+  );*/
+
+    return (
+        <div className="flex justify-between bg-gray-50 text-gray-900 font-sans min-h-screen">
+            {/* Sidebar */}
+            <div className={`transition-all duration-300`}>
+                <AppSidebar
+                    isCollapsed={isSidebarCollapsed}
+                    setIsCollapsed={setIsSidebarCollapsed}
+                    user={user}
+                />
+            </div>
+
+            {/* Main Content */}
+            <div className="w-[90%] pr-20">
+                {/* Page Content */}
+                <main className="flex-1 p-6 overflow-y-auto">
+                    {children}
+                </main>
+            </div>
+        </div>
+    );
+
 };
 
 export default DashboardLayout;
