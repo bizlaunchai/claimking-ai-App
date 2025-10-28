@@ -93,7 +93,7 @@
 .sidebar-header {
     padding: 1.5rem 1rem;
     background: var(--crown-dark);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: none;
     display: flex;
     align-items: center;
     justify-content: space-between;

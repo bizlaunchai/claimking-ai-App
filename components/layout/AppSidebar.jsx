@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 // NOTE: You would typically import CSS styles separately (e.g., import './Sidebar.css';)
 // The HTML/CSS structure is preserved here using className attributes.
 import "../../app/styles/sidebar.css"
+import {LogoutButton} from "@/components/logout-button";
+import Link from "next/link";
 
 function Sidebar() {
     const sidebarRef = useRef(null);
@@ -107,27 +109,34 @@ function Sidebar() {
                 // Optional: set initial width if not handled by CSS
                 style={{ width: isCollapsed ? '62px' : '250px', height: '100$' }}
             >
-                {/* Header */}
-                <div className="sidebar-header">
-                    <div className="logo-container" onClick={expandSidebarIfCollapsed}>
-                        <div className="logo-icon">
-                            {/* ClaimKing Crown Logo */}
-                            <svg viewBox="0 0 32 32" className="crown-logo">
-                                <path d="M16 4L11 10L6 8L8 16L10 14L13 18L16 14L19 18L22 14L24 16L26 8L21 10L16 4Z" />
-                                <rect x="8" y="20" width="16" height="4" rx="1" />
-                                <circle cx="12" cy="8" r="1.5" />
-                                <circle cx="16" cy="6" r="1.5" />
-                                <circle cx="20" cy="8" r="1.5" />
-                            </svg>
-                        </div>
-                        <span className="logo-text">ClaimKing.AI</span>
-                    </div>
-                    <button className="collapse-toggle" onClick={toggleSidebar}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                    </button>
+
+                <div style={{borderBottom: '1px solid var(--border-color)'}} className='pb-2'>
+                    {/* Header */}
+                   <Link href="/">
+                       <div className="sidebar-header">
+                           <div className="logo-container" onClick={expandSidebarIfCollapsed}>
+                               <div className="logo-icon">
+                                   {/* ClaimKing Crown Logo */}
+                                   <svg viewBox="0 0 32 32" className="crown-logo">
+                                       <path d="M16 4L11 10L6 8L8 16L10 14L13 18L16 14L19 18L22 14L24 16L26 8L21 10L16 4Z" />
+                                       <rect x="8" y="20" width="16" height="4" rx="1" />
+                                       <circle cx="12" cy="8" r="1.5" />
+                                       <circle cx="16" cy="6" r="1.5" />
+                                       <circle cx="20" cy="8" r="1.5" />
+                                   </svg>
+                               </div>
+                               <span className="logo-text">ClaimKing.AI</span>
+                           </div>
+                           <button className="collapse-toggle" onClick={toggleSidebar}>
+                               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                   <polyline points="15 18 9 12 15 6"></polyline>
+                               </svg>
+                           </button>
+                       </div>
+                   </Link>
+                    <LogoutButton />
                 </div>
+
 
                 {/* Navigation */}
                 <nav className="sidebar-nav">

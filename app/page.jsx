@@ -1,17 +1,19 @@
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-
-import { hasEnvVars } from "@/lib/utils";
-import Link from "next/link";
-import React from "react";
-import AppHeader from "@/components/layout/AppHeader";
+import HeroSection from "@/components/homePage/HeroSection";
+import Features from "@/components/homePage/Features";
+import RoiCalculator from "@/components/homePage/RoiCalculator";
+import Pricing from "@/components/homePage/Pricing";
+import Testimonials from "@/components/homePage/Testimonials";
+import CTA from "@/components/homePage/CTA";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-
-      </div>
-    </main>
+        <>
+            <HeroSection/>
+            <Features />
+            <RoiCalculator/>
+            <Pricing />
+            <Testimonials />
+            <CTA/>
+        </>
   );
 }
