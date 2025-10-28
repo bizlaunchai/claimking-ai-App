@@ -74,7 +74,7 @@ const AppHeader = () => {
     }, [menuActive]);
 
     if (pathname.startsWith("/dashboard")){
-        return <DashboardHeader/>
+        return null
     }
 
     return (
