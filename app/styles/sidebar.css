@@ -1,0 +1,412 @@
+:root {
+    --crown-gold: #FDB813;
+    --crown-navy: #1a1f3a;
+    --crown-dark: #0f1426;
+    --crown-light-gold: rgba(253, 184, 19, 0.1);
+    --sidebar-bg: linear-gradient(180deg, #0f1426 0%, #1a1f3a 100%);
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --hover-bg: rgba(253, 184, 19, 0.08);
+    --active-bg: rgba(253, 184, 19, 0.15);
+    --border-color: rgba(253, 184, 19, 0.2);
+}
+
+.sidebar {
+    position: relative;
+    max-height: 100% !important;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+    min-width: 70px;
+    max-width: 400px;
+    width: 280px;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: var(--crown-gold);
+    border-radius: 3px;
+    opacity: 0.5;
+}
+
+.sidebar.collapsed {
+    width: 70px !important;
+}
+
+/* Resize Handle */
+.resize-handle {
+    position: fixed;
+    right: auto;
+    left: calc(var(--sidebar-width, 280px) - 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 60px;
+    cursor: col-resize;
+    z-index: 1002;
+    background: transparent;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    opacity: 1;
+}
+
+.sidebar.collapsed ~ .resize-handle {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.resize-handle::before {
+    content: '';
+    position: absolute;
+    right: 4px;
+    width: 4px;
+    height: 40px;
+    background: rgba(253, 184, 19, 0.4);
+    border-radius: 2px;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 8px rgba(253, 184, 19, 0.3);
+}
+
+.resize-handle:hover::before,
+.resize-handle.dragging::before {
+    background: var(--crown-gold);
+    height: 60px;
+    width: 6px;
+    box-shadow: 0 0 15px rgba(253, 184, 19, 0.6);
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    padding: 1.5rem 1rem;
+    background: var(--crown-dark);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 70px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-shrink: 0;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sidebar.collapsed .logo-container {
+    justify-content: center;
+    width: 100%;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar.collapsed .logo-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+/* Crown Logo SVG */
+.crown-logo {
+    fill: var(--crown-gold);
+    filter: drop-shadow(0 2px 4px rgba(253, 184, 19, 0.3));
+}
+
+/* Collapse Toggle */
+.collapse-toggle {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    border-radius: 4px;
+}
+
+.collapse-toggle:hover {
+    background: var(--hover-bg);
+    color: var(--crown-gold);
+}
+
+.sidebar.collapsed .collapse-toggle {
+    transform: rotate(180deg);
+}
+
+/* Navigation Categories */
+.nav-category {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nav-category:last-child {
+    border-bottom: none;
+}
+
+.nav-category-header {
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--crown-gold);
+    font-weight: 700;
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+.sidebar.collapsed .nav-category-header {
+    opacity: 0;
+    height: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Navigation Items */
+.nav-item {
+    position: relative;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    padding: 0.875rem 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+    position: relative;
+    gap: 12px;
+}
+
+.nav-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.nav-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+    opacity: 0.8;
+    transition: all 0.2s ease;
+}
+
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 0.875rem;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar.collapsed .nav-icon {
+    width: 24px;
+    height: 24px;
+    margin: 0 auto;
+}
+
+.sidebar.collapsed .nav-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.nav-link:hover .nav-icon svg {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.nav-link.active .nav-icon svg {
+    opacity: 1;
+    fill: var(--crown-gold);
+}
+
+.nav-text {
+    opacity: 1;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+}
+
+.sidebar.collapsed .nav-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+.nav-link:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-left-color: var(--crown-gold);
+}
+
+.nav-link.active {
+    color: var(--text-primary);
+    background: var(--active-bg);
+    border-left-color: var(--crown-gold);
+}
+
+.nav-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.nav-badge.storm {
+    background: var(--crown-gold);
+    color: var(--crown-navy);
+}
+
+.nav-badge.count {
+    background: rgba(253, 184, 19, 0.2);
+    color: var(--crown-gold);
+}
+
+.nav-badge.pro {
+    background: linear-gradient(135deg, var(--crown-gold), #ffcf40);
+    color: var(--crown-navy);
+    font-weight: 700;
+}
+
+.sidebar.collapsed .nav-badge {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* Support Section */
+.support-section {
+    margin-top: 2rem;
+    padding: 1rem;
+    padding-bottom: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.support-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 1rem 0;
+}
+
+.support-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.support-link:hover {
+    background: var(--hover-bg);
+    color: var(--crown-gold);
+}
+
+.support-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.support-icon svg {
+    fill: currentColor;
+    opacity: 0.7;
+}
+
+.support-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar.collapsed .support-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+.sidebar.collapsed .support-link {
+    justify-content: center;
+}
+
+/* Tooltip */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--crown-navy);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar.collapsed [data-tooltip]:hover::after {
+    opacity: 1;
+}
