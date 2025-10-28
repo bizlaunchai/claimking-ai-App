@@ -3,6 +3,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import AppHeader from "@/components/layout/AppHeader";
 import React from "react";
+import AppFooter from "@/components/layout/AppFooter";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -34,6 +35,7 @@ export default function RootLayout({
         >
           <AppHeader />
           {children}
+          <AppFooter />
         </ThemeProvider>
       </body>
     </html>
