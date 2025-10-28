@@ -1,32 +1,57 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import { LogoutButton } from "./logout-button";
-import {createClient} from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
-export async function AuthButton() {
-  const supabase = await createClient();
+export function AuthButton() {
+    const [user, setUser] = useState(null);
+    const supabase = createClient();
 
-  // You can also use getUser() which will be slower.
-  const { data } = await supabase.auth.getClaims();
+    useEffect(() => {
+        const getUser = async () => {
+            const { data } = await supabase.auth.getUser();
+            setUser(data?.user || null);
+        };
 
-  const user = data?.claims;
+        getUser();
 
-  return user ? (
-    <div className="flex items-center gap-4">
-      Hey, {user.email}!
-      <LogoutButton />
-        <Button asChild size="sm" variant={"default"}>
-            <Link href="/dashboard">Dashboard</Link>
-        </Button>
-    </div>
-  ) : (
-    <div className="flex gap-2">
-      <Button asChild size="sm" variant={"outline"}>
-        <Link href="/auth/login">Sign in</Link>
-      </Button>
-      <Button asChild size="sm" variant={"default"}>
-        <Link href="/auth/sign-up">Sign up</Link>
-      </Button>
-    </div>
-  );
+        // Optional: Listen for auth state changes (login/logout)
+        const { data: listener } = supabase.auth.onAuthStateChange(() => {
+            getUser();
+        });
+
+        return () => {
+            listener?.subscription.unsubscribe();
+        };
+    }, [supabase]);
+
+    if (user) {
+        return (
+            <div className="flex items-center gap-4">
+                {/*<LogoutButton />*/}
+                {/*<Button asChild size="sm" variant="default">
+                    <Link href="/dashboard">Dashboard</Link>
+                </Button>*/}
+                <Link href="/dashboard" className="btn btn-secondary">
+                    <button>Dashboard</button>
+                </Link>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex gap-2">
+            <Link href="/auth/login" className="btn btn-secondary">
+                <button>Sign in</button>
+            </Link>
+            {/*
+              <Link href="/auth/sign-up" className="btn btn-secondary">
+                <button>Sign up</button>
+              </Link>
+              */}
+        </div>
+    );
 }

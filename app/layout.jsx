@@ -1,6 +1,8 @@
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import AppHeader from "@/components/layout/AppHeader";
+import React from "react";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -30,6 +32,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <AppHeader />
           {children}
         </ThemeProvider>
       </body>
