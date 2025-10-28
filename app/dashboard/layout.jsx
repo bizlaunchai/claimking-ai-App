@@ -76,9 +76,9 @@ const DashboardLayout = ({ children }) => {
             </div>
 
             {/* Main Content */}
-            <div className="w-[90%] pr-20">
+            <div className="w-[90%] pr-[60px]">
                 {/* Page Content */}
-                <main className="flex-1 p-6 overflow-y-auto">
+                <main className="px-2 overflow-y-auto">
                     {children}
                 </main>
             </div>
