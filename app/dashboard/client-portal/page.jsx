@@ -1,5 +1,5 @@
 "use client"
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import "./clientPortal.css"
 
 const Page = () => {
@@ -7,6 +7,19 @@ const Page = () => {
     const [showAddClient, setShowAddClient] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [showPortalSettings, setShowPortalSettings] = useState(false);
+
+    const [currentGridPage, setCurrentGridPage] = useState(1);
+    const [currentListPage, setCurrentListPage] = useState(1);
+    const [listItemsPerPage, setListItemsPerPage] = useState(50);
+    const [currentFilter, setCurrentFilter] = useState('all');
+    const [filteredClients, setFilteredClients] = useState([]);
+    const [currentView, setCurrentView] = useState('grid');
+    const [activeModal, setActiveModal] = useState(null);
+    const [activeSettingsTab, setActiveSettingsTab] = useState('general');
+    const [toast, setToast] = useState({ show: false, message: '' });
+    const [allClients, setAllClients] = useState([]);
+
+    const gridItemsPerPage = 9;
 
     const handleSaveClient = (clientData) => {
         console.log('Saving client:', clientData);
@@ -22,6 +35,461 @@ const Page = () => {
         console.log('Saving settings:', settings);
         // API call to save settings
     };
+
+
+
+
+    // Status options
+    const statusOptions = [
+        { value: 'all', label: 'All' },
+        { value: 'need-claim', label: '1. Need Claim #' },
+        { value: 'scheduled', label: '2. Scheduled' },
+        { value: 'in-progress', label: '3. In Progress' },
+        { value: 'partial', label: '4. Partial' },
+        { value: 'supplementing', label: '5. Supplementing' },
+        { value: 'final-check', label: '6. Final Check' },
+        { value: 'completed', label: '7. Completed' },
+        { value: 'declined', label: '8. Declined' },
+        { value: 'cold', label: '9. Cold Claims' }
+    ];
+
+    const sortOptions = [
+        { value: 'recent', label: 'Most Recent Activity' },
+        { value: 'created', label: 'Recently Created' },
+        { value: 'alphabetical', label: 'Alphabetical' },
+        { value: 'value', label: 'Claim Value' },
+        { value: 'updated', label: 'Last Updated' }
+    ];
+
+    // Generate sample client data
+    useEffect(() => {
+        const clients = generateSampleClients(127);
+        setAllClients(clients);
+        setFilteredClients(clients);
+    }, []);
+
+    const generateSampleClients = (count) => {
+        const statuses = [
+            '1. Need Claim #',
+            '2. Scheduled Inspection',
+            '3. In Progress',
+            '4. Partial Approval',
+            '5. Supplementing',
+            '6. Final Check Processing',
+            '7. Completed',
+            '8. Declined',
+            '9. Cold Claims'
+        ];
+        const insuranceCompanies = ['State Farm', 'Allstate', 'Farmers', 'Liberty Mutual', 'USAA'];
+        const clients = [];
+
+        for (let i = 1; i <= count; i++) {
+            let statusIndex;
+            const rand = Math.random();
+            if (rand < 0.15) statusIndex = 0;
+            else if (rand < 0.25) statusIndex = 1;
+            else if (rand < 0.45) statusIndex = 2;
+            else if (rand < 0.55) statusIndex = 3;
+            else if (rand < 0.65) statusIndex = 4;
+            else if (rand < 0.70) statusIndex = 5;
+            else if (rand < 0.85) statusIndex = 6;
+            else if (rand < 0.90) statusIndex = 7;
+            else statusIndex = 8;
+
+            const status = statuses[statusIndex];
+            const progress = calculateProgressByStatus(status);
+
+            clients.push({
+                id: `CLM-2024-${String(1000 - i).padStart(3, '0')}`,
+                name: `${['Johnson', 'Smith', 'Davis', 'Wilson', 'Brown'][i % 5]} ${['Property', 'Residence', 'Complex'][i % 3]}`,
+                address: `${100 + i} ${['Main', 'Oak', 'Pine'][i % 3]} St, Dallas, TX`,
+                phone: `(214) 555-${String(1000 + i).padStart(4, '0')}`,
+                email: `client${i}@example.com`,
+                insurance: insuranceCompanies[i % insuranceCompanies.length],
+                status: status,
+                statusNumber: statusIndex + 1,
+                lastAccess: generateLastAccess(status),
+                documents: Math.floor(Math.random() * 20) + 1,
+                value: Math.floor(Math.random() * 100000) + 20000,
+                progress: progress
+            });
+        }
+
+        return clients;
+    };
+
+    const calculateProgressByStatus = (status) => {
+        switch(status) {
+            case '1. Need Claim #': return Math.floor(Math.random() * 10);
+            case '2. Scheduled Inspection': return 10 + Math.floor(Math.random() * 10);
+            case '3. In Progress': return 20 + Math.floor(Math.random() * 20);
+            case '4. Partial Approval': return 40 + Math.floor(Math.random() * 15);
+            case '5. Supplementing': return 55 + Math.floor(Math.random() * 15);
+            case '6. Final Check Processing': return 70 + Math.floor(Math.random() * 15);
+            case '7. Completed': return 100;
+            case '8. Declined': return Math.floor(Math.random() * 50);
+            case '9. Cold Claims': return Math.floor(Math.random() * 30);
+            default: return 0;
+        }
+    };
+
+    const generateLastAccess = (status) => {
+        if (status === '7. Completed') return 'Completed';
+        if (status === '8. Declined') return 'Declined';
+        if (status === '9. Cold Claims') return '30+ days ago';
+        if (status === '1. Need Claim #') return 'Never';
+        const rand = Math.random();
+        if (rand < 0.3) return 'Today';
+        if (rand < 0.5) return 'Yesterday';
+        if (rand < 0.7) return `${Math.floor(Math.random() * 7) + 2} days ago`;
+        return `${Math.floor(Math.random() * 24) + 1} hours ago`;
+    };
+
+    const getStatusClass = (status) => {
+        if (status.includes('1.')) return 'status-need-claim';
+        if (status.includes('2.')) return 'status-scheduled';
+        if (status.includes('3.')) return 'status-in-progress';
+        if (status.includes('4.')) return 'status-partial';
+        if (status.includes('5.')) return 'status-supplementing';
+        if (status.includes('6.')) return 'status-final-check';
+        if (status.includes('7.')) return 'status-completed';
+        if (status.includes('8.')) return 'status-declined';
+        if (status.includes('9.')) return 'status-cold';
+        return 'status-active';
+    };
+
+    // Event handlers
+    const filterByStatus = (status, event) => {
+        event.preventDefault();
+
+        setCurrentFilter(status);
+
+        if (status === 'all') {
+            setFilteredClients([...allClients]);
+        } else {
+            const statusMap = {
+                'need-claim': '1. Need Claim #',
+                'scheduled': '2. Scheduled Inspection',
+                'in-progress': '3. In Progress',
+                'partial': '4. Partial Approval',
+                'supplementing': '5. Supplementing',
+                'final-check': '6. Final Check Processing',
+                'completed': '7. Completed',
+                'declined': '8. Declined',
+                'cold': '9. Cold Claims'
+            };
+
+            const filtered = allClients.filter(client =>
+                client.status === statusMap[status]
+            );
+            setFilteredClients(filtered);
+        }
+
+        setCurrentGridPage(1);
+        setCurrentListPage(1);
+    };
+
+    const searchClients = (query) => {
+        if (!query) {
+            setFilteredClients(currentFilter === 'all' ? [...allClients] : filteredClients);
+        } else {
+            const q = query.toLowerCase();
+            const filtered = allClients.filter(client =>
+                client.name.toLowerCase().includes(q) ||
+                client.id.toLowerCase().includes(q) ||
+                client.phone.includes(q) ||
+                client.email.toLowerCase().includes(q)
+            );
+            setFilteredClients(filtered);
+        }
+
+        setCurrentGridPage(1);
+        setCurrentListPage(1);
+    };
+
+    const sortClients = (sortBy) => {
+        let sortedClients = [...filteredClients];
+
+        switch(sortBy) {
+            case 'alphabetical':
+                sortedClients.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'value':
+                sortedClients.sort((a, b) => b.value - a.value);
+                break;
+            case 'created':
+                sortedClients.sort((a, b) => b.id.localeCompare(a.id));
+                break;
+            default:
+                sortedClients = [...allClients];
+        }
+
+        setFilteredClients(sortedClients);
+        setCurrentListPage(1);
+    };
+
+    const toggleView = (view) => {
+        setCurrentView(view);
+        if (view === 'list') {
+            setCurrentListPage(1);
+        }
+    };
+
+    const changeItemsPerPage = (value) => {
+        setListItemsPerPage(parseInt(value));
+        setCurrentListPage(1);
+    };
+
+    const previousPage = () => {
+        if (currentListPage > 1) {
+            setCurrentListPage(currentListPage - 1);
+        }
+    };
+
+    const nextPage = () => {
+        const totalPages = Math.ceil(filteredClients.length / listItemsPerPage);
+        if (currentListPage < totalPages) {
+            setCurrentListPage(currentListPage + 1);
+        }
+    };
+
+    const goToPage = (page) => {
+        setCurrentListPage(page);
+    };
+
+    const loadMoreClients = () => {
+        setCurrentGridPage(currentGridPage + 1);
+    };
+
+    const copyPortalLink = (clientId) => {
+        const portalUrl = `https://claimking.ai/portal/${clientId}`;
+        navigator.clipboard.writeText(portalUrl);
+        showToast('Portal link copied to clipboard!');
+    };
+
+    const viewClientDetails = (clientId) => {
+        showToast(`Opening details for ${clientId}...`);
+    };
+
+    const showToast = (message) => {
+        setToast({ show: true, message });
+        setTimeout(() => {
+            setToast({ show: false, message: '' });
+        }, 3000);
+    };
+
+    const openModal = (modalName) => {
+        setActiveModal(modalName);
+        document.body.style.overflow = 'hidden';
+    };
+
+    const closeModal = () => {
+        setActiveModal(null);
+        document.body.style.overflow = '';
+    };
+
+    const saveNewClient = () => {
+        showToast('Client added successfully!');
+        closeModal();
+    };
+
+    const downloadTemplate = () => {
+        const csvContent = `Name,Email,Phone,Address,City,State,ZIP,Insurance,Policy Number,Claim Number,Status
+John Smith,john@example.com,(214) 555-0001,123 Main St,Dallas,TX,75201,State Farm,POL-123456,CLM-2024-001,3`;
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'claimking-import-template.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+
+        showToast('Template downloaded!');
+    };
+
+    const startBulkImport = () => {
+        showToast('Import started... Processing clients');
+        closeModal();
+
+        setTimeout(() => {
+            showToast('Successfully imported 25 clients!');
+        }, 2000);
+    };
+
+    const savePortalSettings = () => {
+        showToast('Settings saved successfully!');
+        closeModal();
+    };
+
+    const switchSettingsTab = (tab) => {
+        setActiveSettingsTab(tab);
+    };
+
+    // Client card component
+    const ClientCard = ({ client }) => {
+        const statusClass = getStatusClass(client.status);
+        const portalActive = client.lastAccess !== 'Never' && client.lastAccess !== 'Declined';
+
+        return (
+            <div className="client-card">
+                <div className="card-header">
+                    <div>
+                        <div className="client-name">{client.name}</div>
+                        <div className="claim-number">{client.id}</div>
+                    </div>
+                    <div className="status-indicator">
+                        <div className={`portal-indicator ${!portalActive ? 'inactive' : ''}`}></div>
+                        <span className={`status-badge ${statusClass}`}>{client.status}</span>
+                    </div>
+                </div>
+
+                <div className="client-details">
+                    <div className="detail-item">
+                        <svg className="detail-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        <span>{client.address}</span>
+                    </div>
+                    <div className="detail-item">
+                        <svg className="detail-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        <span>{client.phone}</span>
+                    </div>
+                    <div className="detail-item">
+                        <svg className="detail-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                            <path d="m22 7-10 5L2 7"></path>
+                        </svg>
+                        <span>{client.email}</span>
+                    </div>
+                </div>
+
+                <div className="portal-stats">
+                    <div className="stat-item">
+                        <div className="stat-value">{client.documents}</div>
+                        <div className="stat-label">Documents</div>
+                    </div>
+                    <div className="stat-item">
+                        <div className="stat-value">{client.lastAccess}</div>
+                        <div className="stat-label">Last Access</div>
+                    </div>
+                    <div className="stat-item">
+                        <div className="stat-value">{client.insurance}</div>
+                        <div className="stat-label">Insurance</div>
+                    </div>
+                    <div className="stat-item">
+                        <div className="stat-value">${(client.value / 1000).toFixed(0)}k</div>
+                        <div className="stat-label">Claim Value</div>
+                    </div>
+                </div>
+
+                <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${client.progress}%` }}></div>
+                </div>
+
+                <div className="card-actions">
+                    <button className="action-btn primary" onClick={() => copyPortalLink(client.id)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                        Copy Portal Link
+                    </button>
+                    <button className="action-btn" onClick={() => viewClientDetails(client.id)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        View Details
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // Calculate displayed clients for grid view
+    const displayedGridClients = filteredClients.slice(0, currentGridPage * gridItemsPerPage);
+
+    // Calculate displayed clients for list view
+    const startIndex = (currentListPage - 1) * listItemsPerPage;
+    const endIndex = startIndex + listItemsPerPage;
+    const displayedListClients = filteredClients.slice(startIndex, endIndex);
+
+    // Calculate pagination info
+    const totalListPages = Math.ceil(filteredClients.length / listItemsPerPage);
+    const startItem = (currentListPage - 1) * listItemsPerPage + 1;
+    const endItem = Math.min(currentListPage * listItemsPerPage, filteredClients.length);
+
+    // Generate page numbers for pagination
+    const generatePageNumbers = () => {
+        const pages = [];
+        let startPage = Math.max(1, currentListPage - 2);
+        let endPage = Math.min(totalListPages, startPage + 4);
+
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        if (startPage > 1) {
+            pages.push(
+                <button key={1} className="page-btn" onClick={() => goToPage(1)}>
+                    1
+                </button>
+            );
+
+            if (startPage > 2) {
+                pages.push(
+                    <span key="dots1" style={{ padding: '0 0.5rem', color: '#6b7280' }}>
+                        ...
+                    </span>
+                );
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(
+                <button
+                    key={i}
+                    className={`page-btn ${i === currentListPage ? 'active' : ''}`}
+                    onClick={() => goToPage(i)}
+                >
+                    {i}
+                </button>
+            );
+        }
+
+        if (endPage < totalListPages) {
+            if (endPage < totalListPages - 1) {
+                pages.push(
+                    <span key="dots2" style={{ padding: '0 0.5rem', color: '#6b7280' }}>
+                        ...
+                    </span>
+                );
+            }
+
+            pages.push(
+                <button key={totalListPages} className="page-btn" onClick={() => goToPage(totalListPages)}>
+                    {totalListPages}
+                </button>
+            );
+        }
+
+        return pages;
+    };
+
+    // Calculate metrics
+    const activeCount = filteredClients.filter(c =>
+        !['7. Completed', '8. Declined', '9. Cold Claims'].includes(c.status)
+    ).length;
+
+    const completedCount = filteredClients.filter(c => c.status === '7. Completed').length;
+    const totalValue = filteredClients.reduce((sum, c) => sum + c.value, 0);
+    const avgProgress = Math.round(
+        filteredClients.reduce((sum, c) => sum + c.progress, 0) / filteredClients.length
+    );
 
     return (
         <>
@@ -62,6 +530,269 @@ const Page = () => {
                 </div>
             </div>
 
+            <div className="client-portal-manager">
+                {/* Search and Filter Section */}
+                <div className="search-filter-section">
+                    <div className="search-bar-container">
+                        <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <input
+                            type="text"
+                            className="search-input-large"
+                            placeholder="Search by client name, claim number, phone, or email..."
+                            onKeyUp={(e) => searchClients(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="filter-row">
+                        <div className="filter-chips">
+                            {statusOptions.map(option => (
+                                <button
+                                    key={option.value}
+                                    className={`filter-chip ${currentFilter === option.value ? 'active' : ''}`}
+                                    onClick={(e) => filterByStatus(option.value, e)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                        <select className="sort-dropdown" onChange={(e) => sortClients(e.target.value)}>
+                            {sortOptions.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="results-count">
+                        Showing {filteredClients.length} clients
+                    </span>
+                    </div>
+                </div>
+
+                {/* Metrics Row */}
+                <div className="metrics-row">
+                    <div className="metric-card">
+                        <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #FDB813, #ffc947)' }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1f3a" strokeWidth="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <div className="metric-content">
+                            <div className="metric-label">Total Clients</div>
+                            <div className="metric-value">{filteredClients.length}</div>
+                            <div className="metric-subtitle">{activeCount} active portals</div>
+                        </div>
+                    </div>
+
+                    <div className="metric-card">
+                        <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #dcfce7, #86efac)' }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <div className="metric-content">
+                            <div className="metric-label">Active Claims</div>
+                            <div className="metric-value">{activeCount}</div>
+                            <div className="metric-subtitle">In various stages</div>
+                            <div className="metric-trend">↑ 12% this week</div>
+                        </div>
+                    </div>
+
+                    <div className="metric-card">
+                        <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #dbeafe, #93c5fd)' }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                        <div className="metric-content">
+                            <div className="metric-label">Avg Progress</div>
+                            <div className="metric-value">{avgProgress}%</div>
+                            <div className="metric-subtitle">Across all claims</div>
+                        </div>
+                    </div>
+
+                    <div className="metric-card">
+                        <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #fef3c7, #fcd34d)' }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <div className="metric-content">
+                            <div className="metric-label">Total Value</div>
+                            <div className="metric-value">${(totalValue / 1000000).toFixed(1)}M</div>
+                            <div className="metric-subtitle">{completedCount} completed</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* View Toggle and Pagination */}
+                <div className="view-toggle-container">
+                    <div className="view-controls-left">
+                        <div className="view-toggle">
+                            <button
+                                className={`view-btn ${currentView === 'grid' ? 'active' : ''}`}
+                                onClick={() => toggleView('grid')}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                Grid View
+                            </button>
+                            <button
+                                className={`view-btn ${currentView === 'list' ? 'active' : ''}`}
+                                onClick={() => toggleView('list')}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                </svg>
+                                List View
+                            </button>
+                        </div>
+
+                        {/* Pagination Controls for List View */}
+                        <div className={`pagination-controls ${currentView === 'list' ? 'active' : ''}`}>
+                            <div className="items-per-page">
+                                <label htmlFor="itemsPerPage">Show:</label>
+                                <select
+                                    className="items-select"
+                                    id="itemsPerPage"
+                                    value={listItemsPerPage}
+                                    onChange={(e) => changeItemsPerPage(e.target.value)}
+                                >
+                                    <option value="10">10</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+
+                            <div className="pagination-info">
+                                <span>{startItem}-{endItem} of {filteredClients.length}</span>
+                            </div>
+
+                            <div className="pagination-buttons">
+                                <button
+                                    className="page-btn"
+                                    onClick={previousPage}
+                                    disabled={currentListPage === 1}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                    Previous
+                                </button>
+                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                    {generatePageNumbers()}
+                                </div>
+                                <button
+                                    className="page-btn"
+                                    onClick={nextPage}
+                                    disabled={currentListPage === totalListPages}
+                                >
+                                    Next
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Client Grid View */}
+                <div className="clients-grid" style={{ display: currentView === 'grid' ? 'grid' : 'none' }}>
+                    {displayedGridClients.map(client => (
+                        <ClientCard key={client.id} client={client} />
+                    ))}
+                </div>
+
+                {/* Show More Button */}
+                <div
+                    className="show-more-container"
+                    style={{ display: currentView === 'grid' ? 'block' : 'none' }}
+                >
+                    {displayedGridClients.length < filteredClients.length && (
+                        <button className="btn btn-outline" onClick={loadMoreClients}>
+                            Show More Clients
+                        </button>
+                    )}
+                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                        Showing <span>{displayedGridClients.length}</span> of <span>{filteredClients.length}</span> clients
+                    </p>
+                </div>
+
+                {/* List View with Fixed Horizontal Scrolling */}
+                <div className={`clients-list ${currentView === 'list' ? 'active' : ''}`}>
+                    <div className="table-wrapper">
+                        <table className="clients-table">
+                            <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Claim #</th>
+                                <th>Property Address</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Insurance</th>
+                                <th>Status</th>
+                                <th>Last Access</th>
+                                <th>Docs</th>
+                                <th>Value</th>
+                                <th>Progress</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {displayedListClients.map(client => {
+                                const statusClass = getStatusClass(client.status);
+                                return (
+                                    <tr key={client.id}>
+                                        <td><strong>{client.name}</strong></td>
+                                        <td>{client.id}</td>
+                                        <td>{client.address}</td>
+                                        <td>{client.phone}</td>
+                                        <td>{client.email}</td>
+                                        <td>{client.insurance}</td>
+                                        <td><span className={`status-badge ${statusClass}`}>{client.status}</span></td>
+                                        <td>{client.lastAccess}</td>
+                                        <td>{client.documents}</td>
+                                        <td>${(client.value / 1000).toFixed(0)}k</td>
+                                        <td>{client.progress}%</td>
+                                        <td>
+                                            <button className="action-btn" onClick={() => copyPortalLink(client.id)}>
+                                                Copy Link
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Toast Notification */}
+                <div className={`toast ${toast.show ? 'active' : ''}`}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span>{toast.message}</span>
+                </div>
+            </div>
+
             <AddClientModal
                 isOpen={showAddClient}
                 onClose={() => setShowAddClient(false)}
@@ -81,6 +812,103 @@ const Page = () => {
             />
 
         </>
+    );
+};
+
+const SearchFilter = () => {
+    // Define status options as data
+    const statusOptions = [
+        { value: 'all', label: 'All' },
+        { value: 'need-claim', label: '1. Need Claim #' },
+        { value: 'scheduled', label: '2. Scheduled' },
+        { value: 'in-progress', label: '3. In Progress' },
+        { value: 'partial', label: '4. Partial' },
+        { value: 'supplementing', label: '5. Supplementing' },
+        { value: 'final-check', label: '6. Final Check' },
+        { value: 'completed', label: '7. Completed' },
+        { value: 'declined', label: '8. Declined' },
+        { value: 'cold', label: '9. Cold Claims' }
+    ];
+
+    // Sort options data
+    const sortOptions = [
+        { value: 'recent', label: 'Most Recent Activity' },
+        { value: 'created', label: 'Recently Created' },
+        { value: 'alphabetical', label: 'Alphabetical' },
+        { value: 'value', label: 'Claim Value' },
+        { value: 'updated', label: 'Last Updated' }
+    ];
+
+    // Mock functions - replace with your actual implementations
+    const searchClients = (searchTerm) => {
+        console.log('Searching for:', searchTerm);
+        // Implement your search logic here
+    };
+
+    const filterByStatus = (status, event) => {
+        event.preventDefault();
+        console.log('Filtering by status:', status);
+        // Implement your filter logic here
+    };
+
+    const sortClients = (sortValue) => {
+        console.log('Sorting by:', sortValue);
+        // Implement your sort logic here
+    };
+
+    return (
+        <div className="search-filter-section">
+            <div className="search-bar-container">
+                <svg
+                    className="search-icon"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    className="search-input-large"
+                    placeholder="Search by client name, claim number, phone, or email..."
+                    onKeyUp={(e) => searchClients(e.target.value)}
+                />
+            </div>
+
+            <div className="filter-row">
+                <div className="filter-chips">
+                    {statusOptions.map(option => (
+                        <button
+                            key={option.value}
+                            className={`filter-chip ${option.value === 'all' ? 'active' : ''}`}
+                            onClick={(e) => filterByStatus(option.value, e)}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+
+                <select
+                    className="sort-dropdown"
+                    onChange={(e) => sortClients(e.target.value)}
+                    defaultValue="recent"
+                >
+                    {sortOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+
+                <span className="results-count" id="resultsCount">
+                    Showing 127 clients
+                </span>
+            </div>
+        </div>
     );
 };
 
