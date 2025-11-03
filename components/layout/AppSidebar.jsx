@@ -138,7 +138,6 @@ function Sidebar() {
                                </svg>
                            </button>
                        </div>
-                    <LogoutButton />
                 </div>
 
 
@@ -463,6 +462,10 @@ function Sidebar() {
                         </div>
                     </div>
 
+                    <div className='nav-item' style={{width: '100%', padding: '5px 1rem'}}>
+                        <LogoutButton />
+                    </div>
+
                     {/* Support Section at bottom */}
                     <div className="support-section">
                         <div className="support-divider"></div>
@@ -484,6 +487,7 @@ function Sidebar() {
                         </a>
                     </div>
                 </nav>
+
             </div>
 
             {/* Resize Handle */}
