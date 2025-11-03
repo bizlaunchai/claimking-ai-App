@@ -1148,7 +1148,7 @@ input:checked + .toggle-slider:before {
 
 /* Modal Styles */
 .modal-overlay {
-    display: none;
+    display: flex;
     position: fixed;
     top: 0;
     left: 0;
@@ -1161,9 +1161,9 @@ input:checked + .toggle-slider:before {
     padding: 1rem;
 }
 
-.modal-overlay.active {
-    display: flex;
-}
+/*.modal-overlay.active {*/
+/*    display: flex;*/
+/*}*/
 
 .modal {
     background: white;
