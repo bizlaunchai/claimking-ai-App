@@ -22,6 +22,7 @@ export function LogoutButton({ iconOnly = false }) {
           variant="danger"
           size={iconOnly ? "icon" : "default"}
           onClick={logout}
+          style={{width:'100%'}}
       >
         {iconOnly ? <LogOut size={16} /> : "Logout"} {/* Show icon if iconOnly */}
       </Button>
