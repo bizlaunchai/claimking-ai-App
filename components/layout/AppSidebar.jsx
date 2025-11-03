@@ -201,7 +201,7 @@ function Sidebar() {
                         </div>
 
                         <div className="nav-item">
-                            <a href="/claims/purchase-credits" className="nav-link" data-tooltip="Purchase Claim Credits">
+                            <Link href="/dashboard/purchase-credits" className={`nav-link ${pathname === '/dashboard/purchase-credits' ? 'active' : ''}`} data-tooltip="Purchase Claim Credits">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
                                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1.81.45 1.61 1.67 1.61 1.16 0 1.6-.64 1.6-1.46 0-.84-.36-1.41-1.81-1.96-2.15-.82-3.42-1.64-3.42-3.59 0-1.67 1.16-2.85 2.83-3.18V4.23h2.67v1.85c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.63-1.63-1.63-1.01 0-1.46.54-1.46 1.34 0 .77.39 1.31 1.85 1.86 2.17.8 3.37 1.65 3.37 3.73 0 1.74-1.25 3.01-3.02 3.32z"/>
@@ -209,7 +209,7 @@ function Sidebar() {
                                 </span>
                                 <span className="nav-text">Purchase Claim Credits</span>
                                 <span className="nav-badge storm">$</span>
-                            </a>
+                            </Link>
                         </div>
                     </div>
 
