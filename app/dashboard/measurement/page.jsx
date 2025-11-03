@@ -323,7 +323,7 @@ const Page = () => {
 
                     {/* New Client Tab */}
                     {activeClientTab === 'new' && (
-                        <div className="tab-content">
+                        <div className="tab-content active">
                             <form className="form-grid">
                                 <div className="form-group">
                                     <label className="form-label required">Full Name</label>
