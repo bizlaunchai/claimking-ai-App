@@ -1,6 +1,7 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import "./storm-tracking.css"
+import 'leaflet/dist/leaflet.css';
 
 const StormTracking = () => {
     const [mapLoaded, setMapLoaded] = useState(false);
@@ -9,6 +10,8 @@ const StormTracking = () => {
     const [severityFilter, setSeverityFilter] = useState('all');
     const [timeFilter, setTimeFilter] = useState('24hours');
     const [regionFilter, setRegionFilter] = useState('all');
+    const mapInstanceRef = useRef(null);
+    const markersRef = useRef([]);
     
     const storms = [
         { lat: 32.7767, lng: -96.7970, severity: 'severe', name: 'Dallas Storm System', wind: '75 mph', hail: '1.5"', movement: 'NE 25 mph', claims: 12 },
@@ -27,67 +30,109 @@ const StormTracking = () => {
     };
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+        
+        const loadingTimerRef = { current: null };
+        const stormTimerRef = { current: null };
+
         // Initialize map when page loads
         const initializeMap = async () => {
             // Simulate loading delay
-            setTimeout(async () => {
+            loadingTimerRef.current = setTimeout(async () => {
                 try {
                     const L = await import('leaflet');
                     const mapElement = document.getElementById('stormMap');
-                    if (mapElement && !mapElement._leaflet_id) {
-                        // Remove loading indicator
+                    
+                    if (!mapElement) {
+                        console.error('Map element not found');
                         setMapLoaded(true);
-                        
-                        // Initialize Leaflet map
-                        const map = L.default.map('stormMap').setView([32.7767, -96.7970], 6);
-                        
-                        // Add tile layer
-                        L.default.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors'
+                        return;
+                    }
+
+                    // Check if map already initialized
+                    if (mapElement._leaflet_id || mapInstanceRef.current) {
+                        console.log('Map already initialized');
+                        setMapLoaded(true);
+                        return;
+                    }
+                    
+                    // Remove loading indicator
+                    setMapLoaded(true);
+                    
+                    // Initialize Leaflet map
+                    const map = L.map('stormMap').setView([32.7767, -96.7970], 6);
+                    mapInstanceRef.current = map;
+                    
+                    // Add tile layer
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors',
+                        maxZoom: 19
+                    }).addTo(map);
+                    
+                    // Add storm markers
+                    storms.forEach(storm => {
+                        const markerColor = getMarkerColor(storm.severity);
+                        const marker = L.circleMarker([storm.lat, storm.lng], {
+                            radius: 15,
+                            fillColor: markerColor,
+                            color: markerColor,
+                            weight: 2,
+                            opacity: 0.8,
+                            fillOpacity: 0.4
                         }).addTo(map);
                         
-                        // Add storm markers
-                        storms.forEach(storm => {
-                            const markerColor = getMarkerColor(storm.severity);
-                            const marker = L.default.circleMarker([storm.lat, storm.lng], {
-                                radius: 15,
-                                fillColor: markerColor,
-                                color: markerColor,
-                                weight: 2,
-                                opacity: 0.8,
-                                fillOpacity: 0.4
-                            }).addTo(map);
-                            
-                            marker.bindPopup(`
-                                <div style="padding: 10px;">
-                                    <h4 style="margin: 0 0 5px 0; color: #1a1f3a;">${storm.name}</h4>
-                                    <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                                        Severity: <strong>${storm.severity.charAt(0).toUpperCase() + storm.severity.slice(1)}</strong><br>
-                                        Wind: ${storm.wind}<br>
-                                        Affected Properties: ${storm.claims}
-                                    </p>
-                                </div>
-                            `);
-                        });
-                    }
+                        marker.bindPopup(`
+                            <div style="padding: 10px;">
+                                <h4 style="margin: 0 0 5px 0; color: #1a1f3a;">${storm.name}</h4>
+                                <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                                    Severity: <strong>${storm.severity.charAt(0).toUpperCase() + storm.severity.slice(1)}</strong><br>
+                                    Wind: ${storm.wind}<br>
+                                    Hail: ${storm.hail}<br>
+                                    Moving: ${storm.movement}<br>
+                                    Affected Properties: ${storm.claims}
+                                </p>
+                            </div>
+                        `);
+                        
+                        markersRef.current.push(marker);
+                    });
+
+                    // Fix Leaflet default icon issue
+                    delete L.Icon.Default.prototype._getIconUrl;
+                    L.Icon.Default.mergeOptions({
+                        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                    });
                 } catch (error) {
-                    console.log('Leaflet not available, using placeholder map');
+                    console.error('Error initializing map:', error);
                     setMapLoaded(true);
                 }
             }, 1500);
+
+            // Simulate storm data loading
+            stormTimerRef.current = setTimeout(() => {
+                setShowStorms(true);
+            }, 2000);
         };
 
-        // Simulate storm data loading
-        const stormTimer = setTimeout(() => {
-            setShowStorms(true);
-        }, 2000);
-
-        if (typeof window !== 'undefined') {
-            initializeMap();
-        }
+        initializeMap();
 
         return () => {
-            clearTimeout(stormTimer);
+            if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+            if (stormTimerRef.current) clearTimeout(stormTimerRef.current);
+            
+            // Cleanup map instance
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+            }
+            
+            // Cleanup markers
+            markersRef.current.forEach(marker => {
+                if (marker) marker.remove();
+            });
+            markersRef.current = [];
         };
     }, []);
 
