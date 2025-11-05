@@ -1,10 +1,22 @@
-/* Top Header */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5;
+    color: #1f2937;
+    line-height: 1.6;
+}
+
+/* Top Header - NOT STICKY */
 .top-header {
     background: white;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     padding: 1.5rem 0;
     border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 2rem;
 }
 
 .header-container {
@@ -433,6 +445,17 @@
     transform: translateY(-1px);
 }
 
+.btn-outline {
+    background: white;
+    color: #1a1f3a;
+    border: 1px solid #e5e7eb;
+}
+
+.btn-outline:hover {
+    background: #f9fafb;
+    border-color: #FDB813;
+}
+
 /* Alert Box */
 .alert {
     padding: 1rem;
@@ -459,6 +482,191 @@
     background: rgba(22, 163, 74, 0.1);
     border: 1px solid rgba(22, 163, 74, 0.3);
     color: #14532d;
+}
+
+/* Color Picker */
+.color-picker-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.color-input {
+    width: 60px;
+    height: 40px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.color-value {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+/* Range Slider */
+.range-group {
+    margin-bottom: 1rem;
+}
+
+.range-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.range-value {
+    font-weight: 600;
+    color: #FDB813;
+}
+
+.range-slider {
+    width: 100%;
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #FDB813;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #FDB813;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Table Styles */
+.settings-table {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.settings-table thead {
+    background: #f9fafb;
+}
+
+.settings-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.settings-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.settings-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.settings-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Status Indicators */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-indicator.active {
+    background: rgba(22, 163, 74, 0.1);
+    color: #16a34a;
+}
+
+.status-indicator.inactive {
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+}
+
+.status-indicator.pending {
+    background: rgba(253, 184, 19, 0.1);
+    color: #d97706;
+}
+
+/* Integration Cards */
+.integration-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.integration-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.integration-card:hover {
+    border-color: #FDB813;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.integration-card.connected {
+    background: linear-gradient(135deg, rgba(253, 184, 19, 0.05), rgba(253, 184, 19, 0.02));
+    border-color: #FDB813;
+}
+
+.integration-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 0.75rem;
+    background: #f9fafb;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.integration-name {
+    font-weight: 600;
+    color: #1a1f3a;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.integration-status {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.integration-card.connected .integration-status {
+    color: #16a34a;
 }
 
 /* Success Toast */
@@ -493,6 +701,10 @@
 
     .form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .integration-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
 
     .header-actions {

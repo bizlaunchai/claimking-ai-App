@@ -5,6 +5,80 @@
     padding: 2rem;
 }
 
+/* Top Header Bar */
+.crm-sync-header {
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    padding: 1rem 0;
+    width: 100%;
+    top: 0;
+    z-index: 100;
+}
+
+.crm-sync-header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.crm-sync-logo-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.crm-sync-logo {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #FDB813, #d4a000);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(253, 184, 19, 0.3);
+}
+
+.crm-sync-logo svg {
+    width: 28px;
+    height: 28px;
+    fill: #1a1f3a;
+}
+
+.crm-sync-logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    letter-spacing: -0.5px;
+}
+
+.crm-sync-support-info {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+.crm-sync-support-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.crm-sync-support-item svg {
+    width: 18px;
+    height: 18px;
+    stroke: #FDB813;
+}
+
+.crm-sync-support-item strong {
+    color: #1a1f3a;
+}
+
+
 /* Hero Section */
 .hero-section {
     text-align: center;
@@ -444,8 +518,13 @@
 }
 
 @keyframes rotate {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 .ai-chat-content {
@@ -537,6 +616,7 @@
         transform: translateY(100%);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;
@@ -652,6 +732,7 @@
         transform: translateY(-20px);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;
@@ -662,6 +743,7 @@
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -672,6 +754,7 @@
         transform: translateX(-20px);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -698,4 +781,3 @@
         right: 1rem;
     }
 }
-

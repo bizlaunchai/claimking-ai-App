@@ -5,7 +5,7 @@
 }
 
 /* Header */
-.header {
+.payments-header {
     background: white;
     padding: 1rem;
     border-bottom: 1px solid #e5e7eb;
@@ -14,13 +14,13 @@
     align-items: center;
 }
 
-.header-left {
+.payments-header-left {
     display: flex;
     align-items: center;
     gap: 0.75rem;
 }
 
-.crown-logo {
+.payments-crown-logo {
     width: 36px;
     height: 36px;
     background: linear-gradient(135deg, #FDB813, #d4a000);
@@ -31,19 +31,19 @@
     flex-shrink: 0;
 }
 
-.crown-logo svg {
+.payments-crown-logo svg {
     width: 20px;
     height: 20px;
     fill: #1a1f3a;
 }
 
-.header h1 {
+.payments-header h1 {
     font-size: 1.25rem;
     font-weight: 700;
     color: #1a1f3a;
 }
 
-.header-actions {
+.payments-header-actions {
     display: flex;
     gap: 0.5rem;
 }
@@ -598,20 +598,20 @@ input:checked + .toggle-slider:before {
 
 /* Responsive */
 @media (max-width: 768px) {
-    .header {
+    .payments-header {
         padding: 0.75rem;
     }
     
-    .header h1 {
+    .payments-header h1 {
         font-size: 1.125rem;
     }
     
-    .crown-logo {
+    .payments-crown-logo {
         width: 32px;
         height: 32px;
     }
     
-    .crown-logo svg {
+    .payments-crown-logo svg {
         width: 18px;
         height: 18px;
     }

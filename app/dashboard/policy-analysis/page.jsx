@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import "./policy-analysis.css"
 
 const PolicyAnalysis = () => {
@@ -13,6 +13,7 @@ const PolicyAnalysis = () => {
     const [showResults, setShowResults] = useState(false);
     const [openAccordions, setOpenAccordions] = useState({ actions: true });
     const [clientSearch, setClientSearch] = useState('');
+    const [isDragging, setIsDragging] = useState(false);
     
     const fileInputRef = useRef(null);
     const uploadZoneRef = useRef(null);
@@ -28,22 +29,38 @@ const PolicyAnalysis = () => {
         client.policy.toLowerCase().includes(clientSearch.toLowerCase())
     );
 
+    const updateProgress = (step) => {
+        setCurrentStep(step);
+    };
+
+    const handleFiles = useCallback((files) => {
+        if (files.length > 0) {
+            const fileArray = Array.from(files);
+            setUploadedFiles(prev => [...prev, ...fileArray]);
+            updateProgress(3);
+            const uploadZone = uploadZoneRef.current;
+            if (uploadZone) {
+                uploadZone.classList.add('has-files');
+            }
+        }
+    }, []);
+
     useEffect(() => {
         const uploadZone = uploadZoneRef.current;
-        if (!uploadZone) return;
+        if (!uploadZone || !selectedClient) return;
 
         const handleDragOver = (e) => {
             e.preventDefault();
-            uploadZone.classList.add('dragging');
+            setIsDragging(true);
         };
 
         const handleDragLeave = () => {
-            uploadZone.classList.remove('dragging');
+            setIsDragging(false);
         };
 
         const handleDrop = (e) => {
             e.preventDefault();
-            uploadZone.classList.remove('dragging');
+            setIsDragging(false);
             handleFiles(e.dataTransfer.files);
         };
 
@@ -56,15 +73,18 @@ const PolicyAnalysis = () => {
             uploadZone.removeEventListener('dragleave', handleDragLeave);
             uploadZone.removeEventListener('drop', handleDrop);
         };
-    }, []);
-
-    const updateProgress = (step) => {
-        setCurrentStep(step);
-    };
+    }, [selectedClient, handleFiles]);
 
     const handleSelectClient = (name) => {
         setSelectedClient(name);
         updateProgress(2);
+        // Scroll to upload section
+        setTimeout(() => {
+            const uploadSection = document.getElementById('upload-section');
+            if (uploadSection) {
+                uploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 100);
     };
 
     const handleCreateClient = () => {
@@ -80,13 +100,10 @@ const PolicyAnalysis = () => {
         setUploadedFiles([]);
         setShowResults(false);
         updateProgress(1);
-    };
-
-    const handleFiles = (files) => {
-        if (files.length > 0) {
-            const fileArray = Array.from(files);
-            setUploadedFiles(prev => [...prev, ...fileArray]);
-            updateProgress(3);
+        // Reset upload zone
+        const uploadZone = uploadZoneRef.current;
+        if (uploadZone) {
+            uploadZone.classList.remove('has-files');
         }
     };
 
@@ -99,6 +116,10 @@ const PolicyAnalysis = () => {
             const newFiles = prev.filter((_, i) => i !== index);
             if (newFiles.length === 0) {
                 updateProgress(2);
+                const uploadZone = uploadZoneRef.current;
+                if (uploadZone) {
+                    uploadZone.classList.remove('has-files');
+                }
             }
             return newFiles;
         });
@@ -113,6 +134,13 @@ const PolicyAnalysis = () => {
             setShowResults(true);
             setIsAnalyzing(false);
             updateProgress(4);
+            // Scroll to results
+            setTimeout(() => {
+                const resultsSection = document.getElementById('results-section');
+                if (resultsSection) {
+                    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
         }, 3000);
     };
 
@@ -151,20 +179,20 @@ const PolicyAnalysis = () => {
             <div className="px-6 py-6">
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <div className="progress-steps">
-                        <div className="progress-line" style={{ width: `${progressWidth}%` }}></div>
-                        <div className={`step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
+                        <div id="progress-line" className="progress-line" style={{ width: `${progressWidth}%` }}></div>
+                        <div id="step-1" className={`step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
                             <div className="step-circle">1</div>
                             <div className="step-label">Select Client</div>
                         </div>
-                        <div className={`step ${currentStep >= 2 ? 'active' : ''} ${currentStep > 2 ? 'completed' : ''}`}>
+                        <div id="step-2" className={`step ${currentStep >= 2 ? 'active' : ''} ${currentStep > 2 ? 'completed' : ''}`}>
                             <div className="step-circle">2</div>
                             <div className="step-label">Upload Documents</div>
                         </div>
-                        <div className={`step ${currentStep >= 3 ? 'active' : ''} ${currentStep > 3 ? 'completed' : ''}`}>
+                        <div id="step-3" className={`step ${currentStep >= 3 ? 'active' : ''} ${currentStep > 3 ? 'completed' : ''}`}>
                             <div className="step-circle">3</div>
                             <div className="step-label">Analyze Policy</div>
                         </div>
-                        <div className={`step ${currentStep >= 4 ? 'active' : ''}`}>
+                        <div id="step-4" className={`step ${currentStep >= 4 ? 'active' : ''}`}>
                             <div className="step-circle">4</div>
                             <div className="step-label">View Results</div>
                         </div>
@@ -175,8 +203,7 @@ const PolicyAnalysis = () => {
             {/* Main Content */}
             <div className="px-6 pb-6">
                 {/* Step 1: Client Selection */}
-                {!selectedClient && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                <div id="client-section" className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${selectedClient ? 'hidden' : ''}`}>
                         <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 1: Select or Create Client</h2>
                         
                         <div className="flex gap-4 mb-4">
@@ -265,29 +292,32 @@ const PolicyAnalysis = () => {
                             </div>
                         )}
                     </div>
-                )}
 
                 {/* Selected Client Bar */}
-                {selectedClient && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <span className="text-sm text-green-800">✓ Client Selected: </span>
-                                <span className="font-semibold text-green-900">{selectedClient}</span>
-                            </div>
-                            <button 
-                                onClick={handleChangeClient}
-                                className="text-sm text-blue-600 hover:underline"
-                            >
-                                Change Client
-                            </button>
+                <div id="selected-client-bar" className={`bg-green-50 border border-green-200 rounded-lg p-4 mb-6 ${selectedClient ? '' : 'hidden'}`}>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <span className="text-sm text-green-800">✓ Client Selected: </span>
+                            <span className="font-semibold text-green-900" id="selected-client-name">{selectedClient || 'Sarah Johnson'}</span>
                         </div>
+                        <button 
+                            onClick={handleChangeClient}
+                            className="text-sm text-blue-600 hover:underline"
+                        >
+                            Change Client
+                        </button>
                     </div>
-                )}
+                </div>
 
                 {/* Step 2: Document Upload */}
-                {selectedClient && (
-                    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                <div id="upload-section" className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${selectedClient ? '' : 'disabled-section'}`}>
+                    {!selectedClient && (
+                        <div className="disabled-overlay">
+                            <div className="disabled-message">
+                                <p className="text-gray-700 font-medium">Please select a client first</p>
+                            </div>
+                        </div>
+                    )}
                         <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 2: Upload Policy Documents</h2>
                         
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -295,10 +325,12 @@ const PolicyAnalysis = () => {
                             <div>
                                 <div 
                                     ref={uploadZoneRef}
-                                    className={`upload-zone p-8 rounded-lg text-center ${uploadedFiles.length > 0 ? 'has-files' : ''}`}
+                                    id="upload-zone"
+                                    className={`upload-zone p-8 rounded-lg text-center ${isDragging ? 'dragging' : ''} ${uploadedFiles.length > 0 ? 'has-files' : ''}`}
                                 >
                                     <input 
                                         ref={fileInputRef}
+                                        id="file-input"
                                         type="file" 
                                         className="file-input-hidden"
                                         multiple 
@@ -306,7 +338,7 @@ const PolicyAnalysis = () => {
                                         onChange={handleFileInputChange}
                                     />
                                     {uploadedFiles.length === 0 ? (
-                                        <div>
+                                        <div id="upload-placeholder">
                                             <p className="text-gray-700 font-medium text-lg mb-2">Drag & drop policy documents here</p>
                                             <p className="text-xs text-gray-500 mt-2">PDF, JPG, PNG, DOC, DOCX • Max 50MB</p>
                                             <div className="grid grid-cols-2 gap-2 mt-4">
@@ -337,7 +369,7 @@ const PolicyAnalysis = () => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div>
+                                        <div id="upload-success">
                                             <div className="text-green-600 text-4xl mb-2">✓</div>
                                             <p className="text-green-700 font-medium">Documents Ready</p>
                                             <p className="text-sm text-gray-600 mt-1">Click "Analyze Policy" to continue</p>
@@ -353,6 +385,7 @@ const PolicyAnalysis = () => {
                                     <div className="space-y-2 text-sm">
                                         <label className="flex items-center gap-2">
                                             <input 
+                                                id="check-dec"
                                                 type="checkbox" 
                                                 className="rounded text-yellow-400"
                                                 checked={uploadedFiles.length > 0}
@@ -361,45 +394,44 @@ const PolicyAnalysis = () => {
                                             <span className="text-gray-700">Declarations Page <span className="text-red-500">*</span></span>
                                         </label>
                                         <label className="flex items-center gap-2">
-                                            <input type="checkbox" className="rounded text-yellow-400" />
+                                            <input id="check-policy" type="checkbox" className="rounded text-yellow-400" />
                                             <span className="text-gray-700">Policy Booklet</span>
                                         </label>
                                         <label className="flex items-center gap-2">
-                                            <input type="checkbox" className="rounded text-yellow-400" />
+                                            <input id="check-endorsements" type="checkbox" className="rounded text-yellow-400" />
                                             <span className="text-gray-700">Endorsements/Riders</span>
                                         </label>
                                     </div>
                                 </div>
 
                                 {/* Uploaded Files List */}
-                                {uploadedFiles.length > 0 && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-700 mb-2">Uploaded Files:</h3>
-                                        <div className="space-y-2">
-                                            {uploadedFiles.map((file, index) => (
-                                                <div key={index} className="document-item slide-down">
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-medium">{file.name}</p>
-                                                        <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                                    </div>
-                                                    <span className="status-badge ready text-xs">Ready</span>
-                                                    <button 
-                                                        onClick={() => removeFile(index)}
-                                                        className="ml-2 text-gray-400 hover:text-red-500 text-lg"
-                                                    >
-                                                        ×
-                                                    </button>
+                                <div id="uploaded-files" className={uploadedFiles.length > 0 ? '' : 'hidden'}>
+                                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Uploaded Files:</h3>
+                                    <div id="files-list" className="space-y-2">
+                                        {uploadedFiles.map((file, index) => (
+                                            <div key={index} className="document-item slide-down">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium">{file.name}</p>
+                                                    <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                                                 </div>
-                                            ))}
-                                        </div>
+                                                <span className="status-badge ready text-xs">Ready</span>
+                                                <button 
+                                                    onClick={() => removeFile(index)}
+                                                    className="ml-2 text-gray-400 hover:text-red-500 text-lg"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
 
                         {/* Analyze Button */}
                         <div className="mt-6 text-center">
                             <button 
+                                id="analyze-button"
                                 onClick={handleAnalyze}
                                 disabled={uploadedFiles.length === 0 || isAnalyzing}
                                 className={`analyze-button px-8 py-3 rounded-lg font-medium text-lg transition ${
@@ -419,17 +451,30 @@ const PolicyAnalysis = () => {
                                     </div>
                                 ) : (
                                     <span className="button-text">
-                                        {uploadedFiles.length === 0 ? 'Select Files to Enable Analysis' : 'Analyze Policy'}
+                                        {uploadedFiles.length === 0 
+                                            ? 'Select Files to Enable Analysis' 
+                                            : showResults 
+                                                ? 'Re-analyze Policy' 
+                                                : 'Analyze Policy'}
                                     </span>
                                 )}
                             </button>
                             <p className="text-xs text-gray-500 mt-2">Analysis typically takes 30-60 seconds</p>
                         </div>
                     </div>
-                )}
 
                 {/* Step 3 & 4: Analysis Results */}
-                {showResults ? (
+                <div id="results-section" className={showResults ? '' : 'disabled-section'}>
+                    {!showResults && (
+                        <div className="disabled-overlay">
+                            <div className="disabled-message">
+                                <p className="text-gray-700 font-medium mb-2">📄 No Policy Analyzed Yet</p>
+                                <p className="text-sm text-gray-600">Upload documents and click "Analyze Policy" to see results</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Results Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Main Results */}
                         <div className="lg:col-span-2">
@@ -466,9 +511,9 @@ const PolicyAnalysis = () => {
                                         onClick={() => toggleAccordion('covered')}
                                     >
                                         <h3 className="font-semibold text-green-800">✓ What's Covered</h3>
-                                        <span>{openAccordions.covered ? '▲' : '▼'}</span>
+                                        <span id="covered-chevron">{openAccordions.covered ? '▲' : '▼'}</span>
                                     </div>
-                                    <div className={`accordion-content ${openAccordions.covered ? 'open' : ''}`}>
+                                    <div id="covered-content" className={`accordion-content ${openAccordions.covered ? 'open' : ''}`}>
                                         <div className="p-4 text-sm">
                                             <ul className="space-y-1">
                                                 <li>✓ Wind and Hail Damage</li>
@@ -488,9 +533,9 @@ const PolicyAnalysis = () => {
                                         onClick={() => toggleAccordion('excluded')}
                                     >
                                         <h3 className="font-semibold text-red-800">✗ What's Excluded</h3>
-                                        <span>{openAccordions.excluded ? '▲' : '▼'}</span>
+                                        <span id="excluded-chevron">{openAccordions.excluded ? '▲' : '▼'}</span>
                                     </div>
-                                    <div className={`accordion-content ${openAccordions.excluded ? 'open' : ''}`}>
+                                    <div id="excluded-content" className={`accordion-content ${openAccordions.excluded ? 'open' : ''}`}>
                                         <div className="p-4 text-sm">
                                             <ul className="space-y-1">
                                                 <li>✗ Flood (separate policy needed)</li>
@@ -509,9 +554,9 @@ const PolicyAnalysis = () => {
                                         onClick={() => toggleAccordion('actions')}
                                     >
                                         <h3 className="font-semibold text-yellow-800">⚡ Action Items</h3>
-                                        <span>{openAccordions.actions ? '▲' : '▼'}</span>
+                                        <span id="actions-chevron">{openAccordions.actions ? '▲' : '▼'}</span>
                                     </div>
-                                    <div className={`accordion-content ${openAccordions.actions ? 'open' : ''}`}>
+                                    <div id="actions-content" className={`accordion-content ${openAccordions.actions ? 'open' : ''}`}>
                                         <div className="p-4 space-y-2">
                                             <div className="bg-green-100 border border-green-300 rounded p-3 text-sm">
                                                 <strong className="text-green-800">Include code upgrades</strong> - 10% additional coverage available
@@ -549,18 +594,7 @@ const PolicyAnalysis = () => {
                             </div>
                         </div>
                     </div>
-                ) : (
-                    selectedClient && uploadedFiles.length > 0 && (
-                        <div className="bg-white rounded-lg border border-gray-200 p-6 disabled-section">
-                            <div className="disabled-overlay">
-                                <div className="disabled-message">
-                                    <p className="text-gray-700 font-medium mb-2">📄 No Policy Analyzed Yet</p>
-                                    <p className="text-sm text-gray-600">Upload documents and click "Analyze Policy" to see results</p>
-                                </div>
-                            </div>
-                        </div>
-                    )
-                )}
+                </div>
             </div>
         </div>
     );

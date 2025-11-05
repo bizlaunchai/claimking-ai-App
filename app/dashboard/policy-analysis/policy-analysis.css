@@ -8,6 +8,11 @@
     --info-blue: #3b82f6;
 }
 
+body {
+    background-color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 /* Progress Steps */
 .progress-steps {
     display: flex;

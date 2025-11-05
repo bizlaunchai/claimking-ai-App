@@ -421,24 +421,24 @@ const CRMSync = () => {
     return (
         <div>
             {/* Top Header */}
-            <div className="top-header">
-                <div className="header-container">
-                    <div className="logo-section">
-                        <div className="logo">
+            <div className="crm-sync-header">
+                <div className="crm-sync-header-container">
+                    <div className="crm-sync-logo-section">
+                        <div className="crm-sync-logo">
                             <svg viewBox="0 0 24 24">
                                 <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
                             </svg>
                         </div>
-                        <div className="logo-text">ClaimKing.AI</div>
+                        <div className="crm-sync-logo-text">ClaimKing.AI</div>
                     </div>
-                    <div className="support-info">
-                        <div className="support-item">
+                    <div className="crm-sync-support-info">
+                        <div className="crm-sync-support-item">
                             <svg stroke="currentColor" fill="none" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                             </svg>
                             <strong>Support:</strong> 1-800-CLAIMKING
                         </div>
-                        <div className="support-item">
+                        <div className="crm-sync-support-item">
                             <svg stroke="currentColor" fill="none" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                             </svg>
