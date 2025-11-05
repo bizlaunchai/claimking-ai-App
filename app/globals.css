@@ -98,11 +98,11 @@ body {
   gap: 2rem;
 }
 
-.header-left {
+/* .header-left {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-}
+} */
 
 /* Mobile Logo - Hidden on desktop */
 .mobile-logo {
