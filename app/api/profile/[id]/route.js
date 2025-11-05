@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { serverCreateClient } from "@/lib/supabase/server";
 
-export async function GET(request, context) {
-    const { params } = await context; // ✅ await here in Next.js 15+
-
+export async function GET(request, { params }) {
     const supabase = await serverCreateClient();
 
-    const id = await params?.id;
+    const { id } = await params;
 
     if (!id) {
         return NextResponse.json({ error: "Missing ID" }, { status: 400 });

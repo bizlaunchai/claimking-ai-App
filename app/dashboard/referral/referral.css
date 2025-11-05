@@ -1,0 +1,624 @@
+/* Container */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+/* Header */
+.header {
+    background: white;
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.crown-logo {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #FDB813, #d4a000);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.crown-logo svg {
+    width: 20px;
+    height: 20px;
+    fill: #1a1f3a;
+}
+
+.header h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #FDB813;
+    color: #1a1f3a;
+}
+
+.btn-primary:hover {
+    background: #fdc433;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: #1a1f3a;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #2a3151;
+    transform: translateY(-1px);
+}
+
+/* Earnings Overview */
+.earnings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.earnings-card {
+    background: white;
+    padding: 1.25rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.earnings-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+.earnings-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+
+.earnings-change {
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.earnings-change.positive {
+    color: #16a34a;
+}
+
+/* Referral Link Section */
+.referral-link-section {
+    background: linear-gradient(135deg, #FDB813, #fdc433);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: #1a1f3a;
+}
+
+.referral-link-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.referral-link-container {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.referral-link-input {
+    flex: 1;
+    padding: 0.75rem;
+    background: white;
+    border: 2px solid #1a1f3a;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    min-width: 250px;
+}
+
+.copy-btn {
+    padding: 0.75rem 1.5rem;
+    background: #1a1f3a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+    background: #2a3151;
+    transform: translateY(-1px);
+}
+
+.copy-btn.copied {
+    background: #16a34a;
+}
+
+.share-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.share-btn {
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 2px solid #1a1f3a;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.share-btn:hover {
+    background: #1a1f3a;
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Charts Section */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.chart-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1a1f3a;
+}
+
+.chart-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+/* Bar Chart */
+.bar-chart {
+    height: 250px;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 0.5rem;
+    position: relative;
+}
+
+.bar-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    position: relative;
+}
+
+.bar {
+    width: 100%;
+    background: linear-gradient(180deg, #FDB813, #d4a000);
+    border-radius: 4px 4px 0 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-height: 10px;
+}
+
+.bar:hover {
+    opacity: 0.8;
+    transform: translateY(-2px);
+}
+
+.bar-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1a1f3a;
+    margin-bottom: 0.25rem;
+    position: absolute;
+    top: -20px;
+    white-space: nowrap;
+}
+
+.bar-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.5rem;
+    position: absolute;
+    bottom: -20px;
+}
+
+/* Pie Chart */
+.pie-chart-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+}
+
+.pie-chart {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: conic-gradient(
+        #FDB813 0deg 216deg,
+        #e5e7eb 216deg 360deg
+    );
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pie-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pie-percentage {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+
+.pie-label {
+    font-size: 0.625rem;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.legend-label {
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.legend-value {
+    font-weight: 600;
+    color: #1a1f3a;
+    margin-left: auto;
+}
+
+/* Funnel Chart */
+.funnel-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.funnel-stage {
+    background: #f9fafb;
+    border-left: 4px solid #FDB813;
+    padding: 0.75rem;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.funnel-stage:hover {
+    background: #f3f4f6;
+    transform: translateX(4px);
+}
+
+.funnel-stage-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.funnel-stage-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1a1f3a;
+}
+
+.funnel-stage-desc {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.funnel-stage-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+
+/* Referral Tiers */
+.tiers-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tiers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.tier-card {
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+.tier-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.tier-card.current {
+    background: linear-gradient(135deg, #fef3c7, #fef9e6);
+    border-color: #FDB813;
+}
+
+.tier-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.tier-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    margin-bottom: 0.25rem;
+}
+
+.tier-requirement {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+}
+
+.tier-commission {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #FDB813;
+}
+
+/* Referrals Table */
+.referrals-table {
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.referrals-table th {
+    background: #f9fafb;
+    padding: 0.75rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6b7280;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.referrals-table td {
+    padding: 1rem 0.75rem;
+    font-size: 0.875rem;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.referrals-table tr:hover {
+    background: #f9fafb;
+}
+
+.referral-name {
+    font-weight: 600;
+    color: #1a1f3a;
+}
+
+.referral-email {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-trial {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.status-active {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.status-churned {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.commission-amount {
+    font-weight: 600;
+    color: #16a34a;
+}
+
+/* Coupon Code Section */
+.coupon-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.coupon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.coupon-card {
+    background: #f9fafb;
+    border: 2px dashed #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.coupon-card:hover {
+    border-color: #FDB813;
+    background: #fef9e6;
+}
+
+.coupon-code {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    margin-bottom: 0.25rem;
+}
+
+.coupon-uses {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+/* Commission Structure */
+.commission-structure-section {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #16a34a;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .earnings-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .referral-link-section {
+        padding: 1.5rem 1rem;
+    }
+    
+    .referral-link-container {
+        flex-direction: column;
+    }
+    
+    .referral-link-input {
+        min-width: auto;
+    }
+    
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tiers-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .coupon-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+

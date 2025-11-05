@@ -2,7 +2,7 @@
 .main-container {
     min-height: 100vh;
     transition: padding-left 0.3s ease;
-    /*max-width: 100vw;*/
+    max-width: 100vw;
     overflow-x: hidden;
 }
 
@@ -748,6 +748,80 @@
 }
 
 .detail-value {
+    font-size: 0.875rem;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+/* Claim Details Grid */
+.claim-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.detail-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detail-group label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* Move Stage Menu Styles */
+.move-stage-menu {
+    max-width: 600px;
+}
+
+.stage-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.stage-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.stage-option:hover {
+    background: #fef9e6;
+    border-color: #FDB813;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(253, 184, 19, 0.2);
+}
+
+.stage-option-number {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #FDB813, #ffc947);
+    color: #1a1f3a;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.stage-option-name {
+    flex: 1;
     font-size: 0.875rem;
     color: #1f2937;
     font-weight: 500;

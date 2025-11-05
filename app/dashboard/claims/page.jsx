@@ -1147,9 +1147,9 @@ const ClaimsManagement = () => {
                                 <div className="detail-group">
                                     <label>Priority</label>
                                     <div className="detail-value">
-                    <span className={`table-priority priority-${selectedClaim.priority}`}>
-                      {selectedClaim.priority.charAt(0).toUpperCase() + selectedClaim.priority.slice(1)}
-                    </span>
+                                        <span className={`table-priority priority-${selectedClaim.priority}`}>
+                                            {selectedClaim.priority.charAt(0).toUpperCase() + selectedClaim.priority.slice(1)}
+                                        </span>
                                     </div>
                                 </div>
                                 <div className="detail-group">
