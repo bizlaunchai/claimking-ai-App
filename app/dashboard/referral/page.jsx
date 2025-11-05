@@ -108,8 +108,8 @@ const Referral = () => {
     return (
         <div>
             {/* Header */}
-            <div className="header">
-                <div className="header-left">
+            <div className="referral-header">
+                <div className="referral-header-left">
                     <div className="crown-logo">
                         <svg viewBox="0 0 24 24" fill="#1a1f3a">
                             <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
@@ -117,7 +117,7 @@ const Referral = () => {
                     </div>
                     <h1>Referral Program</h1>
                 </div>
-                <div className="header-actions">
+                <div className="referral-header-actions">
                     <button className="btn btn-secondary">View Payouts</button>
                     <button className="btn btn-primary">+ Invite Friends</button>
                 </div>
