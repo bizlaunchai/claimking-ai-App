@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import "./storm-tracking.css"
 
 const StormTracking = () => {
@@ -10,8 +10,6 @@ const StormTracking = () => {
     const [timeFilter, setTimeFilter] = useState('24hours');
     const [regionFilter, setRegionFilter] = useState('all');
     
-    const mapRef = useRef(null);
-
     const storms = [
         { lat: 32.7767, lng: -96.7970, severity: 'severe', name: 'Dallas Storm System', wind: '75 mph', hail: '1.5"', movement: 'NE 25 mph', claims: 12 },
         { lat: 29.7604, lng: -95.3698, severity: 'moderate', name: 'Houston Weather Front', wind: '45 mph', hail: '0.5"', movement: 'E 18 mph', claims: 8 },
@@ -29,32 +27,21 @@ const StormTracking = () => {
     };
 
     useEffect(() => {
-        // Simulate map loading
-        const mapTimer = setTimeout(() => {
-            setMapLoaded(true);
-        }, 1500);
-
-        // Simulate storm data loading
-        const stormTimer = setTimeout(() => {
-            setShowStorms(true);
-        }, 3000);
-
-        return () => {
-            clearTimeout(mapTimer);
-            clearTimeout(stormTimer);
-        };
-    }, []);
-
-    // Initialize Leaflet map when mapLoaded becomes true
-    useEffect(() => {
-        if (typeof window !== 'undefined' && mapLoaded) {
-            const initializeMap = async () => {
+        // Initialize map when page loads
+        const initializeMap = async () => {
+            // Simulate loading delay
+            setTimeout(async () => {
                 try {
                     const L = await import('leaflet');
                     const mapElement = document.getElementById('stormMap');
                     if (mapElement && !mapElement._leaflet_id) {
+                        // Remove loading indicator
+                        setMapLoaded(true);
+                        
+                        // Initialize Leaflet map
                         const map = L.default.map('stormMap').setView([32.7767, -96.7970], 6);
                         
+                        // Add tile layer
                         L.default.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                             attribution: '© OpenStreetMap contributors'
                         }).addTo(map);
@@ -75,8 +62,8 @@ const StormTracking = () => {
                                 <div style="padding: 10px;">
                                     <h4 style="margin: 0 0 5px 0; color: #1a1f3a;">${storm.name}</h4>
                                     <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                                        Severity: <strong>${storm.severity.charAt(0).toUpperCase() + storm.severity.slice(1)}</strong><br/>
-                                        Wind: ${storm.wind}<br/>
+                                        Severity: <strong>${storm.severity.charAt(0).toUpperCase() + storm.severity.slice(1)}</strong><br>
+                                        Wind: ${storm.wind}<br>
                                         Affected Properties: ${storm.claims}
                                     </p>
                                 </div>
@@ -85,12 +72,24 @@ const StormTracking = () => {
                     }
                 } catch (error) {
                     console.log('Leaflet not available, using placeholder map');
+                    setMapLoaded(true);
                 }
-            };
-            
+            }, 1500);
+        };
+
+        // Simulate storm data loading
+        const stormTimer = setTimeout(() => {
+            setShowStorms(true);
+        }, 2000);
+
+        if (typeof window !== 'undefined') {
             initializeMap();
         }
-    }, [mapLoaded]);
+
+        return () => {
+            clearTimeout(stormTimer);
+        };
+    }, []);
 
     const handleToggleLayer = (layer) => {
         setActiveLayer(layer);
@@ -257,38 +256,33 @@ const StormTracking = () => {
                         </button>
                     </div>
                 </div>
-                <div className="storm-map" style={{ position: 'relative' }}>
-                    {!mapLoaded ? (
+                <div id="stormMap">
+                    {!mapLoaded && (
                         <div className="map-loading">
                             <div className="loading-spinner"></div>
                             <div className="loading-text">Loading storm data from NOAA API...</div>
                         </div>
-                    ) : (
-                        <>
-                            <div id="stormMap" style={{ height: '100%', width: '100%' }} ref={mapRef}>
-                                {/* Map will be initialized via useEffect */}
-                            </div>
-                            <div className="map-legend">
-                                <div className="legend-title">Storm Severity</div>
-                                <div className="legend-item">
-                                    <span className="legend-marker severe"></span>
-                                    <span>Severe Storm</span>
-                                </div>
-                                <div className="legend-item">
-                                    <span className="legend-marker moderate"></span>
-                                    <span>Moderate Storm</span>
-                                </div>
-                                <div className="legend-item">
-                                    <span className="legend-marker watch"></span>
-                                    <span>Storm Watch</span>
-                                </div>
-                                <div className="legend-item">
-                                    <span className="legend-marker clear"></span>
-                                    <span>Clear</span>
-                                </div>
-                            </div>
-                        </>
                     )}
+                    {/* Map Legend */}
+                    <div className="map-legend">
+                        <div className="legend-title">Storm Severity</div>
+                        <div className="legend-item">
+                            <span className="legend-marker severe"></span>
+                            <span>Severe Storm</span>
+                        </div>
+                        <div className="legend-item">
+                            <span className="legend-marker moderate"></span>
+                            <span>Moderate Storm</span>
+                        </div>
+                        <div className="legend-item">
+                            <span className="legend-marker watch"></span>
+                            <span>Storm Watch</span>
+                        </div>
+                        <div className="legend-item">
+                            <span className="legend-marker clear"></span>
+                            <span>Clear</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 

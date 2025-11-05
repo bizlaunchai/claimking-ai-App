@@ -69,7 +69,7 @@ const AnalyticsPage = () => {
     }, []);
 
     useEffect(() => {
-        const progressBars = document.querySelectorAll('.progress-fill');
+        const progressBars = document.querySelectorAll('.analytics-progress-fill');
         progressBars.forEach(bar => {
             const width = bar.style.width;
             bar.style.width = '0';
@@ -82,30 +82,30 @@ const AnalyticsPage = () => {
     return (
         <div>
             {/* Header */}
-            <div className="header">
-                <div className="header-left">
-                    <div className="crown-logo">
+            <div className="analytics-header">
+                <div className="analytics-header-left">
+                    <div className="analytics-crown-logo">
                         <svg viewBox="0 0 24 24" fill="#1a1f3a">
                             <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
                         </svg>
                     </div>
                     <h1>Analytics</h1>
                 </div>
-                <div className="header-controls">
-                    <div className="date-range-selector" ref={dateDropdownRef}>
+                    <div className="analytics-header-controls">
+                    <div className="analytics-date-range-selector" ref={dateDropdownRef}>
                         <button 
-                            className={`date-dropdown-btn ${showDateDropdown ? 'active' : ''}`}
+                            className={`analytics-date-dropdown-btn ${showDateDropdown ? 'active' : ''}`}
                             onClick={() => setShowDateDropdown(!showDateDropdown)}
                         >
-                            <span className="date-label">Date:</span>
-                            <span className="date-text">{dateRange.value}</span>
-                            <span className="dropdown-arrow">▼</span>
+                            <span className="analytics-date-label">Date:</span>
+                            <span className="analytics-date-text">{dateRange.value}</span>
+                            <span className="analytics-dropdown-arrow">▼</span>
                         </button>
-                        <div className={`date-dropdown-menu ${showDateDropdown ? 'show' : ''}`}>
+                        <div className={`analytics-date-dropdown-menu ${showDateDropdown ? 'show' : ''}`}>
                             {dateOptions.map((option) => (
                                 <div 
                                     key={option.value}
-                                    className={`date-option ${dateRange.value === option.value ? 'active' : ''}`}
+                                    className={`analytics-date-option ${dateRange.value === option.value ? 'active' : ''}`}
                                     onClick={() => selectDateRange(option)}
                                 >
                                     {option.label}
@@ -113,73 +113,73 @@ const AnalyticsPage = () => {
                             ))}
                         </div>
                     </div>
-                    <button className="export-btn" onClick={exportAnalytics} title="Export Analytics">
+                    <button className="analytics-export-btn" onClick={exportAnalytics} title="Export Analytics">
                         Export
                     </button>
-                    <div className="live-indicator">
-                        <span className="live-dot"></span>
+                    <div className="analytics-live-indicator">
+                        <span className="analytics-live-dot"></span>
                         <span>Live</span>
                     </div>
                 </div>
             </div>
 
-            <div className="container">
+            <div className="analytics-container-main">
                 {/* KPI Cards */}
-                <div className="kpi-grid">
-                    <div className="kpi-card">
-                        <div className="kpi-label">Total Revenue</div>
-                        <div className="kpi-value">$487,290</div>
-                        <div className="kpi-change positive">↑ 12% vs last month</div>
+                <div className="analytics-kpi-grid">
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Total Revenue</div>
+                        <div className="analytics-kpi-value">$487,290</div>
+                        <div className="analytics-kpi-change positive">↑ 12% vs last month</div>
                     </div>
-                    <div className="kpi-card">
-                        <div className="kpi-label">Active Claims</div>
-                        <div className="kpi-value">47</div>
-                        <div className="kpi-change positive">↑ 8 this week</div>
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Active Claims</div>
+                        <div className="analytics-kpi-value">47</div>
+                        <div className="analytics-kpi-change positive">↑ 8 this week</div>
                     </div>
-                    <div className="kpi-card">
-                        <div className="kpi-label">Close Rate</div>
-                        <div className="kpi-value">68%</div>
-                        <div className="kpi-change positive">↑ 5% improved</div>
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Close Rate</div>
+                        <div className="analytics-kpi-value">68%</div>
+                        <div className="analytics-kpi-change positive">↑ 5% improved</div>
                     </div>
-                    <div className="kpi-card">
-                        <div className="kpi-label">Avg Claim Value</div>
-                        <div className="kpi-value">$10,350</div>
-                        <div className="kpi-change positive">↑ $1,200</div>
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Avg Claim Value</div>
+                        <div className="analytics-kpi-value">$10,350</div>
+                        <div className="analytics-kpi-change positive">↑ $1,200</div>
                     </div>
-                    <div className="kpi-card">
-                        <div className="kpi-label">Lead Response</div>
-                        <div className="kpi-value">12 min</div>
-                        <div className="kpi-change positive">↓ 3 min faster</div>
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Lead Response</div>
+                        <div className="analytics-kpi-value">12 min</div>
+                        <div className="analytics-kpi-change positive">↓ 3 min faster</div>
                     </div>
-                    <div className="kpi-card">
-                        <div className="kpi-label">Customer Score</div>
-                        <div className="kpi-value">4.8 <span className="stars">★</span></div>
-                        <div className="kpi-change positive">127 reviews</div>
+                    <div className="analytics-kpi-card">
+                        <div className="analytics-kpi-label">Customer Score</div>
+                        <div className="analytics-kpi-value">4.8 <span className="analytics-stars">★</span></div>
+                        <div className="analytics-kpi-change positive">127 reviews</div>
                     </div>
                 </div>
 
                 {/* Analytics Tabs */}
                 <div className="analytics-container">
                     {/* Mobile Tab Header */}
-                    <div className="mobile-tab-header" ref={mobileMenuRef}>
-                        <div className="mobile-tab-control">
-                            <div className="current-tab-name">{currentTabName}</div>
+                    <div className="analytics-mobile-tab-header" ref={mobileMenuRef}>
+                        <div className="analytics-mobile-tab-control">
+                            <div className="analytics-current-tab-name">{currentTabName}</div>
                             <button 
-                                className={`tab-menu-btn ${showMobileMenu ? 'open' : ''}`}
+                                className={`analytics-tab-menu-btn ${showMobileMenu ? 'open' : ''}`}
                                 onClick={() => setShowMobileMenu(!showMobileMenu)}
                             >
-                                <div className="hamburger">
+                                <div className="analytics-hamburger">
                                     <span></span>
                                     <span></span>
                                     <span></span>
                                 </div>
                             </button>
                         </div>
-                        <div className={`mobile-tab-menu ${showMobileMenu ? 'show' : ''}`}>
+                        <div className={`analytics-mobile-tab-menu ${showMobileMenu ? 'show' : ''}`}>
                             {tabs.map((tab) => (
                                 <div 
                                     key={tab.id}
-                                    className={`mobile-tab-option ${activeTab === tab.id ? 'active' : ''}`}
+                                    className={`analytics-mobile-tab-option ${activeTab === tab.id ? 'active' : ''}`}
                                     onClick={() => {
                                         switchTab(tab.id);
                                         setShowMobileMenu(false);
@@ -192,11 +192,11 @@ const AnalyticsPage = () => {
                     </div>
                     
                     {/* Desktop Tab Navigation */}
-                    <div className="tab-nav">
+                    <div className="analytics-tab-nav">
                         {tabs.map((tab) => (
                             <button 
                                 key={tab.id}
-                                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                                className={`analytics-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => switchTab(tab.id)}
                             >
                                 {tab.name}
@@ -206,16 +206,16 @@ const AnalyticsPage = () => {
 
                     {/* Claims & Revenue Tab */}
                     {activeTab === 'claims' && (
-                        <div className="tab-content active">
-                            <div className="chart-container">
-                                <div className="chart-header">
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-header">
                                     <div>
-                                        <div className="chart-title">Revenue Trends</div>
-                                        <div className="chart-subtitle">Monthly revenue over 12 months</div>
+                                        <div className="analytics-chart-title">Revenue Trends</div>
+                                        <div className="analytics-chart-subtitle">Monthly revenue over 12 months</div>
                                     </div>
                                 </div>
-                                <div className="revenue-chart">
-                                    <div className="chart-bars">
+                                <div className="analytics-revenue-chart">
+                                    <div className="analytics-chart-bars">
                                         {[
                                             { month: 'Jan', height: 60 },
                                             { month: 'Feb', height: 65 },
@@ -230,17 +230,17 @@ const AnalyticsPage = () => {
                                             { month: 'Nov', height: 78 },
                                             { month: 'Dec', height: 75 }
                                         ].map((item) => (
-                                            <div key={item.month} className="chart-bar" style={{height: `${item.height}%`}}>
-                                                <span className="chart-bar-label">{item.month}</span>
+                                            <div key={item.month} className="analytics-chart-bar" style={{height: `${item.height}%`}}>
+                                                <span className="analytics-chart-bar-label">{item.month}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="chart-container">
-                                <div className="chart-title">Claims Pipeline Funnel</div>
-                                <div className="funnel-container">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Claims Pipeline Funnel</div>
+                                <div className="analytics-funnel-container">
                                     {[
                                         { label: 'New Leads:', value: 234, width: 100 },
                                         { label: 'Inspected:', value: 189, width: 80 },
@@ -249,53 +249,53 @@ const AnalyticsPage = () => {
                                         { label: 'Completed:', value: 98, width: 42 },
                                         { label: 'Paid:', value: 87, width: 37 }
                                     ].map((stage) => (
-                                        <div key={stage.label} className="funnel-stage">
-                                            <span className="funnel-label">{stage.label}</span>
-                                            <div className="funnel-bar" style={{width: `${stage.width}%`}}>
-                                                <span className="funnel-value">{stage.value}</span>
+                                        <div key={stage.label} className="analytics-funnel-stage">
+                                            <span className="analytics-funnel-label">{stage.label}</span>
+                                            <div className="analytics-funnel-bar" style={{width: `${stage.width}%`}}>
+                                                <span className="analytics-funnel-value">{stage.value}</span>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="metrics-grid">
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Top Insurance Companies</div>
+                            <div className="analytics-metrics-grid">
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Top Insurance Companies</div>
                                     {[
                                         { name: 'State Farm', value: '82% approval' },
                                         { name: 'Allstate', value: '78% approval' },
                                         { name: 'Progressive', value: '71% approval' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Top ZIP Codes</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Top ZIP Codes</div>
                                     {[
                                         { name: '75001', value: '$124,500' },
                                         { name: '75023', value: '$98,300' },
                                         { name: '75034', value: '$87,200' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Claim Types</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Claim Types</div>
                                     {[
                                         { name: 'Wind/Hail', value: '42%' },
                                         { name: 'Water Damage', value: '28%' },
                                         { name: 'Storm', value: '30%' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -305,11 +305,11 @@ const AnalyticsPage = () => {
 
                     {/* Sales & Leads Tab */}
                     {activeTab === 'sales' && (
-                        <div className="tab-content active">
-                            <div className="chart-container">
-                                <div className="chart-title">Lead Sources Breakdown</div>
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Lead Sources Breakdown</div>
                                 <div style={{display: 'flex', justifyContent: 'space-around', alignItems: 'center'}}>
-                                    <div className="donut-chart">
+                                    <div className="analytics-donut-chart">
                                         <svg width="200" height="200">
                                             <circle cx="100" cy="100" r="80" fill="none" stroke="#e5e7eb" strokeWidth="30"/>
                                             <circle cx="100" cy="100" r="80" fill="none" stroke="#FDB813" strokeWidth="30" 
@@ -319,9 +319,9 @@ const AnalyticsPage = () => {
                                             <circle cx="100" cy="100" r="80" fill="none" stroke="#fef3c7" strokeWidth="30" 
                                                     strokeDasharray="66 400" strokeDashoffset="-184"/>
                                         </svg>
-                                        <div className="donut-center">
-                                            <div className="donut-value">234</div>
-                                            <div className="donut-label">Total Leads</div>
+                                        <div className="analytics-donut-center">
+                                            <div className="analytics-donut-value">234</div>
+                                            <div className="analytics-donut-label">Total Leads</div>
                                         </div>
                                     </div>
                                     <div>
@@ -332,18 +332,18 @@ const AnalyticsPage = () => {
                                             { name: '🌐 Website:', value: '10% (23 leads)' },
                                             { name: '📱 Social Media:', value: '6% (15 leads)' }
                                         ].map((item) => (
-                                            <div key={item.name} className="metric-item">
-                                                <span className="metric-name">{item.name}</span>
-                                                <span className="metric-value">{item.value}</span>
+                                            <div key={item.name} className="analytics-metric-item">
+                                                <span className="analytics-metric-name">{item.name}</span>
+                                                <span className="analytics-metric-value">{item.value}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="chart-container">
-                                <div className="chart-title">Sales Team Leaderboard</div>
-                                <table className="data-table">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Sales Team Leaderboard</div>
+                                <table className="analytics-data-table">
                                     <thead>
                                         <tr>
                                             <th>Rep Name</th>
@@ -364,41 +364,41 @@ const AnalyticsPage = () => {
                                                 <td>{rep.leads}</td>
                                                 <td>{rep.closed}</td>
                                                 <td>{rep.value}</td>
-                                                <td><span className="kpi-change positive">{rep.conversion}</span></td>
+                                                <td><span className="analytics-kpi-change positive">{rep.conversion}</span></td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
 
-                            <div className="metrics-grid">
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Conversion Metrics</div>
+                            <div className="analytics-metrics-grid">
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Conversion Metrics</div>
                                     {[
                                         { name: 'Lead to Inspection', value: '78%' },
                                         { name: 'Inspection to Estimate', value: '82%' },
                                         { name: 'Estimate to Approval', value: '71%' },
                                         { name: 'Overall Conversion', value: '42%', special: true }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value" style={item.special ? {color: '#16a34a', fontSize: '1rem'} : {}}>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value" style={item.special ? {color: '#16a34a', fontSize: '1rem'} : {}}>
                                                 {item.value}
                                             </span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Response Performance</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Response Performance</div>
                                     {[
                                         { name: 'Average Response', value: '12 min' },
                                         { name: 'Fastest Response', value: '2 min' },
                                         { name: 'Missed Leads Today', value: '3' },
                                         { name: 'After-hours Leads', value: '18 this week' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -408,9 +408,9 @@ const AnalyticsPage = () => {
 
                     {/* Customers & Reviews Tab */}
                     {activeTab === 'customers' && (
-                        <div className="tab-content active">
-                            <div className="chart-container">
-                                <div className="chart-title">Review Platforms Performance</div>
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Review Platforms Performance</div>
                                 <div style={{padding: '1rem 0'}}>
                                     {[
                                         { platform: 'Google', rating: '4.9', stars: '★★★★★', reviews: 89, width: 89 },
@@ -422,43 +422,43 @@ const AnalyticsPage = () => {
                                             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
                                                 <span style={{fontWeight: 600}}>{platform.platform}</span>
                                                 <span>
-                                                    {platform.rating} {platform.stars && <span className="stars">{platform.stars}</span>} ({platform.reviews} reviews)
+                                                    {platform.rating} {platform.stars && <span className="analytics-stars">{platform.stars}</span>} ({platform.reviews} reviews)
                                                 </span>
                                             </div>
-                                            <div className="progress-bar">
-                                                <div className="progress-fill" style={{width: `${platform.width}%`}}></div>
+                                            <div className="analytics-progress-bar">
+                                                <div className="analytics-progress-fill" style={{width: `${platform.width}%`}}></div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="metrics-grid">
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Customer Satisfaction</div>
+                            <div className="analytics-metrics-grid">
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Customer Satisfaction</div>
                                     {[
                                         { name: 'Net Promoter Score', value: '72' },
                                         { name: 'Customer Lifetime Value', value: '$24,500' },
                                         { name: 'Repeat Customer Rate', value: '34%' },
                                         { name: 'Referral Rate', value: '41%' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Recent Reviews</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Recent Reviews</div>
                                     {[
                                         { stars: '⭐⭐⭐⭐⭐', time: '2 hours ago' },
                                         { stars: '⭐⭐⭐⭐⭐', time: '5 hours ago' },
                                         { stars: '⭐⭐⭐⭐', time: 'Yesterday' },
                                         { stars: '⭐⭐⭐⭐⭐', time: '2 days ago' }
                                     ].map((review, idx) => (
-                                        <div key={idx} className="metric-item">
-                                            <span className="metric-name">{review.stars}</span>
-                                            <span className="metric-value">{review.time}</span>
+                                        <div key={idx} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{review.stars}</span>
+                                            <span className="analytics-metric-value">{review.time}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -468,29 +468,29 @@ const AnalyticsPage = () => {
 
                     {/* Marketing & Social Tab */}
                     {activeTab === 'marketing' && (
-                        <div className="tab-content active">
-                            <div className="chart-container">
-                                <div className="chart-title">Social Media Engagement</div>
-                                <div className="social-grid">
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Social Media Engagement</div>
+                                <div className="analytics-social-grid">
                                     {[
                                         { platform: 'Facebook', followers: '2,341', engagement: '8.2% engagement', leads: '12 leads/month' },
                                         { platform: 'Instagram', followers: '1,876', engagement: '6.5% engagement', leads: '8 leads/month' },
                                         { platform: 'LinkedIn', followers: '892', engagement: '4.1% engagement', leads: '5 leads/month' },
                                         { platform: 'TikTok', followers: '3,210', engagement: '12.3% engagement', leads: '18 leads/month' }
                                     ].map((social) => (
-                                        <div key={social.platform} className="social-card">
-                                            <div className="social-platform">{social.platform}</div>
-                                            <div className="social-followers">{social.followers}</div>
-                                            <div className="social-engagement">{social.engagement}</div>
-                                            <div className="social-engagement">{social.leads}</div>
+                                        <div key={social.platform} className="analytics-social-card">
+                                            <div className="analytics-social-platform">{social.platform}</div>
+                                            <div className="analytics-social-followers">{social.followers}</div>
+                                            <div className="analytics-social-engagement">{social.engagement}</div>
+                                            <div className="analytics-social-engagement">{social.leads}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="chart-container">
-                                <div className="chart-title">Campaign ROI</div>
-                                <table className="data-table">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Campaign ROI</div>
+                                <table className="analytics-data-table">
                                     <thead>
                                         <tr>
                                             <th>Campaign</th>
@@ -511,7 +511,7 @@ const AnalyticsPage = () => {
                                                 <td>{campaign.spend}</td>
                                                 <td>{campaign.leads}</td>
                                                 <td>{campaign.revenue}</td>
-                                                <td><span className="kpi-change positive">{campaign.roi}</span></td>
+                                                <td><span className="analytics-kpi-change positive">{campaign.roi}</span></td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -522,54 +522,54 @@ const AnalyticsPage = () => {
 
                     {/* Operations Tab */}
                     {activeTab === 'operations' && (
-                        <div className="tab-content active">
-                            <div className="metrics-grid">
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Team Productivity</div>
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-metrics-grid">
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Team Productivity</div>
                                     {[
                                         { name: 'Jobs/Day', value: '8.4' },
                                         { name: 'Avg Job Duration', value: '4.2 hours' },
                                         { name: 'Drive Time Efficiency', value: '87%' },
                                         { name: 'Materials Waste', value: '3.2%' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Email AI Performance</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Email AI Performance</div>
                                     {[
                                         { name: 'Emails Scanned', value: '12,847' },
                                         { name: 'Claims Detected', value: '1,283' },
                                         { name: 'Accuracy Rate', value: '94%' },
                                         { name: 'Time Saved', value: '127 hrs/mo' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="metric-box">
-                                    <div className="metric-box-header">Response Times</div>
+                                <div className="analytics-metric-box">
+                                    <div className="analytics-metric-box-header">Response Times</div>
                                     {[
                                         { name: 'First Contact', value: '12 min' },
                                         { name: 'Quote Delivery', value: '2.4 hours' },
                                         { name: 'Same Day Inspection', value: '89%' },
                                         { name: 'Job Start', value: '3.2 days' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="chart-container">
-                                <div className="chart-title">Cost Analysis</div>
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Cost Analysis</div>
                                 <div style={{display: 'flex', justifyContent: 'space-around', padding: '2rem 0'}}>
                                     {[
                                         { value: '32%', label: 'Labor Costs' },
@@ -591,41 +591,41 @@ const AnalyticsPage = () => {
 
                     {/* Predictive Tab */}
                     {activeTab === 'predictive' && (
-                        <div className="tab-content active">
-                            <div className="chart-container">
-                                <div className="chart-title">🔮 Weather Forecast Impact</div>
-                                <div className="metrics-grid">
-                                    <div className="metric-box">
-                                        <div className="metric-box-header">Next 14 Days</div>
+                        <div className="analytics-tab-content active">
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">🔮 Weather Forecast Impact</div>
+                                <div className="analytics-metrics-grid">
+                                    <div className="analytics-metric-box">
+                                        <div className="analytics-metric-box-header">Next 14 Days</div>
                                         {[
                                             { name: 'Storm Probability', value: '65%' },
                                             { name: 'Estimated Leads', value: '45-60' },
                                             { name: 'Revenue Projection', value: '$450K-600K' }
                                         ].map((item) => (
-                                            <div key={item.name} className="metric-item">
-                                                <span className="metric-name">{item.name}</span>
-                                                <span className="metric-value">{item.value}</span>
+                                            <div key={item.name} className="analytics-metric-item">
+                                                <span className="analytics-metric-name">{item.name}</span>
+                                                <span className="analytics-metric-value">{item.value}</span>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="metric-box">
-                                        <div className="metric-box-header">Growth Projections</div>
+                                    <div className="analytics-metric-box">
+                                        <div className="analytics-metric-box-header">Growth Projections</div>
                                         {[
                                             { name: '3-Month Forecast', value: '$1.4M' },
                                             { name: '6-Month Pipeline', value: '$2.8M' },
                                             { name: 'Year-End Target', value: '85% complete' }
                                         ].map((item) => (
-                                            <div key={item.name} className="metric-item">
-                                                <span className="metric-name">{item.name}</span>
-                                                <span className="metric-value">{item.value}</span>
+                                            <div key={item.name} className="analytics-metric-item">
+                                                <span className="analytics-metric-name">{item.name}</span>
+                                                <span className="analytics-metric-value">{item.value}</span>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="chart-container">
-                                <div className="chart-title">Seasonal Trends</div>
+                            <div className="analytics-chart-container">
+                                <div className="analytics-chart-title">Seasonal Trends</div>
                                 <div style={{padding: '1rem'}}>
                                     {[
                                         { name: '🌸 Spring (Mar-May)', value: 'Highest storm activity' },
@@ -633,9 +633,9 @@ const AnalyticsPage = () => {
                                         { name: '🍂 Fall (Sep-Nov)', value: 'Moderate activity' },
                                         { name: '❄️ Winter (Dec-Feb)', value: 'Slow period - maintenance focus' }
                                     ].map((item) => (
-                                        <div key={item.name} className="metric-item">
-                                            <span className="metric-name">{item.name}</span>
-                                            <span className="metric-value">{item.value}</span>
+                                        <div key={item.name} className="analytics-metric-item">
+                                            <span className="analytics-metric-name">{item.name}</span>
+                                            <span className="analytics-metric-value">{item.value}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -645,8 +645,8 @@ const AnalyticsPage = () => {
                 </div>
 
                 {/* AI Insights Section */}
-                <div className="insights-container">
-                    <div className="insights-title">💡 AI-Generated Insights</div>
+                <div className="analytics-insights-container">
+                    <div className="analytics-insights-title">💡 AI-Generated Insights</div>
                     {[
                         { icon: '📈', text: 'Your email response time improved 25% this month - keep it up!' },
                         { icon: '🎯', text: 'State Farm approval rate is 15% higher than average - prioritize these claims' },
@@ -654,9 +654,9 @@ const AnalyticsPage = () => {
                         { icon: '👥', text: 'Consider hiring - you\'re at 95% capacity with growing demand' },
                         { icon: '🌧️', text: 'Rain forecast this weekend - expect 20+ leads, prepare crew availability' }
                     ].map((insight, idx) => (
-                        <div key={idx} className="insight-item">
-                            <span className="insight-icon">{insight.icon}</span>
-                            <span className="insight-text">{insight.text}</span>
+                        <div key={idx} className="analytics-insight-item">
+                            <span className="analytics-insight-icon">{insight.icon}</span>
+                            <span className="analytics-insight-text">{insight.text}</span>
                         </div>
                     ))}
                 </div>

@@ -136,16 +136,16 @@ const PaymentsPage = () => {
     return (
         <div>
             {/* Header */}
-            <div className="header">
-                <div className="header-left">
-                    <div className="crown-logo">
+            <div className="payments-header">
+                <div className="payments-header-left">
+                    <div className="payments-crown-logo">
                         <svg viewBox="0 0 24 24" fill="#1a1f3a">
                             <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
                         </svg>
                     </div>
                     <h1>Payments</h1>
                 </div>
-                <div className="header-actions">
+                <div className="payments-header-actions">
                     <button className="btn btn-outline" onClick={exportTransactions}>Export</button>
                     <button className="btn btn-primary" onClick={() => setActiveTab('create')}>+ Create Invoice</button>
                 </div>

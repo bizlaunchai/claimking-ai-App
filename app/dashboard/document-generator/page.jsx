@@ -119,30 +119,30 @@ const DocumentGenerator = () => {
     return (
         <div>
             {/* Top Header */}
-            <div className="top-header">
-                <div className="header-container">
-                    <div className="logo-section">
-                        <div className="logo">
+            <div className="document-generator-header">
+                <div className="document-generator-header-container">
+                    <div className="document-generator-logo-section">
+                        <div className="document-generator-logo">
                             <svg viewBox="0 0 24 24">
                                 <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
                             </svg>
                         </div>
-                        <div className="logo-text">ClaimKing.AI</div>
+                        <div className="document-generator-logo-text">ClaimKing.AI</div>
                     </div>
-                    <div className="nav-actions">
-                        <button className="nav-btn">
+                    <div className="document-generator-nav-actions">
+                        <button className="document-generator-nav-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                             My Documents
                         </button>
-                        <button className="nav-btn">
+                        <button className="document-generator-nav-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             Recent
                         </button>
-                        <button className="nav-btn primary" onClick={() => setShowModal(true)}>
+                        <button className="document-generator-nav-btn primary" onClick={() => setShowModal(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 4v16m8-8H4"/>
                             </svg>

@@ -1,4 +1,8 @@
 {
+  "name": "claimking-ai-app",
+  "version": "1.0.0",
+  "description": "ClaimKing AI Application",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

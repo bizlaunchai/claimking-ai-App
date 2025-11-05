@@ -223,11 +223,11 @@ const MockupStudio = () => {
     return (
         <div className="mockup-container">
             {/* Header Section */}
-            <div className="header-section">
-                <div className="header-content">
-                    <div className="header-left">
-                        <div className="page-title">
-                            <div className="crown-logo">
+            <div className="mockup-3d-header-section">
+                <div className="mockup-3d-header-content">
+                    <div className="mockup-3d-header-left">
+                        <div className="mockup-3d-page-title">
+                            <div className="mockup-3d-crown-logo">
                                 <svg viewBox="0 0 24 24" fill="#1a1f3a" width="24" height="24">
                                     <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
                                 </svg>
@@ -237,14 +237,14 @@ const MockupStudio = () => {
                                 <span className="title-line2">Studio</span>
                             </div>
                         </div>
-                        <p className="page-subtitle">AI-powered exterior visualization tool</p>
-                        <div className="status-badges">
-                            <div className="status-badge active">AI Ready</div>
-                            <div className="status-badge active">HD Rendering</div>
-                            <div className="status-badge active">Photorealistic Mode</div>
+                        <p className="mockup-3d-page-subtitle">AI-powered exterior visualization tool</p>
+                        <div className="mockup-3d-status-badges">
+                            <div className="mockup-3d-status-badge active">AI Ready</div>
+                            <div className="mockup-3d-status-badge active">HD Rendering</div>
+                            <div className="mockup-3d-status-badge active">Photorealistic Mode</div>
                         </div>
                     </div>
-                    <div className="header-actions">
+                    <div className="mockup-3d-header-actions">
                         <button className="btn btn-outline" onClick={() => setShowGallery(true)}>View Mockup Gallery</button>
                         <button className="btn btn-outline" onClick={() => setShowRecent(true)}>Recent Projects</button>
                         <button className="btn btn-outline" onClick={() => setShowTemplates(true)}>Mockup Templates</button>
