@@ -1,6 +1,7 @@
 "use client"
 import React, {useEffect, useRef, useState} from 'react';
 import "./measurement.css"
+import FileUploader from "@/utiles/FileUploader.jsx";
 
 const Page = () => {
 
@@ -21,6 +22,9 @@ const Page = () => {
         { message: '• Measuring linear elements...', status: 'pending' }
     ]);
     const [viewAllReportModal, setViewAllReportModal] = useState(false)
+    const [measurementReportsFiles, setMeasurementReportsFiles] = useState([])
+    const [droneFiles, setDroneFiles] = useState([])
+
 
     // Refs
     const reportFileRef = useRef(null);
@@ -413,7 +417,7 @@ const Page = () => {
                         {/* Upload Report Tab */}
                         {activeInputTab === 'report' && (
                             <div className="tab-content active">
-                                <div className="upload-zone" onClick={() => reportFileRef.current?.click()}>
+                                {/*<div className="upload-zone" onClick={() => reportFileRef.current?.click()}>
                                     <p className="upload-text" style={{marginBottom: '0.5rem'}}>Drag & drop measurement
                                         reports here</p>
                                     <p className="upload-subtext">PDF, XML, ESX, JPG, PNG</p>
@@ -425,7 +429,9 @@ const Page = () => {
                                         accept=".pdf,.xml,.esx,.jpg,.png"
                                         onChange={handleFileUpload}
                                     />
-                                </div>
+                                </div>*/}
+
+                                <FileUploader label={'Drag & drop measurement reports here'} files={measurementReportsFiles} setFiles={setMeasurementReportsFiles} allowedExtensions={['.pdf', '.xml', '.esx', '.jpg', '.png']} maxFiles={2} />
 
                                 <div className="provider-badges">
                                     <div className="provider-badge">EagleView</div>
@@ -519,11 +525,12 @@ const Page = () => {
                                     </div>
                                 </div>
 
-                                <div className="upload-zone">
-                                    <p className="upload-text" style={{marginBottom: '0.5rem'}}>Upload drone photos or
-                                        video</p>
+                                {/*<div className="upload-zone">
+                                    <p className="upload-text" style={{marginBottom: '0.5rem'}}>Upload drone photos or video</p>
                                     <p className="upload-subtext">JPG, PNG, MP4, MOV</p>
-                                </div>
+                                </div>*/}
+
+                                <FileUploader label={'Upload drone photos or video'} files={droneFiles} setFiles={setDroneFiles} allowedExtensions={['.jpg', '.png', '.mp4', '.mov']} maxSizeMB={10} maxFiles={1} />
 
                                 <div style={{
                                     padding: '1rem',
