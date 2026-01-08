@@ -409,7 +409,7 @@ const SupplementsManagement = () => {
 
                 <div className="upload-estimates-section">
                     <h3 className="section-header">Upload Insurance Estimates and/or Other Documents</h3>
-                    <FileUploader files={files} setFiles={setFiles} />
+                    <FileUploader label='Drag and drop estimate files and any other documents for this supplement' files={files} setFiles={setFiles} />
                 </div>
 
                 {/* Supplement Items Section */}

@@ -1,113 +1,85 @@
-'use client';
-
 import { Dropzone, FileMosaic } from "@files-ui/react";
+import crypto from "crypto";
 
 const DEFAULT_ALLOWED = [
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".pdf",
-    ".doc",
-    ".docx",
+    ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx",
 ];
 
 export default function FileUploader({
                                          files,
                                          setFiles,
                                          allowedExtensions = DEFAULT_ALLOWED,
-                                         maxSizeMB = null, // optional
+                                         maxSizeMB = 5,
                                          maxFiles = 10,
+                                         label = 'Drop your files here...',
+                                         labelStyle = { fontSize: 16, marginBottom: 2 },
                                      }) {
     const accept = allowedExtensions.join(",");
 
-  /*  const updateFiles = async (incomingFiles) => {
-        let valid = incomingFiles.filter(file =>
-            allowedExtensions.some(ext =>
-                file.name.toLowerCase().endsWith(ext)
-            )
-        );
-
-        if (maxSizeMB) {
-            const maxBytes = maxSizeMB * 1024 * 1024;
-            valid = valid.filter(file => file.size <= maxBytes);
-        }
-
-        if (valid.length !== incomingFiles.length) {
-            alert(
-                `Only ${allowedExtensions.join(", ")} files are allowed` +
-                (maxSizeMB ? ` (Max ${maxSizeMB}MB)` : "")
-            );
-        }
-
-        // 👉 Upload each file (recommended)
-        for (const item of valid) {
-            const formData = new FormData();
-            formData.append("file", item.file); // ✅ IMPORTANT
-
-            const res = await fetch("/api/upload-file", {
-                method: "POST",
-                body: formData,
-            });
-
-            const result = await res.json();
-            console.log("Uploaded:", result);
-        }
-
-        setFiles(valid);
-    };
-
-
-    const removeFile = (id) => {
-        setFiles(files.filter((x) => x.id !== id));
-    };*/
-
     const removeFile = async (file) => {
-
-        console.log(file?.serverResponse?.payload?.key);
-        // return;
-
         try {
             if (file?.serverResponse?.payload?.key) {
                 await fetch("/api/upload-file", {
                     method: "DELETE",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ key: file?.serverResponse?.payload?.key }),
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ key: file.serverResponse.payload.key }),
                 });
             }
-            // Remove from state
             setFiles(files.filter((x) => x.id !== file.id));
         } catch (err) {
             console.error("Failed to delete file from S3:", err);
         }
     };
 
-
     return (
         <Dropzone
             value={files}
-            onChange={setFiles} // optional, you can still use updateFiles for filtering
+            onChange={(incomingFiles) => {
+                // Assign unique IDs to local files
+                const filesWithId = incomingFiles.map(f => ({
+                    ...f,
+                    id: f.id || crypto.randomUUID(),
+                }));
+                setFiles(filesWithId);
+            }}
             accept={accept}
-            maxFileSize={5 * 1024 * 1024} // 28MB
+            maxFileSize={`${maxSizeMB}` * 1024 * 1024}
             maxFiles={maxFiles}
             actionButtons={{ position: "bottom", uploadButton: {}, abortButton: {} }}
+            hideInstructions={true}
             uploadConfig={{
                 url: "/api/upload-file",
                 method: "POST",
-                headers: {
-                    // You can send auth if needed
-                    Authorization: "Bearer MY_SECRET_TOKEN",
-                },
+                headers: { Authorization: "Bearer MY_SECRET_TOKEN" },
                 cleanOnUpload: true,
                 autoUpload: true
             }}
             onUploadFinish={(uploadedFiles) => {
-                console.log("All uploads finished", uploadedFiles);
-                // Update state with uploaded file info if you want
-                setFiles(uploadedFiles);
+                // Merge uploaded files with existing files
+                const filesWithId = uploadedFiles.map(file => ({
+                    ...file,
+                    id: file.id || crypto.randomUUID(),
+                }));
+
+                // Merge: existing files that are not in uploadedFiles + new uploadedFiles
+                const allFiles = [
+                    ...files.filter(f => !filesWithId.some(u => u.id === f.id)),
+                    ...filesWithId
+                ];
+
+                setFiles(allFiles);
             }}
+            footerConfig={{ style: { display: "none" } }}
         >
+            {files.length === 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                    <div style={labelStyle}>{label}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                        Allowed file types: {allowedExtensions.join(", ")}
+                    </div>
+                </div>
+            )}
+
             {files.map((file) => (
                 <FileMosaic
                     key={file.id}
@@ -118,6 +90,5 @@ export default function FileUploader({
                 />
             ))}
         </Dropzone>
-
     );
 }
