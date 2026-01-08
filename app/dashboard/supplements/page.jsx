@@ -2,6 +2,12 @@
 import React, {useState, useEffect, useRef, useMemo} from 'react';
 import Chart from 'chart.js/auto';
 import './supplement.css';
+import dynamic from "next/dynamic";
+
+const FileUploader = dynamic(
+    () => import("@/utiles/FileUploader"),
+    { ssr: false }
+);
 
 const SupplementsManagement = () => {
     // State declarations
@@ -17,6 +23,8 @@ const SupplementsManagement = () => {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [supplementType, setSupplementType] = useState('');
     const [additionalNotes, setAdditionalNotes] = useState('');
+    const [files, setFiles] = useState([]);
+
 
     // Sample data
     const sampleClients = [
@@ -362,7 +370,7 @@ const SupplementsManagement = () => {
                 </div>
 
                 {/* Upload Estimates Section */}
-                <div className="upload-estimates-section">
+                {/*<div className="upload-estimates-section">
                     <h3 className="section-header">Upload Insurance Estimates and/or Other Documents</h3>
                     <div
                         className="upload-box"
@@ -397,6 +405,11 @@ const SupplementsManagement = () => {
                             </div>
                         ))}
                     </div>
+                </div>*/}
+
+                <div className="upload-estimates-section">
+                    <h3 className="section-header">Upload Insurance Estimates and/or Other Documents</h3>
+                    <FileUploader files={files} setFiles={setFiles} />
                 </div>
 
                 {/* Supplement Items Section */}
@@ -1374,6 +1387,5 @@ const SupplementsTable = () => {
         </div>
     );
 };
-
 
 export default SupplementsManagement;
