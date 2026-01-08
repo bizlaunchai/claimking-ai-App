@@ -1,12 +1,13 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react';
 import "./3d-mockup.css"
+import FileUploader from "@/utiles/FileUploader.jsx";
 
 const MockupStudio = () => {
     const [clientTab, setClientTab] = useState('existing');
     const [selectedClient, setSelectedClient] = useState(null);
     const [materialTab, setMaterialTab] = useState('roofing');
-    const [selectedPhoto, setSelectedPhoto] = useState(null);
+    // const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [showGallery, setShowGallery] = useState(false);
     const [showRecent, setShowRecent] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
@@ -20,6 +21,8 @@ const MockupStudio = () => {
         trim: null,
         windows: null
     });
+    const [files, setFiles] = useState([])
+    const selectedPhoto = files?.[0]?.serverResponse?.payload?.url || null;
     
     const fileInputRef = useRef(null);
 
@@ -57,7 +60,7 @@ const MockupStudio = () => {
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                setSelectedPhoto(e.target.result);
+                // setSelectedPhoto(e.target.result);
             };
             reader.readAsDataURL(file);
         }
@@ -70,7 +73,7 @@ const MockupStudio = () => {
         if (file && file.type.startsWith('image/')) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                setSelectedPhoto(e.target.result);
+                // setSelectedPhoto(e.target.result);
             };
             reader.readAsDataURL(file);
         }
@@ -123,7 +126,7 @@ const MockupStudio = () => {
     const startOver = () => {
         if (confirm('Are you sure you want to start over?')) {
             setSelectedClient(null);
-            setSelectedPhoto(null);
+            // setSelectedPhoto(null);
             setShowSharing(false);
             setMaterialTab('roofing');
             setSelectedColors({
@@ -358,7 +361,7 @@ const MockupStudio = () => {
                     <div className="panel-card">
                         <h3 className="panel-header">Photo Upload & Management</h3>
                         
-                        <div 
+                        {/*<div
                             className={`upload-zone ${selectedPhoto ? 'has-photo' : ''}`}
                             onClick={() => fileInputRef.current?.click()}
                             onDrop={handleDrop}
@@ -375,7 +378,9 @@ const MockupStudio = () => {
                                 accept="image/*"
                                 onChange={handlePhotoUpload}
                             />
-                        </div>
+                        </div>*/}
+
+                        <FileUploader label={'Upload Property Photo'} files={files} setFiles={setFiles} allowedExtensions={['.jpg', '.png', '.heif']} maxFiles={1} maxSizeMB={50} />
                         
                         <div className="upload-buttons">
                             <button className="upload-btn">Take Photo</button>
@@ -383,7 +388,7 @@ const MockupStudio = () => {
                         </div>
 
                         {/* Photo Display */}
-                        {selectedPhoto && (
+                       {/* {selectedPhoto && (
                             <div className="photo-display active">
                                 <div className="photo-preview">
                                     <img src={selectedPhoto} alt="Property preview" />
@@ -399,7 +404,7 @@ const MockupStudio = () => {
                                 </div>
                             </div>
                         )}
-
+*/}
                         {/* Photo Analysis Results */}
                         <div className="analysis-box">
                             <div className="analysis-title">Detected Elements:</div>
