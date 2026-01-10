@@ -1,6 +1,11 @@
 'use client'
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import "./policy-analysis.css"
+import dynamic from "next/dynamic";
+const FileUploader = dynamic(
+    () => import("@/utiles/FileUploader"),
+    { ssr: false }
+);
 
 const PolicyAnalysis = () => {
     const [currentStep, setCurrentStep] = useState(1);
@@ -17,6 +22,8 @@ const PolicyAnalysis = () => {
     
     const fileInputRef = useRef(null);
     const uploadZoneRef = useRef(null);
+
+    const [files, setFiles] = useState([])
 
     const clients = [
         { name: 'Sarah Johnson', carrier: 'State Farm', policy: '#SF-2024-789456' },
@@ -322,7 +329,35 @@ const PolicyAnalysis = () => {
                         
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Upload Zone */}
-                            <div>
+
+                         <div>
+                             <FileUploader label='Drag & drop policy documents here' files={files} setFiles={setFiles} allowedExtensions={['.pdf', '.jpg', '.doc', '.docx']} maxSizeMB={50} />
+
+                             <div id="upload-placeholder">
+                                 <div className="grid grid-cols-2 gap-2 mt-4">
+                                     <button
+                                         onClick={() => alert('Camera feature will open device camera for document capture')}
+                                         className="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition"
+                                     >
+                                         📷 Take Photo
+                                     </button>
+                                     <button
+                                         onClick={() => alert('Email import will connect to your email to import policy documents')}
+                                         className="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition"
+                                     >
+                                         ✉️ Import Email
+                                     </button>
+                                     <button
+                                         onClick={() => alert('Document scanner will open scanning interface')}
+                                         className="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition"
+                                     >
+                                         📄 Scan Doc
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+
+                           {/* <div>
                                 <div 
                                     ref={uploadZoneRef}
                                     id="upload-zone"
@@ -376,7 +411,7 @@ const PolicyAnalysis = () => {
                                         </div>
                                     )}
                                 </div>
-                            </div>
+                            </div>*/}
 
                             {/* Document Checklist & Uploaded Files */}
                             <div>
@@ -433,9 +468,9 @@ const PolicyAnalysis = () => {
                             <button 
                                 id="analyze-button"
                                 onClick={handleAnalyze}
-                                disabled={uploadedFiles.length === 0 || isAnalyzing}
+                                disabled={files.length === 0 || isAnalyzing}
                                 className={`analyze-button px-8 py-3 rounded-lg font-medium text-lg transition ${
-                                    uploadedFiles.length === 0 || isAnalyzing
+                                    files.length === 0 || isAnalyzing
                                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                         : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'
                                 } ${isAnalyzing ? 'processing' : ''}`}
@@ -451,7 +486,7 @@ const PolicyAnalysis = () => {
                                     </div>
                                 ) : (
                                     <span className="button-text">
-                                        {uploadedFiles.length === 0 
+                                        {files.length === 0
                                             ? 'Select Files to Enable Analysis' 
                                             : showResults 
                                                 ? 'Re-analyze Policy' 
