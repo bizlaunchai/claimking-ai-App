@@ -10,7 +10,7 @@ export default function FileUploader({
                                          setFiles,
                                          allowedExtensions = DEFAULT_ALLOWED,
                                          maxSizeMB = 5,
-                                         maxFiles = 10,
+                                         maxFiles = 1,
                                          label = 'Drop your files here...',
                                          labelStyle = { fontSize: 16, marginBottom: 2 },
                                      }) {
