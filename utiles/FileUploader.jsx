@@ -70,6 +70,10 @@ export default function FileUploader({
                 setFiles(allFiles);
             }}
             footerConfig={{ style: { display: "none" } }}
+            headerConfig={{
+                cleanFiles: false,
+                deleteFiles: false,
+            }}
         >
             {files.length === 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
