@@ -43,15 +43,6 @@ body {
     gap: 0.75rem;
 }
 
-.crown-logo {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, #FDB813, #d4a000);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-}
 
 .page-subtitle {
     font-size: 0.875rem;

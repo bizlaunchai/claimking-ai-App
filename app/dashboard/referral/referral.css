@@ -22,23 +22,6 @@
     gap: 0.75rem;
 }
 
-.crown-logo {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, #FDB813, #d4a000);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.crown-logo svg {
-    width: 20px;
-    height: 20px;
-    fill: #1a1f3a;
-}
-
 .referral-header h1 {
     font-size: 1.25rem;
     font-weight: 700;

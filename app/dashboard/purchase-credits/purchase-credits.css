@@ -55,22 +55,6 @@ body {
     gap: 1rem;
 }
 
-.crown-logo {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, var(--primary-gold), var(--dark-gold));
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.crown-logo svg {
-    width: 24px;
-    height: 24px;
-    fill: var(--navy-blue);
-}
 
 .page-title {
     font-size: 1.5rem;
