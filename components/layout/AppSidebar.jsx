@@ -8,10 +8,10 @@ import {LogoutButton} from "@/components/logout-button";
 import Link from "next/link";
 import {usePathname} from "next/navigation";
 
-function Sidebar() {
+function Sidebar({isCollapsed, setIsCollapsed}) {
     const sidebarRef = useRef(null);
     const resizeHandleRef = useRef(null);
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    // const [isCollapsed, setIsCollapsed] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
 
     const pathname = usePathname();
@@ -106,11 +106,11 @@ function Sidebar() {
     return (
         <>
             <div
-                className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}
+                className={`sidebar   ${isCollapsed ? 'collapsed' : ''}`}
                 id="sidebar"
                 ref={sidebarRef}
                 // Optional: set initial width if not handled by CSS
-                style={{ width: isCollapsed ? '62px' : '250px', height: '100$' }}
+                style={{ width: isCollapsed ? '62px' : '250px', height: '100px' }}
             >
 
                 <div style={{borderBottom: '1px solid var(--border-color)'}} className='pb-2'>

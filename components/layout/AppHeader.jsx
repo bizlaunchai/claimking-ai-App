@@ -129,7 +129,7 @@ const AppHeader = () => {
                         >
                             Free Demo
                         </button>
-                        <button className="btn btn-primary">Start Free Trial</button>
+                        <Link href='/auth/login' className="btn btn-primary">Start Free Trial</Link>
                         <button
                             className={`hamburger ${menuActive ? "active" : ""}`}
                             onClick={toggleMenu}
@@ -184,9 +184,15 @@ const AppHeader = () => {
                     </div>
 
                     <div className="mobile-cta">
-                        <button className="btn btn-secondary">Sign In</button>
+
+                        {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
+                        {/*<Link href='/auth/login' className="btn btn-secondary">*/}
+                        {/*    Sign in*/}
+                        {/*</Link>*/}
                         <button className="btn btn-demo">Free Demo</button>
-                        <button className="btn btn-primary">Start Free Trial</button>
+                        <Link href='/auth/login' className="btn btn-secondary">
+                            Start Free Trial
+                        </Link>
                     </div>
 
                     {/* Contact Info */}
