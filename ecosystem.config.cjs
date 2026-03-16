@@ -3,7 +3,7 @@ module.exports = {
         {
             name: 'claimking',
             script: 'yarn start',
-            port: 8003,
+            port: 3000,
         },
     ],
 };
