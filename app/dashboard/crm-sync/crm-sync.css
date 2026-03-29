@@ -1,6 +1,6 @@
 /* Main Content */
 .main-container {
-    max-width: 1200px;
+    /*max-width: 1200px;*/
     margin: 0 auto;
     padding: 2rem;
 }
@@ -16,7 +16,7 @@
 }
 
 .crm-sync-header-container {
-    max-width: 1200px;
+    /*max-width: 1200px;*/
     margin: 0 auto;
     padding: 0 2rem;
     display: flex;

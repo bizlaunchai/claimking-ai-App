@@ -20,9 +20,9 @@ const SocialMedia = () => {
             iconClass: 'facebook-icon',
             connected: true,
             stats: {
-                pageLikes: '12,345',
-                followers: '12,890',
-                weeklyReach: '45.2K'
+                pageLikes: '-',
+                followers: '-',
+                weeklyReach: '-'
             }
         },
         {
@@ -32,9 +32,9 @@ const SocialMedia = () => {
             iconClass: 'instagram-icon',
             connected: true,
             stats: {
-                followers: '8,765',
-                following: '234',
-                posts: '456'
+                followers: '-',
+                following: '-',
+                posts: '-'
             }
         },
         {
@@ -150,11 +150,6 @@ const SocialMedia = () => {
             <div className="header-section">
                 <div className="header-content">
                     <div className="page-title">
-                        <div className="crown-logo">
-                            <svg viewBox="0 0 24 24" fill="#1a1f3a" width="24" height="24">
-                                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                            </svg>
-                        </div>
                         Social Media
                     </div>
                     <p className="page-subtitle">Connect your accounts and share your projects</p>
@@ -257,34 +252,34 @@ const SocialMedia = () => {
                     <h2 className="section-title">Analytics Overview</h2>
                     <div className="analytics-grid">
                         <div className="metric-card">
-                            <div className="metric-value">98.5K</div>
+                            <div className="metric-value">0</div>
                             <div className="metric-label">Total Views</div>
-                            <div className="metric-change change-positive">↑ 12% from last week</div>
+                            <div className="metric-change change-positive">↑ 0% from last week</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-value">4,567</div>
+                            <div className="metric-value">0</div>
                             <div className="metric-label">Engagements</div>
-                            <div className="metric-change change-positive">↑ 8% from last week</div>
+                            <div className="metric-change change-positive">↑ 0% from last week</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-value">234</div>
+                            <div className="metric-value">0</div>
                             <div className="metric-label">New Followers</div>
-                            <div className="metric-change change-negative">↓ 3% from last week</div>
+                            <div className="metric-change change-negative">↓ 0% from last week</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-value">89</div>
+                            <div className="metric-value">0</div>
                             <div className="metric-label">Posts Shared</div>
-                            <div className="metric-change change-positive">↑ 15% from last week</div>
+                            <div className="metric-change change-positive">↑ 0% from last week</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-value">1.2K</div>
+                            <div className="metric-value">0</div>
                             <div className="metric-label">Profile Visits</div>
-                            <div className="metric-change change-positive">↑ 5% from last week</div>
+                            <div className="metric-change change-positive">↑ 0% from last week</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-value">4.5%</div>
+                            <div className="metric-value">0%</div>
                             <div className="metric-label">Engagement Rate</div>
-                            <div className="metric-change change-positive">↑ 0.3% from last week</div>
+                            <div className="metric-change change-positive">↑ 0% from last week</div>
                         </div>
                     </div>
                 </div>
