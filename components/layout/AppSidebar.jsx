@@ -171,7 +171,7 @@ function Sidebar({isCollapsed, setIsCollapsed}) {
                                     </svg>
                                 </span>
                                 <span className="nav-text">Active Claims</span>
-                                <span className="nav-badge count">127</span>
+                                {/*<span className="nav-badge count">127</span>*/}
                             </Link>
                         </div>
 
@@ -183,7 +183,7 @@ function Sidebar({isCollapsed, setIsCollapsed}) {
                                     </svg>
                                 </span>
                                 <span className="nav-text">Supplements</span>
-                                <span className="nav-badge count">18</span>
+                                {/*<span className="nav-badge count">18</span>*/}
                             </Link>
                         </div>
 
