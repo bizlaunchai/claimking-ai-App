@@ -17,13 +17,12 @@ body {
     background: white;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     padding: 1rem 0;
-    width: 100%;
     top: 0;
     z-index: 100;
 }
 
 .document-generator-header-container {
-    max-width: 1400px;
+    /*max-width: 1400px;*/
     margin: 0 auto;
     padding: 0 2rem;
     display: flex;
@@ -125,7 +124,7 @@ body {
 
 /* Main Container */
 .main-container {
-    max-width: 1400px;
+    /*max-width: 1400px;*/
     margin: 0 auto;
     padding: 100px 2rem 2rem;
 }
