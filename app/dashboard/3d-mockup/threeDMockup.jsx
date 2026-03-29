@@ -230,11 +230,6 @@ const ThreeDMockup = () => {
                 <div className="mockup-3d-header-content">
                     <div className="mockup-3d-header-left">
                         <div className="mockup-3d-page-title">
-                            <div className="mockup-3d-crown-logo">
-                                <svg viewBox="0 0 24 24" fill="#1a1f3a" width="24" height="24">
-                                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                                </svg>
-                            </div>
                             <div className="title-text">
                                 <span className="title-line1">3D Mockup</span>
                                 <span className="title-line2">Studio</span>
@@ -284,7 +279,7 @@ const ThreeDMockup = () => {
                                 placeholder="Type client name, address, or phone..."
                             />
                             
-                            <div style={{ display: 'grid', gap: '0.5rem' }}>
+                            {/*<div style={{ display: 'grid', gap: '0.5rem' }}>
                                 <div className="client-option" onClick={() => handleClientSelect('Johnson Property')}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: '6px', cursor: 'pointer' }}>
                                         <div>
@@ -294,7 +289,7 @@ const ThreeDMockup = () => {
                                         <button className="btn btn-outline" style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem' }}>Select Client</button>
                                     </div>
                                 </div>
-                            </div>
+                            </div>*/}
                         </div>
                     )}
                     
@@ -790,7 +785,7 @@ const ThreeDMockup = () => {
                                 </select>
                             </div>
                             <div className="gallery-grid">
-                                {['Johnson Property', 'Smith Residence', 'Davis Complex', 'Wilson Estate'].map((client, idx) => (
+                                {/*{['Johnson Property', 'Smith Residence', 'Davis Complex', 'Wilson Estate'].map((client, idx) => (
                                     <div key={idx} className="gallery-item">
                                         <div className="gallery-image"></div>
                                         <div className="gallery-info">
@@ -799,7 +794,7 @@ const ThreeDMockup = () => {
                                             <div className="gallery-type">Roof + Siding</div>
                                         </div>
                                     </div>
-                                ))}
+                                ))}*/}
                             </div>
                         </div>
                     </div>
@@ -815,7 +810,7 @@ const ThreeDMockup = () => {
                             <button className="modal-close" onClick={() => closeModal('recent')}>×</button>
                         </div>
                         <div className="modal-body">
-                            <div className="recent-list">
+                            {/*<div className="recent-list">
                                 <div className="recent-item">
                                     <div className="recent-preview"></div>
                                     <div className="recent-details">
@@ -854,7 +849,7 @@ const ThreeDMockup = () => {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </div>*/}
                         </div>
                     </div>
                 </div>
@@ -869,7 +864,7 @@ const ThreeDMockup = () => {
                             <button className="modal-close" onClick={() => closeModal('templates')}>×</button>
                         </div>
                         <div className="modal-body">
-                            <div className="templates-grid">
+                           {/* <div className="templates-grid">
                                 {[
                                     { name: 'Modern Farmhouse', desc: 'White siding, black trim, charcoal roof' },
                                     { name: 'Classic Colonial', desc: 'Cream siding, white trim, weathered wood roof' },
@@ -883,7 +878,7 @@ const ThreeDMockup = () => {
                                         <button className="template-use-btn">Use Template</button>
                                     </div>
                                 ))}
-                            </div>
+                            </div>*/}
                             <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
                                 <button className="btn btn-primary">Create New Template</button>
                             </div>
