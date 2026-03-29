@@ -735,12 +735,6 @@ const BuyCreditsPage = () => {
         <>
             <div className="page-header">
                 <div className="header-left">
-                    <div className="crown-logo">
-                        <svg viewBox="0 0 24 24">
-                            <path
-                                d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                        </svg>
-                    </div>
                     <h1 className="page-title">Buy Credits</h1>
                 </div>
             </div>
@@ -754,7 +748,7 @@ const BuyCreditsPage = () => {
                         <div className="balance-info">
                             <div className="balance-label">Current Balance</div>
                             <div className="balance-value">
-                                <span id="creditBalance">23</span>
+                                <span id="creditBalance">0</span>
                                 <span className="credit-label">Credits</span>
                             </div>
                         </div>
@@ -765,7 +759,7 @@ const BuyCreditsPage = () => {
                         </div>
                     </div>
                     <div className="balance-meter">
-                        <div className="balance-fill" style={{width: '23%'}}></div>
+                        {/*<div className="balance-fill" style={{width: '0%'}}></div>*/}
                     </div>
                 </div>
 
@@ -1111,7 +1105,7 @@ const BuyCreditsPage = () => {
                     </div>
                     <div className="payment-methods-list">
                         {/* Default Payment Method */}
-                        <div className="payment-method-item default">
+                        {/*<div className="payment-method-item default">
                             <div className="payment-method-icon">
                                 <svg viewBox="0 0 24 24" width="24" height="24">
                                     <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
@@ -1131,7 +1125,7 @@ const BuyCreditsPage = () => {
                             </div>
                         </div>
 
-                        {/* Secondary Payment Method */}
+                         Secondary Payment Method
                         <div className="payment-method-item">
                             <div className="payment-method-icon">
                                 <svg viewBox="0 0 24 24" width="24" height="24">
@@ -1152,7 +1146,7 @@ const BuyCreditsPage = () => {
                             </div>
                         </div>
 
-                        {/* Bank Account */}
+                         Bank Account
                         <div className="payment-method-item">
                             <div className="payment-method-icon">
                                 <svg viewBox="0 0 24 24" width="24" height="24">
@@ -1173,7 +1167,7 @@ const BuyCreditsPage = () => {
                             </div>
                         </div>
 
-                        {/* Crypto Wallet */}
+                         Crypto Wallet
                         <div className="payment-method-item">
                             <div className="payment-method-icon crypto">
                                 <svg viewBox="0 0 24 24" width="24" height="24">
@@ -1194,7 +1188,7 @@ const BuyCreditsPage = () => {
                             </div>
                         </div>
 
-                        {/* Ethereum Wallet */}
+                         Ethereum Wallet
                         <div className="payment-method-item">
                             <div className="payment-method-icon crypto">
                                 <svg viewBox="0 0 24 24" width="24" height="24">
@@ -1213,7 +1207,7 @@ const BuyCreditsPage = () => {
                                 <button className="payment-action-btn" onClick={() => editPaymentMethod(5)}>Edit</button>
                                 <button className="payment-action-btn remove" onClick={() => removePaymentMethod(5)}>Remove</button>
                             </div>
-                        </div>
+                        </div>*/}
                     </div>
                 </div>
 
@@ -1417,7 +1411,7 @@ const BuyCreditsPage = () => {
                             <div>INVOICE</div>
                         </div>
 
-                        <div className="table-row">
+                        {/*<div className="table-row">
                             <div data-label="Date:">Oct 15, 2024</div>
                             <div data-label="Credits:">10</div>
                             <div data-label="Amount:">$1,800.00</div>
@@ -1451,7 +1445,7 @@ const BuyCreditsPage = () => {
                             <div data-label="Payment:">ACH Transfer</div>
                             <div data-label="Status:"><span className="status-badge status-completed">Completed</span></div>
                             <div data-label="Invoice:"><button className="invoice-btn">Download</button></div>
-                        </div>
+                        </div>*/}
                     </div>
                 </div>
             </div>
