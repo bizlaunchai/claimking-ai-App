@@ -1,6 +1,10 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
 import "./claims.css"
+import StatCard from "@/app/dashboard/claims/Components/StatCard.js";
+import AnalyticsCard from "@/app/dashboard/claims/Components/AnalyticsCard.js";
+import RecentActivity from "@/app/dashboard/claims/Components/RecentActivity.js";
+import ActionItems from "@/app/dashboard/claims/Components/ActionItems.js";
 
 const ClaimsManagement = () => {
     // State declarations
@@ -17,6 +21,26 @@ const ClaimsManagement = () => {
     const [showClaimModal, setShowClaimModal] = useState(false);
     const [showMoveMenu, setShowMoveMenu] = useState(false);
     const [moveMenuClaimId, setMoveMenuClaimId] = useState(null);
+    const [recentActivities, setRecentActivities] = useState([]);
+    const [actionItems, setActionItems] = useState([]);
+
+    const [statsData, setStatsData] = useState({
+        totalClaims: { value: "0", change: "0% vs last month", isPositive: true },
+        actionRequired: { value: "0", change: "0 overdue", isPositive: false },
+        pipelineValue: { value: "$0", change: "0% increase", isPositive: true },
+        highPriority: { value: "0", change: "0 critical", isPositive: false },
+        needSupplement: { value: "0", change: "0 ready", isPositive: true },
+        avgResolution: { value: "0d", change: "0d faster", isPositive: true },
+    });
+
+    const [analyticsData, setAnalyticsData] = useState({
+        totalClaims: { value: "0", trend: "0%", subtitle: "Active in Pipeline", progress: 0 },
+        pipelineValue: { value: "$0", trend: "0%", subtitle: "Total Potential Revenue", progress: 0 },
+        avgDays: { value: "0", trend: "0d", stages: ["0d", "0d", "0d"] },
+        successRate: { value: "0%", trend: "0%", approved: 0, declined: 0, pending: 0 },
+        needAction: { value: "0", overdue: 0, supplement: 0, schedule: 0 },
+        avgClaim: { value: "$0", trend: "0%", min: "$0", max: "$0", median: "$0" }
+    });
 
     const stageNames = [
         'Need Claim Number',
@@ -35,7 +59,8 @@ const ClaimsManagement = () => {
 
     // Generate sample claims
     const generateClaims = () => {
-        const distributions = [8, 10, 15, 6, 8, 9, 12, 4, 8];
+        // const distributions = [8, 10, 15, 6, 8, 9, 12, 4, 8];
+        const distributions = [];
         const claims = [];
         let claimId = 1;
 
@@ -589,68 +614,13 @@ const ClaimsManagement = () => {
                 </div>
             </div>
 
-            {/* Stats Overview */}
             <div className="stats-overview">
-                <div className="stat-item">
-                    <div className="stat-value">80</div>
-                    <div className="stat-label">Total Claims</div>
-                    <div className="stat-change positive">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z" transform="rotate(180 6 6)"/>
-                        </svg>
-                        12% vs last month
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-value">12</div>
-                    <div className="stat-label">Action Required</div>
-                    <div className="stat-change negative">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z"/>
-                        </svg>
-                        3 overdue
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-value">$1.4M</div>
-                    <div className="stat-label">Pipeline Value</div>
-                    <div className="stat-change positive">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z" transform="rotate(180 6 6)"/>
-                        </svg>
-                        28% increase
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-value">15</div>
-                    <div className="stat-label">High Priority</div>
-                    <div className="stat-change negative">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z"/>
-                        </svg>
-                        5 critical
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-value">8</div>
-                    <div className="stat-label">Need Supplement</div>
-                    <div className="stat-change positive">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z" transform="rotate(180 6 6)"/>
-                        </svg>
-                        3 ready
-                    </div>
-                </div>
-                <div className="stat-item">
-                    <div className="stat-value">5.2d</div>
-                    <div className="stat-label">Avg. Resolution</div>
-                    <div className="stat-change positive">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                            <path d="M6 9.5L2.5 6l1-1L5.5 7V2.5h1V7l2-2 1 1L6 9.5z" transform="rotate(180 6 6)"/>
-                        </svg>
-                        0.8d faster
-                    </div>
-                </div>
+                <StatCard label="Total Claims" data={statsData.totalClaims} />
+                <StatCard label="Action Required" data={statsData.actionRequired} />
+                <StatCard label="Pipeline Value" data={statsData.pipelineValue} />
+                <StatCard label="High Priority" data={statsData.highPriority} />
+                <StatCard label="Need Supplement" data={statsData.needSupplement} />
+                <StatCard label="Avg. Resolution" data={statsData.avgResolution} />
             </div>
 
             {/* Pipeline Tabs */}
@@ -660,28 +630,28 @@ const ClaimsManagement = () => {
                     onClick={() => switchTab('action')}
                 >
                     Action Required
-                    <span className="tab-badge action">12</span>
+                    <span className="tab-badge action">0</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'all' ? 'active' : ''}`}
                     onClick={() => switchTab('all')}
                 >
                     All Claims
-                    <span className="tab-badge">80</span>
+                    <span className="tab-badge">0</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'high' ? 'active' : ''}`}
                     onClick={() => switchTab('high')}
                 >
                     High Value
-                    <span className="tab-badge">15</span>
+                    <span className="tab-badge">0</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'urgent' ? 'active' : ''}`}
                     onClick={() => switchTab('urgent')}
                 >
                     Urgent
-                    <span className="tab-badge urgent">5</span>
+                    <span className="tab-badge urgent">0</span>
                 </button>
             </div>
 
@@ -853,7 +823,7 @@ const ClaimsManagement = () => {
                 </div>
 
                 <div className="analytics-grid grid grid-cols-4 gap-5">
-                    {/* Total Claims Card */}
+                    {/* Total Claims Card
                     <div className="analytics-card">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Total Claims</h3>
@@ -866,7 +836,7 @@ const ClaimsManagement = () => {
                         </div>
                     </div>
 
-                    {/* Pipeline Value Card */}
+                     Pipeline Value Card
                     <div className="analytics-card">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Pipeline Value</h3>
@@ -879,7 +849,7 @@ const ClaimsManagement = () => {
                         </div>
                     </div>
 
-                    {/* Average Days Per Stage Card */}
+                     Average Days Per Stage Card
                     <div className="analytics-card">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Avg Days/Stage</h3>
@@ -903,7 +873,7 @@ const ClaimsManagement = () => {
                         </div>
                     </div>
 
-                    {/* Success Rate Card */}
+                     Success Rate Card
                     <div className="analytics-card">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Success Rate</h3>
@@ -927,7 +897,7 @@ const ClaimsManagement = () => {
                         </div>
                     </div>
 
-                    {/* Need Action Card */}
+                     Need Action Card
                     <div className="analytics-card highlight">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Need Action</h3>
@@ -951,7 +921,7 @@ const ClaimsManagement = () => {
                         </div>
                     </div>
 
-                    {/* Average Claim Card */}
+                     Average Claim Card
                     <div className="analytics-card">
                         <div className="analytics-card-header">
                             <h3 className="analytics-card-title">Average Claim</h3>
@@ -973,136 +943,73 @@ const ClaimsManagement = () => {
                                 <span className="range-value">$31,200</span>
                             </div>
                         </div>
-                    </div>
+                    </div>*/}
+
+                    <AnalyticsCard
+                        title="Total Claims"
+                        value={analyticsData?.totalClaims?.value}
+                        trend={analyticsData?.totalClaims?.trend}
+                        subtitle="Active in Pipeline"
+                        progress={analyticsData?.totalClaims?.progress || 0}
+                    />
+
+                    <AnalyticsCard
+                        title="Pipeline Value"
+                        value={analyticsData?.pipelineValue?.value || "$0"}
+                        trend={analyticsData?.pipelineValue?.trend}
+                        subtitle="Total Potential Revenue"
+                        progress={analyticsData?.pipelineValue?.progress || 0}
+                    />
+
+                    <AnalyticsCard
+                        title="Avg Days/Stage"
+                        value={analyticsData?.avgDays?.value || "0"}
+                        trend={analyticsData?.avgDays?.trend}
+                    >
+                        <div className="stage-breakdown">
+                            {(analyticsData?.avgDays?.stages || ["0d", "0d", "0d"]).map((days, i) => (
+                                <div key={i} className="stage-item">
+                                    <span className="stage-label">Stage {i*3+1}-{i*3+3}:</span>
+                                    <span className="stage-days">{days}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </AnalyticsCard>
+
+                    <AnalyticsCard
+                        title="Success Rate"
+                        value={analyticsData?.successRate?.value || "0%"}
+                        trend={analyticsData?.successRate?.trend}
+                    >
+                        <div className="success-breakdown">
+                            <div className="success-item">
+                                <span className="success-label">Approved:</span>
+                                <span className="success-value">{analyticsData?.successRate?.approved || 0} claims</span>
+                            </div>
+                        </div>
+                    </AnalyticsCard>
+
+                    <AnalyticsCard
+                        title="Need Action"
+                        value={analyticsData?.needAction?.count || "0"}
+                        highlight={true}
+                        badge="Urgent"
+                    >
+                        <div className="action-breakdown">
+                            <div className="action-item urgent">
+                                <span className="action-icon">⚠️</span>
+                                <span className="action-text">{analyticsData?.needAction?.overdue || 0} Overdue</span>
+                            </div>
+                        </div>
+                    </AnalyticsCard>
+
                 </div>
 
                 {/* Activity Section */}
                 <div className="activity-section">
                     <div className="activity-container">
-                        <div className="activity-column">
-                            <h3 className="activity-title">Recent Activity</h3>
-                            <div className="activity-list">
-                                <div className="activity-item">
-                                    <div className="activity-icon success">✓</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">CLM-2024-022 approved by State Farm</div>
-                                        <div className="activity-time">2 minutes ago</div>
-                                    </div>
-                                    <div className="activity-amount">+$38,900</div>
-                                </div>
-                                <div className="activity-item">
-                                    <div className="activity-icon warning">!</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">Supplement needed for Davis Complex</div>
-                                        <div className="activity-time">15 minutes ago</div>
-                                    </div>
-                                    <div className="activity-amount">$58,900</div>
-                                </div>
-                                <div className="activity-item">
-                                    <div className="activity-icon info">📄</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">New estimate submitted - Wilson Estate</div>
-                                        <div className="activity-time">1 hour ago</div>
-                                    </div>
-                                    <div className="activity-amount">$42,340</div>
-                                </div>
-                                <div className="activity-item">
-                                    <div className="activity-icon urgent">⚡</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">Urgent: Johnson Property needs claim number</div>
-                                        <div className="activity-time">2 hours ago</div>
-                                    </div>
-                                    <div className="activity-amount">$47,823</div>
-                                </div>
-                                <div className="activity-item">
-                                    <div className="activity-icon success">✓</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">Final check processed - Martinez Home</div>
-                                        <div className="activity-time">3 hours ago</div>
-                                    </div>
-                                    <div className="activity-amount">+$38,200</div>
-                                </div>
-                                <div className="activity-item">
-                                    <div className="activity-icon info">📞</div>
-                                    <div className="activity-content">
-                                        <div className="activity-text">Call scheduled with adjuster - Park Avenue Complex</div>
-                                        <div className="activity-time">4 hours ago</div>
-                                    </div>
-                                    <div className="activity-amount">$42,100</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="activity-column">
-                            <h3 className="activity-title">Action Items</h3>
-                            <div className="action-list">
-                                <div className="action-card">
-                                    <div className="action-priority high">High Priority</div>
-                                    <div className="action-title">Upload Signed Contract</div>
-                                    <div className="action-client">Johnson Property - CLM-2024-001</div>
-                                    <div className="action-deadline">
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                                            <path
-                                                d="M7 0a7 7 0 1 1 0 14A7 7 0 0 1 7 0zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zm0 2a.75.75 0 0 1 .75.75v2.5h2a.75.75 0 0 1 0 1.5h-2.75a.75.75 0 0 1-.75-.75v-3.25A.75.75 0 0 1 7 3.5z"/>
-                                        </svg>
-                                        3 days overdue
-                                    </div>
-                                    <button className="action-complete-btn">Complete Action</button>
-                                </div>
-                                <div className="action-card">
-                                    <div className="action-priority medium">Medium Priority</div>
-                                    <div className="action-title">Submit Supplement</div>
-                                    <div className="action-client">Davis Complex - CLM-2024-003</div>
-                                    <div className="action-deadline">
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                                            <path
-                                                d="M7 0a7 7 0 1 1 0 14A7 7 0 0 1 7 0zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zm0 2a.75.75 0 0 1 .75.75v2.5h2a.75.75 0 0 1 0 1.5h-2.75a.75.75 0 0 1-.75-.75v-3.25A.75.75 0 0 1 7 3.5z"/>
-                                        </svg>
-                                        Due in 4 hours
-                                    </div>
-                                    <button className="action-complete-btn">Complete Action</button>
-                                </div>
-                                <div className="action-card">
-                                    <div className="action-priority low">Low Priority</div>
-                                    <div className="action-title">Schedule Adjuster Meeting</div>
-                                    <div className="action-client">Wilson Estate - CLM-2024-004</div>
-                                    <div className="action-deadline">
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                                            <path
-                                                d="M7 0a7 7 0 1 1 0 14A7 7 0 0 1 7 0zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zm0 2a.75.75 0 0 1 .75.75v2.5h2a.75.75 0 0 1 0 1.5h-2.75a.75.75 0 0 1-.75-.75v-3.25A.75.75 0 0 1 7 3.5z"/>
-                                        </svg>
-                                        Due tomorrow
-                                    </div>
-                                    <button className="action-complete-btn">Complete Action</button>
-                                </div>
-                                <div className="action-card">
-                                    <div className="action-priority high">High Priority</div>
-                                    <div className="action-title">Follow-up on Inspection</div>
-                                    <div className="action-client">Miller Residence - CLM-2024-014</div>
-                                    <div className="action-deadline">
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                                            <path
-                                                d="M7 0a7 7 0 1 1 0 14A7 7 0 0 1 7 0zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zm0 2a.75.75 0 0 1 .75.75v2.5h2a.75.75 0 0 1 0 1.5h-2.75a.75.75 0 0 1-.75-.75v-3.25A.75.75 0 0 1 7 3.5z"/>
-                                        </svg>
-                                        Due in 2 hours
-                                    </div>
-                                    <button className="action-complete-btn">Complete Action</button>
-                                </div>
-                                <div className="action-card">
-                                    <div className="action-priority medium">Medium Priority</div>
-                                    <div className="action-title">Update Client Portal</div>
-                                    <div className="action-client">Thompson Plaza - CLM-2024-012</div>
-                                    <div className="action-deadline">
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                                            <path
-                                                d="M7 0a7 7 0 1 1 0 14A7 7 0 0 1 7 0zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zm0 2a.75.75 0 0 1 .75.75v2.5h2a.75.75 0 0 1 0 1.5h-2.75a.75.75 0 0 1-.75-.75v-3.25A.75.75 0 0 1 7 3.5z"/>
-                                        </svg>
-                                        Due today at 5PM
-                                    </div>
-                                    <button className="action-complete-btn">Complete Action</button>
-                                </div>
-                            </div>
-                        </div>
+                        <RecentActivity activities={recentActivities} />
+                        <ActionItems actionItems={actionItems} />
                     </div>
                 </div>
             </div>
