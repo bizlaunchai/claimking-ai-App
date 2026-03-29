@@ -77,7 +77,7 @@ const DashboardLayout = ({ children }) => {
   );*/
 
     return (
-        <div className="flex justify-between bg-gray-50 text-gray-900 font-sans min-h-screen">
+        <div className="bg-gray-50 text-gray-900 font-sans min-h-screen">
             {/* Sidebar */}
             <div className={`transition-all duration-300`}>
                 <AppSidebar
@@ -88,7 +88,7 @@ const DashboardLayout = ({ children }) => {
             </div>
 
             {/* Main Content */}
-            <div className="md:w-[90%] md:pr-[60px]">
+            <div className={ isCollapsed ? 'ml-[68px]': 'ml-[250px]' } >
                 {/*<button*/}
                 {/*    onClick={() => {*/}
                 {/*        setIsCollapsed(true)*/}
