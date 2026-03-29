@@ -26,21 +26,21 @@
 
 /* Container */
 .container {
-    max-width: 1400px;
+    /*max-width: 1400px;*/
     margin: 0 auto;
-    padding: 2rem;
+    padding: 0!important;
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
     background: var(--light-gray);
     color: var(--almost-black);
     line-height: 1.6;
-    min-height: 100vh;
+    /*min-height: 100vh;*/
 }
 
 /* Header */
 .page-header {
     background: white;
     border-bottom: 1px solid var(--border-gray);
-    padding: 1.5rem 2rem;
+    padding: 2rem;
     margin: -2rem -2rem 2rem -2rem;
     display: flex;
     justify-content: space-between;
