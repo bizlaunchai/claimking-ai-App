@@ -26,8 +26,8 @@ const PolicyAnalysis = () => {
     const [files, setFiles] = useState([])
 
     const clients = [
-        { name: 'Sarah Johnson', carrier: 'State Farm', policy: '#SF-2024-789456' },
-        { name: 'Michael Chen', carrier: 'Allstate', policy: '#AS-2024-123789' },
+        /*{ name: 'Sarah Johnson', carrier: 'State Farm', policy: '#SF-2024-789456' },
+        { name: 'Michael Chen', carrier: 'Allstate', policy: '#AS-2024-123789' },*/
     ];
 
     const filteredClients = clients.filter(client =>
