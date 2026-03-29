@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
+import GoogleAuth from "@/components/auth/GoogleAuth.jsx";
 
 export function LoginForm({ className, ...props }) {
   const [email, setEmail] = useState("");
@@ -43,6 +44,8 @@ export function LoginForm({ className, ...props }) {
       setIsLoading(false);
     }
   };
+
+
 
   return (
       <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -94,6 +97,18 @@ export function LoginForm({ className, ...props }) {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Logging in..." : "Login"}
                 </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                  </div>
+                </div>
+
+                <GoogleAuth/>
+
               </div>
               <div className="mt-4 text-center text-sm">
                 Don't have an account?{" "}

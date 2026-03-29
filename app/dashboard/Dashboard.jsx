@@ -1,6 +1,7 @@
 "use client";
 import React, {useEffect, useRef, useState} from "react";
 import Chart from "chart.js/auto";
+import axiosInstance from "@/lib/axiosInstance.js";
 
 const DashboardPage = () => {
     // Refs for charts
@@ -110,6 +111,16 @@ const DashboardPage = () => {
             typesChartInstance.current?.destroy();
             insuranceChartInstance.current?.destroy();
         };
+    }, []);
+
+
+    useEffect(() => {
+        (async () => {
+            const {data} = await axiosInstance.get('/me');
+
+            console.log(data);
+
+        })()
     }, []);
 
     return (
