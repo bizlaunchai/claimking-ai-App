@@ -122,12 +122,7 @@ const DocumentGenerator = () => {
             <div className="document-generator-header">
                 <div className="document-generator-header-container">
                     <div className="document-generator-logo-section">
-                        <div className="document-generator-logo">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                            </svg>
-                        </div>
-                        <div className="document-generator-logo-text">ClaimKing.AI</div>
+                        <div className="document-generator-logo-text">Document Generator</div>
                     </div>
                     <div className="document-generator-nav-actions">
                         <button className="document-generator-nav-btn">
@@ -170,7 +165,7 @@ const DocumentGenerator = () => {
                     <div className="stat-label">Document Templates</div>
                 </div>
                 <div className="stat-item">
-                    <div className="stat-value">25k</div>
+                    <div className="stat-value">0</div>
                     <div className="stat-label">Documents Created</div>
                 </div>
                 <div className="stat-item">
@@ -420,7 +415,7 @@ const DocumentGenerator = () => {
                     <button className="nav-btn">View All</button>
                 </div>
                 <div className="recent-list">
-                    <div className="recent-item">
+                    {/*<div className="recent-item">
                         <div className="recent-icon">📊</div>
                         <div className="recent-info">
                             <div className="recent-name">Smith Residence - Roof Estimate</div>
@@ -455,7 +450,7 @@ const DocumentGenerator = () => {
                             <button className="action-btn">Download</button>
                             <button className="action-btn">Share</button>
                         </div>
-                    </div>
+                    </div>*/}
                 </div>
             </div>
 
