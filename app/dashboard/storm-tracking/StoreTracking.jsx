@@ -13,12 +13,14 @@ const StormTracking = () => {
     const mapInstanceRef = useRef(null);
     const markersRef = useRef([]);
     
-    const storms = [
+    const stormsOld = [
         { lat: 32.7767, lng: -96.7970, severity: 'severe', name: 'Dallas Storm System', wind: '75 mph', hail: '1.5"', movement: 'NE 25 mph', claims: 12 },
         { lat: 29.7604, lng: -95.3698, severity: 'moderate', name: 'Houston Weather Front', wind: '45 mph', hail: '0.5"', movement: 'E 18 mph', claims: 8 },
         { lat: 30.2672, lng: -97.7431, severity: 'watch', name: 'Austin Storm Watch', wind: '35 mph', hail: '0.25"', movement: 'SE 15 mph', claims: 5 },
         { lat: 33.4484, lng: -112.0740, severity: 'moderate', name: 'Phoenix Heat Storm', wind: '50 mph', hail: '0.75"', movement: 'SW 20 mph', claims: 3 },
     ];
+
+    const storms = [];
 
     const getMarkerColor = (severity) => {
         switch (severity) {
@@ -183,7 +185,7 @@ const StormTracking = () => {
                 <div className="alert-content">
                     <div className="alert-title">Severe Weather Alert Active</div>
                     <div className="alert-description">
-                        3 active storm systems detected in your service areas. 47 client properties may be affected. Click to view detailed tracking.
+                        0 active storm systems detected in your service areas. 47 client properties may be affected. Click to view detailed tracking.
                     </div>
                 </div>
             </div>
@@ -199,13 +201,13 @@ const StormTracking = () => {
                         </div>
                         <span className="stat-badge">LIVE</span>
                     </div>
-                    <div className="stat-value">3</div>
+                    <div className="stat-value">0</div>
                     <div className="stat-label">Severe Storms</div>
                     <div className="stat-change up">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M7 14l5-5 5 5H7z"/>
                         </svg>
-                        2 new in last hour
+                        0 new in last hour
                     </div>
                 </div>
 
@@ -217,13 +219,13 @@ const StormTracking = () => {
                             </svg>
                         </div>
                     </div>
-                    <div className="stat-value">12</div>
+                    <div className="stat-value">0</div>
                     <div className="stat-label">Active Warnings</div>
                     <div className="stat-change down">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M7 10l5 5 5-5H7z"/>
                         </svg>
-                        3 less than yesterday
+                        0 less than yesterday
                     </div>
                 </div>
 
@@ -235,7 +237,7 @@ const StormTracking = () => {
                             </svg>
                         </div>
                     </div>
-                    <div className="stat-value">284</div>
+                    <div className="stat-value">0</div>
                     <div className="stat-label">Monitored Zones</div>
                 </div>
 
@@ -247,13 +249,13 @@ const StormTracking = () => {
                             </svg>
                         </div>
                     </div>
-                    <div className="stat-value">47</div>
+                    <div className="stat-value">0</div>
                     <div className="stat-label">Properties at Risk</div>
                     <div className="stat-change up">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M7 14l5-5 5 5H7z"/>
                         </svg>
-                        18 new alerts sent
+                        0 new alerts sent
                     </div>
                 </div>
             </div>
