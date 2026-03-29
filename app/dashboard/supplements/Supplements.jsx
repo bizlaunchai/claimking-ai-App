@@ -3,6 +3,8 @@ import React, {useState, useEffect, useRef, useMemo} from 'react';
 import Chart from 'chart.js/auto';
 import './supplement.css';
 import dynamic from "next/dynamic";
+import MetricCard from "@/app/dashboard/supplements/Components/MetricCard.js";
+import RecentActivityFeed from "@/app/dashboard/supplements/Components/RecentActivityFeed.js";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -24,6 +26,14 @@ const SupplementsManagement = () => {
     const [supplementType, setSupplementType] = useState('');
     const [additionalNotes, setAdditionalNotes] = useState('');
     const [files, setFiles] = useState([]);
+    const [recentActivities, setRecentActivities] = useState([])
+
+    const [metrics, setMetrics] = useState({
+        totalSupplements: { value: "0", change: "0% from last month", isPositive: true },
+        avgValue: { value: "$0", change: "0% above industry avg", isPositive: true },
+        successRate: { value: "0%", change: "0% improvement", isPositive: true },
+        revenue: { value: "$0", change: "0% YTD tracking", isPositive: true }
+    });
 
 
     // Sample data
@@ -35,7 +45,7 @@ const SupplementsManagement = () => {
         { id: 'CLM-2024-888', name: 'Martinez Home', address: '654 Maple Dr, Fort Worth, TX', policy: 'POL-56789012' }
     ];
 
-    const supplementItemsData = [
+    const supplementItemsDataOld = [
         // Roofing Items
         { id: 1, name: 'Drip Edge Metal', category: 'roofing', unit: 'LF', avgPrice: '8.50', successRate: '92%' },
         { id: 2, name: 'Ridge Cap Shingles', category: 'roofing', unit: 'Bundle', avgPrice: '45.00', successRate: '89%' },
@@ -72,6 +82,8 @@ const SupplementsManagement = () => {
         { id: 27, name: 'Dumpster Rental', category: 'permits', unit: 'EA', avgPrice: '450.00', successRate: '92%' },
         { id: 28, name: 'Code Upgrade Fee', category: 'permits', unit: 'EA', avgPrice: '1250.00', successRate: '74%' }
     ];
+
+    const supplementItemsData = [];
 
     // Search clients inline
     const searchClientsInline = (query) => {
@@ -528,26 +540,30 @@ const SupplementsManagement = () => {
 
             {/* Key Metrics Row */}
             <div className="metrics-row">
-                <div className="metric-card">
-                    <div className="metric-label">Total Supplements Generated</div>
-                    <div className="metric-value">847</div>
-                    <span className="metric-change positive">↑ 18.5% from last month</span>
-                </div>
-                <div className="metric-card">
-                    <div className="metric-label">Average Supplement Value</div>
-                    <div className="metric-value">$12,847</div>
-                    <span className="metric-change positive">↑ 12.3% above industry avg</span>
-                </div>
-                <div className="metric-card">
-                    <div className="metric-label">Success Rate</div>
-                    <div className="metric-value">87.3%</div>
-                    <span className="metric-change positive">↑ 4.2% improvement</span>
-                </div>
-                <div className="metric-card">
-                    <div className="metric-label">Revenue Recovered</div>
-                    <div className="metric-value">$1.2M</div>
-                    <span className="metric-change positive">↑ YTD tracking</span>
-                </div>
+                <MetricCard
+                    label="Total Supplements Generated"
+                    value={metrics.totalSupplements.value}
+                    change={metrics.totalSupplements.change}
+                    isPositive={metrics.totalSupplements.isPositive}
+                />
+                <MetricCard
+                    label="Average Supplement Value"
+                    value={metrics.avgValue.value}
+                    change={metrics.avgValue.change}
+                    isPositive={metrics.avgValue.isPositive}
+                />
+                <MetricCard
+                    label="Success Rate"
+                    value={metrics.successRate.value}
+                    change={metrics.successRate.change}
+                    isPositive={metrics.successRate.isPositive}
+                />
+                <MetricCard
+                    label="Revenue Recovered"
+                    value={metrics.revenue.value}
+                    change={metrics.revenue.change}
+                    isPositive={metrics.revenue.isPositive}
+                />
             </div>
 
             {/* Main Content Area */}
@@ -718,30 +734,7 @@ const SupplementsManagement = () => {
                     </div>
 
                     {/* Recent Activity */}
-                    <div className="activity-feed-section">
-                        <h2 className="section-title">Recent Activity</h2>
-                        <div className="activity-item">
-                            <div className="activity-icon success">✓</div>
-                            <div className="activity-content">
-                                <div className="activity-text">Supplement approved - Johnson Residence (+$8,234)</div>
-                                <div className="activity-time">2 hours ago</div>
-                            </div>
-                        </div>
-                        <div className="activity-item">
-                            <div className="activity-icon warning">!</div>
-                            <div className="activity-content">
-                                <div className="activity-text">New code requirement added to database</div>
-                                <div className="activity-time">5 hours ago</div>
-                            </div>
-                        </div>
-                        <div className="activity-item">
-                            <div className="activity-icon success">✓</div>
-                            <div className="activity-content">
-                                <div className="activity-text">Adjuster response received - Smith Property</div>
-                                <div className="activity-time">1 day ago</div>
-                            </div>
-                        </div>
-                    </div>
+                    <RecentActivityFeed recentActivities={recentActivities} />
                 </div>
             </div>
 
@@ -925,7 +918,8 @@ const AnalyticsCharts = () => {
                     labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
                     datasets: [{
                         label: 'Success Rate',
-                        data: [82, 84, 83, 86, 88, 87],
+                        // data: [82, 84, 83, 86, 88, 87],
+                        data: [],
                         borderColor: '#FDB813',
                         backgroundColor: 'rgba(253, 184, 19, 0.1)',
                         tension: 0.4,
@@ -970,7 +964,8 @@ const AnalyticsCharts = () => {
                 data: {
                     labels: ['Documentation', 'Policy Exclusion', 'Pricing', 'Duplicate', 'Other'],
                     datasets: [{
-                        data: [25, 20, 15, 10, 5],
+                        // data: [25, 20, 15, 10, 5],
+                        data: [],
                         backgroundColor: '#1a1f3a',
                         borderColor: '#1a1f3a',
                         borderWidth: 1
@@ -1013,7 +1008,8 @@ const AnalyticsCharts = () => {
                 data: {
                     labels: ['Materials', 'Labor', 'Code Upgrades', 'Permits', 'Other'],
                     datasets: [{
-                        data: [35, 25, 20, 10, 10],
+                        // data: [35, 25, 20, 10, 10],
+                        data: [],
                         backgroundColor: [
                             '#FDB813',
                             '#ffc947',
@@ -1093,7 +1089,7 @@ const AnalyticsCharts = () => {
 const SupplementsTable = () => {
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [supplements] = useState([
+    const [supplementsOld] = useState([
         {
             id: 'CLM-2024-892',
             client: 'Johnson Property',
@@ -1185,6 +1181,7 @@ const SupplementsTable = () => {
             created: 'Oct 5, 2024'
         }
     ]);
+    const [supplements] = useState([]);
 
     const filterSupplements = (status) => {
         setActiveFilter(status);
