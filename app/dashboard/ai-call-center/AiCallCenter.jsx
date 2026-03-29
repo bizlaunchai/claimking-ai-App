@@ -14,36 +14,36 @@ const AICallCenter = () => {
         { 
             icon: '📞', 
             label: 'Total Calls Today', 
-            value: '47', 
-            change: { text: '15% from yesterday', type: 'positive' }
+            value: '0',
+            change: { text: '0% from yesterday', type: 'positive' }
         },
         { 
             icon: '🎯', 
             label: 'New Leads Generated', 
-            value: '12', 
-            change: { text: '3 more than yesterday', type: 'positive' }
+            value: '0',
+            change: { text: '0 more than yesterday', type: 'positive' }
         },
         { 
             icon: '⏱️', 
             label: 'Average Call Duration', 
-            value: '3:45', 
+            value: '0:00',
             change: { text: 'minutes', type: 'neutral' }
         },
         { 
             icon: '📊', 
             label: 'Calls This Week', 
-            value: '238', 
-            change: { text: '22% from last week', type: 'positive' }
+            value: '0',
+            change: { text: '0% from last week', type: 'positive' }
         }
     ];
 
-    const calls = [
+    const callsOld = [
         {
             id: 1,
             time: 'Today, 10:45 AM',
             caller: 'Sarah Johnson',
             phone: '(555) 123-4567',
-            duration: '4:23',
+            duration: '0:00',
             notes: {
                 leadType: 'New Lead - Hail Damage Claim',
                 status: 'Inspection scheduled for tomorrow at 2:00 PM',
@@ -102,7 +102,9 @@ const AICallCenter = () => {
         }
     ];
 
-    const trendData = [
+    const calls = [];
+
+    const trendDataOld = [
         { day: 'Mon', value: 31, height: 65 },
         { day: 'Tue', value: 38, height: 80 },
         { day: 'Wed', value: 47, height: 100 },
@@ -111,6 +113,7 @@ const AICallCenter = () => {
         { day: 'Sat', value: 19, height: 40 },
         { day: 'Sun', value: 14, height: 30 }
     ];
+    const trendData = [];
 
     const toggleNotes = (callId) => {
         setExpandedNotes(prev => 
@@ -162,7 +165,8 @@ const AICallCenter = () => {
                     data: {
                         labels: ['Google Ads', 'Website', 'Facebook', 'Referrals', 'Direct Calls'],
                         datasets: [{
-                            data: [42, 28, 15, 10, 5],
+                            // data: [42, 28, 15, 10, 5],
+                            data: [0,0,0,0,0],
                             backgroundColor: [
                                 '#FDB813',
                                 '#1a1f3a',
@@ -213,11 +217,6 @@ const AICallCenter = () => {
             {/* Page Header */}
             <div className="page-header">
                 <div className="header-left">
-                    <div className="crown-logo">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                        </svg>
-                    </div>
                     <div>
                         <h1 className="page-title">AI Call Center</h1>
                         <span className="page-subtitle">Powered by Call Tracking Metrics</span>
@@ -264,27 +263,27 @@ const AICallCenter = () => {
                             <div className="legend-item">
                                 <span className="legend-color" style={{ background: '#FDB813' }}></span>
                                 <span className="legend-label">Google Ads</span>
-                                <span className="legend-value">42%</span>
+                                <span className="legend-value">0%</span>
                             </div>
                             <div className="legend-item">
                                 <span className="legend-color" style={{ background: '#1a1f3a' }}></span>
                                 <span className="legend-label">Website</span>
-                                <span className="legend-value">28%</span>
+                                <span className="legend-value">0%</span>
                             </div>
                             <div className="legend-item">
                                 <span className="legend-color" style={{ background: '#3b82f6' }}></span>
                                 <span className="legend-label">Facebook</span>
-                                <span className="legend-value">15%</span>
+                                <span className="legend-value">0%</span>
                             </div>
                             <div className="legend-item">
                                 <span className="legend-color" style={{ background: '#16a34a' }}></span>
                                 <span className="legend-label">Referrals</span>
-                                <span className="legend-value">10%</span>
+                                <span className="legend-value">0%</span>
                             </div>
                             <div className="legend-item">
                                 <span className="legend-color" style={{ background: '#dc2626' }}></span>
                                 <span className="legend-label">Direct Calls</span>
-                                <span className="legend-value">5%</span>
+                                <span className="legend-value">0%</span>
                             </div>
                         </div>
                     </div>
@@ -373,7 +372,7 @@ const AICallCenter = () => {
                 {/* Pagination */}
                 <div className="pagination-container">
                     <div className="pagination-info">
-                        Showing {startItem}-{endItem} of 247 calls
+                        Showing {startItem}-{endItem} of {calls?.length} calls
                     </div>
                     <div className="pagination-controls">
                         <button 
