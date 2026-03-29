@@ -69,7 +69,8 @@ const ClientPortal = () => {
 
     // Generate sample client data
     useEffect(() => {
-        const clients = generateSampleClients(127);
+        // const clients = generateSampleClients(127);
+        const clients = generateSampleClients(0);
         setAllClients(clients);
         setFilteredClients(clients);
     }, []);
@@ -618,7 +619,7 @@ John Smith,john@example.com,(214) 555-0001,123 Main St,Dallas,TX,75201,State Far
                         </div>
                         <div className="metric-content">
                             <div className="metric-label">Avg Progress</div>
-                            <div className="metric-value">{avgProgress}%</div>
+                            <div className="metric-value">{avgProgress || 0}%</div>
                             <div className="metric-subtitle">Across all claims</div>
                         </div>
                     </div>
