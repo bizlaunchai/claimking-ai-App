@@ -84,11 +84,6 @@ const AnalyticsPage = () => {
             {/* Header */}
             <div className="analytics-header">
                 <div className="analytics-header-left">
-                    <div className="analytics-crown-logo">
-                        <svg viewBox="0 0 24 24" fill="#1a1f3a">
-                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                        </svg>
-                    </div>
                     <h1>Analytics</h1>
                 </div>
                     <div className="analytics-header-controls">
@@ -128,33 +123,33 @@ const AnalyticsPage = () => {
                 <div className="analytics-kpi-grid">
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Total Revenue</div>
-                        <div className="analytics-kpi-value">$487,290</div>
-                        <div className="analytics-kpi-change positive">↑ 12% vs last month</div>
+                        <div className="analytics-kpi-value">$0</div>
+                        <div className="analytics-kpi-change positive">↑ 0% vs last month</div>
                     </div>
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Active Claims</div>
-                        <div className="analytics-kpi-value">47</div>
-                        <div className="analytics-kpi-change positive">↑ 8 this week</div>
+                        <div className="analytics-kpi-value">0</div>
+                        <div className="analytics-kpi-change positive">↑ 0 this week</div>
                     </div>
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Close Rate</div>
-                        <div className="analytics-kpi-value">68%</div>
-                        <div className="analytics-kpi-change positive">↑ 5% improved</div>
+                        <div className="analytics-kpi-value">0%</div>
+                        <div className="analytics-kpi-change positive">↑ 0% improved</div>
                     </div>
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Avg Claim Value</div>
-                        <div className="analytics-kpi-value">$10,350</div>
-                        <div className="analytics-kpi-change positive">↑ $1,200</div>
+                        <div className="analytics-kpi-value">$0</div>
+                        <div className="analytics-kpi-change positive">↑ $0</div>
                     </div>
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Lead Response</div>
-                        <div className="analytics-kpi-value">12 min</div>
-                        <div className="analytics-kpi-change positive">↓ 3 min faster</div>
+                        <div className="analytics-kpi-value">0 min</div>
+                        <div className="analytics-kpi-change positive">↓ 0 min faster</div>
                     </div>
                     <div className="analytics-kpi-card">
                         <div className="analytics-kpi-label">Customer Score</div>
-                        <div className="analytics-kpi-value">4.8 <span className="analytics-stars">★</span></div>
-                        <div className="analytics-kpi-change positive">127 reviews</div>
+                        <div className="analytics-kpi-value">0 <span className="analytics-stars">★</span></div>
+                        <div className="analytics-kpi-change positive">0 reviews</div>
                     </div>
                 </div>
 
@@ -217,18 +212,18 @@ const AnalyticsPage = () => {
                                 <div className="analytics-revenue-chart">
                                     <div className="analytics-chart-bars">
                                         {[
-                                            { month: 'Jan', height: 60 },
-                                            { month: 'Feb', height: 65 },
-                                            { month: 'Mar', height: 70 },
-                                            { month: 'Apr', height: 75 },
-                                            { month: 'May', height: 72 },
-                                            { month: 'Jun', height: 80 },
-                                            { month: 'Jul', height: 85 },
-                                            { month: 'Aug', height: 82 },
-                                            { month: 'Sep', height: 88 },
-                                            { month: 'Oct', height: 90 },
-                                            { month: 'Nov', height: 78 },
-                                            { month: 'Dec', height: 75 }
+                                            { month: 'Jan', height: 0 },
+                                            { month: 'Feb', height: 0 },
+                                            { month: 'Mar', height: 0 },
+                                            { month: 'Apr', height: 0 },
+                                            { month: 'May', height: 0 },
+                                            { month: 'Jun', height: 0 },
+                                            { month: 'Jul', height: 0 },
+                                            { month: 'Aug', height: 0 },
+                                            { month: 'Sep', height: 0 },
+                                            { month: 'Oct', height: 0 },
+                                            { month: 'Nov', height: 0 },
+                                            { month: 'Dec', height: 0 }
                                         ].map((item) => (
                                             <div key={item.month} className="analytics-chart-bar" style={{height: `${item.height}%`}}>
                                                 <span className="analytics-chart-bar-label">{item.month}</span>
@@ -242,12 +237,12 @@ const AnalyticsPage = () => {
                                 <div className="analytics-chart-title">Claims Pipeline Funnel</div>
                                 <div className="analytics-funnel-container">
                                     {[
-                                        { label: 'New Leads:', value: 234, width: 100 },
-                                        { label: 'Inspected:', value: 189, width: 80 },
-                                        { label: 'Estimated:', value: 156, width: 67 },
-                                        { label: 'Approved:', value: 134, width: 57 },
-                                        { label: 'Completed:', value: 98, width: 42 },
-                                        { label: 'Paid:', value: 87, width: 37 }
+                                        { label: 'New Leads:', value: 0, width: 0 },
+                                        { label: 'Inspected:', value: 0, width: 0 },
+                                        { label: 'Estimated:', value: 0, width: 0 },
+                                        { label: 'Approved:', value: 0, width: 0 },
+                                        { label: 'Completed:', value: 0, width: 0 },
+                                        { label: 'Paid:', value: 0, width: 0 }
                                     ].map((stage) => (
                                         <div key={stage.label} className="analytics-funnel-stage">
                                             <span className="analytics-funnel-label">{stage.label}</span>
@@ -263,9 +258,9 @@ const AnalyticsPage = () => {
                                 <div className="analytics-metric-box">
                                     <div className="analytics-metric-box-header">Top Insurance Companies</div>
                                     {[
-                                        { name: 'State Farm', value: '82% approval' },
-                                        { name: 'Allstate', value: '78% approval' },
-                                        { name: 'Progressive', value: '71% approval' }
+                                        { name: 'State Farm', value: '0% approval' },
+                                        { name: 'Allstate', value: '0% approval' },
+                                        { name: 'Progressive', value: '0% approval' }
                                     ].map((item) => (
                                         <div key={item.name} className="analytics-metric-item">
                                             <span className="analytics-metric-name">{item.name}</span>
@@ -276,11 +271,11 @@ const AnalyticsPage = () => {
                                 <div className="analytics-metric-box">
                                     <div className="analytics-metric-box-header">Top ZIP Codes</div>
                                     {[
-                                        { name: '75001', value: '$124,500' },
-                                        { name: '75023', value: '$98,300' },
-                                        { name: '75034', value: '$87,200' }
-                                    ].map((item) => (
-                                        <div key={item.name} className="analytics-metric-item">
+                                        { name: '-', value: '$0' },
+                                        { name: '-', value: '$0' },
+                                        { name: '-', value: '$0' }
+                                    ].map((item, index) => (
+                                        <div key={index} className="analytics-metric-item">
                                             <span className="analytics-metric-name">{item.name}</span>
                                             <span className="analytics-metric-value">{item.value}</span>
                                         </div>
@@ -289,9 +284,9 @@ const AnalyticsPage = () => {
                                 <div className="analytics-metric-box">
                                     <div className="analytics-metric-box-header">Claim Types</div>
                                     {[
-                                        { name: 'Wind/Hail', value: '42%' },
-                                        { name: 'Water Damage', value: '28%' },
-                                        { name: 'Storm', value: '30%' }
+                                        { name: 'Wind/Hail', value: '0%' },
+                                        { name: 'Water Damage', value: '0%' },
+                                        { name: 'Storm', value: '0%' }
                                     ].map((item) => (
                                         <div key={item.name} className="analytics-metric-item">
                                             <span className="analytics-metric-name">{item.name}</span>
