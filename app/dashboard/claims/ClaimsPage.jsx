@@ -795,7 +795,7 @@ const ClaimsManagement = () => {
             </div>
 
             {/* Analytics Section */}
-            <div className="analytics-section">
+            <div className="claim-analytics-section">
                 <div className="analytics-header">
                     <h2 className="analytics-title">Pipeline Analytics</h2>
                     <div className="analytics-actions">
@@ -823,127 +823,6 @@ const ClaimsManagement = () => {
                 </div>
 
                 <div className="analytics-grid grid grid-cols-4 gap-5">
-                    {/* Total Claims Card
-                    <div className="analytics-card">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Total Claims</h3>
-                            <span className="analytics-trend positive">+12%</span>
-                        </div>
-                        <div className="analytics-card-value">80</div>
-                        <div className="analytics-card-subtitle">Active in Pipeline</div>
-                        <div className="analytics-progress">
-                            <div className="progress-bar" style={{width: '75%'}}></div>
-                        </div>
-                    </div>
-
-                     Pipeline Value Card
-                    <div className="analytics-card">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Pipeline Value</h3>
-                            <span className="analytics-trend positive">+28%</span>
-                        </div>
-                        <div className="analytics-card-value">$1.4M</div>
-                        <div className="analytics-card-subtitle">Total Potential Revenue</div>
-                        <div className="analytics-progress">
-                            <div className="progress-bar" style={{width: '82%'}}></div>
-                        </div>
-                    </div>
-
-                     Average Days Per Stage Card
-                    <div className="analytics-card">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Avg Days/Stage</h3>
-                            <span className="analytics-trend negative">-0.8d</span>
-                        </div>
-                        <div className="analytics-card-value">3.2</div>
-                        <div className="analytics-card-subtitle">Processing Time</div>
-                        <div className="stage-breakdown">
-                            <div className="stage-item">
-                                <span className="stage-label">Stage 1-3:</span>
-                                <span className="stage-days">2.1d</span>
-                            </div>
-                            <div className="stage-item">
-                                <span className="stage-label">Stage 4-6:</span>
-                                <span className="stage-days">4.5d</span>
-                            </div>
-                            <div className="stage-item">
-                                <span className="stage-label">Stage 7-9:</span>
-                                <span className="stage-days">3.0d</span>
-                            </div>
-                        </div>
-                    </div>
-
-                     Success Rate Card
-                    <div className="analytics-card">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Success Rate</h3>
-                            <span className="analytics-trend positive">+5%</span>
-                        </div>
-                        <div className="analytics-card-value">94%</div>
-                        <div className="analytics-card-subtitle">Claims Approved</div>
-                        <div className="success-breakdown">
-                            <div className="success-item">
-                                <span className="success-label">Approved:</span>
-                                <span className="success-value">75 claims</span>
-                            </div>
-                            <div className="success-item">
-                                <span className="success-label">Declined:</span>
-                                <span className="success-value">4 claims</span>
-                            </div>
-                            <div className="success-item">
-                                <span className="success-label">Pending:</span>
-                                <span className="success-value">1 claim</span>
-                            </div>
-                        </div>
-                    </div>
-
-                     Need Action Card
-                    <div className="analytics-card highlight">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Need Action</h3>
-                            <span className="analytics-badge urgent">Urgent</span>
-                        </div>
-                        <div className="analytics-card-value">12</div>
-                        <div className="analytics-card-subtitle">Require Immediate Attention</div>
-                        <div className="action-breakdown">
-                            <div className="action-item urgent">
-                                <span className="action-icon">⚠️</span>
-                                <span className="action-text">3 Overdue</span>
-                            </div>
-                            <div className="action-item warning">
-                                <span className="action-icon">📋</span>
-                                <span className="action-text">5 Need Supplement</span>
-                            </div>
-                            <div className="action-item info">
-                                <span className="action-icon">📅</span>
-                                <span className="action-text">4 Schedule Required</span>
-                            </div>
-                        </div>
-                    </div>
-
-                     Average Claim Card
-                    <div className="analytics-card">
-                        <div className="analytics-card-header">
-                            <h3 className="analytics-card-title">Average Claim</h3>
-                            <span className="analytics-trend positive">+15%</span>
-                        </div>
-                        <div className="analytics-card-value">$17.5K</div>
-                        <div className="analytics-card-subtitle">Per Claim Value</div>
-                        <div className="claim-range">
-                            <div className="range-item">
-                                <span className="range-label">Min:</span>
-                                <span className="range-value">$8,900</span>
-                            </div>
-                            <div className="range-item">
-                                <span className="range-label">Max:</span>
-                                <span className="range-value">$58,900</span>
-                            </div>
-                            <div className="range-item">
-                                <span className="range-label">Median:</span>
-                                <span className="range-value">$31,200</span>
-                            </div>
-                        </div>
-                    </div>*/}
 
                     <AnalyticsCard
                         title="Total Claims"
