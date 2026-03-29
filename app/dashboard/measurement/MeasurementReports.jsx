@@ -224,12 +224,6 @@ const Page = () => {
                 <div className="measurement-header-content">
                     <div className="measurement-header-left">
                         <div className="page-title">
-                            <div className="crown-logo">
-                                <svg viewBox="0 0 24 24" fill="#1a1f3a" width="24" height="24">
-                                    <path
-                                        d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                                </svg>
-                            </div>
                             Measurement Report Analysis
                         </div>
                         <p className="page-subtitle">AI-powered measurements from photos or existing reports</p>
@@ -254,7 +248,7 @@ const Page = () => {
                                 padding: '2px 6px',
                                 borderRadius: '10px',
                                 fontSize: '0.65rem'
-                            }}>23</span>
+                            }}>0</span>
                         </button>
                         <button className="btn btn-outline" onClick={() => openModal('history')}>
                             Measurement History
@@ -298,7 +292,7 @@ const Page = () => {
                                 />
                             </div>
 
-                            <div style={{display: 'grid', gap: '0.5rem'}}>
+                            {/*<div style={{display: 'grid', gap: '0.5rem'}}>
                                 <div className="client-option" onClick={() => selectClient('Johnson Property')}>
                                     <div style={{
                                         display: 'flex',
@@ -321,7 +315,7 @@ const Page = () => {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </div>*/}
                         </div>
                     )}
 
@@ -921,7 +915,7 @@ const Page = () => {
 
 
                             <div className="reports-list">
-                                <div className="report-item">
+                               {/* <div className="report-item">
                                     <div className="report-item-header">
                                         <div>
                                             <div className="report-title">Johnson Property - Full Exterior</div>
@@ -991,11 +985,11 @@ const Page = () => {
                                         <button className="report-action-btn" onClick={() => shareReport('MR-2024-0890')}>Share
                                         </button>
                                     </div>
-                                </div>
+                                </div>*/}
                             </div>
 
                             <div className="modal-pagination">
-                                <span>Showing 3 of 23 reports</span>
+                                <span>Showing 0 of 0 reports</span>
                                 <button className="pagination-btn" onClick={loadMoreReports}>Load More</button>
                             </div>
                         </div>
@@ -1029,7 +1023,7 @@ const Page = () => {
 
 
                             <div className="history-timeline">
-                                <div className="timeline-item">
+                                {/*<div className="timeline-item">
                                     <div className="timeline-date">October 19, 2025</div>
                                     <div className="timeline-entries">
                                         <div className="timeline-entry">
@@ -1075,12 +1069,12 @@ const Page = () => {
                                             <span className="timeline-method">User Override</span>
                                         </div>
                                     </div>
-                                </div>
+                                </div>*/}
                             </div>
 
 
                             <div className="history-stats">
-                                <div className="stat-box">
+                                {/*<div className="stat-box">
                                     <div className="stat-value">156</div>
                                     <div className="stat-label">Total Measurements</div>
                                 </div>
@@ -1095,7 +1089,7 @@ const Page = () => {
                                 <div className="stat-box">
                                     <div className="stat-value">82%</div>
                                     <div className="stat-label">AI Generated</div>
-                                </div>
+                                </div>*/}
                             </div>
                         </div>
                     </div>
@@ -1136,7 +1130,7 @@ const Page = () => {
                                             <input
                                                 type="number"
                                                 className="setting-input"
-                                                defaultValue="2"
+                                                defaultValue="0"
                                                 min="1"
                                                 max="10"
                                             />
@@ -1146,7 +1140,7 @@ const Page = () => {
                                             <input
                                                 type="number"
                                                 className="setting-input"
-                                                defaultValue="0.5"
+                                                defaultValue="0"
                                                 min="0.1"
                                                 max="2"
                                                 step="0.1"
@@ -1157,7 +1151,7 @@ const Page = () => {
                                             <input
                                                 type="number"
                                                 className="setting-input"
-                                                defaultValue="85"
+                                                defaultValue="0"
                                                 min="70"
                                                 max="100"
                                             />
@@ -1167,7 +1161,7 @@ const Page = () => {
                                             <input
                                                 type="number"
                                                 className="setting-input"
-                                                defaultValue="95"
+                                                defaultValue="0"
                                                 min="90"
                                                 max="100"
                                             />
