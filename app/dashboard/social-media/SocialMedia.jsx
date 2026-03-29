@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 import "./social-media.css"
 
 const SocialMedia = () => {
-    const [connectedPlatforms, setConnectedPlatforms] = useState(['facebook', 'instagram']);
+    // const [connectedPlatforms, setConnectedPlatforms] = useState(['facebook', 'instagram']);
+    const [connectedPlatforms, setConnectedPlatforms] = useState([]);
     const [selectedProject, setSelectedProject] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState({
-        facebook: true,
-        instagram: true,
+        facebook: false,
+        instagram: false,
         linkedin: false,
         twitter: false
     });
@@ -18,7 +19,7 @@ const SocialMedia = () => {
             name: 'Facebook',
             icon: 'f',
             iconClass: 'facebook-icon',
-            connected: true,
+            connected: false,
             stats: {
                 pageLikes: '-',
                 followers: '-',
@@ -30,7 +31,7 @@ const SocialMedia = () => {
             name: 'Instagram',
             icon: '📷',
             iconClass: 'instagram-icon',
-            connected: true,
+            connected: false,
             stats: {
                 followers: '-',
                 following: '-',
