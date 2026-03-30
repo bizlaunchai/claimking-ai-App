@@ -9,41 +9,41 @@ const Referral = () => {
     const referralLink = 'claimking.ai/ref/JOHN123';
 
     const earningsData = [
-        { label: 'Total Earnings', value: '$12,450', change: '↑ Lifetime earnings', positive: true },
-        { label: 'This Month', value: '$1,840', change: '↑ 23% vs last month', positive: true },
-        { label: 'Pending', value: '$620', change: 'Pays out Nov 1st', positive: false },
-        { label: 'Active Referrals', value: '18', change: '↑ 3 this month', positive: true }
+        { label: 'Total Earnings', value: '$0', change: '↑ Lifetime earnings', positive: true },
+        { label: 'This Month', value: '$0', change: '↑ 23% vs last month', positive: true },
+        { label: 'Pending', value: '$0', change: 'Pays out Nov 1st', positive: false },
+        { label: 'Active Referrals', value: '0', change: '↑ 0 this month', positive: true }
     ];
 
     const monthlyEarnings = [
-        { month: 'May', value: 980, height: 53 },
-        { month: 'Jun', value: 1200, height: 65 },
-        { month: 'Jul', value: 1450, height: 78 },
-        { month: 'Aug', value: 1100, height: 59 },
-        { month: 'Sep', value: 1500, height: 81 },
-        { month: 'Oct', value: 1840, height: 100 }
+        { month: 'May', value: 0, height: 0 },
+        { month: 'Jun', value: 0, height: 0 },
+        { month: 'Jul', value: 0, height: 0 },
+        { month: 'Aug', value: 0, height: 0 },
+        { month: 'Sep', value: 0, height: 0 },
+        { month: 'Oct', value: 0, height: 0 }
     ];
 
     const funnelData = [
-        { name: 'Link Clicks', desc: 'Unique visitors to your referral link', value: 245 },
+        /*{ name: 'Link Clicks', desc: 'Unique visitors to your referral link', value: 245 },
         { name: 'Sign Ups', desc: 'Created an account', value: 68 },
         { name: 'Trial Started', desc: 'Started free trial', value: 42 },
-        { name: 'Paid Customer', desc: 'Converted to paid plan', value: 18 }
+        { name: 'Paid Customer', desc: 'Converted to paid plan', value: 18 }*/
     ];
 
     const tiers = [
-        { icon: '🥉', name: 'Bronze', requirement: '0-5 referrals', commission: '5%', current: false },
+        /*{ icon: '🥉', name: 'Bronze', requirement: '0-5 referrals', commission: '5%', current: false },
         { icon: '🥈', name: 'Silver', requirement: '6-15 referrals', commission: '10%', current: true },
         { icon: '🥇', name: 'Gold', requirement: '16-30 referrals', commission: '15%', current: false },
-        { icon: '💎', name: 'Platinum', requirement: '31+ referrals', commission: '20%', current: false }
+        { icon: '💎', name: 'Platinum', requirement: '31+ referrals', commission: '20%', current: false }*/
     ];
 
     const referrals = [
-        { name: 'ABC Roofing Co.', email: 'john@abcroofing.com', date: 'Oct 15, 2024', status: 'active', plan: 'Professional', commission: '$60/mo' },
+        /*{ name: 'ABC Roofing Co.', email: 'john@abcroofing.com', date: 'Oct 15, 2024', status: 'active', plan: 'Professional', commission: '$60/mo' },
         { name: 'XYZ Contractors', email: 'mike@xyzcontract.com', date: 'Oct 12, 2024', status: 'trial', plan: 'Enterprise', commission: 'Pending' },
         { name: 'Premier Exteriors', email: 'sarah@premier.com', date: 'Sep 28, 2024', status: 'active', plan: 'Professional', commission: '$60/mo' },
         { name: 'Storm Guard LLC', email: 'dave@stormguard.com', date: 'Sep 15, 2024', status: 'churned', plan: 'Starter', commission: '$0/mo' },
-        { name: 'Quality Roofing', email: 'lisa@quality.com', date: 'Aug 10, 2024', status: 'active', plan: 'Enterprise', commission: '$100/mo' }
+        { name: 'Quality Roofing', email: 'lisa@quality.com', date: 'Aug 10, 2024', status: 'active', plan: 'Enterprise', commission: '$100/mo' }*/
     ];
 
     const coupons = [
@@ -110,11 +110,6 @@ const Referral = () => {
             {/* Header */}
             <div className="referral-header">
                 <div className="referral-header-left">
-                    <div className="crown-logo">
-                        <svg viewBox="0 0 24 24" fill="#1a1f3a">
-                            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                        </svg>
-                    </div>
                     <h1>Referral Program</h1>
                 </div>
                 <div className="referral-header-actions">
@@ -204,7 +199,7 @@ const Referral = () => {
                         <div className="pie-chart-container">
                             <div className="pie-chart">
                                 <div className="pie-center">
-                                    <div className="pie-percentage">72%</div>
+                                    <div className="pie-percentage">0%</div>
                                     <div className="pie-label">Active</div>
                                 </div>
                             </div>
@@ -212,12 +207,12 @@ const Referral = () => {
                                 <div className="legend-item">
                                     <div className="legend-color" style={{ background: '#FDB813' }}></div>
                                     <span className="legend-label">Active</span>
-                                    <span className="legend-value">18</span>
+                                    <span className="legend-value">0</span>
                                 </div>
                                 <div className="legend-item">
                                     <div className="legend-color" style={{ background: '#e5e7eb' }}></div>
                                     <span className="legend-label">Inactive</span>
-                                    <span className="legend-value">7</span>
+                                    <span className="legend-value">0</span>
                                 </div>
                             </div>
                         </div>
@@ -376,7 +371,7 @@ const Referral = () => {
                 </div>
 
                 {/* Recent Referrals Table */}
-                <table className="referrals-table">
+                <table className="referrals-table mb-10">
                     <thead>
                         <tr>
                             <th>Referral</th>
