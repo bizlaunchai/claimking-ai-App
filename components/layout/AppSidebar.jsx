@@ -117,7 +117,7 @@ function Sidebar({isCollapsed, setIsCollapsed}) {
                     {/* Header */}
                        <div className={`sidebar-header ${isCollapsed ? 'flex-col items-center justify-center mb-8 gap-3' : 'flex-row'}`}>
                            <Link href="/">
-                           <div className={`logo-container ${isCollapsed ? '' : 'gap-2'}`} onClick={expandSidebarIfCollapsed}>
+                           <div className={`logo-container mr-2 ${isCollapsed ? '' : 'gap-2'}`} onClick={expandSidebarIfCollapsed}>
                                <div className="logo-icon">
                                    {/* ClaimKing Crown Logo */}
                                    <svg viewBox="0 0 32 32" className="crown-logo">
