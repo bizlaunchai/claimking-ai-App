@@ -1,8 +1,8 @@
 /* Container */
 .container {
-    max-width: 1400px;
+    /*max-width: 1400px;*/
     margin: 0 auto;
-    padding: 1.5rem;
+    padding: 0;
 }
 
 /* Header */
@@ -281,8 +281,8 @@
     height: 150px;
     border-radius: 50%;
     background: conic-gradient(
-        #FDB813 0deg 216deg,
-        #e5e7eb 216deg 360deg
+        #FDB813 0deg 0deg,
+        #e5e7eb 0deg 0deg
     );
     position: relative;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
