@@ -5,7 +5,7 @@ import "./payments.css";
 const PaymentsPage = () => {
     const [activeTab, setActiveTab] = useState('transactions');
     const [processors, setProcessors] = useState({
-        stripe: { connected: true },
+        stripe: { connected: false },
         square: { connected: false },
         paypal: { connected: false },
         other: { connected: false, name: 'Other' }
@@ -20,18 +20,22 @@ const PaymentsPage = () => {
         requireDeposit: true
     });
 
-    const transactions = [
+   /* const transactions = [
         { client: 'Johnson Property', project: 'Roof Replacement', invoice: '#INV-2024-089', amount: 12450, status: 'paid', date: 'Oct 19, 2024' },
         { client: 'Smith Residence', project: 'Complete Exterior', invoice: '#INV-2024-088', amount: 28900, status: 'pending', date: 'Oct 18, 2024' },
         { client: 'Davis Complex', project: 'Storm Repair', invoice: '#INV-2024-087', amount: 8750, status: 'overdue', date: 'Oct 10, 2024' },
         { client: 'Wilson Estate', project: 'Siding & Trim', invoice: '#INV-2024-086', amount: 15200, status: 'paid', date: 'Oct 15, 2024' },
         { client: 'Anderson Home', project: 'Gutter Installation', invoice: '#INV-2024-085', amount: 3200, status: 'draft', date: 'Oct 20, 2024' }
-    ];
+    ];*/
 
-    const invoices = [
+    const transactions = [];
+
+    /*const invoices = [
         { invoice: '#INV-2024-089', client: 'Johnson Property', amount: 12450, dueDate: 'Oct 25, 2024', status: 'paid' },
         { invoice: '#INV-2024-088', client: 'Smith Residence', amount: 28900, dueDate: 'Oct 28, 2024', status: 'pending' }
-    ];
+    ];*/
+
+    const invoices = [];
 
     const connectProcessor = (processor) => {
         if (confirm(`Connect to ${processor}?\n\nYou'll be redirected to ${processor} to authorize the connection.`)) {
@@ -156,23 +160,23 @@ const PaymentsPage = () => {
                 <div className="stats-grid">
                     <div className="stat-card">
                         <div className="stat-label">Total Revenue</div>
-                        <div className="stat-value">$487,290</div>
-                        <div className="stat-change positive">↑ 12% this month</div>
+                        <div className="stat-value">$0</div>
+                        {/*<div className="stat-change positive">↑ 12% this month</div>*/}
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Pending Payments</div>
-                        <div className="stat-value">$45,600</div>
-                        <div className="stat-change negative">↑ 8 overdue</div>
+                        <div className="stat-value">$0</div>
+                        {/*<div className="stat-change negative">↑ 8 overdue</div>*/}
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Paid This Month</div>
-                        <div className="stat-value">$127,430</div>
-                        <div className="stat-change positive">↑ 18% vs last month</div>
+                        <div className="stat-value">$0</div>
+                        {/*<div className="stat-change positive">↑ 18% vs last month</div>*/}
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Avg Invoice</div>
-                        <div className="stat-value">$10,350</div>
-                        <div className="stat-change positive">↑ $1,200</div>
+                        <div className="stat-value">$0</div>
+                        {/*<div className="stat-change positive">↑ $1,200</div>*/}
                     </div>
                 </div>
 
