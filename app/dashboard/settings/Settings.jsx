@@ -16,9 +16,9 @@ const Settings = () => {
     const [secondaryColor, setSecondaryColor] = useState('#1a1f3a');
     const [files, setFiles] = useState([]);
     const [integrations, setIntegrations] = useState({
-        salesforce: true,
+        salesforce: false,
         hubspot: false,
-        acculynx: true,
+        acculynx: false,
         jobber: false,
         pipedrive: false,
         zoho: false
@@ -52,12 +52,7 @@ const Settings = () => {
                 <div className="header-container">
                     <div className="header-left">
                         <div className="logo-section">
-                            <div className="logo">
-                                <svg viewBox="0 0 24 24">
-                                    <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                                </svg>
-                            </div>
-                            <div className="logo-text">ClaimKing.AI</div>
+                            <div className="logo-text">General</div>
                         </div>
                         <div className="page-title">Settings & Configuration</div>
                     </div>
@@ -113,34 +108,35 @@ const Settings = () => {
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Company Name</label>
-                                            <input type="text" className="form-input" defaultValue="Premium Roofing Solutions" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">DBA Name</label>
-                                            <input type="text" className="form-input" placeholder="Doing Business As" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">License Number</label>
-                                            <input type="text" className="form-input" defaultValue="ROC-123456" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Tax ID/EIN</label>
-                                            <input type="text" className="form-input" defaultValue="12-3456789" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Business Address</label>
-                                        <input type="text" className="form-input" defaultValue="123 Main Street, Suite 100" />
+                                        <input type="text" className="form-input" />
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">City</label>
-                                            <input type="text" className="form-input" defaultValue="Phoenix" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">State</label>
                                             <select className="form-select">
-                                                <option defaultValue>Arizona</option>
+                                                <option value=""></option>
+                                                <option>Arizona</option>
                                                 <option>California</option>
                                                 <option>Texas</option>
                                                 <option>Florida</option>
@@ -148,21 +144,21 @@ const Settings = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">ZIP Code</label>
-                                            <input type="text" className="form-input" defaultValue="85001" />
+                                            <input type="text" className="form-input" />
                                         </div>
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Phone</label>
-                                            <input type="tel" className="form-input" defaultValue="(555) 123-4567" />
+                                            <input type="tel" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Email</label>
-                                            <input type="email" className="form-input" defaultValue="info@premiumroofing.com" />
+                                            <input type="email" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Website</label>
-                                            <input type="url" className="form-input" defaultValue="https://premiumroofing.com" />
+                                            <input type="url" className="form-input" />
                                         </div>
                                     </div>
                                 </div>
@@ -178,11 +174,11 @@ const Settings = () => {
                                                     <span>Service Radius</span>
                                                     <span className="range-value">{serviceRadius} miles</span>
                                                 </div>
-                                                <input 
-                                                    type="range" 
-                                                    className="range-slider" 
-                                                    min="10" 
-                                                    max="200" 
+                                                <input
+                                                    type="range"
+                                                    className="range-slider"
+                                                    min="10"
+                                                    max="200"
                                                     value={serviceRadius}
                                                     onChange={(e) => setServiceRadius(e.target.value)}
                                                 />
@@ -190,10 +186,11 @@ const Settings = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Service Type</label>
-                                            <select className="form-select">
-                                                <option>Residential & Commercial</option>
-                                                <option>Residential Only</option>
-                                                <option>Commercial Only</option>
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Service Type</option>
+                                                <option value="both">Residential & Commercial</option>
+                                                <option value="residential">Residential Only</option>
+                                                <option value="commercial">Commercial Only</option>
                                             </select>
                                         </div>
                                     </div>
@@ -201,7 +198,7 @@ const Settings = () => {
                                         <label className="form-label">Service States</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="state-az" defaultChecked />
+                                                <input type="checkbox" id="state-az" />
                                                 <label htmlFor="state-az" className="checkbox-label">Arizona</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -209,7 +206,7 @@ const Settings = () => {
                                                 <label htmlFor="state-ca" className="checkbox-label">California</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="state-nv" defaultChecked />
+                                                <input type="checkbox" id="state-nv" />
                                                 <label htmlFor="state-nv" className="checkbox-label">Nevada</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -317,14 +314,15 @@ const Settings = () => {
                                             <div className="toggle-description">Automatically generate unique claim IDs</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Claim Number Format</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Format</option>
                                                 <option>CLM-YYYY-0001</option>
                                                 <option>YYYY-MM-0001</option>
                                                 <option>Custom Format</option>
@@ -332,9 +330,10 @@ const Settings = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Default Priority</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Priority</option>
                                                 <option>Low</option>
-                                                <option defaultValue>Medium</option>
+                                                <option>Medium</option>
                                                 <option>High</option>
                                                 <option>Urgent</option>
                                             </select>
@@ -344,27 +343,27 @@ const Settings = () => {
                                         <label className="form-label">Claim Statuses</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-new" defaultChecked />
+                                                <input type="checkbox" id="status-new" />
                                                 <label htmlFor="status-new" className="checkbox-label">New</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-inspection" defaultChecked />
+                                                <input type="checkbox" id="status-inspection" />
                                                 <label htmlFor="status-inspection" className="checkbox-label">Inspection Scheduled</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-estimate" defaultChecked />
+                                                <input type="checkbox" id="status-estimate" />
                                                 <label htmlFor="status-estimate" className="checkbox-label">Estimating</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-approval" defaultChecked />
+                                                <input type="checkbox" id="status-approval" />
                                                 <label htmlFor="status-approval" className="checkbox-label">Awaiting Approval</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-progress" defaultChecked />
+                                                <input type="checkbox" id="status-progress" />
                                                 <label htmlFor="status-progress" className="checkbox-label">In Progress</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="status-complete" defaultChecked />
+                                                <input type="checkbox" id="status-complete" />
                                                 <label htmlFor="status-complete" className="checkbox-label">Complete</label>
                                             </div>
                                         </div>
@@ -375,7 +374,7 @@ const Settings = () => {
                                             <div className="toggle-description">Track and manage supplement requests</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -395,26 +394,29 @@ const Settings = () => {
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Initial Response Time</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Response Time</option>
                                                 <option>1 Hour</option>
                                                 <option>2 Hours</option>
-                                                <option defaultValue>4 Hours</option>
+                                                <option>4 Hours</option>
                                                 <option>24 Hours</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Inspection Window</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Window</option>
                                                 <option>24 Hours</option>
-                                                <option defaultValue>48 Hours</option>
+                                                <option>48 Hours</option>
                                                 <option>72 Hours</option>
                                                 <option>1 Week</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Estimate Delivery</label>
-                                            <select className="form-select">
-                                                <option defaultValue>Same Day</option>
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Delivery Time</option>
+                                                <option>Same Day</option>
                                                 <option>Next Day</option>
                                                 <option>48 Hours</option>
                                                 <option>3 Days</option>
@@ -422,10 +424,11 @@ const Settings = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Project Completion</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Completion Time</option>
                                                 <option>7 Days</option>
                                                 <option>14 Days</option>
-                                                <option defaultValue>30 Days</option>
+                                                <option>30 Days</option>
                                                 <option>Custom</option>
                                             </select>
                                         </div>
@@ -469,25 +472,27 @@ const Settings = () => {
                                             <div className="toggle-description">Automatically calculate materials from measurement reports</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Waste Factor %</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Waste Factor</option>
                                                 <option>5%</option>
-                                                <option defaultValue>10%</option>
+                                                <option>10%</option>
                                                 <option>15%</option>
                                                 <option>20%</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Pricing Database</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Database</option>
                                                 <option>National Average</option>
-                                                <option defaultValue>Regional Pricing</option>
+                                                <option>Regional Pricing</option>
                                                 <option>Custom Pricing</option>
                                             </select>
                                         </div>
@@ -498,11 +503,12 @@ const Settings = () => {
                                             <div className="toggle-description">Add labor calculations to estimates</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
                                 </div>
+
                                 <div className="settings-section">
                                     <h3 className="section-title">3D Mockup Generator</h3>
                                     <div className="toggle-group">
@@ -511,7 +517,7 @@ const Settings = () => {
                                             <div className="toggle-description">Allow AI-generated property visualizations</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -519,15 +525,15 @@ const Settings = () => {
                                         <label className="form-label">Default Mockup Options</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="mockup-roof" defaultChecked />
+                                                <input type="checkbox" id="mockup-roof" />
                                                 <label htmlFor="mockup-roof" className="checkbox-label">Roof Colors</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="mockup-siding" defaultChecked />
+                                                <input type="checkbox" id="mockup-siding" />
                                                 <label htmlFor="mockup-siding" className="checkbox-label">Siding Options</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="mockup-trim" defaultChecked />
+                                                <input type="checkbox" id="mockup-trim" />
                                                 <label htmlFor="mockup-trim" className="checkbox-label">Trim & Fascia</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -547,22 +553,25 @@ const Settings = () => {
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Image Quality</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Quality</option>
                                                 <option>Standard (720p)</option>
-                                                <option defaultValue>High (1080p)</option>
+                                                <option>High (1080p)</option>
                                                 <option>Ultra (4K)</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Processing Speed</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Speed</option>
                                                 <option>Fast (Lower Quality)</option>
-                                                <option defaultValue>Balanced</option>
+                                                <option>Balanced</option>
                                                 <option>Best Quality (Slower)</option>
                                             </select>
                                         </div>
                                     </div>
                                 </div>
+
                                 <div className="settings-section">
                                     <h3 className="section-title">Policy Analyzer</h3>
                                     <div className="toggle-group">
@@ -571,7 +580,7 @@ const Settings = () => {
                                             <div className="toggle-description">AI-powered insurance policy interpretation</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -579,24 +588,25 @@ const Settings = () => {
                                         <label className="form-label">Analysis Focus Areas</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="policy-coverage" defaultChecked />
+                                                <input type="checkbox" id="policy-coverage" />
                                                 <label htmlFor="policy-coverage" className="checkbox-label">Coverage Limits</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="policy-deductible" defaultChecked />
+                                                <input type="checkbox" id="policy-deductible" />
                                                 <label htmlFor="policy-deductible" className="checkbox-label">Deductibles</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="policy-exclusions" defaultChecked />
+                                                <input type="checkbox" id="policy-exclusions" />
                                                 <label htmlFor="policy-exclusions" className="checkbox-label">Exclusions</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="policy-endorsements" defaultChecked />
+                                                <input type="checkbox" id="policy-endorsements" />
                                                 <label htmlFor="policy-endorsements" className="checkbox-label">Endorsements</label>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
+
                                 <div className="settings-section">
                                     <h3 className="section-title">AI Call Center</h3>
                                     <div className="toggle-group">
@@ -605,23 +615,25 @@ const Settings = () => {
                                             <div className="toggle-description">24/7 automated call handling</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Business Hours Mode</label>
-                                            <select className="form-select">
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Mode</option>
                                                 <option>Always Use AI</option>
-                                                <option defaultValue>Human First, AI Backup</option>
+                                                <option>Human First, AI Backup</option>
                                                 <option>Human Only</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">After Hours Mode</label>
-                                            <select className="form-select">
-                                                <option defaultValue>AI Handles All Calls</option>
+                                            <select className="form-select" defaultValue="">
+                                                <option value="" disabled>Select Mode</option>
+                                                <option>AI Handles All Calls</option>
                                                 <option>Emergency Only</option>
                                                 <option>Voicemail</option>
                                             </select>
@@ -629,16 +641,17 @@ const Settings = () => {
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">AI Voice Personality</label>
-                                        <select className="form-select">
+                                        <select className="form-select" defaultValue="">
+                                            <option value="" disabled>Select Personality</option>
                                             <option>Professional</option>
-                                            <option defaultValue>Friendly Professional</option>
+                                            <option>Friendly Professional</option>
                                             <option>Warm & Casual</option>
                                             <option>Formal</option>
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Custom Greeting</label>
-                                        <textarea className="form-textarea" placeholder="Thank you for calling Premium Roofing Solutions..." defaultValue="Thank you for calling Premium Roofing Solutions. We're here to help with all your roofing needs. How can I assist you today?"></textarea>
+                                        <textarea className="form-textarea"></textarea>
                                     </div>
                                 </div>
                             </div>
@@ -676,7 +689,7 @@ const Settings = () => {
                                             <div className="toggle-description">Monitor weather events in your service areas</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -684,19 +697,19 @@ const Settings = () => {
                                         <label className="form-label">Alert Types</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="alert-hail" defaultChecked />
+                                                <input type="checkbox" id="alert-hail" />
                                                 <label htmlFor="alert-hail" className="checkbox-label">Hail Storms</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="alert-wind" defaultChecked />
+                                                <input type="checkbox" id="alert-wind" />
                                                 <label htmlFor="alert-wind" className="checkbox-label">High Winds</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="alert-tornado" defaultChecked />
+                                                <input type="checkbox" id="alert-tornado" />
                                                 <label htmlFor="alert-tornado" className="checkbox-label">Tornadoes</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="alert-flood" defaultChecked />
+                                                <input type="checkbox" id="alert-flood" />
                                                 <label htmlFor="alert-flood" className="checkbox-label">Flooding</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -735,7 +748,7 @@ const Settings = () => {
                                             <div className="toggle-description">Automatically mark affected areas for canvassing</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -745,7 +758,7 @@ const Settings = () => {
                                             <div className="toggle-description">Alert sales team of storm opportunities</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -785,7 +798,7 @@ const Settings = () => {
                                             <div className="toggle-description">Create documents automatically based on claim status</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox"  />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -793,23 +806,23 @@ const Settings = () => {
                                         <label className="form-label">Default Templates</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="template-estimate" defaultChecked />
+                                                <input type="checkbox" id="template-estimate"  />
                                                 <label htmlFor="template-estimate" className="checkbox-label">Estimates</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="template-contract" defaultChecked />
+                                                <input type="checkbox" id="template-contract"  />
                                                 <label htmlFor="template-contract" className="checkbox-label">Contracts</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="template-invoice" defaultChecked />
+                                                <input type="checkbox" id="template-invoice"  />
                                                 <label htmlFor="template-invoice" className="checkbox-label">Invoices</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="template-supplement" defaultChecked />
+                                                <input type="checkbox" id="template-supplement"  />
                                                 <label htmlFor="template-supplement" className="checkbox-label">Supplements</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="template-coc" defaultChecked />
+                                                <input type="checkbox" id="template-coc"  />
                                                 <label htmlFor="template-coc" className="checkbox-label">Certificates</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -842,7 +855,7 @@ const Settings = () => {
                                             <div className="toggle-description">Add your logo to all generated documents</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -852,7 +865,7 @@ const Settings = () => {
                                             <div className="toggle-description">Enable electronic signature collection</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox" />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -970,23 +983,23 @@ const Settings = () => {
                                         <label className="form-label">Data to Sync</label>
                                         <div className="checkbox-grid">
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="sync-contacts" defaultChecked />
+                                                <input type="checkbox" id="sync-contacts" />
                                                 <label htmlFor="sync-contacts" className="checkbox-label">Contacts</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="sync-claims" defaultChecked />
+                                                <input type="checkbox" id="sync-claims" />
                                                 <label htmlFor="sync-claims" className="checkbox-label">Claims/Deals</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="sync-activities" defaultChecked />
+                                                <input type="checkbox" id="sync-activities" />
                                                 <label htmlFor="sync-activities" className="checkbox-label">Activities</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="sync-documents" defaultChecked />
+                                                <input type="checkbox" id="sync-documents" />
                                                 <label htmlFor="sync-documents" className="checkbox-label">Documents</label>
                                             </div>
                                             <div className="checkbox-item">
-                                                <input type="checkbox" id="sync-notes" defaultChecked />
+                                                <input type="checkbox" id="sync-notes" />
                                                 <label htmlFor="sync-notes" className="checkbox-label">Notes</label>
                                             </div>
                                             <div className="checkbox-item">
@@ -1004,7 +1017,7 @@ const Settings = () => {
                                             <div className="toggle-description">Sync emails with client records</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox"  />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -1014,7 +1027,7 @@ const Settings = () => {
                                             <div className="toggle-description">Track calls and SMS messages</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox"  />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -1061,11 +1074,11 @@ const Settings = () => {
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Email Notifications</label>
-                                            <input type="email" className="form-input" defaultValue="notifications@premiumroofing.com" />
+                                            <input type="email" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">SMS Notifications</label>
-                                            <input type="tel" className="form-input" defaultValue="+1 (555) 123-4567" />
+                                            <input type="tel" className="form-input" />
                                         </div>
                                     </div>
                                     <div className="toggle-group">
@@ -1074,7 +1087,7 @@ const Settings = () => {
                                             <div className="toggle-description">Browser and mobile app notifications</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox"  />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -1084,7 +1097,7 @@ const Settings = () => {
                                             <div className="toggle-description">Show notifications within the application</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
+                                            <input type="checkbox"  />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
@@ -1209,7 +1222,7 @@ const Settings = () => {
                         </div>
                         <div className={`category-content ${expandedCategories.includes('billing') ? 'expanded' : ''}`}>
                             <div className="category-body">
-                                <div className="alert alert-info">
+                                {/*<div className="alert alert-info">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <circle cx="12" cy="12" r="10"/>
                                         <line x1="12" y1="16" x2="12" y2="12"/>
@@ -1219,7 +1232,7 @@ const Settings = () => {
                                         <strong>Current Plan: Professional</strong><br />
                                         $299/month • Renews November 15, 2024
                                     </div>
-                                </div>
+                                </div>*/}
                                 <div className="settings-section">
                                     <h3 className="section-title">Subscription Details</h3>
                                     <div className="form-grid">
@@ -1241,7 +1254,7 @@ const Settings = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="settings-section">
+                               {/* <div className="settings-section">
                                     <h3 className="section-title">Usage & Credits</h3>
                                     <div className="range-group">
                                         <div className="range-header">
@@ -1270,8 +1283,8 @@ const Settings = () => {
                                         </div>
                                     </div>
                                     <button className="btn btn-outline" style={{marginTop: '1rem'}}>Purchase Additional Credits</button>
-                                </div>
-                                <div className="settings-section">
+                                </div>*/}
+                               {/* <div className="settings-section">
                                     <h3 className="section-title">Payment Method</h3>
                                     <div className="form-group">
                                         <label className="form-label">Primary Payment Method</label>
@@ -1304,7 +1317,7 @@ const Settings = () => {
                                         <label className="form-label">Backup Payment Method</label>
                                         <button className="btn btn-outline">Add Backup Method</button>
                                     </div>
-                                </div>
+                                </div>*/}
                                 <div className="settings-section">
                                     <h3 className="section-title">Billing History</h3>
                                     <table className="settings-table">
@@ -1318,7 +1331,7 @@ const Settings = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
+                                           {/* <tr>
                                                 <td>Oct 15, 2024</td>
                                                 <td>Professional Plan - Monthly</td>
                                                 <td>$299.00</td>
@@ -1338,7 +1351,7 @@ const Settings = () => {
                                                 <td>$299.00</td>
                                                 <td><span className="status-indicator active">Paid</span></td>
                                                 <td><button className="btn btn-outline">Download</button></td>
-                                            </tr>
+                                            </tr>*/}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1389,10 +1402,10 @@ const Settings = () => {
                                     <div className="form-group">
                                         <label className="form-label">Payment Processor</label>
                                         <div className="integration-grid">
-                                            <div className="integration-card connected">
+                                            <div className="integration-card">
                                                 <div className="integration-icon">💳</div>
                                                 <div className="integration-name">Stripe</div>
-                                                <div className="integration-status">Connected</div>
+                                                <div className="integration-status">Not Connected</div>
                                             </div>
                                             <div className="integration-card">
                                                 <div className="integration-icon">🟦</div>
@@ -1466,7 +1479,7 @@ const Settings = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Starting Invoice Number</label>
-                                            <input type="number" className="form-input" defaultValue="1247" />
+                                            <input type="number" className="form-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Default Payment Terms</label>
@@ -1727,7 +1740,7 @@ const Settings = () => {
                             <div className="category-info">
                                 <div className="category-title">
                                     Team & Users
-                                    <span className="category-badge">5</span>
+                                    {/*<span className="category-badge">5</span>*/}
                                 </div>
                                 <div className="category-description">Manage team members, roles, and permissions</div>
                             </div>
@@ -1739,7 +1752,7 @@ const Settings = () => {
                         </div>
                         <div className={`category-content ${expandedCategories.includes('team') ? 'expanded' : ''}`}>
                             <div className="category-body">
-                                <div className="alert alert-info">
+                                {/*<div className="alert alert-info">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <circle cx="12" cy="12" r="10"/>
                                         <line x1="12" y1="16" x2="12" y2="12"/>
@@ -1749,7 +1762,7 @@ const Settings = () => {
                                         <strong>Team Size: 5 / 10 members</strong><br />
                                         You can add 5 more team members to your current plan.
                                     </div>
-                                </div>
+                                </div>*/}
                                 <div className="settings-section">
                                     <h3 className="section-title">User Roles</h3>
                                     <table className="settings-table">
@@ -1762,7 +1775,7 @@ const Settings = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
+                                           {/* <tr>
                                                 <td><strong>Admin</strong></td>
                                                 <td>2</td>
                                                 <td>Full system access</td>
@@ -1791,7 +1804,7 @@ const Settings = () => {
                                                 <td>0</td>
                                                 <td>Field inspections and photos</td>
                                                 <td><button className="btn btn-outline">Edit</button></td>
-                                            </tr>
+                                            </tr>*/}
                                         </tbody>
                                     </table>
                                 </div>
