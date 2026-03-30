@@ -129,7 +129,7 @@
 .logo-text {
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-primary)!important;
     letter-spacing: -0.02em;
     white-space: nowrap;
     transition: opacity 0.3s ease;
