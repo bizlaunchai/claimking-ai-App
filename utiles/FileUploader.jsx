@@ -184,7 +184,7 @@ export default function FileUploader({
             maxFileSize={`${maxSizeMB}` * 1024 * 1024}
             maxFiles={maxFiles}
             actionButtons={{ position: "bottom", uploadButton: {}, abortButton: {} }}
-            hideInstructions={true}
+            hideinstructions="true"
             uploadConfig={{
                 url: "/api/upload-file",
                 method: "POST",

@@ -8,9 +8,19 @@ export async function GET(request) {
 
     if (code) {
         const supabase = await createClient();
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
 
-        if (!error) {
+        if (!error && user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('business_name, phone')
+                .eq('id', user.id)
+                .single();
+
+            if (!profile || !profile.business_name) {
+                return NextResponse.redirect(`${origin}/onboarding`);
+            }
+
             return NextResponse.redirect(`${origin}${next}`);
         }
     }
