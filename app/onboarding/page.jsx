@@ -25,7 +25,6 @@ export default function OnboardingModal() {
 
     const router = useRouter();
 
-    // মডাল ওপেন থাকলে ব্যাকগ্রাউন্ড স্ক্রল বন্ধ রাখবে
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -68,8 +67,10 @@ export default function OnboardingModal() {
         }
     };
 
-    const handleClose = () => {
+    const handleClose = async () => {
         setIsOpen(false);
+        const supabase = createClient();
+        await supabase.auth.signOut();
         router.push("/");
     };
 
