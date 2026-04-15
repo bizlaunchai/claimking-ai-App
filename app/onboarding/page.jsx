@@ -175,12 +175,13 @@ export default function OnboardingModal() {
                                     </label>
                                     <div className="flex-1 min-h-[200px] border-2 border-dashed border-gray-200 rounded-[1.5rem] bg-white flex items-center justify-center p-4 hover:border-yellow-400 transition-colors group">
                                         <FileUploader
-                                            label={"Upload High-Res Logo"}
+                                            label={'Upload Logo'}
                                             files={logoFiles}
                                             setFiles={setLogoFiles}
-                                            allowedExtensions={[".jpg", ".png", ".jpeg", ".webp"]}
+                                            allowedExtensions={['.jpg', '.png', '.jpeg', '.webp']}
                                             maxFiles={1}
-                                            maxSizeMB={2}
+                                            maxSizeMB={1} // Adjusted max size for logo
+                                            uploadFolderName={'business_logo'}
                                         />
                                     </div>
                                 </div>
