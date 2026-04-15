@@ -47,8 +47,7 @@ export function SignUpForm({ className, ...props }) {
     }
 
     try {
-      const logoUrl = logoFiles.length > 0 ? "path/to/uploaded/logo.png" : null;
-
+      const logoUrl = logoFiles?.length > 0 ? logoFiles[0]?.serverResponse?.payload?.key : null;
 
       const { error } = await supabase.auth.signUp({
         email,
@@ -68,6 +67,7 @@ export function SignUpForm({ className, ...props }) {
       if (error) throw error;
       router.push("/auth/sign-up-success");
     } catch (err) {
+      console.log(err)
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
@@ -122,6 +122,7 @@ export function SignUpForm({ className, ...props }) {
                       allowedExtensions={['.jpg', '.png', '.jpeg', '.webp']}
                       maxFiles={1}
                       maxSizeMB={1} // Adjusted max size for logo
+                      uploadFolderName={'business_logo'}
                   />
                 </div>
 

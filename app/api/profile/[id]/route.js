@@ -17,6 +17,7 @@ export async function GET(request, { params }) {
         .single();
 
     if (profileError) {
+        console.log(profileError);
         return NextResponse.json({ error: profileError.message }, { status: 400 });
     }
 

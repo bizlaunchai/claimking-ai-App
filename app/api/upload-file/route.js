@@ -11,6 +11,10 @@ import crypto from "crypto";
 
 export async function POST(req) {
     try {
+
+        const { searchParams } = new URL(req.url);
+        const uploadFolderName = searchParams.get("uploadFolderName")
+
         const formData = await req.formData();
         const file = formData.get("file");
 
@@ -24,21 +28,23 @@ export async function POST(req) {
         // Convert to buffer
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
+        const bucketName = process.env.AWS_S3_BUCKET;
 
         // Unique filename
         const ext = path.extname(file.name);
-        const key = `${crypto.randomUUID()}${ext}`;
+        // const key = `${crypto.randomUUID()}${ext}`;
+        const key = uploadFolderName ? `${uploadFolderName}/${crypto.randomUUID()}${ext}` : `${crypto.randomUUID()}${ext}`;
+
 
         // Upload to S3 (PRIVATE)
         await s3.send(
             new PutObjectCommand({
-                Bucket: process.env.AWS_S3_BUCKET,
+                Bucket: bucketName,
                 Key: key,
                 Body: buffer,
                 ContentType: file.type,
             })
         );
-
 
         return Response.json({
             success: true,

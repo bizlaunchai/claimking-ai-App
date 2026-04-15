@@ -144,6 +144,7 @@ export default function FileUploader({
                                          labelStyle = { fontSize: 16, marginBottom: 2 },
                                          enforceRecommendedSize = false,      // NEW prop
                                          recommendedSize = null, // NEW prop
+                                         uploadFolderName = ''
                                      }) {
     const accept = allowedExtensions.join(",");
 
@@ -186,13 +187,45 @@ export default function FileUploader({
             actionButtons={{ position: "bottom", uploadButton: {}, abortButton: {} }}
             hideinstructions="true"
             uploadConfig={{
-                url: "/api/upload-file",
+                url: uploadFolderName ? `/api/upload-file?uploadFolderName=${uploadFolderName}` : `/api/upload-file`,
                 method: "POST",
                 headers: { Authorization: "Bearer MY_SECRET_TOKEN" },
                 cleanOnUpload: true,
                 autoUpload: true,
             }}
+            /*onUploadFinish={(uploadedFiles) => {
+                const filesWithId = uploadedFiles.map((file) => ({
+                    ...file,
+                    id: file.id || crypto.randomUUID(),
+                }));
+
+                const allFiles = [
+                    ...files.filter((f) => !filesWithId.some((u) => u.id === f.id)),
+                    ...filesWithId,
+                ];
+
+                setFiles(allFiles);
+            }}*/
+
             onUploadFinish={(uploadedFiles) => {
+                console.log("📥 Raw Upload Response:", uploadedFiles);
+
+                const failedFiles = uploadedFiles.filter(
+                    (file) => !file.serverResponse?.success
+                );
+
+                if (failedFiles.length > 0) {
+                    console.error("🔥 Upload failed:", failedFiles);
+
+                    // alert(
+                    //     failedFiles[0]?.serverResponse?.message ||
+                    //     "Upload failed from server"
+                    // );
+
+                    return;
+                }
+
+                // SUCCESS
                 const filesWithId = uploadedFiles.map((file) => ({
                     ...file,
                     id: file.id || crypto.randomUUID(),
@@ -205,6 +238,8 @@ export default function FileUploader({
 
                 setFiles(allFiles);
             }}
+
+
             footerConfig={{ style: { display: "none" } }}
             headerConfig={{
                 cleanFiles: false,
