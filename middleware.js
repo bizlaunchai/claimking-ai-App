@@ -1,5 +1,15 @@
 import { updateSession } from "./lib/supabase/middleware";
+import { NextResponse } from "next/server";
+
 export async function middleware(request) {
+  const { pathname } = request.nextUrl;
+
+  // 🔥 API route skip
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next();
+  }
+
+
   return await updateSession(request);
 }
 
