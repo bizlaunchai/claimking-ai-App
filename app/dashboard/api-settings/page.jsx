@@ -10,10 +10,51 @@ import {
     HardDrive,
     Copy,
     CheckCircle2,
-    AlertCircle
+    AlertCircle, Loader2
 } from 'lucide-react';
+import axiosInstance from "@/lib/axiosInstance.js";
+import {toast} from "sonner";
 
 const IntegrationPage = () => {
+
+    const [openaiKey, setOpenaiKey] = useState('');
+    const [openaiStatus, setOpenaiStatus] = useState();
+
+
+    const handleSaveOpenAI = async () => {
+        if (!openaiKey) {
+            toast.error('Please enter API key');
+            return;
+        }
+
+        setOpenaiStatus('loading');
+
+        try {
+            const res = await axiosInstance.post('/openai-key-save', {
+                apiKey: openaiKey
+            });
+
+            if (res.data.success) {
+                setOpenaiStatus('success');
+                toast.success('OpenAI key saved successfully');
+                setOpenaiKey(''); // clear input
+            } else {
+                setOpenaiStatus('error');
+                toast.error(res.data.message || 'Failed to save key');
+            }
+
+        } catch (err) {
+            setOpenaiStatus('error');
+        }
+    };
+
+    const StatusIcon = ({ status }) => {
+        if (status === 'loading') return <Loader2 className="w-4 h-4 animate-spin" />;
+        if (status === 'success') return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+        if (status === 'error') return <AlertCircle className="w-4 h-4 text-red-500" />;
+        return null;
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 p-6 md:p-10 font-sans">
             <div className="max-w-5xl mx-auto">
@@ -42,8 +83,20 @@ const IntegrationPage = () => {
                                     <p className="text-xs text-gray-500 mb-2">Used for estimates, policy analysis, email replies, supplement generation,
                                         document generation.</p>
                                     <div className="flex gap-2">
-                                        <input type="password" placeholder="sk-..." className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
-                                        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition text-sm font-medium">Save & Test</button>
+                                        <input
+                                            type="password"
+                                            placeholder="sk-..."
+                                            value={openaiKey}
+                                            onChange={(e) => setOpenaiKey(e.target.value)}
+                                            className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        <button
+                                            onClick={handleSaveOpenAI}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition text-sm font-medium flex items-center gap-2"
+                                        >
+                                            Save & Test
+                                            <StatusIcon status={openaiStatus} />
+                                        </button>
                                     </div>
                                 </div>
                                 <div>
