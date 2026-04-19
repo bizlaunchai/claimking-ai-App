@@ -14,8 +14,8 @@ import {
     Check,
     XCircle,
 } from 'lucide-react';
-import axiosInstance from '@/lib/axiosInstance.js';
 import { toast } from 'sonner';
+import axiosInstance from "../../../lib/axiosInstance.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
