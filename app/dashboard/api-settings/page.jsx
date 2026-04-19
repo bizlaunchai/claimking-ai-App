@@ -28,6 +28,7 @@ const styles = `
     overflow: hidden;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
     transition: box-shadow 0.2s;
+    height: 100%;
   }
   .card:hover { box-shadow: 0 2px 4px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06); }
 
@@ -50,101 +51,81 @@ const styles = `
     background: #f9fafb;
     border: 1.5px solid #e5e7eb;
     border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 10px 12px;
+    font-size: 14px;
     color: #111827;
     outline: none;
     transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-    font-family: 'DM Sans', sans-serif;
   }
-  .input::placeholder { color: #9ca3af; }
   .input:focus {
     border-color: #6366f1;
     background: #fff;
     box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
   }
-  .input.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.02em; }
+  .input.mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 
   .lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7280; display: block; margin-bottom: 5px; }
   .hint { font-size: 12px; color: #9ca3af; margin-bottom: 7px; line-height: 1.5; }
 
   .btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 15px; border-radius: 8px;
-    font-size: 13px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
     border: none; transition: all 0.15s; white-space: nowrap;
-    font-family: 'DM Sans', sans-serif;
   }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-indigo  { background: #4f46e5; color: #fff; }
   .btn-indigo:hover:not(:disabled)  { background: #4338ca; }
   .btn-violet  { background: #7c3aed; color: #fff; }
-  .btn-violet:hover:not(:disabled)  { background: #6d28d9; }
   .btn-orange  { background: #ea580c; color: #fff; }
-  .btn-orange:hover:not(:disabled)  { background: #c2410c; }
   .btn-rose    { background: #e11d48; color: #fff; }
-  .btn-rose:hover:not(:disabled)    { background: #be123c; }
   .btn-teal    { background: #0d9488; color: #fff; }
-  .btn-teal:hover:not(:disabled)    { background: #0f766e; }
-  .btn-ghost   { background: #fff; color: #374151; border: 1.5px solid #e5e7eb; }
-  .btn-ghost:hover:not(:disabled)   { background: #f9fafb; border-color: #d1d5db; }
 
-  .ok  { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; color: #166534; font-size: 12px; font-weight: 500; margin-top: 10px; }
-  .err { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; color: #be123c; font-size: 12px; font-weight: 500; margin-top: 10px; }
+  .ok, .err { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+  .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .err { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; }
 
-  .divider-v { width: 1px; background: #f3f4f6; align-self: stretch; flex-shrink: 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 32px; }
+  .grid-simple { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
-  .provider-logo { height: 15px; object-fit: contain; }
+  @media (max-width: 768px) {
+    .grid-2, .grid-simple { grid-template-columns: 1fr; }
+    .divider-v { display: none; }
+    .btn { width: 100%; }
+    .card-head { padding: 12px 16px; }
+    .card-body { padding: 16px !important; }
+  }
 
-  .provider-name { font-size: 13px; font-weight: 600; color: #1f2937; }
-
-  .sub-head { font-size: 12px; font-weight: 600; color: #374151; display: flex; align-items: center; gap: 7px; padding-bottom: 10px; border-bottom: 1px solid #f3f4f6; margin-bottom: 12px; }
-
+  .divider-v { width: 1px; background: #f3f4f6; align-self: stretch; }
+  .provider-logo { height: 16px; object-fit: contain; }
+  .provider-name { font-size: 14px; font-weight: 600; color: #1f2937; }
   .oauth-card {
     display: flex; align-items: center; gap: 12px;
-    padding: 14px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-    background: #fff; cursor: pointer; transition: all 0.15s;
-    font-family: 'DM Sans', sans-serif; text-align: left;
+    padding: 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+    background: #fff; cursor: pointer; transition: all 0.15s; width: 100%;
   }
-  .oauth-card:hover { background: #fafafa; border-color: #c7d2fe; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-
-  .fwd-box { background: linear-gradient(135deg,#eff6ff,#f0f9ff); border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; }
-
-  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .tag-free    { background: #ede9fe; color: #5b21b6; }
-  .tag-enc     { background: #ffe4e6; color: #be123c; }
-
-  .mono-tag { display: inline-flex; align-items: center; gap: 5px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 7px 10px; font-size: 11px; color: #6b7280; font-family: 'JetBrains Mono', monospace; white-space: nowrap; align-self: center; }
-
-  .webhook-pill { display: inline-flex; align-items: center; gap: 5px; background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px; padding: 5px 9px; font-size: 11px; color: #9ca3af; font-family: 'JetBrains Mono', monospace; margin-top: 8px; }
-
-  .noaa-pill { display: flex; align-items: center; gap: 7px; padding: 9px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 12px; color: #166534; font-weight: 500; }
+  .oauth-card:hover { border-color: #c7d2fe; background: #fafafa; }
 `;
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── components ───────────────────────────────────────────────────────────────
 
 const SI = ({ status, size = 14 }) => {
-    const s = { width: size, height: size, flexShrink: 0 };
-    if (status === 'loading') return <Loader2 style={{ ...s, animation: 'spin 1s linear infinite' }} />;
-    if (status === 'success') return <CheckCircle2 style={s} />;
-    if (status === 'error')   return <XCircle style={s} />;
+    if (status === 'loading') return <Loader2 size={size} style={{ animation: 'spin 1s linear infinite' }} />;
+    if (status === 'success') return <CheckCircle2 size={size} />;
+    if (status === 'error')   return <XCircle size={size} />;
     return null;
 };
 
-const extractError = (err) =>
-    err?.response?.data?.message ||
-    err?.response?.data?.error ||
-    err?.message ||
-    'Something went wrong';
+const extractError = (err) => err?.response?.data?.message || err?.message || 'Something went wrong';
 
 const Banner = ({ status, error }) => {
     if (!status || status === 'loading') return null;
-    if (status === 'success') return <div className="ok"><CheckCircle2 size={14} style={{ flexShrink: 0 }} />Connected successfully</div>;
-    return <div className="err"><XCircle size={14} style={{ flexShrink: 0 }} />{error || 'Something went wrong'}</div>;
+    if (status === 'success') return <div className="ok"><CheckCircle2 size={14} />Connected successfully</div>;
+    return <div className="err"><XCircle size={14} />{error || 'Error connection failed'}</div>;
 };
 
 const F = ({ label, hint, children }) => (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
         {label && <span className="lbl">{label}</span>}
         {hint  && <span className="hint">{hint}</span>}
         {children}
@@ -156,20 +137,19 @@ const Card = ({ accent, iconBg, icon: Icon, title, badge, children, delay = 0 })
         <div className="card-head">
             <div className="accent" style={{ background: accent }} />
             <div className="icon-wrap" style={{ background: iconBg }}>
-                <Icon size={14} style={{ color: accent }} />
+                <Icon size={16} style={{ color: accent }} />
             </div>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#1f2937', flex: 1 }}>{title}</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#111827', flex: 1 }}>{title}</span>
             {badge}
         </div>
-        <div style={{ padding: 24 }}>{children}</div>
+        <div className="card-body" style={{ padding: '24px 32px' }}>{children}</div>
     </div>
 );
-
-// ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function IntegrationPage() {
     const s = (init = '') => useState(init);
 
+    // Form States
     const [openaiKey, setOpenaiKey] = s();
     const [openaiSt, setOpenaiSt] = s(null);
     const [openaiErr, setOpenaiErr] = s();
@@ -220,65 +200,64 @@ export default function IntegrationPage() {
             onOk?.();
         } catch (e) {
             const msg = extractError(e);
+            console.log(msg);
             setSt('error'); setErr(msg); toast.error(msg);
         }
     };
 
     return (
-        <div className="int-root" style={{ minHeight: '100vh', background: '#f3f4f6', padding: '32px 20px' }}>
+        <div className="int-root" style={{ minHeight: '100vh', background: '#f3f4f6', padding: '40px 20px' }}>
             <style>{styles}</style>
-            <div style={{ maxWidth: 840, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
                 {/* Header */}
-                <div className="fade-up" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div className="fade-up" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                            <div style={{ width: 34, height: 34, background: '#1f2937', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Zap size={16} color="#fbbf24" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                            <div style={{ width: 40, height: 40, background: '#1f2937', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Zap size={20} color="#fbbf24" />
                             </div>
-                            <h1 style={{ margin: 0, fontSize: 21, fontWeight: 600, color: '#111827' }}>Integrations</h1>
+                            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>Integrations</h1>
                         </div>
-                        <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>
-                            Connect AI providers, phone systems, email, and storage. All credentials are AES-256 encrypted.
+                        <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>
+                            Securely connect your core business tools. All data is encrypted with AES-256 standards.
                         </p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
-                        <AlertCircle size={13} color="#d97706" />
-                        <span style={{ fontSize: 12, fontWeight: 500, color: '#b45309' }}>Configure before using live features</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
+                        <AlertCircle size={14} color="#d97706" />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>Production Ready</span>
                     </div>
                 </div>
 
                 {/* AI Providers */}
-                <Card accent="#4f46e5" iconBg="#eef2ff" icon={Cpu} title="AI Providers" delay={40}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 24 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <Card accent="#4f46e5" iconBg="#eef2ff" icon={Cpu} title="AI Engine Providers" delay={40}>
+                    <div className="grid-2">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img className="provider-logo" src="https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg" alt="OpenAI" />
-                                <span className="provider-name">OpenAI</span>
+                                <span className="provider-name">OpenAI (GPT-4)</span>
                             </div>
-                            <F hint="Powers estimates, policy analysis, email replies & document generation.">
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input className="input mono" type="password" autoComplete="new-password" placeholder="sk-proj-..." value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} style={{ flex: 1 }} />
-                                    <button className="btn btn-indigo" onClick={() => callApi('/openai-key-save', { apiKey: openaiKey }, setOpenaiSt, setOpenaiErr, () => setOpenaiKey(''))} disabled={openaiSt === 'loading'}>
-                                        Save <SI status={openaiSt} />
+                            <F hint="Used for automated estimating, analysis, and smart replies.">
+                                <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                                    <input className="input mono" type="password" placeholder="sk-proj-..." value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/openai-key-save', { apiKey: openaiKey }, setOpenaiSt, setOpenaiErr)} disabled={openaiSt === 'loading'}>
+                                        Save Connection <SI status={openaiSt} />
                                     </button>
                                 </div>
                             </F>
                             <Banner status={openaiSt} error={openaiErr} />
                         </div>
-
                         <div className="divider-v" />
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img className="provider-logo" src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" />
                                 <span className="provider-name">Google Gemini</span>
                             </div>
-                            <F hint="Alternative AI provider for image generation and analysis.">
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input className="input mono" type="password" autoComplete="new-password" placeholder="AIza..." value={geminiKey} onChange={e => setGeminiKey(e.target.value)} style={{ flex: 1 }} />
-                                    <button className="btn btn-indigo" onClick={() => callApi('/gemini-key-save', { apiKey: geminiKey }, setGeminiSt, setGeminiErr, () => setGeminiKey(''))} disabled={geminiSt === 'loading'}>
-                                        Save <SI status={geminiSt} />
+                            <F hint="Used as a high-performance alternative for vision and multi-modal tasks.">
+                                <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                                    <input className="input mono" type="password" placeholder="AIza..." value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/gemini-key-save', { apiKey: geminiKey }, setGeminiSt, setGeminiErr)} disabled={geminiSt === 'loading'}>
+                                        Save Connection <SI status={geminiSt} />
                                     </button>
                                 </div>
                             </F>
@@ -288,18 +267,17 @@ export default function IntegrationPage() {
                 </Card>
 
                 {/* Image Generation */}
-                <Card accent="#7c3aed" iconBg="#f5f3ff" icon={ImageIcon} title="Image Generation" delay={80}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <Card accent="#7c3aed" iconBg="#f5f3ff" icon={ImageIcon} title="Visual & Image Generation" delay={80}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <img className="provider-logo" src="https://replicate.com/favicon.ico" alt="Replicate" style={{ borderRadius: 3 }} />
-                            <span className="provider-name">Replicate</span>
+                            <span className="provider-name">Replicate (SDXL)</span>
                         </div>
-                        <F hint="Powers 3D roof mockup generation via Stable Diffusion XL.">
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                <input className="input mono" type="password" autoComplete="new-password" placeholder="r8_..." value={repToken} onChange={e => setRepToken(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-                                <div className="mono-tag"><Database size={11} />stability-ai/sdxl</div>
-                                <button className="btn btn-violet" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr, () => setRepToken(''))} disabled={repSt === 'loading'}>
-                                    Test & Save <SI status={repSt} />
+                        <F hint="Generates detailed 3D roof mockups and property visualizations.">
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                <input className="input mono" style={{ flex: 1, minWidth: '240px' }} type="password" placeholder="r8_..." value={repToken} onChange={e => setRepToken(e.target.value)} />
+                                <button className="btn btn-violet" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr)} disabled={repSt === 'loading'}>
+                                    Verify & Save <SI status={repSt} />
                                 </button>
                             </div>
                         </F>
@@ -308,163 +286,120 @@ export default function IntegrationPage() {
                 </Card>
 
                 {/* Call Tracking */}
-                <Card accent="#ea580c" iconBg="#fff7ed" icon={Phone} title="Phone & Call Tracking" delay={120}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 24 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <div className="sub-head">
-                                <img className="provider-logo" src="https://www.ringcentral.com/favicon.ico" alt="RC" style={{ borderRadius: 2 }} />
-                                RingCentral
+                <Card accent="#ea580c" iconBg="#fff7ed" icon={Phone} title="Communications & Call Tracking" delay={120}>
+                    <div className="grid-2">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
+                                <img className="provider-logo" src="https://www.ringcentral.com/favicon.ico" alt="RC" /> RingCentral
                             </div>
-                            <F label="Client ID">
-                                <input className="input" type="text" placeholder="Client ID" value={rcId} onChange={e => setRcId(e.target.value)} />
-                            </F>
-                            <F label="Client Secret">
-                                <input className="input mono" type="password" autoComplete="new-password" placeholder="Client Secret" value={rcSecret} onChange={e => setRcSecret(e.target.value)} />
-                            </F>
-                            <F label="JWT Token">
-                                <textarea className="input mono" placeholder="Paste JWT token..." value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 68, resize: 'none' }} />
-                            </F>
-                            <button className="btn btn-orange" onClick={() => callApi('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt }, setRcSt, setRcErr)} disabled={rcSt === 'loading'} style={{ alignSelf: 'flex-start' }}>
-                                Connect <SI status={rcSt} />
+                            <F label="Client ID"><input className="input" placeholder="Enter ID" value={rcId} onChange={e => setRcId(e.target.value)} /></F>
+                            <F label="Client Secret"><input className="input mono" type="password" placeholder="Enter Secret" value={rcSecret} onChange={e => setRcSecret(e.target.value)} /></F>
+                            <F label="JWT Token"><textarea className="input mono" placeholder="Paste JWT..." value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 80, resize: 'none' }} /></F>
+                            <button className="btn btn-orange" onClick={() => callApi('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt }, setRcSt, setRcErr)} disabled={rcSt === 'loading'}>
+                                Connect Phone <SI status={rcSt} />
                             </button>
                             <Banner status={rcSt} error={rcErr} />
-                            <div className="webhook-pill"><Wifi size={10} />POST /api/webhooks/ringcentral</div>
                         </div>
-
                         <div className="divider-v" />
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <div className="sub-head"><Globe size={13} color="#ea580c" />Call Tracking Metrics</div>
-                            <F label="Account ID">
-                                <input className="input" type="text" placeholder="Account ID" value={ctmAccount} onChange={e => setCtmAccount(e.target.value)} />
-                            </F>
-                            <F label="API Key">
-                                <input className="input" type="text" placeholder="API Key" value={ctmKey} onChange={e => setCtmKey(e.target.value)} />
-                            </F>
-                            <F label="API Secret">
-                                <input className="input mono" type="password" autoComplete="new-password" placeholder="API Secret" value={ctmSecret} onChange={e => setCtmSecret(e.target.value)} />
-                            </F>
-                            <button className="btn btn-orange" disabled={ctmSt === 'loading'} style={{ alignSelf: 'flex-start' }}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
+                                <Globe size={16} color="#ea580c" /> Call Tracking Metrics
+                            </div>
+                            <F label="Account ID"><input className="input" placeholder="ID" value={ctmAccount} onChange={e => setCtmAccount(e.target.value)} /></F>
+                            <F label="API Key"><input className="input" placeholder="Key" value={ctmKey} onChange={e => setCtmKey(e.target.value)} /></F>
+                            <F label="API Secret"><input className="input mono" type="password" placeholder="Secret" value={ctmSecret} onChange={e => setCtmSecret(e.target.value)} /></F>
+                            <button className="btn btn-orange" disabled={ctmSt === 'loading'}
                                     onClick={async () => {
-                                        if (!ctmKey || !ctmSecret || !ctmAccount) { toast.error('Please fill in all CTM fields'); return; }
-                                        setCtmSt('loading'); setCtmErr('');
+                                        if (!ctmKey || !ctmSecret || !ctmAccount) { toast.error('Fill all fields'); return; }
+                                        setCtmSt('loading');
                                         try {
                                             const res = await axiosInstance.post('/ctm-save', { apiKey: ctmKey, apiSecret: ctmSecret, accountId: ctmAccount });
                                             setCtmSt('success'); setCtmCount(res.data?.importedCount ?? 0);
-                                            toast.success(`Imported ${res.data?.importedCount ?? 0} calls`);
-                                        } catch (e) { const m = extractError(e); setCtmSt('error'); setCtmErr(m); toast.error(m); }
+                                        } catch (e) { setCtmSt('error'); setCtmErr(extractError(e)); }
                                     }}>
-                                Save & Import 30 Days <SI status={ctmSt} />
+                                Sync 30-Day Data <SI status={ctmSt} />
                             </button>
-                            {ctmSt === 'success' && ctmCount !== null
-                                ? <div className="ok"><CheckCircle2 size={14} style={{ flexShrink: 0 }} />{ctmCount} calls imported from last 30 days</div>
-                                : <Banner status={ctmSt === 'success' ? null : ctmSt} error={ctmErr} />
-                            }
+                            {ctmSt === 'success' && <div className="ok">{ctmCount} calls synced successfully</div>}
+                            {ctmSt === 'error' && <Banner status="error" error={ctmErr} />}
                         </div>
                     </div>
                 </Card>
 
                 {/* Email */}
-                <Card accent="#059669" iconBg="#ecfdf5" icon={Mail} title="Email Connections" delay={160}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            <button className="oauth-card" onClick={() => toast.info('Redirect to Google OAuth...')}>
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Color_Logo.svg" style={{ width: 20 }} alt="Google" />
-                                <div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Connect Gmail</div>
-                                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>gmail.readonly scope</div>
+                <Card accent="#059669" iconBg="#ecfdf5" icon={Mail} title="Email Sync & Processing" delay={160}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                        <div className="grid-simple">
+                            <button className="oauth-card" onClick={() => toast.info('Redirecting to Google...')}>
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Color_Logo.svg" style={{ width: 22 }} alt="G" />
+                                <div style={{ textAlign: 'left' }}>
+                                    <div style={{ fontSize: 14, fontWeight: 600 }}>Sync Gmail</div>
+                                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Read-only access</div>
                                 </div>
                             </button>
-                            <button className="oauth-card" onClick={() => toast.info('Redirect to Microsoft OAuth...')}>
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" style={{ width: 20 }} alt="Microsoft" />
-                                <div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Connect Outlook</div>
-                                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Mail.Read via Graph API</div>
+                            <button className="oauth-card" onClick={() => toast.info('Redirecting to Microsoft...')}>
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" style={{ width: 22 }} alt="M" />
+                                <div style={{ textAlign: 'left' }}>
+                                    <div style={{ fontSize: 14, fontWeight: 600 }}>Sync Outlook</div>
+                                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Graph API access</div>
                                 </div>
                             </button>
                         </div>
-                        <div className="fwd-box">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                                <Key size={12} color="#1d4ed8" />
-                                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1d4ed8' }}>
-                                    Email Forwarding Alternative
-                                </span>
+                        <div className="fwd-box" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                <Key size={14} color="#64748b" />
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Direct Inbound Address</span>
                             </div>
-                            <p style={{ fontSize: 12, color: '#374151', margin: '0 0 10px', lineHeight: 1.5 }}>
-                                Fallback for non-OAuth users — forward insurance emails to this address:
-                            </p>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <input readOnly value={fwdEmail} className="input mono" style={{ flex: 1, background: '#fff', borderColor: '#bfdbfe', color: '#1d4ed8' }} />
+                            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Use this for automated email forwarding if OAuth is not supported by your provider.</p>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <input readOnly value={fwdEmail} className="input mono" style={{ background: '#fff' }} />
                                 <button onClick={() => { navigator.clipboard.writeText(fwdEmail); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                                        style={{ padding: '8px 11px', background: '#fff', border: '1.5px solid #bfdbfe', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
-                                    {copied ? <Check size={14} color="#059669" /> : <Copy size={14} color="#1d4ed8" />}
+                                        style={{ padding: '0 16px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8, cursor: 'pointer' }}>
+                                    {copied ? <Check size={16} color="#059669" /> : <Copy size={16} color="#64748b" />}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </Card>
 
-                {/* Weather */}
-                <Card accent="#0891b2" iconBg="#ecfeff" icon={CloudRain} title="Storm & Weather Tracking"
-                      badge={<span className="tag tag-free"><Zap size={10} />Free API</span>} delay={200}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div className="noaa-pill">
-                            <CheckCircle2 size={13} color="#059669" />
-                            NOAA & NWS APIs active — no API key required
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                            <F label="Service Area ZIPs">
-                                <input className="input" type="text" placeholder="77001, 77002, 77003" value={wZips} onChange={e => setWZips(e.target.value)} />
-                            </F>
-                            <F label="Alert Radius">
+                {/* Weather & AWS */}
+                <div className="grid-simple" style={{ gap: 24 }}>
+                    <Card accent="#0891b2" iconBg="#ecfeff" icon={CloudRain} title="Storm Tracking" delay={200}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div className="noaa-pill" style={{ background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}>
+                                <Globe size={14} /> NOAA Integration Active
+                            </div>
+                            <F label="Target ZIPs"><input className="input" placeholder="77001, 77002" value={wZips} onChange={e => setWZips(e.target.value)} /></F>
+                            <F label="Radius">
                                 <select className="input" value={wRadius} onChange={e => setWRadius(e.target.value)}>
-                                    <option value="10">Within 10 miles</option>
-                                    <option value="25">Within 25 miles</option>
-                                    <option value="50">Within 50 miles</option>
-                                    <option value="100">Within 100 miles</option>
+                                    <option value="25">25 Miles</option>
+                                    <option value="50">50 Miles</option>
+                                    <option value="100">100 Miles</option>
                                 </select>
                             </F>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-teal" onClick={() => callApi('/weather-settings-save', { serviceAreaZips: wZips, alertRadiusMiles: Number(wRadius) }, setWSt, setWErr)} disabled={wSt === 'loading'}>
-                                Save Settings <SI status={wSt} />
+                            <button className="btn btn-teal" onClick={() => callApi('/weather-settings-save', { serviceAreaZips: wZips, alertRadiusMiles: Number(wRadius) }, setWSt, setWErr)}>
+                                Save Config <SI status={wSt} />
                             </button>
                         </div>
-                        <Banner status={wSt} error={wErr} />
-                    </div>
-                </Card>
+                    </Card>
 
-                {/* AWS S3 */}
-                <Card accent="#dc2626" iconBg="#fef2f2" icon={HardDrive} title="Storage — AWS S3"
-                      badge={<span className="tag tag-enc"><Shield size={10} />AES-256 Encrypted</span>} delay={240}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>
-                            Stores uploaded PDFs, job photos, generated mockups, and call recordings.
-                        </p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <F label="Access Key ID">
-                                <input className="input mono" type="text" placeholder="AKIA..." value={s3Key} onChange={e => setS3Key(e.target.value)} />
-                            </F>
-                            <F label="Secret Access Key">
-                                <input className="input mono" type="password" autoComplete="new-password" placeholder="••••••••••••••••••" value={s3Secret} onChange={e => setS3Secret(e.target.value)} />
-                            </F>
-                            <F label="Region">
-                                <input className="input" type="text" placeholder="us-east-1" value={s3Region} onChange={e => setS3Region(e.target.value)} />
-                            </F>
-                            <F label="Bucket Name">
-                                <input className="input" type="text" placeholder="my-claimking-bucket" value={s3Bucket} onChange={e => setS3Bucket(e.target.value)} />
-                            </F>
-                        </div>
-                        <div>
-                            <button className="btn btn-rose" onClick={() => callApi('/aws-s3-save', { accessKeyId: s3Key, secretAccessKey: s3Secret, region: s3Region, bucketName: s3Bucket }, setS3St, setS3Err)} disabled={s3St === 'loading'}>
-                                Save & Test Connection <SI status={s3St} />
+                    <Card accent="#dc2626" iconBg="#fef2f2" icon={HardDrive} title="AWS S3 Storage" delay={240}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <F label="Access Key"><input className="input mono" placeholder="AKIA..." value={s3Key} onChange={e => setS3Key(e.target.value)} /></F>
+                            <F label="Secret Key"><input className="input mono" type="password" placeholder="••••" value={s3Secret} onChange={e => setS3Secret(e.target.value)} /></F>
+                            <div className="grid-simple">
+                                <F label="Region"><input className="input" placeholder="us-east-1" value={s3Region} onChange={e => setS3Region(e.target.value)} /></F>
+                                <F label="Bucket"><input className="input" placeholder="bucket-name" value={s3Bucket} onChange={e => setS3Bucket(e.target.value)} /></F>
+                            </div>
+                            <button className="btn btn-rose" onClick={() => callApi('/aws-s3-save', { accessKeyId: s3Key, secretAccessKey: s3Secret, region: s3Region, bucketName: s3Bucket }, setS3St, setS3Err)}>
+                                Test & Save <SI status={s3St} />
                             </button>
+                            {s3St === 'success' && <div className="ok">AWS S3 connected successfully</div>}
+                            {s3St === 'error' && <Banner status="error" error={s3Err} />}
                         </div>
-                        <Banner status={s3St} error={s3Err} />
-                    </div>
-                </Card>
+                    </Card>
+                </div>
 
-                <div style={{ height: 24 }} />
+                <div style={{ height: 40 }} />
             </div>
         </div>
     );
