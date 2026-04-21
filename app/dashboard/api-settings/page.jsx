@@ -283,10 +283,6 @@ export default function IntegrationPage() {
                             Securely connect your core business tools. All data is encrypted with AES-256 standards.
                         </p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
-                        <AlertCircle size={14} color="#d97706" />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#b45309' }}>Production Ready</span>
-                    </div>
                 </div>
 
                 {/* AI Providers */}
