@@ -1,9 +1,9 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Cpu, Image as ImageIcon, Phone, Mail, CloudRain, HardDrive,
     Copy, CheckCircle2, AlertCircle, Loader2, Check, XCircle,
-    Zap, Shield, Globe, Database, Key, Wifi,
+    Zap, Shield, Globe, Database, Key, Wifi, CircleDot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '../../../lib/axiosInstance.js';
@@ -105,7 +105,32 @@ const styles = `
     background: #fff; cursor: pointer; transition: all 0.15s; width: 100%;
   }
   .oauth-card:hover { border-color: #c7d2fe; background: #fafafa; }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; border: 1px solid transparent;
+  }
+  .status-pill.connected { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+  .status-pill.pending   { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+
+  .skeleton {
+    height: 12px; border-radius: 4px;
+    background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+    background-size: 200% 100%; animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 `;
+
+const API_DEFAULTS = {
+    openai:      { configured: false },
+    gemini:      { configured: false },
+    replicate:   { configured: false },
+    ringcentral: { configured: false },
+    ctm:         { configured: false },
+    weather:     { configured: false, serviceAreaZips: null, alertRadiusMiles: null },
+    awsS3:       { configured: false, region: null, bucketName: null },
+};
 
 // ─── components ───────────────────────────────────────────────────────────────
 
@@ -131,6 +156,12 @@ const F = ({ label, hint, children }) => (
         {children}
     </div>
 );
+
+const StatusBadge = ({ configured, loading }) => {
+    if (loading) return <span className="status-pill pending"><Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> Checking</span>;
+    if (configured) return <span className="status-pill connected"><CheckCircle2 size={10} /> Connected</span>;
+    return <span className="status-pill pending"><CircleDot size={10} /> Not configured</span>;
+};
 
 const Card = ({ accent, iconBg, icon: Icon, title, badge, children, delay = 0 }) => (
     <div className="card fade-up" style={{ animationDelay: `${delay}ms` }}>
@@ -190,13 +221,42 @@ export default function IntegrationPage() {
     const [copied, setCopied] = useState(false);
     const fwdEmail = 'intake+acc12345@claimking.ai';
 
-    const callApi = async (ep, payload, setSt, setErr, onOk) => {
+    // Integration summary from backend
+    const [summary, setSummary] = useState(API_DEFAULTS);
+    const [summaryLoading, setSummaryLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axiosInstance.get('/integrations');
+                if (cancelled) return;
+                setSummary({ ...API_DEFAULTS, ...data });
+                // Pre-fill non-secret fields that were previously saved
+                if (data?.weather?.serviceAreaZips) setWZips(data.weather.serviceAreaZips);
+                if (data?.weather?.alertRadiusMiles) setWRadius(String(data.weather.alertRadiusMiles));
+                if (data?.awsS3?.region) setS3Region(data.awsS3.region);
+                if (data?.awsS3?.bucketName) setS3Bucket(data.awsS3.bucketName);
+            } catch {
+                // Silent fail — user will just see "not configured" states; save still works
+            } finally {
+                if (!cancelled) setSummaryLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const markConfigured = (key) => setSummary((prev) => ({ ...prev, [key]: { ...prev[key], configured: true } }));
+    const secretPlaceholder = (configured, fallback) => (configured ? '•••••••• Saved — enter new value to replace' : fallback);
+
+    const callApi = async (ep, payload, setSt, setErr, onOk, summaryKey) => {
         if (Object.values(payload).some(v => !v?.toString().trim())) { toast.error('Please fill in all fields'); return; }
         setSt('loading'); setErr('');
         try {
             await axiosInstance.post(ep, payload);
             setSt('success'); setErr('');
             toast.success('Saved & connected successfully');
+            if (summaryKey) markConfigured(summaryKey);
             onOk?.();
         } catch (e) {
             const msg = extractError(e);
@@ -230,7 +290,10 @@ export default function IntegrationPage() {
                 </div>
 
                 {/* AI Providers */}
-                <Card accent="#4f46e5" iconBg="#eef2ff" icon={Cpu} title="AI Engine Providers" delay={40}>
+                <Card
+                    accent="#4f46e5" iconBg="#eef2ff" icon={Cpu} title="AI Engine Providers" delay={40}
+                    badge={<StatusBadge loading={summaryLoading} configured={summary.openai.configured && summary.gemini.configured} />}
+                >
                     <div className="grid-2">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -239,9 +302,9 @@ export default function IntegrationPage() {
                             </div>
                             <F hint="Used for automated estimating, analysis, and smart replies.">
                                 <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                                    <input className="input mono" type="password" placeholder="sk-proj-..." value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} />
-                                    <button className="btn btn-indigo" onClick={() => callApi('/openai-key-save', { apiKey: openaiKey }, setOpenaiSt, setOpenaiErr)} disabled={openaiSt === 'loading'}>
-                                        Save Connection <SI status={openaiSt} />
+                                    <input className="input mono" type="password" placeholder={secretPlaceholder(summary.openai.configured, 'sk-proj-...')} value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/openai-key-save', { apiKey: openaiKey }, setOpenaiSt, setOpenaiErr, null, 'openai')} disabled={openaiSt === 'loading'}>
+                                        {summary.openai.configured ? 'Update Key' : 'Save Connection'} <SI status={openaiSt} />
                                     </button>
                                 </div>
                             </F>
@@ -255,9 +318,9 @@ export default function IntegrationPage() {
                             </div>
                             <F hint="Used as a high-performance alternative for vision and multi-modal tasks.">
                                 <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                                    <input className="input mono" type="password" placeholder="AIza..." value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
-                                    <button className="btn btn-indigo" onClick={() => callApi('/gemini-key-save', { apiKey: geminiKey }, setGeminiSt, setGeminiErr)} disabled={geminiSt === 'loading'}>
-                                        Save Connection <SI status={geminiSt} />
+                                    <input className="input mono" type="password" placeholder={secretPlaceholder(summary.gemini.configured, 'AIza...')} value={geminiKey} onChange={e => setGeminiKey(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/gemini-key-save', { apiKey: geminiKey }, setGeminiSt, setGeminiErr, null, 'gemini')} disabled={geminiSt === 'loading'}>
+                                        {summary.gemini.configured ? 'Update Key' : 'Save Connection'} <SI status={geminiSt} />
                                     </button>
                                 </div>
                             </F>
@@ -267,7 +330,10 @@ export default function IntegrationPage() {
                 </Card>
 
                 {/* Image Generation */}
-                <Card accent="#7c3aed" iconBg="#f5f3ff" icon={ImageIcon} title="Visual & Image Generation" delay={80}>
+                <Card
+                    accent="#7c3aed" iconBg="#f5f3ff" icon={ImageIcon} title="Visual & Image Generation" delay={80}
+                    badge={<StatusBadge loading={summaryLoading} configured={summary.replicate.configured} />}
+                >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <img className="provider-logo" src="https://replicate.com/favicon.ico" alt="Replicate" style={{ borderRadius: 3 }} />
@@ -275,9 +341,9 @@ export default function IntegrationPage() {
                         </div>
                         <F hint="Generates detailed 3D roof mockups and property visualizations.">
                             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                <input className="input mono" style={{ flex: 1, minWidth: '240px' }} type="password" placeholder="r8_..." value={repToken} onChange={e => setRepToken(e.target.value)} />
-                                <button className="btn btn-violet" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr)} disabled={repSt === 'loading'}>
-                                    Verify & Save <SI status={repSt} />
+                                <input className="input mono" style={{ flex: 1, minWidth: '240px' }} type="password" placeholder={secretPlaceholder(summary.replicate.configured, 'r8_...')} value={repToken} onChange={e => setRepToken(e.target.value)} />
+                                <button className="btn btn-violet" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr, null, 'replicate')} disabled={repSt === 'loading'}>
+                                    {summary.replicate.configured ? 'Update Token' : 'Verify & Save'} <SI status={repSt} />
                                 </button>
                             </div>
                         </F>
@@ -286,17 +352,20 @@ export default function IntegrationPage() {
                 </Card>
 
                 {/* Call Tracking */}
-                <Card accent="#ea580c" iconBg="#fff7ed" icon={Phone} title="Communications & Call Tracking" delay={120}>
+                <Card
+                    accent="#ea580c" iconBg="#fff7ed" icon={Phone} title="Communications & Call Tracking" delay={120}
+                    badge={<StatusBadge loading={summaryLoading} configured={summary.ringcentral.configured && summary.ctm.configured} />}
+                >
                     <div className="grid-2">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
                                 <img className="provider-logo" src="https://www.ringcentral.com/favicon.ico" alt="RC" /> RingCentral
                             </div>
-                            <F label="Client ID"><input className="input" placeholder="Enter ID" value={rcId} onChange={e => setRcId(e.target.value)} /></F>
-                            <F label="Client Secret"><input className="input mono" type="password" placeholder="Enter Secret" value={rcSecret} onChange={e => setRcSecret(e.target.value)} /></F>
-                            <F label="JWT Token"><textarea className="input mono" placeholder="Paste JWT..." value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 80, resize: 'none' }} /></F>
-                            <button className="btn btn-orange" onClick={() => callApi('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt }, setRcSt, setRcErr)} disabled={rcSt === 'loading'}>
-                                Connect Phone <SI status={rcSt} />
+                            <F label="Client ID"><input className="input" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter ID')} value={rcId} onChange={e => setRcId(e.target.value)} /></F>
+                            <F label="Client Secret"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter Secret')} value={rcSecret} onChange={e => setRcSecret(e.target.value)} /></F>
+                            <F label="JWT Token"><textarea className="input mono" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Paste JWT...')} value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 80, resize: 'none' }} /></F>
+                            <button className="btn btn-orange" onClick={() => callApi('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt }, setRcSt, setRcErr, null, 'ringcentral')} disabled={rcSt === 'loading'}>
+                                {summary.ringcentral.configured ? 'Reconnect Phone' : 'Connect Phone'} <SI status={rcSt} />
                             </button>
                             <Banner status={rcSt} error={rcErr} />
                         </div>
@@ -305,9 +374,9 @@ export default function IntegrationPage() {
                             <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
                                 <Globe size={16} color="#ea580c" /> Call Tracking Metrics
                             </div>
-                            <F label="Account ID"><input className="input" placeholder="ID" value={ctmAccount} onChange={e => setCtmAccount(e.target.value)} /></F>
-                            <F label="API Key"><input className="input" placeholder="Key" value={ctmKey} onChange={e => setCtmKey(e.target.value)} /></F>
-                            <F label="API Secret"><input className="input mono" type="password" placeholder="Secret" value={ctmSecret} onChange={e => setCtmSecret(e.target.value)} /></F>
+                            <F label="Account ID"><input className="input" placeholder={secretPlaceholder(summary.ctm.configured, 'ID')} value={ctmAccount} onChange={e => setCtmAccount(e.target.value)} /></F>
+                            <F label="API Key"><input className="input" placeholder={secretPlaceholder(summary.ctm.configured, 'Key')} value={ctmKey} onChange={e => setCtmKey(e.target.value)} /></F>
+                            <F label="API Secret"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.ctm.configured, 'Secret')} value={ctmSecret} onChange={e => setCtmSecret(e.target.value)} /></F>
                             <button className="btn btn-orange" disabled={ctmSt === 'loading'}
                                     onClick={async () => {
                                         if (!ctmKey || !ctmSecret || !ctmAccount) { toast.error('Fill all fields'); return; }
@@ -315,9 +384,10 @@ export default function IntegrationPage() {
                                         try {
                                             const res = await axiosInstance.post('/ctm-save', { apiKey: ctmKey, apiSecret: ctmSecret, accountId: ctmAccount });
                                             setCtmSt('success'); setCtmCount(res.data?.importedCount ?? 0);
+                                            markConfigured('ctm');
                                         } catch (e) { setCtmSt('error'); setCtmErr(extractError(e)); }
                                     }}>
-                                Sync 30-Day Data <SI status={ctmSt} />
+                                {summary.ctm.configured ? 'Re-sync 30-Day Data' : 'Sync 30-Day Data'} <SI status={ctmSt} />
                             </button>
                             {ctmSt === 'success' && <div className="ok">{ctmCount} calls synced successfully</div>}
                             {ctmSt === 'error' && <Banner status="error" error={ctmErr} />}
@@ -363,7 +433,10 @@ export default function IntegrationPage() {
 
                 {/* Weather & AWS */}
                 <div className="grid-simple" style={{ gap: 24 }}>
-                    <Card accent="#0891b2" iconBg="#ecfeff" icon={CloudRain} title="Storm Tracking" delay={200}>
+                    <Card
+                        accent="#0891b2" iconBg="#ecfeff" icon={CloudRain} title="Storm Tracking" delay={200}
+                        badge={<StatusBadge loading={summaryLoading} configured={summary.weather.configured} />}
+                    >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div className="noaa-pill" style={{ background: '#f0f9ff', color: '#0369a1', borderColor: '#bae6fd' }}>
                                 <Globe size={14} /> NOAA Integration Active
@@ -376,22 +449,25 @@ export default function IntegrationPage() {
                                     <option value="100">100 Miles</option>
                                 </select>
                             </F>
-                            <button className="btn btn-teal" onClick={() => callApi('/weather-settings-save', { serviceAreaZips: wZips, alertRadiusMiles: Number(wRadius) }, setWSt, setWErr)}>
-                                Save Config <SI status={wSt} />
+                            <button className="btn btn-teal" onClick={() => callApi('/weather-settings-save', { serviceAreaZips: wZips, alertRadiusMiles: Number(wRadius) }, setWSt, setWErr, null, 'weather')}>
+                                {summary.weather.configured ? 'Update Config' : 'Save Config'} <SI status={wSt} />
                             </button>
                         </div>
                     </Card>
 
-                    <Card accent="#dc2626" iconBg="#fef2f2" icon={HardDrive} title="AWS S3 Storage" delay={240}>
+                    <Card
+                        accent="#dc2626" iconBg="#fef2f2" icon={HardDrive} title="AWS S3 Storage" delay={240}
+                        badge={<StatusBadge loading={summaryLoading} configured={summary.awsS3.configured} />}
+                    >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <F label="Access Key"><input className="input mono" placeholder="AKIA..." value={s3Key} onChange={e => setS3Key(e.target.value)} /></F>
-                            <F label="Secret Key"><input className="input mono" type="password" placeholder="••••" value={s3Secret} onChange={e => setS3Secret(e.target.value)} /></F>
+                            <F label="Access Key"><input className="input mono" placeholder={secretPlaceholder(summary.awsS3.configured, 'AKIA...')} value={s3Key} onChange={e => setS3Key(e.target.value)} /></F>
+                            <F label="Secret Key"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.awsS3.configured, '••••')} value={s3Secret} onChange={e => setS3Secret(e.target.value)} /></F>
                             <div className="grid-simple">
                                 <F label="Region"><input className="input" placeholder="us-east-1" value={s3Region} onChange={e => setS3Region(e.target.value)} /></F>
                                 <F label="Bucket"><input className="input" placeholder="bucket-name" value={s3Bucket} onChange={e => setS3Bucket(e.target.value)} /></F>
                             </div>
-                            <button className="btn btn-rose" onClick={() => callApi('/aws-s3-save', { accessKeyId: s3Key, secretAccessKey: s3Secret, region: s3Region, bucketName: s3Bucket }, setS3St, setS3Err)}>
-                                Test & Save <SI status={s3St} />
+                            <button className="btn btn-rose" onClick={() => callApi('/aws-s3-save', { accessKeyId: s3Key, secretAccessKey: s3Secret, region: s3Region, bucketName: s3Bucket }, setS3St, setS3Err, null, 'awsS3')}>
+                                {summary.awsS3.configured ? 'Test & Update' : 'Test & Save'} <SI status={s3St} />
                             </button>
                             {s3St === 'success' && <div className="ok">AWS S3 connected successfully</div>}
                             {s3St === 'error' && <Banner status="error" error={s3Err} />}
