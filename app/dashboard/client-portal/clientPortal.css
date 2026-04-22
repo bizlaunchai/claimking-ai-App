@@ -1,4 +1,17 @@
 
+/* Validation error styles */
+.input-error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15) !important;
+}
+
+.field-error {
+    display: block;
+    color: #ef4444;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
 /* Header Section */
 .client-portal-header-section {
     background: white;
@@ -697,7 +710,7 @@
 
 /* Modal Styles */
 .modal-overlay {
-    display: flex;
+    display: flex !important;
     position: fixed;
     top: 0;
     left: 0;
