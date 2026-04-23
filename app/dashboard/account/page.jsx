@@ -125,21 +125,28 @@ export default function AccountPage() {
         setError(null);
         setSuccess(null);
 
+        debugger
+
+        console.log({fullName, phone, businessName, address, avatarKey, logoKey})
+
         try {
+            // Only include fields that have values — skip nulls/empties so the
+            // backend validator (whitelist + @IsOptional) gets a clean payload.
+            const payload = {};
+            if (fullName !== undefined && fullName !== null) payload.full_name = fullName;
+            if (phone !== undefined && phone !== null) payload.phone = phone;
+            if (businessName !== undefined && businessName !== null) payload.business_name = businessName;
+            if (address !== undefined && address !== null) payload.address = address;
+            if (avatarKey) payload.avatar_url = avatarKey;
+            if (logoKey) payload.business_logo = logoKey;
+
             const res = await fetch(`${API_URL}/profile/${userId}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    full_name: fullName,
-                    phone,
-                    business_name: businessName,
-                    address,
-                    avatar_url: avatarKey,
-                    business_logo: logoKey,
-                }),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {

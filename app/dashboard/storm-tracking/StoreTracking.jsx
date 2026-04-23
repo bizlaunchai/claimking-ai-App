@@ -1,414 +1,406 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react';
-import "./storm-tracking.css"
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
+import './storm-tracking.css';
 import 'leaflet/dist/leaflet.css';
+
+const DEFAULT_EVENT_TYPES = [
+    'Tornado Warning',
+    'Severe Thunderstorm Warning',
+    'High Wind Warning',
+    'Wind Advisory',
+    'Flood Warning',
+    'Flood Watch',
+    'Winter Storm Warning',
+];
+
+const severityColor = (event, severity) => {
+    if (/Tornado/i.test(event)) return '#dc2626';            // red
+    if (/Severe/i.test(severity || '')) return '#dc2626';
+    if (/Thunderstorm|Hail|High Wind Warning/i.test(event)) return '#f97316'; // orange
+    if (/Wind Advisory|Flood Watch|Winter Storm/i.test(event)) return '#eab308'; // yellow
+    return '#3b82f6'; // blue — other
+};
+
+const severityBucket = (event, severity) => {
+    const c = severityColor(event, severity);
+    if (c === '#dc2626') return 'severe';
+    if (c === '#f97316') return 'moderate';
+    if (c === '#eab308') return 'watch';
+    return 'other';
+};
+
+const formatTime = (iso) => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+};
 
 const StormTracking = () => {
     const [mapLoaded, setMapLoaded] = useState(false);
-    const [showStorms, setShowStorms] = useState(false);
-    const [activeLayer, setActiveLayer] = useState('radar');
+    const [alerts, setAlerts] = useState([]);
+    const [center, setCenter] = useState(null);
+    const [loadingAlerts, setLoadingAlerts] = useState(true);
     const [severityFilter, setSeverityFilter] = useState('all');
-    const [timeFilter, setTimeFilter] = useState('24hours');
-    const [regionFilter, setRegionFilter] = useState('all');
-    const mapInstanceRef = useRef(null);
-    const markersRef = useRef([]);
-    
-    const stormsOld = [
-        { lat: 32.7767, lng: -96.7970, severity: 'severe', name: 'Dallas Storm System', wind: '75 mph', hail: '1.5"', movement: 'NE 25 mph', claims: 12 },
-        { lat: 29.7604, lng: -95.3698, severity: 'moderate', name: 'Houston Weather Front', wind: '45 mph', hail: '0.5"', movement: 'E 18 mph', claims: 8 },
-        { lat: 30.2672, lng: -97.7431, severity: 'watch', name: 'Austin Storm Watch', wind: '35 mph', hail: '0.25"', movement: 'SE 15 mph', claims: 5 },
-        { lat: 33.4484, lng: -112.0740, severity: 'moderate', name: 'Phoenix Heat Storm', wind: '50 mph', hail: '0.75"', movement: 'SW 20 mph', claims: 3 },
-    ];
+    const [showSnowOverlay, setShowSnowOverlay] = useState(false);
 
-    const storms = [];
+    const [settings, setSettings] = useState(null);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
-    const getMarkerColor = (severity) => {
-        switch (severity) {
-            case 'severe': return '#dc2626';
-            case 'moderate': return '#FDB813';
-            case 'watch': return '#3b82f6';
-            default: return '#16a34a';
+    const [notifications, setNotifications] = useState([]);
+    const [notifOpen, setNotifOpen] = useState(false);
+
+    const mapRef = useRef(null);
+    const layersRef = useRef({ markers: [], polygons: [], snow: null });
+    const LRef = useRef(null);
+
+    // -----------------------------------------------------------
+    // Data fetch
+    // -----------------------------------------------------------
+    const loadSettings = useCallback(async () => {
+        try {
+            const { data } = await axiosInstance.get('/weather-settings');
+            setSettings(data);
+        } catch { /* handled by axios interceptor */ }
+    }, []);
+
+    const loadAlerts = useCallback(async () => {
+        setLoadingAlerts(true);
+        try {
+            const { data } = await axiosInstance.get('/weather/user-alerts');
+            setAlerts(Array.isArray(data?.alerts) ? data.alerts : []);
+            if (data?.center) setCenter(data.center);
+        } catch {
+            setAlerts([]);
+        } finally {
+            setLoadingAlerts(false);
         }
-    };
+    }, []);
+
+    const loadNotifications = useCallback(async () => {
+        try {
+            const { data } = await axiosInstance.get('/weather/notifications');
+            setNotifications(Array.isArray(data) ? data : []);
+        } catch { /* silent */ }
+    }, []);
 
     useEffect(() => {
+        loadSettings();
+        loadAlerts();
+        loadNotifications();
+        const t = setInterval(() => {
+            loadAlerts();
+            loadNotifications();
+        }, 120000); // refresh every 2 min in-tab
+        return () => clearInterval(t);
+    }, [loadSettings, loadAlerts, loadNotifications]);
+
+    // -----------------------------------------------------------
+    // Map init
+    // -----------------------------------------------------------
+    useEffect(() => {
         if (typeof window === 'undefined') return;
-        
-        const loadingTimerRef = { current: null };
-        const stormTimerRef = { current: null };
+        let cancelled = false;
 
-        // Initialize map when page loads
-        const initializeMap = async () => {
-            // Simulate loading delay
-            loadingTimerRef.current = setTimeout(async () => {
-                try {
-                    const L = await import('leaflet');
-                    const mapElement = document.getElementById('stormMap');
-                    
-                    if (!mapElement) {
-                        console.error('Map element not found');
-                        setMapLoaded(true);
-                        return;
-                    }
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            LRef.current = L;
 
-                    // Check if map already initialized
-                    if (mapElement._leaflet_id || mapInstanceRef.current) {
-                        console.log('Map already initialized');
-                        setMapLoaded(true);
-                        return;
-                    }
-                    
-                    // Remove loading indicator
-                    setMapLoaded(true);
-                    
-                    // Initialize Leaflet map
-                    const map = L.map('stormMap').setView([32.7767, -96.7970], 6);
-                    mapInstanceRef.current = map;
-                    
-                    // Add tile layer
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap contributors',
-                        maxZoom: 19
-                    }).addTo(map);
-                    
-                    // Add storm markers
-                    storms.forEach(storm => {
-                        const markerColor = getMarkerColor(storm.severity);
-                        const marker = L.circleMarker([storm.lat, storm.lng], {
-                            radius: 15,
-                            fillColor: markerColor,
-                            color: markerColor,
-                            weight: 2,
-                            opacity: 0.8,
-                            fillOpacity: 0.4
-                        }).addTo(map);
-                        
-                        marker.bindPopup(`
-                            <div style="padding: 10px;">
-                                <h4 style="margin: 0 0 5px 0; color: #1a1f3a;">${storm.name}</h4>
-                                <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                                    Severity: <strong>${storm.severity.charAt(0).toUpperCase() + storm.severity.slice(1)}</strong><br>
-                                    Wind: ${storm.wind}<br>
-                                    Hail: ${storm.hail}<br>
-                                    Moving: ${storm.movement}<br>
-                                    Affected Properties: ${storm.claims}
-                                </p>
-                            </div>
-                        `);
-                        
-                        markersRef.current.push(marker);
-                    });
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
 
-                    // Fix Leaflet default icon issue
-                    delete L.Icon.Default.prototype._getIconUrl;
-                    L.Icon.Default.mergeOptions({
-                        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-                        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                    });
-                } catch (error) {
-                    console.error('Error initializing map:', error);
-                    setMapLoaded(true);
-                }
-            }, 1500);
+            const el = document.getElementById('stormMap');
+            if (!el || el._leaflet_id) { setMapLoaded(true); return; }
 
-            // Simulate storm data loading
-            stormTimerRef.current = setTimeout(() => {
-                setShowStorms(true);
-            }, 2000);
-        };
+            const map = L.map('stormMap').setView([39.8283, -98.5795], 4); // US center
+            mapRef.current = map;
 
-        initializeMap();
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19,
+            }).addTo(map);
+
+            setMapLoaded(true);
+        })();
 
         return () => {
-            if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-            if (stormTimerRef.current) clearTimeout(stormTimerRef.current);
-            
-            // Cleanup map instance
-            if (mapInstanceRef.current) {
-                mapInstanceRef.current.remove();
-                mapInstanceRef.current = null;
+            cancelled = true;
+            if (mapRef.current) {
+                try { mapRef.current.remove(); } catch { /* noop */ }
+                mapRef.current = null;
             }
-            
-            // Cleanup markers
-            markersRef.current.forEach(marker => {
-                if (marker) marker.remove();
-            });
-            markersRef.current = [];
         };
     }, []);
 
-    const handleToggleLayer = (layer) => {
-        setActiveLayer(layer);
+    // Re-center when user center arrives
+    useEffect(() => {
+        if (!mapRef.current || !center) return;
+        mapRef.current.setView([center.latitude, center.longitude], 7);
+    }, [center]);
+
+    // Toggle NOHRSC snow depth overlay
+    useEffect(() => {
+        const L = LRef.current;
+        const map = mapRef.current;
+        if (!L || !map) return;
+
+        if (showSnowOverlay) {
+            if (!layersRef.current.snow) {
+                // NOHRSC public snow depth WMS (raster overlay)
+                const snow = L.tileLayer.wms(
+                    'https://mapservices.weather.noaa.gov/raster/services/obs/nohrsc_snow_analysis/MapServer/WMSServer',
+                    {
+                        layers: '1',
+                        format: 'image/png',
+                        transparent: true,
+                        opacity: 0.55,
+                        attribution: 'NOAA NOHRSC',
+                    }
+                );
+                layersRef.current.snow = snow;
+                snow.addTo(map);
+            } else {
+                layersRef.current.snow.addTo(map);
+            }
+        } else if (layersRef.current.snow) {
+            layersRef.current.snow.remove();
+        }
+    }, [showSnowOverlay]);
+
+    // Render alert markers + polygons on map
+    useEffect(() => {
+        const L = LRef.current;
+        const map = mapRef.current;
+        if (!L || !map) return;
+
+        layersRef.current.markers.forEach((m) => m.remove());
+        layersRef.current.polygons.forEach((p) => p.remove());
+        layersRef.current.markers = [];
+        layersRef.current.polygons = [];
+
+        const filtered = alerts.filter((a) => {
+            if (severityFilter === 'all') return true;
+            return severityBucket(a.event, a.severity) === severityFilter;
+        });
+
+        filtered.forEach((a) => {
+            const color = severityColor(a.event, a.severity);
+
+            if (a.geometry) {
+                try {
+                    const poly = L.geoJSON(a.geometry, {
+                        style: { color, weight: 2, fillColor: color, fillOpacity: 0.15 },
+                    });
+                    poly.addTo(map);
+                    layersRef.current.polygons.push(poly);
+                } catch { /* skip invalid geometry */ }
+            }
+
+            if (a.centroid_lat != null && a.centroid_lon != null) {
+                const marker = L.circleMarker([a.centroid_lat, a.centroid_lon], {
+                    radius: 10,
+                    fillColor: color,
+                    color,
+                    weight: 2,
+                    opacity: 0.9,
+                    fillOpacity: 0.6,
+                });
+                marker.bindPopup(`
+                    <div style="min-width:240px">
+                        <h4 style="margin:0 0 6px;color:#1a1f3a">${a.event}</h4>
+                        <div style="font-size:12px;color:#6b7280">
+                            <div><strong>Severity:</strong> ${a.severity || 'Unknown'}</div>
+                            <div><strong>Area:</strong> ${a.area_desc || '—'}</div>
+                            <div><strong>Effective:</strong> ${formatTime(a.effective)}</div>
+                            <div><strong>Expires:</strong> ${formatTime(a.expires)}</div>
+                            ${a.distance_miles != null ? `<div><strong>Distance:</strong> ${a.distance_miles} mi</div>` : ''}
+                        </div>
+                    </div>
+                `);
+                marker.addTo(map);
+                layersRef.current.markers.push(marker);
+            }
+        });
+    }, [alerts, severityFilter]);
+
+    // -----------------------------------------------------------
+    // Derived UI state
+    // -----------------------------------------------------------
+    const filteredAlerts = useMemo(() => {
+        return alerts
+            .slice()
+            .sort((a, b) => new Date(b.effective || 0) - new Date(a.effective || 0))
+            .filter((a) => severityFilter === 'all'
+                ? true
+                : severityBucket(a.event, a.severity) === severityFilter);
+    }, [alerts, severityFilter]);
+
+    const stats = useMemo(() => {
+        const severe = alerts.filter((a) => severityBucket(a.event, a.severity) === 'severe').length;
+        const warnings = alerts.filter((a) => /Warning/i.test(a.event)).length;
+        const zones = settings ? (settings.service_area_zips ? settings.service_area_zips.split(/[,\s]+/).filter(Boolean).length : 0) + 1 : 0;
+        const unread = notifications.filter((n) => !n.read_at).length;
+        return { severe, warnings, zones, unread };
+    }, [alerts, settings, notifications]);
+
+    // -----------------------------------------------------------
+    // Handlers
+    // -----------------------------------------------------------
+    const handleMarkRead = async (id) => {
+        try {
+            await axiosInstance.patch(`/weather/notifications/${id}/read`);
+            setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
+        } catch { /* silent */ }
     };
 
-    const filteredStorms = storms.filter(storm => {
-        if (severityFilter !== 'all' && storm.severity !== severityFilter) {
-            return false;
-        }
-        return true;
-    });
+    const handleMarkAllRead = async () => {
+        try {
+            await axiosInstance.patch('/weather/notifications/read-all');
+            const now = new Date().toISOString();
+            setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || now })));
+        } catch { /* silent */ }
+    };
 
+    const handleSaveSettings = async (form) => {
+        try {
+            await axiosInstance.post('/weather-settings-save', form);
+            toast.success('Weather settings saved');
+            setSettingsOpen(false);
+            await loadSettings();
+            await loadAlerts();
+        } catch { /* handled by interceptor */ }
+    };
+
+    // -----------------------------------------------------------
+    // Render
+    // -----------------------------------------------------------
     return (
         <div className="storm-tracking-container">
-            {/* Page Header */}
             <div className="page-header">
                 <h1 className="page-title">
                     <svg viewBox="0 0 24 24">
-                        <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 0 0 4 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0 0 11.32 0c1.56-1.56 2.34-3.67 2.34-5.67S19.22 9.56 17.66 8zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/>
+                        <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 0 0 4 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0 0 11.32 0c1.56-1.56 2.34-3.67 2.34-5.67S19.22 9.56 17.66 8z" />
                     </svg>
                     Storm Tracking Center
                 </h1>
                 <div className="header-actions">
-                    <button className="btn btn-secondary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
-                        </svg>
-                        Export Report
+                    <button className="btn btn-secondary" onClick={() => setNotifOpen(true)}>
+                        Notifications {stats.unread > 0 && <span style={{ marginLeft: 6, background: '#dc2626', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: 12 }}>{stats.unread}</span>}
                     </button>
-                    <button className="btn btn-primary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
-                        </svg>
-                        Add Alert Zone
+                    <button className="btn btn-primary" onClick={() => setSettingsOpen(true)}>
+                        Alert Settings
                     </button>
                 </div>
             </div>
 
-            {/* Alert Banner */}
             <div className="alert-banner">
                 <div className="alert-icon">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-                    </svg>
+                    <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>
                 </div>
                 <div className="alert-content">
-                    <div className="alert-title">Severe Weather Alert Active</div>
+                    <div className="alert-title">
+                        {stats.severe > 0 ? 'Severe Weather Alert Active' : 'No severe alerts in your service area'}
+                    </div>
                     <div className="alert-description">
-                        0 active storm systems detected in your service areas. 47 client properties may be affected. Click to view detailed tracking.
+                        {alerts.length} matching alert{alerts.length === 1 ? '' : 's'} within {settings?.alert_radius_miles ?? 50} miles of your coverage area.
                     </div>
                 </div>
             </div>
 
-            {/* Storm Statistics */}
             <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <div className="stat-icon severe">
-                            <svg width="20" height="20" viewBox="0 0 24 24">
-                                <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 0 0 4 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0 0 11.32 0c1.56-1.56 2.34-3.67 2.34-5.67S19.22 9.56 17.66 8z"/>
-                            </svg>
-                        </div>
-                        <span className="stat-badge">LIVE</span>
-                    </div>
-                    <div className="stat-value">0</div>
-                    <div className="stat-label">Severe Storms</div>
-                    <div className="stat-change up">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M7 14l5-5 5 5H7z"/>
-                        </svg>
-                        0 new in last hour
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <div className="stat-icon active">
-                            <svg width="20" height="20" viewBox="0 0 24 24">
-                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div className="stat-value">0</div>
-                    <div className="stat-label">Active Warnings</div>
-                    <div className="stat-change down">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M7 10l5 5 5-5H7z"/>
-                        </svg>
-                        0 less than yesterday
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <div className="stat-icon monitored">
-                            <svg width="20" height="20" viewBox="0 0 24 24">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div className="stat-value">0</div>
-                    <div className="stat-label">Monitored Zones</div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <div className="stat-icon affected">
-                            <svg width="20" height="20" viewBox="0 0 24 24">
-                                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div className="stat-value">0</div>
-                    <div className="stat-label">Properties at Risk</div>
-                    <div className="stat-change up">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M7 14l5-5 5 5H7z"/>
-                        </svg>
-                        0 new alerts sent
-                    </div>
-                </div>
+                <StatCard label="Severe Alerts" value={stats.severe} tone="severe" />
+                <StatCard label="Active Warnings" value={stats.warnings} tone="active" />
+                <StatCard label="Monitored Zones" value={stats.zones} tone="monitored" />
+                <StatCard label="Unread Notifications" value={stats.unread} tone="affected" />
             </div>
 
-            {/* Main Map Section */}
             <div className="map-section">
                 <div className="map-header">
-                    <div className="map-title">Live Weather Radar & Storm Tracking</div>
+                    <div className="map-title">Live Weather Alerts — NWS / NOAA</div>
                     <div className="map-controls">
-                        <button 
-                            className={`control-btn ${activeLayer === 'radar' ? 'active' : ''}`}
-                            onClick={() => handleToggleLayer('radar')}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9z"/>
-                            </svg>
-                            Radar
-                        </button>
-                        <button 
-                            className={`control-btn ${activeLayer === 'satellite' ? 'active' : ''}`}
-                            onClick={() => handleToggleLayer('satellite')}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-                            </svg>
-                            Satellite
-                        </button>
-                        <button 
-                            className={`control-btn ${activeLayer === 'hail' ? 'active' : ''}`}
-                            onClick={() => handleToggleLayer('hail')}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-                            </svg>
-                            Hail
-                        </button>
-                        <button 
-                            className={`control-btn ${activeLayer === 'wind' ? 'active' : ''}`}
-                            onClick={() => handleToggleLayer('wind')}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5z"/>
-                            </svg>
-                            Wind
-                        </button>
+                        <button
+                            className={`control-btn ${!showSnowOverlay ? 'active' : ''}`}
+                            onClick={() => setShowSnowOverlay(false)}
+                        >Alerts Only</button>
+                        <button
+                            className={`control-btn ${showSnowOverlay ? 'active' : ''}`}
+                            onClick={() => setShowSnowOverlay(true)}
+                        >+ NOHRSC Snow</button>
+                        <button
+                            className="control-btn"
+                            onClick={loadAlerts}
+                            disabled={loadingAlerts}
+                        >{loadingAlerts ? 'Refreshing…' : 'Refresh'}</button>
                     </div>
                 </div>
-                <div id="stormMap">
+                <div id="stormMap" style={{ height: 500, width: '100%' }}>
                     {!mapLoaded && (
                         <div className="map-loading">
                             <div className="loading-spinner"></div>
-                            <div className="loading-text">Loading storm data from NOAA API...</div>
+                            <div className="loading-text">Loading NOAA weather data…</div>
                         </div>
                     )}
-                    {/* Map Legend */}
                     <div className="map-legend">
-                        <div className="legend-title">Storm Severity</div>
-                        <div className="legend-item">
-                            <span className="legend-marker severe"></span>
-                            <span>Severe Storm</span>
-                        </div>
-                        <div className="legend-item">
-                            <span className="legend-marker moderate"></span>
-                            <span>Moderate Storm</span>
-                        </div>
-                        <div className="legend-item">
-                            <span className="legend-marker watch"></span>
-                            <span>Storm Watch</span>
-                        </div>
-                        <div className="legend-item">
-                            <span className="legend-marker clear"></span>
-                            <span>Clear</span>
-                        </div>
+                        <div className="legend-title">Alert Severity</div>
+                        <div className="legend-item"><span className="legend-marker severe"></span><span>Tornado / Severe</span></div>
+                        <div className="legend-item"><span className="legend-marker moderate" style={{ background: '#f97316' }}></span><span>Thunderstorm / Hail / Wind Warning</span></div>
+                        <div className="legend-item"><span className="legend-marker watch" style={{ background: '#eab308' }}></span><span>Advisory / Watch / Winter</span></div>
+                        <div className="legend-item"><span className="legend-marker clear"></span><span>Clear</span></div>
                     </div>
                 </div>
             </div>
 
-            {/* Storm List Section */}
             <div className="storm-list-section">
                 <div className="list-header">
-                    <div className="list-title">Active Storm Events</div>
+                    <div className="list-title">Active Storm Alerts ({filteredAlerts.length})</div>
                     <div className="filter-controls">
-                        <select 
-                            className="filter-select"
-                            value={severityFilter}
-                            onChange={(e) => setSeverityFilter(e.target.value)}
-                        >
+                        <select className="filter-select" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
                             <option value="all">All Severities</option>
-                            <option value="severe">Severe Only</option>
-                            <option value="moderate">Moderate</option>
-                            <option value="watch">Watches</option>
-                        </select>
-                        <select 
-                            className="filter-select"
-                            value={timeFilter}
-                            onChange={(e) => setTimeFilter(e.target.value)}
-                        >
-                            <option value="24hours">Last 24 Hours</option>
-                            <option value="7days">Last 7 Days</option>
-                            <option value="30days">Last 30 Days</option>
-                        </select>
-                        <select 
-                            className="filter-select"
-                            value={regionFilter}
-                            onChange={(e) => setRegionFilter(e.target.value)}
-                        >
-                            <option value="all">All Regions</option>
-                            <option value="north">North Texas</option>
-                            <option value="south">South Texas</option>
-                            <option value="ok">Oklahoma</option>
+                            <option value="severe">Tornado / Severe</option>
+                            <option value="moderate">Thunderstorm / Hail / Wind</option>
+                            <option value="watch">Advisory / Watch / Winter</option>
                         </select>
                     </div>
                 </div>
                 <div className="storm-data-container">
-                    {!showStorms ? (
+                    {loadingAlerts ? (
                         <div className="api-placeholder">
-                            <div className="api-icon">
-                                <svg viewBox="0 0 24 24">
-                                    <path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18s-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18s.41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15z"/>
-                                </svg>
-                            </div>
-                            <h3 className="api-title">Storm Data Integration Ready</h3>
+                            <div className="loading-spinner"></div>
+                            <p className="api-description">Loading alerts from NOAA…</p>
+                        </div>
+                    ) : filteredAlerts.length === 0 ? (
+                        <div className="api-placeholder">
+                            <h3 className="api-title">No active alerts in your area</h3>
                             <p className="api-description">
-                                This section will display real-time storm data from NOAA Weather API.
-                                Data includes wind speeds, hail probability, storm paths, and affected areas.
+                                We&apos;re monitoring {settings?.alert_radius_miles ?? 50} miles around your business address.
                             </p>
-                            <div className="api-status">
-                                <span className="status-indicator"></span>
-                                Waiting for API Connection
-                            </div>
                         </div>
                     ) : (
                         <div className="storm-list">
-                            {filteredStorms.map((storm, index) => (
-                                <div key={index} className="storm-item">
-                                    <div className={`storm-severity ${storm.severity}`}>
+                            {filteredAlerts.map((a) => (
+                                <div key={a.id} className="storm-item">
+                                    <div className={`storm-severity ${severityBucket(a.event, a.severity)}`}>
                                         <svg width="24" height="24" viewBox="0 0 24 24">
-                                            <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 0 0 4 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0 0 11.32 0c1.56-1.56 2.34-3.67 2.34-5.67S19.22 9.56 17.66 8z"/>
+                                            <path d="M17.66 8L12 2.35 6.34 8A8.02 8.02 0 0 0 4 13.64c0 2 .78 4.11 2.34 5.67a7.99 7.99 0 0 0 11.32 0c1.56-1.56 2.34-3.67 2.34-5.67S19.22 9.56 17.66 8z" />
                                         </svg>
                                     </div>
                                     <div className="storm-info">
-                                        <div className="storm-name">{storm.name}</div>
+                                        <div className="storm-name">{a.event}{a.severity ? ` — ${a.severity}` : ''}</div>
                                         <div className="storm-details">
-                                            <span>Wind: {storm.wind}</span>
-                                            <span>Hail: {storm.hail}</span>
-                                            <span>Moving: {storm.movement}</span>
+                                            <span>Area: {a.area_desc || '—'}</span>
+                                            <span>Effective: {formatTime(a.effective)}</span>
+                                            <span>Expires: {formatTime(a.expires)}</span>
                                         </div>
                                     </div>
                                     <div className="storm-action">
-                                        <span className="affected-claims">{storm.claims} Claims</span>
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#6b7280">
-                                            <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/>
-                                        </svg>
+                                        {a.distance_miles != null && (
+                                            <span className="affected-claims">{a.distance_miles} mi away</span>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -416,9 +408,194 @@ const StormTracking = () => {
                     )}
                 </div>
             </div>
+
+            {settingsOpen && settings && (
+                <SettingsModal
+                    initial={settings}
+                    onClose={() => setSettingsOpen(false)}
+                    onSave={handleSaveSettings}
+                />
+            )}
+
+            {notifOpen && (
+                <NotificationsPanel
+                    items={notifications}
+                    onClose={() => setNotifOpen(false)}
+                    onMarkRead={handleMarkRead}
+                    onMarkAllRead={handleMarkAllRead}
+                />
+            )}
         </div>
     );
 };
 
-export default StormTracking;
+// ---------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------
+const StatCard = ({ label, value, tone }) => (
+    <div className="stat-card">
+        <div className="stat-header">
+            <div className={`stat-icon ${tone}`}>
+                <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+            </div>
+        </div>
+        <div className="stat-value">{value}</div>
+        <div className="stat-label">{label}</div>
+    </div>
+);
 
+const SettingsModal = ({ initial, onClose, onSave }) => {
+    const [zips, setZips] = useState(initial.service_area_zips || '');
+    const [radius, setRadius] = useState(initial.alert_radius_miles || 50);
+    const [emailEnabled, setEmailEnabled] = useState(!!initial.email_alerts_enabled);
+    const [email, setEmail] = useState(initial.alert_email || '');
+    const [events, setEvents] = useState(
+        Array.isArray(initial.enabled_event_types) && initial.enabled_event_types.length
+            ? initial.enabled_event_types
+            : DEFAULT_EVENT_TYPES
+    );
+
+    const toggleEvent = (ev) => {
+        setEvents((prev) => prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]);
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        onSave({
+            serviceAreaZips: zips,
+            alertRadiusMiles: Number(radius),
+            emailAlertsEnabled: emailEnabled,
+            alertEmail: email || undefined,
+            enabledEventTypes: events,
+        });
+    };
+
+    return (
+        <div style={modalBackdrop} onClick={onClose}>
+            <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 20, color: '#1a1f3a' }}>Storm Alert Settings</h2>
+                    <button onClick={onClose} style={closeBtn}>&times;</button>
+                </div>
+                <form onSubmit={submit}>
+                    <label style={lbl}>Service area ZIP codes (comma-separated, optional)</label>
+                    <input
+                        type="text"
+                        value={zips}
+                        onChange={(e) => setZips(e.target.value)}
+                        placeholder="e.g. 75201, 75202, 75203"
+                        style={inp}
+                    />
+
+                    <label style={lbl}>Alert radius from business address (miles)</label>
+                    <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        value={radius}
+                        onChange={(e) => setRadius(e.target.value)}
+                        style={inp}
+                    />
+
+                    <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} />
+                        Email me when a matching alert is issued
+                    </label>
+                    {emailEnabled && (
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="alerts@yourcompany.com"
+                            style={inp}
+                        />
+                    )}
+
+                    <label style={lbl}>Notify me about:</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                        {DEFAULT_EVENT_TYPES.map((ev) => (
+                            <label key={ev} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={events.includes(ev)}
+                                    onChange={() => toggleEvent(ev)}
+                                />
+                                {ev}
+                            </label>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+                        <button type="submit" className="btn btn-primary">Save Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const NotificationsPanel = ({ items, onClose, onMarkRead, onMarkAllRead }) => (
+    <div style={modalBackdrop} onClick={onClose}>
+        <div style={{ ...modalPanel, maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 20, color: '#1a1f3a' }}>Storm Notifications</h2>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={onMarkAllRead} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}>Mark all read</button>
+                    <button onClick={onClose} style={closeBtn}>&times;</button>
+                </div>
+            </div>
+            {items.length === 0 ? (
+                <p style={{ color: '#6b7280' }}>No notifications yet.</p>
+            ) : (
+                <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+                    {items.map((n) => {
+                        const a = n.storm_alert || {};
+                        const unread = !n.read_at;
+                        return (
+                            <div
+                                key={n.id}
+                                onClick={() => unread && onMarkRead(n.id)}
+                                style={{
+                                    padding: 12,
+                                    borderLeft: `4px solid ${severityColor(a.event, a.severity)}`,
+                                    background: unread ? '#fff7ed' : '#f9fafb',
+                                    marginBottom: 8,
+                                    borderRadius: 6,
+                                    cursor: unread ? 'pointer' : 'default',
+                                }}
+                            >
+                                <div style={{ fontWeight: 600, color: '#1a1f3a' }}>{a.event || 'Alert'}</div>
+                                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                                    {a.area_desc || ''}
+                                    {n.distance_miles != null && ` • ${n.distance_miles} mi away`}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                                    {formatTime(n.sent_at)}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    </div>
+);
+
+const modalBackdrop = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
+};
+const modalPanel = {
+    background: '#fff', padding: 24, borderRadius: 12, width: '90%',
+    maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+};
+const closeBtn = {
+    border: 'none', background: 'transparent', fontSize: 28, lineHeight: 1, cursor: 'pointer', color: '#6b7280',
+};
+const lbl = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', margin: '12px 0 6px' };
+const inp = {
+    width: '100%', padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14,
+};
+
+export default StormTracking;
