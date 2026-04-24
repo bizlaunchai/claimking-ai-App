@@ -50,6 +50,9 @@ const AICallCenter = () => {
     const [calls, setCalls] = useState([]);
     const [totalCalls, setTotalCalls] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [recordingUrl, setRecordingUrl] = useState(null);
+    const [recordingCallId, setRecordingCallId] = useState(null);
+    const [recordingLoading, setRecordingLoading] = useState(false);
 
     const chartRef = useRef(null);
     const chartInstance = useRef(null);
@@ -202,21 +205,39 @@ const AICallCenter = () => {
         setShowModal(true);
     };
 
-    const closeModal = () => { setShowModal(false); setSelectedCall(null); };
+    const clearRecording = () => {
+        if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+        setRecordingUrl(null);
+        setRecordingCallId(null);
+    };
+
+    const closeModal = () => { setShowModal(false); setSelectedCall(null); clearRecording(); };
 
     const playRecording = async (call) => {
         if (!call.recording_s3_key) {
             toast.info('Recording not yet available');
             return;
         }
+        if (recordingCallId === call.id && recordingUrl) return;
+        setRecordingLoading(true);
         try {
-            const res = await axiosInstance.get(`/api/calls/${call.id}/recording`);
-            toast.success('Recording ready');
-            console.log('recording key', res.data);
+            const res = await axiosInstance.get(`/api/calls/${call.id}/recording`, {
+                responseType: 'blob',
+            });
+            if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+            const url = URL.createObjectURL(res.data);
+            setRecordingUrl(url);
+            setRecordingCallId(call.id);
         } catch (e) {
             toast.error('Could not fetch recording');
+        } finally {
+            setRecordingLoading(false);
         }
     };
+
+    useEffect(() => {
+        return () => { if (recordingUrl) URL.revokeObjectURL(recordingUrl); };
+    }, [recordingUrl]);
 
     const goToPage = (p) => setCurrentPage(Math.max(1, Math.min(totalPages, p)));
 
@@ -390,7 +411,7 @@ const AICallCenter = () => {
                                                 {call.recording_s3_key ? (
                                                     <button
                                                         className="pagination-btn"
-                                                        onClick={(e) => { e.stopPropagation(); playRecording(call); }}
+                                                        onClick={(e) => { e.stopPropagation(); openCallDetails(call); playRecording(call); }}
                                                     >▶ Play</button>
                                                 ) : call.recording_url ? 'processing…' : '—'}
                                             </div>
@@ -477,12 +498,27 @@ const AICallCenter = () => {
                                 <div className="detail-section">
                                     <div className="detail-label">Call Recording</div>
                                     <div className="recording-player">
-                                        <button className="play-button" onClick={() => playRecording(selectedCall)}>
-                                            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                        </button>
-                                        <div style={{ fontSize: 12, color: '#6b7280' }}>
-                                            Click to play (presigned URL)
-                                        </div>
+                                        {recordingCallId === selectedCall.id && recordingUrl ? (
+                                            <audio
+                                                controls
+                                                autoPlay
+                                                src={recordingUrl}
+                                                style={{ width: '100%' }}
+                                            />
+                                        ) : (
+                                            <>
+                                                <button
+                                                    className="play-button"
+                                                    disabled={recordingLoading}
+                                                    onClick={() => playRecording(selectedCall)}
+                                                >
+                                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                                </button>
+                                                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                                    {recordingLoading ? 'Loading…' : 'Click to play'}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}
