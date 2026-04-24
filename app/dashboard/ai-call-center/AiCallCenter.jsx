@@ -1,290 +1,307 @@
 'use client'
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
 import "./ai-call-center.css"
+
+const PAGE_SIZE = 10;
+
+const SOURCE_LABEL = {
+    ringcentral: 'RingCentral',
+    ctm: 'CTM',
+};
+
+function formatDuration(seconds) {
+    const s = Number(seconds) || 0;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function formatDateTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (isToday) return `Today, ${time}`;
+    const y = new Date(today);
+    y.setDate(y.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return `Yesterday, ${time}`;
+    return `${d.toLocaleDateString()} ${time}`;
+}
+
+function SourceBadge({ source }) {
+    const label = SOURCE_LABEL[source] || source;
+    const cls = source === 'ringcentral' ? 'source-rc' : 'source-ctm';
+    return <span className={`source-badge ${cls}`}>{label}</span>;
+}
 
 const AICallCenter = () => {
     const [expandedNotes, setExpandedNotes] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [selectedCall, setSelectedCall] = useState(null);
+    const [sourceFilter, setSourceFilter] = useState('all');
+    const [unassignedOnly, setUnassignedOnly] = useState(false);
+
+    const [summary, setSummary] = useState(null);
+    const [trend, setTrend] = useState([]);
+    const [calls, setCalls] = useState([]);
+    const [totalCalls, setTotalCalls] = useState(0);
+    const [loading, setLoading] = useState(true);
+
     const chartRef = useRef(null);
     const chartInstance = useRef(null);
 
+    const loadSummary = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/api/metrics/calls/summary');
+            setSummary(res.data);
+        } catch (e) {
+            console.error('summary fetch failed', e);
+        }
+    }, []);
+
+    const loadTrend = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/api/metrics/calls/timeseries');
+            setTrend(res.data || []);
+        } catch (e) {
+            console.error('timeseries fetch failed', e);
+        }
+    }, []);
+
+    const loadCalls = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = {
+                limit: PAGE_SIZE,
+                offset: (currentPage - 1) * PAGE_SIZE,
+            };
+            if (sourceFilter !== 'all') params.source = sourceFilter;
+            if (unassignedOnly) params.unassigned = 'true';
+            const res = await axiosInstance.get('/api/calls', { params });
+            setCalls(res.data?.data || []);
+            setTotalCalls(res.data?.total || 0);
+        } catch (e) {
+            console.error('calls fetch failed', e);
+            setCalls([]);
+            setTotalCalls(0);
+        } finally {
+            setLoading(false);
+        }
+    }, [currentPage, sourceFilter, unassignedOnly]);
+
+    useEffect(() => { loadSummary(); loadTrend(); }, [loadSummary, loadTrend]);
+    useEffect(() => { loadCalls(); }, [loadCalls]);
+
     const stats = [
-        { 
-            icon: '📞', 
-            label: 'Total Calls Today', 
-            value: '0',
-            change: { text: '0% from yesterday', type: 'positive' }
+        {
+            icon: '📞',
+            label: 'Total Calls',
+            value: summary ? summary.total_calls : 0,
+            change: {
+                text: `${summary ? summary.inbound_calls : 0} inbound · ${summary ? summary.outbound_calls : 0} outbound`,
+                type: 'neutral',
+            },
         },
-        { 
-            icon: '🎯', 
-            label: 'New Leads Generated', 
-            value: '0',
-            change: { text: '0 more than yesterday', type: 'positive' }
+        {
+            icon: '🎯',
+            label: 'Unassigned Leads',
+            value: summary ? summary.unassigned_leads : 0,
+            change: {
+                text: unassignedOnly ? 'filtered' : 'click to filter',
+                type: summary && summary.unassigned_leads > 0 ? 'positive' : 'neutral',
+            },
         },
-        { 
-            icon: '⏱️', 
-            label: 'Average Call Duration', 
-            value: '0:00',
-            change: { text: 'minutes', type: 'neutral' }
+        {
+            icon: '⏱️',
+            label: 'Average Call Duration',
+            value: summary ? formatDuration(summary.avg_duration_seconds) : '0:00',
+            change: { text: 'answered calls only', type: 'neutral' },
         },
-        { 
-            icon: '📊', 
-            label: 'Calls This Week', 
-            value: '0',
-            change: { text: '0% from last week', type: 'positive' }
-        }
+        {
+            icon: '📊',
+            label: 'Answered / Missed',
+            value: summary ? `${summary.answered_calls} / ${summary.missed_calls}` : '0 / 0',
+            change: { text: 'last 30 days', type: 'neutral' },
+        },
     ];
 
-    const callsOld = [
-        {
-            id: 1,
-            time: 'Today, 10:45 AM',
-            caller: 'Sarah Johnson',
-            phone: '(555) 123-4567',
-            duration: '0:00',
-            notes: {
-                leadType: 'New Lead - Hail Damage Claim',
-                status: 'Inspection scheduled for tomorrow at 2:00 PM',
-                property: '789 Elm Street, Dallas, TX 75201',
-                aiSummary: "Caller reported significant hail damage from last week's storm. Very interested in immediate inspection. High conversion probability (9/10 lead score)."
-            }
-        },
-        {
-            id: 2,
-            time: 'Today, 9:30 AM',
-            caller: 'Michael Williams',
-            phone: '(555) 987-6543',
-            duration: '2:15',
-            notes: {
-                leadType: 'Existing Client',
-                status: 'Question about claim status - Resolved',
-                aiSummary: 'Client called to check on claim #CK-2024-0892 status. Informed that adjuster approved supplemental items. Work scheduled to begin Monday.'
-            }
-        },
-        {
-            id: 3,
-            time: 'Today, 8:15 AM',
-            caller: 'Unknown Caller',
-            phone: '(555) 456-7890',
-            duration: '1:02',
-            notes: {
-                leadType: 'General Inquiry',
-                status: 'Follow-up needed',
-                aiSummary: 'Caller asked about service areas and pricing. Seemed interested but ended call before scheduling. Recommend follow-up call.'
-            }
-        },
-        {
-            id: 4,
-            time: 'Yesterday, 4:22 PM',
-            caller: 'Emily Davis',
-            phone: '(555) 234-5678',
-            duration: '5:18',
-            notes: {
-                leadType: 'New Lead - Wind Damage',
-                status: 'Converted - Contract Signed',
-                property: '456 Oak Avenue, Plano, TX 75023',
-                aiSummary: 'Wind damage to north side of roof. Insurance claim already filed. Scheduled inspection, customer signed agreement during initial visit. Project value: $12,500'
-            }
-        },
-        {
-            id: 5,
-            time: 'Yesterday, 2:10 PM',
-            caller: 'Robert Martinez',
-            phone: '(555) 345-6789',
-            duration: '3:42',
-            notes: {
-                leadType: 'Vendor/Supplier Call',
-                status: 'Information provided',
-                aiSummary: 'ABC Supply calling about material delivery for Johnson project. Confirmed delivery window for Thursday 8-10 AM. Order #SUP-45678'
-            }
-        }
-    ];
+    const maxTrend = Math.max(1, ...trend.map(t => t.total_calls || 0));
+    const trendData = trend.map(t => {
+        const d = new Date(t.date);
+        const day = d.toLocaleDateString([], { weekday: 'short' });
+        return {
+            day,
+            value: t.total_calls || 0,
+            height: Math.round(((t.total_calls || 0) / maxTrend) * 100),
+        };
+    });
 
-    const calls = [];
+    // Source breakdown pie chart
+    useEffect(() => {
+        if (typeof window === 'undefined' || !chartRef.current || !summary) return;
+        import('chart.js/auto').then((ChartModule) => {
+            const Chart = ChartModule.default || ChartModule.Chart || ChartModule;
+            if (chartInstance.current) chartInstance.current.destroy();
 
-    const trendDataOld = [
-        { day: 'Mon', value: 31, height: 65 },
-        { day: 'Tue', value: 38, height: 80 },
-        { day: 'Wed', value: 47, height: 100 },
-        { day: 'Thu', value: 35, height: 75 },
-        { day: 'Fri', value: 42, height: 90 },
-        { day: 'Sat', value: 19, height: 40 },
-        { day: 'Sun', value: 14, height: 30 }
-    ];
-    const trendData = [];
+            const sources = Object.keys(summary.by_source || {});
+            const labels = sources.map(s => SOURCE_LABEL[s] || s);
+            const data = sources.map(s => summary.by_source[s].total_calls || 0);
+            const hasData = data.some(v => v > 0);
 
-    const toggleNotes = (callId) => {
-        setExpandedNotes(prev => 
-            prev.includes(callId) 
-                ? prev.filter(id => id !== callId)
-                : [...prev, callId]
-        );
+            const ctx = chartRef.current.getContext('2d');
+            chartInstance.current = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: hasData ? labels : ['No data'],
+                    datasets: [{
+                        data: hasData ? data : [1],
+                        backgroundColor: hasData ? ['#FDB813', '#1a1f3a', '#3b82f6'] : ['#e5e7eb'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: hasData,
+                            callbacks: {
+                                label: (ctx) => {
+                                    const total = data.reduce((a, b) => a + b, 0) || 1;
+                                    const pct = Math.round((ctx.parsed / total) * 100);
+                                    return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }).catch(err => console.error('Chart.js load error', err));
+
+        return () => {
+            if (chartInstance.current) chartInstance.current.destroy();
+        };
+    }, [summary]);
+
+    const totalPages = Math.max(1, Math.ceil(totalCalls / PAGE_SIZE));
+    const startItem = totalCalls === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+    const endItem = Math.min(currentPage * PAGE_SIZE, totalCalls);
+
+    const toggleNotes = (id) => {
+        setExpandedNotes(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
-    const openCallDetails = (call) => {
+    const openCallDetails = async (call) => {
         setSelectedCall(call);
         setShowModal(true);
     };
 
-    const closeModal = () => {
-        setShowModal(false);
-        setSelectedCall(null);
-    };
+    const closeModal = () => { setShowModal(false); setSelectedCall(null); };
 
-    const goToPage = (page) => {
-        setCurrentPage(page);
-    };
-
-    const nextPage = () => {
-        if (currentPage < 50) {
-            setCurrentPage(prev => prev + 1);
+    const playRecording = async (call) => {
+        if (!call.recording_s3_key) {
+            toast.info('Recording not yet available');
+            return;
+        }
+        try {
+            const res = await axiosInstance.get(`/api/calls/${call.id}/recording`);
+            toast.success('Recording ready');
+            console.log('recording key', res.data);
+        } catch (e) {
+            toast.error('Could not fetch recording');
         }
     };
 
-    const previousPage = () => {
-        if (currentPage > 1) {
-            setCurrentPage(prev => prev - 1);
-        }
-    };
-
-    // Initialize Chart.js pie chart
-    useEffect(() => {
-        if (typeof window !== 'undefined' && chartRef.current) {
-            import('chart.js/auto').then((ChartModule) => {
-                const Chart = ChartModule.default || ChartModule.Chart || ChartModule;
-                
-                if (chartInstance.current) {
-                    chartInstance.current.destroy();
-                }
-
-                const ctx = chartRef.current.getContext('2d');
-                chartInstance.current = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: ['Google Ads', 'Website', 'Facebook', 'Referrals', 'Direct Calls'],
-                        datasets: [{
-                            // data: [42, 28, 15, 10, 5],
-                            data: [0,0,0,0,0],
-                            backgroundColor: [
-                                '#FDB813',
-                                '#1a1f3a',
-                                '#3b82f6',
-                                '#16a34a',
-                                '#dc2626'
-                            ],
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.label + ': ' + context.parsed + '%';
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }).catch(err => {
-                console.error('Error loading Chart.js:', err);
-            });
-        }
-
-        return () => {
-            if (chartInstance.current) {
-                chartInstance.current.destroy();
-            }
-        };
-    }, []);
-
-    const totalPages = 50;
-    const itemsPerPage = 5;
-    const startItem = (currentPage - 1) * itemsPerPage + 1;
-    const endItem = Math.min(currentPage * itemsPerPage, 247);
+    const goToPage = (p) => setCurrentPage(Math.max(1, Math.min(totalPages, p)));
 
     return (
         <div className="container">
-            {/* Page Header */}
             <div className="page-header">
                 <div className="header-left">
                     <div>
                         <h1 className="page-title">AI Call Center</h1>
-                        <span className="page-subtitle">Powered by Call Tracking Metrics</span>
+                        <span className="page-subtitle">Unified RingCentral + Call Tracking Metrics</span>
                     </div>
                 </div>
-            </div>
-
-            {/* Alert Banner */}
-            <div className="alert-banner">
-                <div className="alert-icon">📞</div>
-                <div className="alert-content">
-                    <div className="alert-text">Your AI receptionist is actively handling calls 24/7</div>
-                    <div className="alert-subtext">To update AI scripts or call settings, please contact ClaimKing.AI support team</div>
+                <div className="header-filters" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <select
+                        value={sourceFilter}
+                        onChange={e => { setSourceFilter(e.target.value); setCurrentPage(1); }}
+                        className="filter-select"
+                        style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db' }}
+                    >
+                        <option value="all">All Sources</option>
+                        <option value="ringcentral">RingCentral</option>
+                        <option value="ctm">Call Tracking Metrics</option>
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+                        <input
+                            type="checkbox"
+                            checked={unassignedOnly}
+                            onChange={e => { setUnassignedOnly(e.target.checked); setCurrentPage(1); }}
+                        />
+                        Unassigned only
+                    </label>
                 </div>
             </div>
 
-            {/* Stats Grid */}
+            {(!summary || summary.total_calls === 0) && (
+                <div className="alert-banner">
+                    <div className="alert-icon">📞</div>
+                    <div className="alert-content">
+                        <div className="alert-text">No calls yet</div>
+                        <div className="alert-subtext">
+                            Connect RingCentral or Call Tracking Metrics in <a href="/dashboard/api-settings" style={{ textDecoration: 'underline' }}>API Settings</a> to start logging calls.
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="stats-grid">
-                {stats.map((stat, index) => (
-                    <div key={index} className="stat-card">
+                {stats.map((stat, i) => (
+                    <div key={i} className="stat-card">
                         <div className="stat-icon">{stat.icon}</div>
                         <div className="stat-label">{stat.label}</div>
                         <div className="stat-value">{stat.value}</div>
                         <div className={`stat-change ${stat.change.type}`}>
-                            {stat.change.type === 'positive' && <span>↑</span>}
                             <span>{stat.change.text}</span>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* Call Source Analytics */}
             <div className="analytics-grid">
                 <div className="card chart-card">
                     <div className="card-header">
                         <h2 className="card-title">Call Sources</h2>
-                        <p className="card-subtitle">Where your leads are coming from</p>
+                        <p className="card-subtitle">Distribution across providers</p>
                     </div>
                     <div className="card-body">
                         <div className="chart-container">
-                            <canvas id="sourceChart" ref={chartRef}></canvas>
+                            <canvas ref={chartRef}></canvas>
                         </div>
                         <div className="source-legend">
-                            <div className="legend-item">
-                                <span className="legend-color" style={{ background: '#FDB813' }}></span>
-                                <span className="legend-label">Google Ads</span>
-                                <span className="legend-value">0%</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="legend-color" style={{ background: '#1a1f3a' }}></span>
-                                <span className="legend-label">Website</span>
-                                <span className="legend-value">0%</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="legend-color" style={{ background: '#3b82f6' }}></span>
-                                <span className="legend-label">Facebook</span>
-                                <span className="legend-value">0%</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="legend-color" style={{ background: '#16a34a' }}></span>
-                                <span className="legend-label">Referrals</span>
-                                <span className="legend-value">0%</span>
-                            </div>
-                            <div className="legend-item">
-                                <span className="legend-color" style={{ background: '#dc2626' }}></span>
-                                <span className="legend-label">Direct Calls</span>
-                                <span className="legend-value">0%</span>
-                            </div>
+                            {summary && Object.entries(summary.by_source || {}).map(([src, s], i) => {
+                                const colors = ['#FDB813', '#1a1f3a', '#3b82f6'];
+                                const total = summary.total_calls || 1;
+                                const pct = Math.round(((s.total_calls || 0) / total) * 100);
+                                return (
+                                    <div key={src} className="legend-item">
+                                        <span className="legend-color" style={{ background: colors[i % colors.length] }}></span>
+                                        <span className="legend-label">{SOURCE_LABEL[src] || src}</span>
+                                        <span className="legend-value">{pct}%</span>
+                                    </div>
+                                );
+                            })}
+                            {(!summary || !Object.keys(summary.by_source || {}).length) && (
+                                <div className="legend-item"><span className="legend-label">No data yet</span></div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -292,14 +309,17 @@ const AICallCenter = () => {
                 <div className="card chart-card">
                     <div className="card-header">
                         <h2 className="card-title">Call Trends</h2>
-                        <p className="card-subtitle">Daily call volume over the past week</p>
+                        <p className="card-subtitle">Daily call volume</p>
                     </div>
                     <div className="card-body">
                         <div className="trend-chart">
                             <div className="trend-bars">
-                                {trendData.map((item, index) => (
-                                    <div key={index} className="trend-bar-container">
-                                        <div className="trend-bar" style={{ height: `${item.height}%` }}>
+                                {trendData.length === 0 && (
+                                    <div style={{ padding: 24, color: '#9ca3af' }}>No trend data</div>
+                                )}
+                                {trendData.map((item, i) => (
+                                    <div key={i} className="trend-bar-container">
+                                        <div className="trend-bar" style={{ height: `${Math.max(5, item.height)}%` }}>
                                             <span className="trend-value">{item.value}</span>
                                         </div>
                                         <span className="trend-label">{item.day}</span>
@@ -311,56 +331,78 @@ const AICallCenter = () => {
                 </div>
             </div>
 
-            {/* Call History */}
             <div className="card">
                 <div className="card-header">
                     <h2 className="card-title">Recent Call History</h2>
-                    <p className="card-subtitle">View all AI-handled calls and their details</p>
+                    <p className="card-subtitle">
+                        {loading ? 'Loading…' : `${totalCalls} call${totalCalls === 1 ? '' : 's'}`}
+                    </p>
                 </div>
                 <div className="call-table">
                     <div className="call-header">
                         <div>DATE & TIME</div>
                         <div>CALLER INFORMATION</div>
                         <div>DURATION</div>
-                        <div>NOTES</div>
+                        <div>SOURCE / STATUS</div>
                     </div>
-                    
+
+                    {!loading && calls.length === 0 && (
+                        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>
+                            No calls match the selected filters.
+                        </div>
+                    )}
+
                     {calls.map((call) => (
                         <React.Fragment key={call.id}>
-                            <div 
+                            <div
                                 className={`call-row ${expandedNotes.includes(call.id) ? 'expanded' : ''}`}
                                 onClick={() => toggleNotes(call.id)}
                             >
-                                <div className="call-time">{call.time}</div>
+                                <div className="call-time">{formatDateTime(call.started_at)}</div>
                                 <div className="caller-info">
-                                    <div className="caller-name">{call.caller}</div>
-                                    <div className="caller-phone">{call.phone}</div>
+                                    <div className="caller-name">
+                                        {call.caller_name || (call.client_id ? 'Existing Client' : 'Unknown Caller')}
+                                    </div>
+                                    <div className="caller-phone">{call.caller_number || '—'}</div>
                                 </div>
-                                <div className="call-duration">{call.duration}</div>
-                                <div>
-                                    <span className="notes-preview">View Notes</span>
+                                <div className="call-duration">{formatDuration(call.duration_seconds)}</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <SourceBadge source={call.source} />
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        {call.status}{call.needs_assignment ? ' · unassigned' : ''}
+                                    </span>
                                 </div>
                             </div>
                             {expandedNotes.includes(call.id) && (
                                 <div className="notes-expanded active">
                                     <div className="notes-content">
                                         <div className="note-item">
-                                            <div className="note-label">Lead Type:</div>
-                                            <div className="note-value">{call.notes.leadType}</div>
+                                            <div className="note-label">Direction:</div>
+                                            <div className="note-value">{call.direction}</div>
                                         </div>
                                         <div className="note-item">
-                                            <div className="note-label">Status:</div>
-                                            <div className="note-value">{call.notes.status}</div>
+                                            <div className="note-label">Tracking Source:</div>
+                                            <div className="note-value">{call.tracking_source || '—'}</div>
                                         </div>
-                                        {call.notes.property && (
-                                            <div className="note-item">
-                                                <div className="note-label">Property:</div>
-                                                <div className="note-value">{call.notes.property}</div>
+                                        <div className="note-item">
+                                            <div className="note-label">Recording:</div>
+                                            <div className="note-value">
+                                                {call.recording_s3_key ? (
+                                                    <button
+                                                        className="pagination-btn"
+                                                        onClick={(e) => { e.stopPropagation(); playRecording(call); }}
+                                                    >▶ Play</button>
+                                                ) : call.recording_url ? 'processing…' : '—'}
                                             </div>
-                                        )}
+                                        </div>
                                         <div className="note-item">
-                                            <div className="note-label">AI Summary:</div>
-                                            <div className="note-value">{call.notes.aiSummary}</div>
+                                            <div className="note-label">&nbsp;</div>
+                                            <div className="note-value">
+                                                <button
+                                                    className="pagination-btn"
+                                                    onClick={(e) => { e.stopPropagation(); openCallDetails(call); }}
+                                                >View Details</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -368,90 +410,25 @@ const AICallCenter = () => {
                         </React.Fragment>
                     ))}
                 </div>
-                
-                {/* Pagination */}
-                <div className="pagination-container">
-                    <div className="pagination-info">
-                        Showing {startItem}-{endItem} of {calls?.length} calls
+
+                {totalCalls > PAGE_SIZE && (
+                    <div className="pagination-container">
+                        <div className="pagination-info">
+                            Showing {startItem}-{endItem} of {totalCalls} calls
+                        </div>
+                        <div className="pagination-controls">
+                            <button className="pagination-btn" disabled={currentPage === 1} onClick={() => goToPage(1)}>First</button>
+                            <button className="pagination-btn" disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>Previous</button>
+                            <span className="pagination-info" style={{ padding: '0 12px' }}>
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <button className="pagination-btn" disabled={currentPage >= totalPages} onClick={() => goToPage(currentPage + 1)}>Next</button>
+                            <button className="pagination-btn" disabled={currentPage >= totalPages} onClick={() => goToPage(totalPages)}>Last</button>
+                        </div>
                     </div>
-                    <div className="pagination-controls">
-                        <button 
-                            className="pagination-btn" 
-                            disabled={currentPage === 1}
-                            onClick={() => goToPage(1)}
-                        >
-                            First
-                        </button>
-                        <button 
-                            className="pagination-btn" 
-                            disabled={currentPage === 1}
-                            onClick={previousPage}
-                        >
-                            Previous
-                        </button>
-                        {currentPage <= 3 && (
-                            <>
-                                {[1, 2, 3, 4, 5].map(page => (
-                                    <button
-                                        key={page}
-                                        className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                                        onClick={() => goToPage(page)}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                            </>
-                        )}
-                        {currentPage > 3 && currentPage < totalPages - 2 && (
-                            <>
-                                <button className="pagination-btn" onClick={() => goToPage(1)}>1</button>
-                                <span className="pagination-dots">...</span>
-                                {[currentPage - 1, currentPage, currentPage + 1].map(page => (
-                                    <button
-                                        key={page}
-                                        className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                                        onClick={() => goToPage(page)}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                                <span className="pagination-dots">...</span>
-                            </>
-                        )}
-                        {currentPage >= totalPages - 2 && (
-                            <>
-                                <button className="pagination-btn" onClick={() => goToPage(1)}>1</button>
-                                <span className="pagination-dots">...</span>
-                                {[totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages].map(page => (
-                                    <button
-                                        key={page}
-                                        className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                                        onClick={() => goToPage(page)}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                            </>
-                        )}
-                        <button 
-                            className="pagination-btn" 
-                            disabled={currentPage >= totalPages}
-                            onClick={nextPage}
-                        >
-                            Next
-                        </button>
-                        <button 
-                            className="pagination-btn" 
-                            disabled={currentPage >= totalPages}
-                            onClick={() => goToPage(totalPages)}
-                        >
-                            Last
-                        </button>
-                    </div>
-                </div>
+                )}
             </div>
 
-            {/* Call Details Modal */}
             {showModal && selectedCall && (
                 <div className="modal active" onClick={(e) => e.target.classList.contains('modal') && closeModal()}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -460,126 +437,55 @@ const AICallCenter = () => {
                             <button className="modal-close" onClick={closeModal}>×</button>
                         </div>
                         <div className="modal-body">
-                            {/* Caller Information */}
                             <div className="detail-section">
-                                <div className="detail-label">Caller Information</div>
+                                <div className="detail-label">Caller</div>
                                 <div className="detail-content">
                                     <div className="detail-row">
                                         <div className="detail-key">Name:</div>
-                                        <div className="detail-value">{selectedCall.caller}</div>
+                                        <div className="detail-value">{selectedCall.caller_name || 'Unknown'}</div>
                                     </div>
                                     <div className="detail-row">
                                         <div className="detail-key">Phone:</div>
-                                        <div className="detail-value">{selectedCall.phone}</div>
+                                        <div className="detail-value">{selectedCall.caller_number}</div>
                                     </div>
-                                    {selectedCall.notes.property && (
-                                        <div className="detail-row">
-                                            <div className="detail-key">Address:</div>
-                                            <div className="detail-value">{selectedCall.notes.property}</div>
-                                        </div>
-                                    )}
                                     <div className="detail-row">
-                                        <div className="detail-key">Damage Type:</div>
-                                        <div className="detail-value">{selectedCall.notes.leadType}</div>
+                                        <div className="detail-key">Direction:</div>
+                                        <div className="detail-value">{selectedCall.direction}</div>
                                     </div>
-                                </div>
-                            </div>
-
-                            {/* Call Recording */}
-                            <div className="detail-section">
-                                <div className="detail-label">Call Recording</div>
-                                <div className="recording-player">
-                                    <button className="play-button">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z"/>
-                                        </svg>
-                                    </button>
-                                    <div className="audio-timeline">
-                                        <div className="audio-progress"></div>
+                                    <div className="detail-row">
+                                        <div className="detail-key">Status:</div>
+                                        <div className="detail-value">{selectedCall.status}</div>
                                     </div>
-                                    <div className="audio-time">1:32 / {selectedCall.duration}</div>
-                                </div>
-                            </div>
-
-                            {/* AI Transcript */}
-                            <div className="detail-section">
-                                <div className="detail-label">AI-Generated Transcript</div>
-                                <div className="transcript-box">
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">Good morning! Thank you for calling ClaimKing.AI. How can I help you today?</div>
+                                    <div className="detail-row">
+                                        <div className="detail-key">Source:</div>
+                                        <div className="detail-value"><SourceBadge source={selectedCall.source} /></div>
                                     </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">Caller:</div>
-                                        <div className="transcript-text">Hi, I need help with roof damage from the hail storm last week.</div>
+                                    <div className="detail-row">
+                                        <div className="detail-key">Duration:</div>
+                                        <div className="detail-value">{formatDuration(selectedCall.duration_seconds)}</div>
                                     </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">I'm sorry to hear about your roof damage. I can definitely help schedule a free inspection for you. May I have your name, please?</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">Caller:</div>
-                                        <div className="transcript-text">{selectedCall.caller}</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">Thank you. And what's the address of the property with damage?</div>
-                                    </div>
-                                    {selectedCall.notes.property && (
-                                        <div className="transcript-line">
-                                            <div className="transcript-speaker">Caller:</div>
-                                            <div className="transcript-text">{selectedCall.notes.property}</div>
+                                    {selectedCall.tracking_source && (
+                                        <div className="detail-row">
+                                            <div className="detail-key">Tracking Source:</div>
+                                            <div className="detail-value">{selectedCall.tracking_source}</div>
                                         </div>
                                     )}
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">Perfect. I have availability for an inspection tomorrow at 10 AM or 2 PM. Which time works better for you?</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">Caller:</div>
-                                        <div className="transcript-text">2 PM would be great</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">Excellent! I've scheduled your free roof inspection for tomorrow at 2 PM. You'll receive a confirmation text shortly. Is there anything else I can help you with?</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">Caller:</div>
-                                        <div className="transcript-text">No, that's all. Thank you!</div>
-                                    </div>
-                                    <div className="transcript-line">
-                                        <div className="transcript-speaker">AI Assistant:</div>
-                                        <div className="transcript-text">You're welcome! We'll see you tomorrow at 2 PM. Have a great day!</div>
-                                    </div>
                                 </div>
                             </div>
 
-                            {/* Call Summary */}
-                            <div className="detail-section">
-                                <div className="detail-label">Call Summary & Analysis</div>
-                                <div className="call-summary">
-                                    <div className="summary-text">
-                                        {selectedCall.notes.aiSummary}
-                                    </div>
-                                    <div className="lead-score">
-                                        <span className="score-label">Lead Score:</span>
-                                        <span className="score-value">9/10</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Support Note */}
-                            <div className="support-note">
-                                <div className="support-icon">💡</div>
-                                <div>
-                                    <div className="support-text">
-                                        To modify AI scripts, call handling rules, or appointment scheduling settings, please contact our support team:
-                                    </div>
-                                    <div style={{ marginTop: '0.5rem' }}>
-                                        <a href="mailto:support@claimking.ai" className="support-link">support@claimking.ai</a> or call <a href="tel:18885338394" className="support-link">(888) 533-8394</a>
+                            {selectedCall.recording_s3_key && (
+                                <div className="detail-section">
+                                    <div className="detail-label">Call Recording</div>
+                                    <div className="recording-player">
+                                        <button className="play-button" onClick={() => playRecording(selectedCall)}>
+                                            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                        </button>
+                                        <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                            Click to play (presigned URL)
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>

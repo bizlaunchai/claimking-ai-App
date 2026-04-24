@@ -198,6 +198,7 @@ export default function IntegrationPage() {
     const [rcJwt, setRcJwt] = s();
     const [rcSt, setRcSt] = s(null);
     const [rcErr, setRcErr] = s();
+    const [rcSubWarn, setRcSubWarn] = s(null);
 
     const [ctmKey, setCtmKey] = s();
     const [ctmSecret, setCtmSecret] = s();
@@ -360,10 +361,33 @@ export default function IntegrationPage() {
                             <F label="Client ID"><input className="input" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter ID')} value={rcId} onChange={e => setRcId(e.target.value)} /></F>
                             <F label="Client Secret"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter Secret')} value={rcSecret} onChange={e => setRcSecret(e.target.value)} /></F>
                             <F label="JWT Token"><textarea className="input mono" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Paste JWT...')} value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 80, resize: 'none' }} /></F>
-                            <button className="btn btn-orange" onClick={() => callApi('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt }, setRcSt, setRcErr, null, 'ringcentral')} disabled={rcSt === 'loading'}>
+                            <button className="btn btn-orange" disabled={rcSt === 'loading'}
+                                onClick={async () => {
+                                    if (!rcId || !rcSecret || !rcJwt) { toast.error('Fill all fields'); return; }
+                                    setRcSt('loading'); setRcErr(''); setRcSubWarn(null);
+                                    try {
+                                        const res = await axiosInstance.post('/ringcentral-save', { clientId: rcId, clientSecret: rcSecret, jwtToken: rcJwt });
+                                        setRcSt('success');
+                                        markConfigured('ringcentral');
+                                        if (res.data?.subscription === false) {
+                                            setRcSubWarn(res.data?.subscriptionError || 'Webhook subscription failed — real-time events will not work until PUBLIC_API_BASE_URL is set to a public HTTPS URL.');
+                                            toast.warning('Credentials saved, but webhook not active');
+                                        } else {
+                                            toast.success('RingCentral connected & webhook active');
+                                        }
+                                    } catch (e) {
+                                        const msg = extractError(e);
+                                        setRcSt('error'); setRcErr(msg); toast.error(msg);
+                                    }
+                                }}>
                                 {summary.ringcentral.configured ? 'Reconnect Phone' : 'Connect Phone'} <SI status={rcSt} />
                             </button>
                             <Banner status={rcSt} error={rcErr} />
+                            {rcSubWarn && (
+                                <div className="err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>
+                                    ⚠️ {rcSubWarn}
+                                </div>
+                            )}
                         </div>
                         <div className="divider-v" />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

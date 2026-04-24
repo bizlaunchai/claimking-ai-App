@@ -1,0 +1,141 @@
+.unassigned-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.unassigned-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.unassigned-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 4px;
+}
+
+.unassigned-subtitle {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+}
+
+.unassigned-refresh {
+    padding: 8px 16px;
+    background: #1a1f3a;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.unassigned-refresh:hover {
+    background: #2d3561;
+}
+
+.unassigned-empty {
+    padding: 48px;
+    text-align: center;
+    color: #94a3b8;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px dashed #cbd5e1;
+}
+
+.unassigned-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.unassigned-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.5fr 1.3fr 2fr;
+    gap: 16px;
+    align-items: center;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: border-color 0.15s;
+}
+
+.unassigned-row:hover {
+    border-color: #cbd5e1;
+}
+
+.unassigned-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+}
+
+.unassigned-time {
+    font-weight: 500;
+    color: #0f172a;
+}
+
+.unassigned-name {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.unassigned-phone {
+    color: #64748b;
+    font-family: monospace;
+}
+
+.unassigned-meta {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.source-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    width: fit-content;
+}
+
+.source-chip.chip-rc {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.source-chip.chip-ctm {
+    background: #fed7aa;
+    color: #9a3412;
+}
+
+.unassigned-select {
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    width: 100%;
+    cursor: pointer;
+}
+
+.unassigned-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .unassigned-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
