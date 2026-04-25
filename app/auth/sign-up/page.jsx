@@ -1,5 +1,10 @@
 import { SignUpForm } from "@/components/sign-up-form";
 
+export const metadata = {
+    title: "Sign Up | ClaimKing AI",
+    description: "",
+};
+
 export default function Page() {
   return (
     <>

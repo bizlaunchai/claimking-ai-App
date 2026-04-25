@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import FileUploader from "@/utiles/FileUploader.jsx";
 
+
 export default function OnboardingModal() {
     const [isOpen, setIsOpen] = useState(true);
     const [businessName, setBusinessName] = useState("");
