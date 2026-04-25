@@ -732,7 +732,7 @@ const BuyCreditsPage = () => {
         }, [creditBalance]);
 
     return (
-        <>
+        <div className="purchase-credits">
             <div className="page-header">
                 <div className="header-left">
                     <h1 className="page-title">Buy Credits</h1>
@@ -1645,7 +1645,7 @@ const BuyCreditsPage = () => {
                     </div>
                 </div>
             </div>
-        </>
+        </div>
 
     );
 };

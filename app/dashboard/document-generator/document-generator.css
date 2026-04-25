@@ -1,18 +1,4 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, #f5f7fa 0%, #e8eaed 100%);
-    min-height: 100vh;
-    color: #1f2937;
-    line-height: 1.6;
-}
-
- /* Top Header Bar */
+/* Top Header Bar */
  .document-generator-header {
     background: white;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);

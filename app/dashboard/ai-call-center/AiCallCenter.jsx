@@ -242,20 +242,17 @@ const AICallCenter = () => {
     const goToPage = (p) => setCurrentPage(Math.max(1, Math.min(totalPages, p)));
 
     return (
-        <div className="container">
+        <div className="ai-call-center">
             <div className="page-header">
                 <div className="header-left">
-                    <div>
-                        <h1 className="page-title">AI Call Center</h1>
-                        <span className="page-subtitle">Unified RingCentral + Call Tracking Metrics</span>
-                    </div>
+                    <h1 className="page-title">AI Call Center</h1>
+                    <span className="page-subtitle">Unified RingCentral + Call Tracking Metrics</span>
                 </div>
-                <div className="header-filters" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div className="header-filters">
                     <select
                         value={sourceFilter}
                         onChange={e => { setSourceFilter(e.target.value); setCurrentPage(1); }}
                         className="filter-select"
-                        style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db' }}
                     >
                         <option value="all">All Sources</option>
                         <option value="ringcentral">RingCentral</option>
@@ -271,6 +268,8 @@ const AICallCenter = () => {
                     </label>
                 </div>
             </div>
+
+            <div className="page-body">
 
             {(!summary || summary.total_calls === 0) && (
                 <div className="alert-banner">
@@ -526,6 +525,7 @@ const AICallCenter = () => {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 };
