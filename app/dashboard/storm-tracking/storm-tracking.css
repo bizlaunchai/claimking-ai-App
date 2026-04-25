@@ -1,38 +1,23 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-    background: var(--gray-bg);
-    color: var(--text-dark);
-    line-height: 1.6;
-}
-
-/* ClaimKing.AI Brand Colors */
-:root {
-    --gold-primary: #FDB813;
-    --gold-dark: #d4a000;
-    --navy-dark: #1a1f3a;
+/* Local aliases mapped to global brand tokens (kept for compatibility with existing rules) */
+.storm-tracking-container {
+    --gold-primary: var(--ck-gold);
+    --gold-dark: var(--ck-gold-dark);
+    --navy-dark: var(--ck-navy);
     --navy-hover: #2a3151;
-    --gray-bg: #f5f5f5;
+    --gray-bg: var(--ck-bg);
     --white: #ffffff;
-    --border-gray: #e5e7eb;
-    --text-gray: #6b7280;
-    --text-dark: #1f2937;
+    --border-gray: var(--ck-border);
+    --text-gray: var(--ck-text-muted);
+    --text-dark: var(--ck-text);
     --success-green: #16a34a;
     --error-red: #dc2626;
     --info-blue: #3b82f6;
-    --warning-yellow: #FDB813;
-}
+    --warning-yellow: var(--ck-gold);
 
-/* Container */
-.storm-tracking-container {
-    /*max-width: 1400px;*/
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.5rem;
+    background: var(--gray-bg);
+    color: var(--text-dark);
 }
 
 /* Header Section */

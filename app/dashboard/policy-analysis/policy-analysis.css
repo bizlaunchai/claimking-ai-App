@@ -1,16 +1,13 @@
-:root {
-    --primary-gold: #FDB813;
-    --primary-navy: #1a1f3a;
+/* Local aliases — mapped to global brand tokens */
+.policy-analysis {
+    --primary-gold: var(--ck-gold);
+    --primary-navy: var(--ck-navy);
     --secondary-gray: #64748b;
-    --border-color: #e5e7eb;
+    --border-color: var(--ck-border);
     --success-green: #22c55e;
     --warning-red: #ef4444;
     --info-blue: #3b82f6;
-}
-
-body {
     background-color: #f8fafc;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* Progress Steps */

@@ -161,7 +161,7 @@ const PolicyAnalysis = () => {
     const progressWidth = ((currentStep - 1) / 3) * 100;
 
     return (
-        <div className="bg-gray-50 min-h-screen">
+        <div className="policy-analysis bg-gray-50 min-h-screen">
             {/* Header Section */}
             <div className="bg-white border-b border-gray-200 px-6 py-4">
                 <div className="flex justify-between items-center">
