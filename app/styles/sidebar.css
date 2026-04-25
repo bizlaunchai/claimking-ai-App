@@ -429,3 +429,313 @@
 .sidebar.collapsed [data-tooltip]:hover::after {
     opacity: 1;
 }
+
+/* ============================================
+   Sidebar overrides — make sure fixed left:0
+   ============================================ */
+.sidebar {
+    top: 0;
+    left: 0;
+    height: 100vh !important;
+}
+
+/* ============================================
+   Dashboard layout shell
+   ============================================ */
+.dashboard-shell {
+    position: relative;
+    min-height: 100vh;
+}
+
+.dashboard-main {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-content-wrapper {
+    flex: 1;
+    overflow-x: hidden;
+    padding: 0;
+}
+
+.dashboard-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 38, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 999;
+    animation: fadeInOverlay 0.25s ease;
+}
+
+@keyframes fadeInOverlay {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ============================================
+   Dashboard header
+   ============================================ */
+.dashboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1.25rem;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-wrap: wrap;
+}
+
+.dashboard-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.dashboard-new-claim-btn {
+    background: linear-gradient(135deg, #FDB813, #d4a000);
+    color: #1a1f3a;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(253, 184, 19, 0.3);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dashboard-new-claim-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(253, 184, 19, 0.4);
+}
+
+.dashboard-date-select {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    background: #fff;
+    color: #374151;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.dashboard-date-select:hover,
+.dashboard-date-select:focus {
+    border-color: #FDB813;
+    outline: none;
+}
+
+.dashboard-export-btn {
+    background: #f3f4f6;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dashboard-export-btn:hover {
+    background: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+/* Hamburger inside dashboard header */
+.dashboard-hamburger {
+    display: none;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    transition: all 0.2s ease;
+}
+
+.dashboard-hamburger:hover {
+    background: rgba(253, 184, 19, 0.08);
+    border-color: #FDB813;
+}
+
+.dashboard-hamburger span {
+    width: 20px;
+    height: 2px;
+    background: #1a1f3a;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+.dashboard-hamburger.active {
+    background: #1a1f3a;
+    border-color: #1a1f3a;
+}
+
+.dashboard-hamburger.active span {
+    background: #FDB813;
+}
+
+.dashboard-hamburger.active span:nth-child(1) {
+    transform: rotate(45deg) translate(4px, 5px);
+}
+
+.dashboard-hamburger.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.dashboard-hamburger.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(4px, -5px);
+}
+
+/* ============================================
+   Tablet (<= 1024px)
+   ============================================ */
+@media (max-width: 1024px) {
+    .resize-handle {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   Mobile (<= 767px) — sidebar becomes drawer
+   ============================================ */
+@media (max-width: 767px) {
+    .sidebar {
+        width: 280px !important;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    .sidebar.collapsed {
+        width: 280px !important;
+    }
+
+    .sidebar.collapsed .logo-text,
+    .sidebar.collapsed .nav-text,
+    .sidebar.collapsed .nav-category-header,
+    .sidebar.collapsed .nav-badge,
+    .sidebar.collapsed .support-text {
+        opacity: 1;
+        width: auto;
+        height: auto;
+        padding: revert;
+        overflow: visible;
+        pointer-events: auto;
+    }
+
+    .sidebar.collapsed .nav-category-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .sidebar.collapsed .nav-link {
+        justify-content: flex-start;
+        padding: 0.875rem 1rem;
+    }
+
+    .sidebar.collapsed .nav-icon {
+        width: 20px;
+        height: 20px;
+        margin: 0;
+    }
+
+    .sidebar.collapsed .logo-container {
+        justify-content: flex-start;
+        width: auto;
+    }
+
+    .resize-handle {
+        display: none !important;
+    }
+
+    .collapse-toggle {
+        display: none !important;
+    }
+
+    .dashboard-hamburger {
+        display: flex;
+    }
+
+    .dashboard-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .dashboard-header-right {
+        gap: 0.375rem;
+    }
+
+    .dashboard-title {
+        font-size: 1rem;
+    }
+
+    .dashboard-new-claim-btn,
+    .dashboard-export-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .dashboard-date-select {
+        padding: 0.45rem 0.5rem;
+        font-size: 0.8rem;
+        max-width: 130px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-export-btn {
+        display: none;
+    }
+
+    .dashboard-title {
+        display: none;
+    }
+
+    .dashboard-header-left {
+        gap: 0.5rem;
+    }
+
+    .sidebar {
+        width: 85vw !important;
+        max-width: 320px;
+    }
+}
+
+/* Touch-friendly nav rows */
+@media (hover: none) {
+    .nav-link {
+        padding: 1rem;
+    }
+}
