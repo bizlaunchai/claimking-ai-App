@@ -81,10 +81,6 @@ const DashboardLayout = ({ children }) => {
                 className="dashboard-main"
                 style={{ marginLeft: `${mainMargin}px`, transition: "margin-left 0.3s ease" }}
             >
-                <DashboardHeader
-                    onToggleMobile={toggleMobile}
-                    isMobileOpen={isMobileOpen}
-                />
                 <main className="dashboard-content-wrapper">
                     {children}
                 </main>
