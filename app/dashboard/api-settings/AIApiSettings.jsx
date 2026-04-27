@@ -353,7 +353,13 @@ export default function IntegrationPage() {
                     accent="#ea580c" iconBg="#fff7ed" icon={Phone} title="Communications & Call Tracking" delay={120}
                     badge={<StatusBadge loading={summaryLoading} configured={summary.ringcentral.configured && summary.ctm.configured} />}
                 >
-                    <div className="grid-2">
+                    {!summaryLoading && !summary.awsS3.configured && (
+                        <div className="err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e', marginBottom: 16 }}>
+                            <AlertCircle size={14} />
+                            Configure <strong>AWS S3 Storage</strong> first — call recordings need a storage bucket before RingCentral or Call Tracking Metrics can be connected.
+                        </div>
+                    )}
+                    <div className="grid-2" style={{ opacity: !summaryLoading && !summary.awsS3.configured ? 0.55 : 1, pointerEvents: !summaryLoading && !summary.awsS3.configured ? 'none' : 'auto' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
                                 <img className="provider-logo" src="https://www.ringcentral.com/favicon.ico" alt="RC" /> RingCentral
@@ -416,7 +422,7 @@ export default function IntegrationPage() {
                 </Card>
 
                 {/* Email */}
-                <Card accent="#059669" iconBg="#ecfdf5" icon={Mail} title="Email Sync & Processing" delay={160}>
+                {/*<Card accent="#059669" iconBg="#ecfdf5" icon={Mail} title="Email Sync & Processing" delay={160}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <div className="grid-simple">
                             <button className="oauth-card" onClick={() => toast.info('Redirecting to Google...')}>
@@ -449,7 +455,7 @@ export default function IntegrationPage() {
                             </div>
                         </div>
                     </div>
-                </Card>
+                </Card>*/}
 
                 {/* Weather & AWS */}
                 <div className="grid-simple" style={{ gap: 24 }}>
