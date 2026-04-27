@@ -99,6 +99,23 @@ const AICallCenter = () => {
     useEffect(() => { loadSummary(); loadTrend(); }, [loadSummary, loadTrend]);
     useEffect(() => { loadCalls(); }, [loadCalls]);
 
+    const [refreshing, setRefreshing] = useState(false);
+    const [lastRefreshed, setLastRefreshed] = useState(null);
+
+    const handleRefresh = useCallback(async () => {
+        if (refreshing) return;
+        setRefreshing(true);
+        try {
+            await Promise.all([loadSummary(), loadTrend(), loadCalls()]);
+            setLastRefreshed(new Date());
+            toast.success('Refreshed');
+        } catch {
+            toast.error('Refresh failed');
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshing, loadSummary, loadTrend, loadCalls]);
+
     const stats = [
         {
             icon: '📞',
@@ -245,8 +262,23 @@ const AICallCenter = () => {
         <div className="ai-call-center">
             <div className="page-header">
                 <div className="header-left">
-                    <h1 className="page-title">AI Call Center</h1>
-                    <span className="page-subtitle">Unified RingCentral + Call Tracking Metrics</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <h1 className="page-title">AI Call Center</h1>
+                        <button
+                            type="button"
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            className="refresh-btn"
+                            title={lastRefreshed ? `Last refreshed: ${lastRefreshed.toLocaleTimeString()}` : 'Click to fetch the latest calls'}
+                        >
+                            <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none', fontSize: '1rem' }}>⟳</span>
+                            {refreshing ? 'Refreshing…' : 'Refresh'}
+                        </button>
+                    </div>
+                    <span className="page-subtitle">
+                        Unified RingCentral + Call Tracking Metrics
+                        {lastRefreshed && <span style={{ marginLeft: 8, opacity: 0.7 }}>· Updated {lastRefreshed.toLocaleTimeString()}</span>}
+                    </span>
                 </div>
                 <div className="header-filters">
                     <select
