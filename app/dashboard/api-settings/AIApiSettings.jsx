@@ -126,8 +126,8 @@ const API_DEFAULTS = {
     openai:      { configured: false },
     gemini:      { configured: false },
     replicate:   { configured: false },
-    ringcentral: { configured: false },
-    ctm:         { configured: false },
+    ringcentral: { configured: false, connectionStatus: null },
+    ctm:         { configured: false, connectionStatus: null },
     weather:     { configured: false, serviceAreaZips: null, alertRadiusMiles: null },
     awsS3:       { configured: false, region: null, bucketName: null },
 };
@@ -364,6 +364,14 @@ export default function IntegrationPage() {
                             <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
                                 <img className="provider-logo" src="https://www.ringcentral.com/favicon.ico" alt="RC" /> RingCentral
                             </div>
+                            {summary.ringcentral.configured && summary.ringcentral.connectionStatus && summary.ringcentral.connectionStatus !== 'connected' && (
+                                <div className="err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e', marginTop: 0 }}>
+                                    <AlertCircle size={14} />
+                                    {summary.ringcentral.connectionStatus === 'subscription_error'
+                                        ? 'Webhook subscription expired or failed to renew. Reconnect to restore real-time call events.'
+                                        : `Connection status: ${summary.ringcentral.connectionStatus}. Reconnect recommended.`}
+                                </div>
+                            )}
                             <F label="Client ID"><input className="input" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter ID')} value={rcId} onChange={e => setRcId(e.target.value)} /></F>
                             <F label="Client Secret"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Enter Secret')} value={rcSecret} onChange={e => setRcSecret(e.target.value)} /></F>
                             <F label="JWT Token"><textarea className="input mono" placeholder={secretPlaceholder(summary.ringcentral.configured, 'Paste JWT...')} value={rcJwt} onChange={e => setRcJwt(e.target.value)} style={{ minHeight: 80, resize: 'none' }} /></F>
@@ -400,6 +408,12 @@ export default function IntegrationPage() {
                             <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', paddingBottom: 10, marginBottom: 5 }}>
                                 <Globe size={16} color="#ea580c" /> Call Tracking Metrics
                             </div>
+                            {summary.ctm.configured && summary.ctm.connectionStatus && summary.ctm.connectionStatus !== 'connected' && (
+                                <div className="err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e', marginTop: 0 }}>
+                                    <AlertCircle size={14} />
+                                    Connection status: {summary.ctm.connectionStatus}. Reconnect recommended.
+                                </div>
+                            )}
                             <F label="Account ID"><input className="input" placeholder={secretPlaceholder(summary.ctm.configured, 'ID')} value={ctmAccount} onChange={e => setCtmAccount(e.target.value)} /></F>
                             <F label="API Key"><input className="input" placeholder={secretPlaceholder(summary.ctm.configured, 'Key')} value={ctmKey} onChange={e => setCtmKey(e.target.value)} /></F>
                             <F label="API Secret"><input className="input mono" type="password" placeholder={secretPlaceholder(summary.ctm.configured, 'Secret')} value={ctmSecret} onChange={e => setCtmSecret(e.target.value)} /></F>

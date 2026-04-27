@@ -64,6 +64,41 @@
     border-color: var(--ck-gold);
 }
 
+.ai-call-center .refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ck-navy, #0b1f3a);
+    background: var(--ck-gold, #fdb813);
+    border: 1px solid var(--ck-gold, #fdb813);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.ai-call-center .refresh-btn:hover:not(:disabled) {
+    background: #e6a610;
+    box-shadow: 0 2px 6px rgba(253, 184, 19, 0.35);
+}
+
+.ai-call-center .refresh-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.ai-call-center .refresh-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
 /* Body padding wraps the rest of the page */
 .ai-call-center .page-body {
     padding: 1.5rem;
