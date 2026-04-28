@@ -5,6 +5,7 @@ export async function GET(request) {
     const { searchParams, origin } = new URL(request.url);
     const code = searchParams.get('code');
     const next = searchParams.get('next') ?? '/dashboard';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.claimking.ai";
 
     if (code) {
         const supabase = await createClient();
@@ -18,12 +19,12 @@ export async function GET(request) {
                 .single();
 
             if (!profile || !profile.business_name) {
-                return NextResponse.redirect(`${origin}/onboarding`);
+                return NextResponse.redirect(`${baseUrl}/onboarding`);
             }
 
-            return NextResponse.redirect(`${origin}${next}`);
+            return NextResponse.redirect(`${baseUrl}${next}`);
         }
     }
 
-    return NextResponse.redirect(`${origin}/auth/login?error=auth-failed`);
+    return NextResponse.redirect(`${baseUrl}/auth/login?error=auth-failed`);
 }
