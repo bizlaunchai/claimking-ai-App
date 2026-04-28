@@ -8,15 +8,18 @@ const GoogleAuth = () => {
 
     const [isLoading, setIsLoading] = useState(false);
 
+
     const handleGoogleLogin = async () => {
         const supabase = createClient();
         setIsLoading(true);
+
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.claimking.ai";
 
         // Google login start
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: `${baseUrl}/auth/callback`,
             },
         });
 
