@@ -86,7 +86,13 @@ const styles = `
   .err { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; }
 
   .grid-2 { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 32px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr; gap: 24px; }
   .grid-simple { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  @media (max-width: 1024px) {
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-3 .divider-v { display: none; }
+  }
 
   @media (max-width: 768px) {
     .grid-2, .grid-simple { grid-template-columns: 1fr; }
@@ -125,6 +131,7 @@ const styles = `
 const API_DEFAULTS = {
     openai:      { configured: false },
     gemini:      { configured: false },
+    claude:      { configured: false },
     replicate:   { configured: false },
     ringcentral: { configured: false, connectionStatus: null },
     ctm:         { configured: false, connectionStatus: null },
@@ -188,6 +195,10 @@ export default function IntegrationPage() {
     const [geminiKey, setGeminiKey] = s();
     const [geminiSt, setGeminiSt] = s(null);
     const [geminiErr, setGeminiErr] = s();
+
+    const [claudeKey, setClaudeKey] = s();
+    const [claudeSt, setClaudeSt] = s(null);
+    const [claudeErr, setClaudeErr] = s();
 
     const [repToken, setRepToken] = s();
     const [repSt, setRepSt] = s(null);
@@ -289,9 +300,9 @@ export default function IntegrationPage() {
                 {/* AI Providers */}
                 <Card
                     accent="#4f46e5" iconBg="#eef2ff" icon={Cpu} title="AI Engine Providers" delay={40}
-                    badge={<StatusBadge loading={summaryLoading} configured={summary.openai.configured && summary.gemini.configured} />}
+                    badge={<StatusBadge loading={summaryLoading} configured={summary.openai.configured && summary.gemini.configured && summary.claude.configured} />}
                 >
-                    <div className="grid-2">
+                    <div className="grid-3">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img className="provider-logo" src="https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg" alt="OpenAI" />
@@ -323,30 +334,29 @@ export default function IntegrationPage() {
                             </F>
                             <Banner status={geminiSt} error={geminiErr} />
                         </div>
+                        <div className="divider-v" />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 16, height: 16, borderRadius: 4, background: '#d97706', color: '#fff',
+                                    fontWeight: 700, fontSize: 10, lineHeight: 1,
+                                }}>A</span>
+                                <span className="provider-name">Anthropic Claude</span>
+                            </div>
+                            <F hint="Used for detailed estimates, policy analysis & supplement reasoning.">
+                                <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                                    <input className="input mono" type="password" placeholder={secretPlaceholder(summary.claude.configured, 'sk-ant-...')} value={claudeKey} onChange={e => setClaudeKey(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/claude-key-save', { apiKey: claudeKey }, setClaudeSt, setClaudeErr, null, 'claude')} disabled={claudeSt === 'loading'}>
+                                        {summary.claude.configured ? 'Update Key' : 'Save Connection'} <SI status={claudeSt} />
+                                    </button>
+                                </div>
+                            </F>
+                            <Banner status={claudeSt} error={claudeErr} />
+                        </div>
                     </div>
                 </Card>
 
-                {/* Image Generation */}
-                <Card
-                    accent="#7c3aed" iconBg="#f5f3ff" icon={ImageIcon} title="Visual & Image Generation" delay={80}
-                    badge={<StatusBadge loading={summaryLoading} configured={summary.replicate.configured} />}
-                >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <img className="provider-logo" src="https://replicate.com/favicon.ico" alt="Replicate" style={{ borderRadius: 3 }} />
-                            <span className="provider-name">Replicate (SDXL)</span>
-                        </div>
-                        <F hint="Generates detailed 3D roof mockups and property visualizations.">
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                <input className="input mono" style={{ flex: 1, minWidth: '240px' }} type="password" placeholder={secretPlaceholder(summary.replicate.configured, 'r8_...')} value={repToken} onChange={e => setRepToken(e.target.value)} />
-                                <button className="btn btn-violet" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr, null, 'replicate')} disabled={repSt === 'loading'}>
-                                    {summary.replicate.configured ? 'Update Token' : 'Verify & Save'} <SI status={repSt} />
-                                </button>
-                            </div>
-                        </F>
-                        <Banner status={repSt} error={repErr} />
-                    </div>
-                </Card>
 
                 {/* Call Tracking */}
                 <Card
@@ -434,42 +444,6 @@ export default function IntegrationPage() {
                         </div>
                     </div>
                 </Card>
-
-                {/* Email */}
-                {/*<Card accent="#059669" iconBg="#ecfdf5" icon={Mail} title="Email Sync & Processing" delay={160}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        <div className="grid-simple">
-                            <button className="oauth-card" onClick={() => toast.info('Redirecting to Google...')}>
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_Color_Logo.svg" style={{ width: 22 }} alt="G" />
-                                <div style={{ textAlign: 'left' }}>
-                                    <div style={{ fontSize: 14, fontWeight: 600 }}>Sync Gmail</div>
-                                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Read-only access</div>
-                                </div>
-                            </button>
-                            <button className="oauth-card" onClick={() => toast.info('Redirecting to Microsoft...')}>
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" style={{ width: 22 }} alt="M" />
-                                <div style={{ textAlign: 'left' }}>
-                                    <div style={{ fontSize: 14, fontWeight: 600 }}>Sync Outlook</div>
-                                    <div style={{ fontSize: 12, color: '#9ca3af' }}>Graph API access</div>
-                                </div>
-                            </button>
-                        </div>
-                        <div className="fwd-box" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <Key size={14} color="#64748b" />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Direct Inbound Address</span>
-                            </div>
-                            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Use this for automated email forwarding if OAuth is not supported by your provider.</p>
-                            <div style={{ display: 'flex', gap: 10 }}>
-                                <input readOnly value={fwdEmail} className="input mono" style={{ background: '#fff' }} />
-                                <button onClick={() => { navigator.clipboard.writeText(fwdEmail); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-                                        style={{ padding: '0 16px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8, cursor: 'pointer' }}>
-                                    {copied ? <Check size={16} color="#059669" /> : <Copy size={16} color="#64748b" />}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </Card>*/}
 
                 {/* Weather & AWS */}
                 <div className="grid-simple" style={{ gap: 24 }}>
