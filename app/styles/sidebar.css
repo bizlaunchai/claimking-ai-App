@@ -468,6 +468,32 @@
     animation: fadeInOverlay 0.25s ease;
 }
 
+/* Floating hamburger toggle — visible only on mobile */
+.mobile-sidebar-toggle {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 1001;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #1a1f3a;
+    color: #FDB813;
+    border: none;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(15, 20, 38, 0.25);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.mobile-sidebar-toggle:hover  { background: #2a3151; }
+.mobile-sidebar-toggle:active { transform: scale(0.95); }
+
+@media (max-width: 767px) {
+    .mobile-sidebar-toggle { display: inline-flex; }
+}
+
 @keyframes fadeInOverlay {
     from { opacity: 0; }
     to { opacity: 1; }

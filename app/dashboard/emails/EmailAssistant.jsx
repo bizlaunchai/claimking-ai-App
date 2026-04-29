@@ -614,53 +614,70 @@ const EmailAssistant = () => {
                                     <div className="email-list">
                                         {messages.map(m => {
                                             const expanded = !!expandedRows[m.id];
+                                            const displayName = m.from_name || m.from_email || '?';
+                                            const initial = (displayName.trim()[0] || '?').toUpperCase();
                                             return (
-                                            <div key={m.id} className={`email-row-wrap ${m.is_unread ? 'unread' : ''} ${expanded ? 'expanded' : ''}`}>
+                                            <div
+                                                key={m.id}
+                                                className={`email-row-wrap ${m.is_unread ? 'unread' : ''} ${expanded ? 'expanded' : ''} ${m.matched_client ? 'matched' : 'unassigned'}`}
+                                            >
                                                 <div
                                                     className="email-row"
                                                     onClick={() => toggleExpand(m.id)}
                                                     role="button"
                                                     tabIndex={0}
+                                                    aria-expanded={expanded}
                                                 >
-                                                    <div className="email-row-dot" />
-                                                    <div className="email-row-from">
-                                                        <div className="email-row-name">
-                                                            {m.from_name || m.from_email}
-                                                        </div>
-                                                        {m.matched_company && (
-                                                            <span className="company-tag">{m.matched_company}</span>
-                                                        )}
+                                                    <div className={`email-avatar source-${m.source}`}>
+                                                        {initial}
+                                                        {m.is_unread && <span className="email-unread-dot" />}
                                                     </div>
-                                                    <div className="email-row-body">
+
+                                                    <div className="email-row-main">
+                                                        <div className="email-row-headline">
+                                                            <span className="email-row-name">{displayName}</span>
+                                                            {m.matched_company && (
+                                                                <span className="company-tag">{m.matched_company}</span>
+                                                            )}
+                                                            <span className={`source-badge source-${m.source}`}>{m.source}</span>
+                                                            <span className="email-row-time-inline">{fmtRelative(m.received_at)}</span>
+                                                        </div>
                                                         <div className="email-row-subject">{m.subject || '(no subject)'}</div>
                                                         <div className="email-row-snippet">{m.snippet}</div>
                                                     </div>
-                                                    <div className="email-row-meta">
+
+                                                    <div className="email-row-side">
                                                         {m.matched_client ? (
                                                             <>
-                                                                <div className="meta-client">{m.matched_client.full_name}</div>
+                                                                <span className="status-pill status-matched">
+                                                                    ✓ {m.matched_client.full_name}
+                                                                </span>
                                                                 <div className="meta-method">
-                                                                    {matchMethodLabel[m.match_method] || 'Auto'}
+                                                                    {matchMethodLabel[m.match_method] || 'Auto-matched'}
                                                                 </div>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <div className="meta-unassigned">Unassigned</div>
+                                                                <span className="status-pill status-unassigned">⚠ Unassigned</span>
                                                                 <div className="meta-actions" onClick={e => e.stopPropagation()}>
-                                                                    <button onClick={() => handleAssignPrompt(m.id)}>Assign</button>
-                                                                    <button onClick={() => handleIgnore(m.id)}>Ignore</button>
+                                                                    <button className="btn-assign" onClick={() => handleAssignPrompt(m.id)}>Assign</button>
+                                                                    <button className="btn-ignore" onClick={() => handleIgnore(m.id)}>Ignore</button>
                                                                 </div>
                                                             </>
                                                         )}
-                                                    </div>
-                                                    <div className="email-row-time">
-                                                        <div>{fmtRelative(m.received_at)}</div>
-                                                        <span className={`source-badge source-${m.source}`}>{m.source}</span>
-                                                    </div>
-                                                    <div className="email-row-caret" aria-hidden="true">
-                                                        {expanded ? '▾' : '▸'}
+                                                        <button
+                                                            className={`expand-btn ${expanded ? 'open' : ''}`}
+                                                            onClick={(e) => { e.stopPropagation(); toggleExpand(m.id); }}
+                                                            aria-label={expanded ? 'Collapse email' : 'Expand email'}
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="6 9 12 15 18 9" />
+                                                            </svg>
+                                                            <span>{expanded ? 'Hide' : 'View'}</span>
+                                                        </button>
                                                     </div>
                                                 </div>
+
                                                 {expanded && (
                                                     <div className="email-row-detail">
                                                         <div className="email-detail-meta">

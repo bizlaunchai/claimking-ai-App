@@ -81,6 +81,20 @@ const DashboardLayout = ({ children }) => {
                 className="dashboard-main"
                 style={{ marginLeft: `${mainMargin}px`, transition: "margin-left 0.3s ease" }}
             >
+                {isMobile && !isMobileOpen && (
+                    <button
+                        type="button"
+                        className="mobile-sidebar-toggle"
+                        aria-label="Open menu"
+                        onClick={toggleMobile}
+                    >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <line x1="4" y1="6" x2="20" y2="6" />
+                            <line x1="4" y1="12" x2="20" y2="12" />
+                            <line x1="4" y1="18" x2="20" y2="18" />
+                        </svg>
+                    </button>
+                )}
                 <main className="dashboard-content-wrapper">
                     {children}
                 </main>
