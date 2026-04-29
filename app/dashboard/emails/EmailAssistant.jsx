@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '../../../lib/axiosInstance.js';
+import { createClient } from '@/lib/supabase/client';
 import './emails.css';
 
 const PROVIDERS = [
@@ -76,6 +77,8 @@ const EmailAssistant = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    const [isAdmin, setIsAdmin]           = useState(false);
+    const [roleLoading, setRoleLoading]   = useState(true);
     const [activeTab, setActiveTab]       = useState('connect');
     const [summary, setSummary]           = useState(null);
     const [summaryLoading, setSummaryLoading] = useState(true);
@@ -100,6 +103,16 @@ const EmailAssistant = () => {
     const [newKeyword, setNewKeyword]             = useState('');
     const [newDomain, setNewDomain]               = useState('');
 
+    // Read-only monitoring info (for non-admins) — pulled from /email/summary
+    // so users can see what the admin has configured without exposing the
+    // editable settings endpoint.
+    const monitoringInfo = summary?.monitoring || null;
+
+    // Expand/collapse map for email rows (id -> bool)
+    const [expandedRows, setExpandedRows]         = useState({});
+    const toggleExpand = (id) =>
+        setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+
     // ── load summary on mount + handle OAuth redirect feedback ────────────
     const loadSummary = useCallback(async () => {
         setSummaryLoading(true);
@@ -114,6 +127,31 @@ const EmailAssistant = () => {
     }, []);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    // ── load current user's role to gate admin-only UI ────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
+                setIsAdmin(profile?.role === 'admin');
+            } catch {/* non-admin by default */}
+            finally { setRoleLoading(false); }
+        })();
+    }, []);
+
+    // If a non-admin somehow lands on the settings tab, bounce them back.
+    useEffect(() => {
+        if (!roleLoading && !isAdmin && activeTab === 'settings') {
+            setActiveTab('connect');
+        }
+    }, [roleLoading, isAdmin, activeTab]);
 
     useEffect(() => {
         const gmail = searchParams.get('gmail');
@@ -171,8 +209,8 @@ const EmailAssistant = () => {
     }, []);
 
     useEffect(() => {
-        if (activeTab === 'settings') loadSettings();
-    }, [activeTab, loadSettings]);
+        if (activeTab === 'settings' && isAdmin) loadSettings();
+    }, [activeTab, loadSettings, isAdmin]);
 
     // ── connect / disconnect ──────────────────────────────────────────────
     const handleConnect = async (providerId) => {
@@ -381,9 +419,11 @@ const EmailAssistant = () => {
                                 <span className="tab-badge">{summary.unassignedCount}</span>
                             )}
                         </button>
-                        <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-                            Settings
-                        </button>
+                        {isAdmin && (
+                            <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+                                Settings
+                            </button>
+                        )}
                     </div>
 
                     {/* ── Connect Tab ───────────────────────────────────────── */}
@@ -437,6 +477,66 @@ const EmailAssistant = () => {
                                     {copied ? '✅ Copied!' : '📋 Copy'}
                                 </button>
                             </div>
+
+                            {/* Read-only monitoring info — visible to all users so they
+                                understand what the assistant is currently scanning for.
+                                Admins edit these on the Settings tab. */}
+                            {monitoringInfo && (
+                                <div className="monitoring-info">
+                                    <div className="monitoring-header">
+                                        <h3>What we&apos;re monitoring</h3>
+                                    </div>
+
+                                    <div className="monitoring-grid">
+                                        <div className="monitoring-card">
+                                            <div className="monitoring-label">Auto-sync frequency</div>
+                                            <div className="monitoring-value">
+                                                {monitoringInfo.sync_frequency_minutes
+                                                    ? `Every ${monitoringInfo.sync_frequency_minutes} min`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                        <div className="monitoring-card">
+                                            <div className="monitoring-label">Scan history</div>
+                                            <div className="monitoring-value">
+                                                {monitoringInfo.scan_history_days
+                                                    ? `Last ${monitoringInfo.scan_history_days} days`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                        <div className="monitoring-card">
+                                            <div className="monitoring-label">Auto-match clients</div>
+                                            <div className="monitoring-value">
+                                                {monitoringInfo.auto_match ? 'On' : 'Off'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {(monitoringInfo.monitored_domains?.length > 0 ||
+                                      monitoringInfo.custom_domains?.length > 0) && (
+                                        <div className="monitoring-block">
+                                            <div className="monitoring-label">Monitored domains</div>
+                                            <div className="monitoring-chips">
+                                                {[...(monitoringInfo.monitored_domains || []),
+                                                  ...(monitoringInfo.custom_domains || [])].map(d => (
+                                                    <span key={d} className="monitoring-chip domain">{d}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {monitoringInfo.keywords?.length > 0 && (
+                                        <div className="monitoring-block">
+                                            <div className="monitoring-label">Detection keywords</div>
+                                            <div className="monitoring-chips">
+                                                {monitoringInfo.keywords.map(k => (
+                                                    <span key={k} className="monitoring-chip keyword">{k}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="benefits-grid">
                                 <div className="benefit-card">
@@ -512,45 +612,75 @@ const EmailAssistant = () => {
                             ) : (
                                 <>
                                     <div className="email-list">
-                                        {messages.map(m => (
-                                            <div key={m.id} className={`email-row ${m.is_unread ? 'unread' : ''}`}>
-                                                <div className="email-row-dot" />
-                                                <div className="email-row-from">
-                                                    <div className="email-row-name">
-                                                        {m.from_name || m.from_email}
+                                        {messages.map(m => {
+                                            const expanded = !!expandedRows[m.id];
+                                            return (
+                                            <div key={m.id} className={`email-row-wrap ${m.is_unread ? 'unread' : ''} ${expanded ? 'expanded' : ''}`}>
+                                                <div
+                                                    className="email-row"
+                                                    onClick={() => toggleExpand(m.id)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                >
+                                                    <div className="email-row-dot" />
+                                                    <div className="email-row-from">
+                                                        <div className="email-row-name">
+                                                            {m.from_name || m.from_email}
+                                                        </div>
+                                                        {m.matched_company && (
+                                                            <span className="company-tag">{m.matched_company}</span>
+                                                        )}
                                                     </div>
-                                                    {m.matched_company && (
-                                                        <span className="company-tag">{m.matched_company}</span>
-                                                    )}
+                                                    <div className="email-row-body">
+                                                        <div className="email-row-subject">{m.subject || '(no subject)'}</div>
+                                                        <div className="email-row-snippet">{m.snippet}</div>
+                                                    </div>
+                                                    <div className="email-row-meta">
+                                                        {m.matched_client ? (
+                                                            <>
+                                                                <div className="meta-client">{m.matched_client.full_name}</div>
+                                                                <div className="meta-method">
+                                                                    {matchMethodLabel[m.match_method] || 'Auto'}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="meta-unassigned">Unassigned</div>
+                                                                <div className="meta-actions" onClick={e => e.stopPropagation()}>
+                                                                    <button onClick={() => handleAssignPrompt(m.id)}>Assign</button>
+                                                                    <button onClick={() => handleIgnore(m.id)}>Ignore</button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <div className="email-row-time">
+                                                        <div>{fmtRelative(m.received_at)}</div>
+                                                        <span className={`source-badge source-${m.source}`}>{m.source}</span>
+                                                    </div>
+                                                    <div className="email-row-caret" aria-hidden="true">
+                                                        {expanded ? '▾' : '▸'}
+                                                    </div>
                                                 </div>
-                                                <div className="email-row-body">
-                                                    <div className="email-row-subject">{m.subject || '(no subject)'}</div>
-                                                    <div className="email-row-snippet">{m.snippet}</div>
-                                                </div>
-                                                <div className="email-row-meta">
-                                                    {m.matched_client ? (
-                                                        <>
-                                                            <div className="meta-client">{m.matched_client.full_name}</div>
-                                                            <div className="meta-method">
-                                                                {matchMethodLabel[m.match_method] || 'Auto'}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <div className="meta-unassigned">Unassigned</div>
-                                                            <div className="meta-actions">
-                                                                <button onClick={() => handleAssignPrompt(m.id)}>Assign</button>
-                                                                <button onClick={() => handleIgnore(m.id)}>Ignore</button>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                                <div className="email-row-time">
-                                                    <div>{fmtRelative(m.received_at)}</div>
-                                                    <span className={`source-badge source-${m.source}`}>{m.source}</span>
-                                                </div>
+                                                {expanded && (
+                                                    <div className="email-row-detail">
+                                                        <div className="email-detail-meta">
+                                                            <span><strong>From:</strong> {m.from_name ? `${m.from_name} <${m.from_email}>` : m.from_email}</span>
+                                                            <span><strong>Received:</strong> {new Date(m.received_at).toLocaleString()}</span>
+                                                            {m.matched_company && (
+                                                                <span><strong>Company:</strong> {m.matched_company}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="email-detail-subject">
+                                                            {m.subject || '(no subject)'}
+                                                        </div>
+                                                        <div className="email-detail-body">
+                                                            {m.body_text || m.snippet || '(empty body)'}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
 
                                     {totalPages > 1 && (
@@ -565,8 +695,8 @@ const EmailAssistant = () => {
                         </div>
                     )}
 
-                    {/* ── Settings Tab ──────────────────────────────────────── */}
-                    {activeTab === 'settings' && (
+                    {/* ── Settings Tab (admin only) ─────────────────────────── */}
+                    {activeTab === 'settings' && isAdmin && (
                         <div className="tab-content active">
                             {settingsLoading ? (
                                 <div className="empty-state">
