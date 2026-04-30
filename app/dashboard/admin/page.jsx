@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Package, Users, Coins } from 'lucide-react';
+import { Package, Users, ShoppingCart } from 'lucide-react';
 
 export default function AdminHome() {
     const links = [
@@ -12,9 +12,16 @@ export default function AdminHome() {
             color: '#4f46e5',
         },
         {
+            href: '/dashboard/admin/orders',
+            title: 'Orders & Subscriptions',
+            desc: 'See every customer subscription, MRR, and payment status.',
+            Icon: ShoppingCart,
+            color: '#7c3aed',
+        },
+        {
             href: '/dashboard/admin/users',
             title: 'Users & Credits',
-            desc: 'View users, adjust credits, manage subscriptions.',
+            desc: 'View users, adjust credits, manage credit history.',
             Icon: Users,
             color: '#0d9488',
         },

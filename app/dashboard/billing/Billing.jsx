@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import {
     Sparkles, CheckCircle2, XCircle, Loader2, Zap, CreditCard,
     Coins, Calendar, AlertCircle, ArrowUpCircle, Receipt, ShieldCheck,
+    Download, ExternalLink, ArrowDownCircle, RefreshCw, Plus, Minus,
+    History,
 } from 'lucide-react';
 import axiosInstance from '../../../lib/axiosInstance.js';
 
@@ -22,6 +24,32 @@ const STATUS_LABEL = {
     incomplete: { label: 'Incomplete', color: '#6b7280', bg: '#f3f4f6', border: '#e5e7eb' },
     unpaid: { label: 'Unpaid', color: '#b91c1c', bg: '#fef2f2', border: '#fecaca' },
     paused: { label: 'Paused', color: '#6b7280', bg: '#f3f4f6', border: '#e5e7eb' },
+};
+
+const INVOICE_STATUS = {
+    paid:    { label: 'Paid',    color: '#047857', bg: '#ecfdf5' },
+    open:    { label: 'Open',    color: '#b45309', bg: '#fffbeb' },
+    void:    { label: 'Void',    color: '#6b7280', bg: '#f3f4f6' },
+    uncollectible: { label: 'Uncollectible', color: '#b91c1c', bg: '#fef2f2' },
+    draft:   { label: 'Draft',   color: '#6b7280', bg: '#f3f4f6' },
+};
+
+const TX_TYPE_META = {
+    subscription_grant: { label: 'Subscription started', Icon: Zap,            color: '#4f46e5' },
+    upgrade_grant:      { label: 'Plan upgraded',         Icon: ArrowUpCircle,  color: '#4f46e5' },
+    renewal_reset:      { label: 'Monthly renewal',       Icon: RefreshCw,      color: '#0891b2' },
+    admin_adjust:       { label: 'Admin adjustment',      Icon: ShieldCheck,    color: '#7c3aed' },
+    consume:            { label: 'Used',                  Icon: Minus,          color: '#b91c1c' },
+    refund:             { label: 'Refund',                Icon: Plus,           color: '#047857' },
+};
+
+const fmtAmount = (cents, currency = 'usd') =>
+    `${currency.toUpperCase() === 'USD' ? '$' : ''}${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const fmtDateTime = (val) => {
+    if (!val) return '—';
+    const d = typeof val === 'number' ? new Date(val * 1000) : new Date(val);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 const styles = `
@@ -98,17 +126,23 @@ export default function Billing() {
     const params = useSearchParams();
     const [me, setMe] = useState(null);
     const [plans, setPlans] = useState([]);
+    const [invoices, setInvoices] = useState([]);
+    const [creditHistory, setCreditHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null); // string key
 
     const refresh = async () => {
         try {
-            const [{ data: subData }, { data: planList }] = await Promise.all([
+            const [{ data: subData }, { data: planList }, invoicesRes, historyRes] = await Promise.all([
                 axiosInstance.get('/subscriptions/me'),
                 axiosInstance.get('/plans'),
+                axiosInstance.get('/subscriptions/me/invoices').catch(() => ({ data: { invoices: [] } })),
+                axiosInstance.get('/credits/me/history?limit=20').catch(() => ({ data: [] })),
             ]);
             setMe(subData);
             setPlans(planList || []);
+            setInvoices(invoicesRes?.data?.invoices || []);
+            setCreditHistory(Array.isArray(historyRes?.data) ? historyRes.data : []);
         } catch (e) {
             toast.error(e?.response?.data?.message || 'Failed to load billing info');
         } finally {
@@ -398,8 +432,147 @@ export default function Billing() {
                     )}
                 </div>
 
+                {/* Invoices */}
+                <div className="fade-up">
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+                        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>
+                            <Receipt size={18} style={{ verticalAlign: -3, marginRight: 6, color: '#4f46e5' }} />
+                            Invoices
+                        </h2>
+                        <span style={{ fontSize: 13, color: '#6b7280' }}>Receipts from Stripe — download anytime</span>
+                    </div>
+                    <div className="card">
+                        {invoices.length === 0 ? (
+                            <div style={{ padding: 30, textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
+                                No invoices yet — they will appear here after your first payment.
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+                                    <thead>
+                                        <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                                            <th style={th}>Date</th>
+                                            <th style={th}>Number</th>
+                                            <th style={th}>Period</th>
+                                            <th style={th}>Amount</th>
+                                            <th style={th}>Status</th>
+                                            <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.map((inv) => {
+                                            const sty = INVOICE_STATUS[inv.status] || INVOICE_STATUS.draft;
+                                            return (
+                                                <tr key={inv.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                    <td style={td}>{fmtDateTime(inv.created)}</td>
+                                                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{inv.number || '—'}</td>
+                                                    <td style={td}>
+                                                        {inv.period_start && inv.period_end ? (
+                                                            <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                                                {fmtDate(new Date(inv.period_start * 1000))} – {fmtDate(new Date(inv.period_end * 1000))}
+                                                            </span>
+                                                        ) : '—'}
+                                                    </td>
+                                                    <td style={{ ...td, fontWeight: 600 }}>{fmtAmount(inv.amount_paid || inv.amount_due, inv.currency)}</td>
+                                                    <td style={td}>
+                                                        <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color }}>
+                                                            {sty.label}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...td, textAlign: 'right' }}>
+                                                        <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                            {inv.hosted_invoice_url && (
+                                                                <a href={inv.hosted_invoice_url} target="_blank" rel="noopener noreferrer"
+                                                                    style={iconLink('#4f46e5')} title="View receipt">
+                                                                    <ExternalLink size={14} />
+                                                                </a>
+                                                            )}
+                                                            {inv.invoice_pdf && (
+                                                                <a href={inv.invoice_pdf} target="_blank" rel="noopener noreferrer"
+                                                                    style={iconLink('#0d9488')} title="Download PDF">
+                                                                    <Download size={14} />
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Credit history */}
+                <div className="fade-up">
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
+                        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827' }}>
+                            <History size={18} style={{ verticalAlign: -3, marginRight: 6, color: '#4f46e5' }} />
+                            Credit Activity
+                        </h2>
+                        <span style={{ fontSize: 13, color: '#6b7280' }}>Last 20 events</span>
+                    </div>
+                    <div className="card">
+                        {creditHistory.length === 0 ? (
+                            <div style={{ padding: 30, textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
+                                No credit activity yet.
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
+                                    <thead>
+                                        <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                                            <th style={th}>When</th>
+                                            <th style={th}>Event</th>
+                                            <th style={th}>Description</th>
+                                            <th style={{ ...th, textAlign: 'right' }}>Amount</th>
+                                            <th style={{ ...th, textAlign: 'right' }}>Balance after</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {creditHistory.map((tx) => {
+                                            const meta = TX_TYPE_META[tx.type] || { label: tx.type, Icon: Coins, color: '#6b7280' };
+                                            const Ico = meta.Icon;
+                                            const positive = tx.amount > 0;
+                                            return (
+                                                <tr key={tx.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                    <td style={{ ...td, fontSize: 12, color: '#6b7280' }}>{fmtDateTime(tx.created_at)}</td>
+                                                    <td style={td}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: meta.color, fontWeight: 600, fontSize: 13 }}>
+                                                            <Ico size={14} /> {meta.label}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...td, fontSize: 13, color: '#4b5563' }}>{tx.description || '—'}</td>
+                                                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: positive ? '#047857' : '#b91c1c' }}>
+                                                        {positive ? '+' : ''}{tx.amount.toLocaleString()}
+                                                    </td>
+                                                    <td style={{ ...td, textAlign: 'right', fontSize: 13, color: '#1f2937' }}>
+                                                        <div>{(tx.monthly_after + tx.bonus_after).toLocaleString()}</div>
+                                                        <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                                                            {tx.monthly_after}m + {tx.bonus_after}b
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div style={{ height: 40 }} />
             </div>
         </div>
     );
 }
+
+const th = { padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
+const td = { padding: '12px 16px', fontSize: 13, color: '#1f2937', verticalAlign: 'middle' };
+const iconLink = (color) => ({
+    width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 6, background: `${color}10`, color, border: `1px solid ${color}30`, textDecoration: 'none',
+});
