@@ -7,14 +7,32 @@ import "../../app/styles/sidebar.css"
 import {LogoutButton} from "@/components/logout-button";
 import Link from "next/link";
 import {usePathname} from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile = () => {}}) {
     const sidebarRef = useRef(null);
     const resizeHandleRef = useRef(null);
     const [isResizing, setIsResizing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const pathname = usePathname();
+
+    // Fetch role once — used to conditionally show the Admin section
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || cancelled) return;
+                const { data: profile } = await supabase
+                    .from('profiles').select('role').eq('id', user.id).single();
+                if (!cancelled) setIsAdmin(profile?.role === 'admin');
+            } catch { /* ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -208,13 +226,13 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                         </div>
 
                         <div className="nav-item">
-                            <Link href="/dashboard/purchase-credits" className={`nav-link ${pathname === '/dashboard/purchase-credits' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Purchase Claim Credits">
+                            <Link href="/dashboard/billing" className={`nav-link ${pathname.startsWith('/dashboard/billing') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Billing & Plans">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1.81.45 1.61 1.67 1.61 1.16 0 1.6-.64 1.6-1.46 0-.84-.36-1.41-1.81-1.96-2.15-.82-3.42-1.64-3.42-3.59 0-1.67 1.16-2.85 2.83-3.18V4.23h2.67v1.85c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.63-1.63-1.63-1.01 0-1.46.54-1.46 1.34 0 .77.39 1.31 1.85 1.86 2.17.8 3.37 1.65 3.37 3.73 0 1.74-1.25 3.01-3.02 3.32z"/>
+                                        <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
                                     </svg>
                                 </span>
-                                <span className="nav-text">Purchase Claim Credits</span>
+                                <span className="nav-text">Billing & Plans</span>
                                 <span className="nav-badge storm">$</span>
                             </Link>
                         </div>
@@ -469,6 +487,35 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>
                     </div>
+
+                    {/* ADMIN — visible only to admins */}
+                    {isAdmin && (
+                        <div className="nav-category">
+                            <div className="nav-category-header">🔒 Admin</div>
+
+                            <div className="nav-item">
+                                <Link href="/dashboard/admin/plans" className={`nav-link ${pathname.startsWith('/dashboard/admin/plans') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Manage Plans">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Plans</span>
+                                </Link>
+                            </div>
+
+                            <div className="nav-item">
+                                <Link href="/dashboard/admin/users" className={`nav-link ${pathname.startsWith('/dashboard/admin/users') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Users & Credits">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Users & Credits</span>
+                                </Link>
+                            </div>
+                        </div>
+                    )}
 
                     <div className='nav-item' style={{width: '100%', padding: '5px 1rem'}}>
                         <LogoutButton />
