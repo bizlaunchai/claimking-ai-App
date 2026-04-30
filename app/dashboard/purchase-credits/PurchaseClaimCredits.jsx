@@ -12,151 +12,151 @@ const BuyCreditsPage = () => {
         'WELCOME10': { discount: 0.10, type: 'percentage', description: 'Welcome discount' },
         'REFER100': { discount: 100, type: 'fixed', description: '$100 referral credit', minCredits: 5 }
     };
-        const [creditBalance, setCreditBalance] = useState(23);
-        let [appliedCoupon, setAppliedCoupon] = useState(null);
-        let [originalTotal, setOriginalTotal] = useState(0);
-        const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-        const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
-        const [currentPackage, setCurrentPackage] = useState({ credits: 0, total: 0 });
-        const [isCouponOpen, setIsCouponOpen] = useState(false);
-        const [couponMessage, setCouponMessage] = useState('');
-        const [couponMessageType, setCouponMessageType] = useState('');
-        const [couponCode, setCouponCode] = useState('');
-        const [customAmount, setCustomAmount] = useState('');
-        const [calculationResult, setCalculationResult] = useState(null);
-        const [isAutoRechargeEnabled, setIsAutoRechargeEnabled] = useState(false);
-        const [rechargeThreshold, setRechargeThreshold] = useState(10);
-        const [rechargeAmount, setRechargeAmount] = useState(10);
-        const [monthlySubscription, setMonthlySubscription] = useState('0');
+    const [creditBalance, setCreditBalance] = useState(23);
+    let [appliedCoupon, setAppliedCoupon] = useState(null);
+    let [originalTotal, setOriginalTotal] = useState(0);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
+    const [currentPackage, setCurrentPackage] = useState({ credits: 0, total: 0 });
+    const [isCouponOpen, setIsCouponOpen] = useState(false);
+    const [couponMessage, setCouponMessage] = useState('');
+    const [couponMessageType, setCouponMessageType] = useState('');
+    const [couponCode, setCouponCode] = useState('');
+    const [customAmount, setCustomAmount] = useState('');
+    const [calculationResult, setCalculationResult] = useState(null);
+    const [isAutoRechargeEnabled, setIsAutoRechargeEnabled] = useState(false);
+    const [rechargeThreshold, setRechargeThreshold] = useState(10);
+    const [rechargeAmount, setRechargeAmount] = useState(10);
+    const [monthlySubscription, setMonthlySubscription] = useState('0');
 
-        const couponCodeRef = useRef(null);
-        const customAmountRef = useRef(null);
-        const paymentModalRef = useRef(null);
+    const couponCodeRef = useRef(null);
+    const customAmountRef = useRef(null);
+    const paymentModalRef = useRef(null);
 
-        // Check balance on load
-        useEffect(() => {
-            checkBalance();
-            updateRechargeExample();
-            setupPaymentForm();
-        }, []);
+    // Check balance on load
+    useEffect(() => {
+        checkBalance();
+        updateRechargeExample();
+        setupPaymentForm();
+    }, []);
 
-        useEffect(() => {
-            updateRechargeExample();
-        }, [rechargeThreshold, rechargeAmount]);
+    useEffect(() => {
+        updateRechargeExample();
+    }, [rechargeThreshold, rechargeAmount]);
 
-        const checkBalance = () => {
-            // Show warning if under 50 credits
-            const warning = document.getElementById('lowBalanceWarning');
-            const meter = document.querySelector('.balance-fill');
+    const checkBalance = () => {
+        // Show warning if under 50 credits
+        const warning = document.getElementById('lowBalanceWarning');
+        const meter = document.querySelector('.balance-fill');
 
-            if (creditBalance < 50) {
-                if (warning) warning.style.display = 'flex';
+        if (creditBalance < 50) {
+            if (warning) warning.style.display = 'flex';
+        } else {
+            if (warning) warning.style.display = 'none';
+        }
+
+        // Update meter (assuming max display is 100)
+        if (meter) {
+            meter.style.width = Math.min(creditBalance, 100) + '%';
+        }
+    };
+
+    // Coupon Functions
+    const toggleCoupon = () => {
+        setIsCouponOpen(!isCouponOpen);
+        if (!isCouponOpen && couponCodeRef.current) {
+            couponCodeRef.current.focus();
+        }
+    };
+
+    const applyCoupon = () => {
+        const code = couponCode.trim().toUpperCase();
+
+        if (!code) {
+            showCouponMessage('Please enter a promo code', 'error');
+            return;
+        }
+
+        const coupon = couponCodes[code];
+
+        if (!coupon) {
+            showCouponMessage('Invalid promo code', 'error');
+            return;
+        }
+
+        // Check minimum credits requirement
+        if (coupon.minCredits && currentPackage.credits < coupon.minCredits) {
+            showCouponMessage(`This code requires minimum ${coupon.minCredits} credits`, 'error');
+            return;
+        }
+
+        // Apply coupon
+        setAppliedCoupon({ ...coupon, code });
+        updatePriceWithCoupon();
+
+        // Show success
+        showCouponMessage('Promo code applied!', 'success');
+        setIsCouponOpen(false);
+    };
+
+    const removeCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setCouponMessage('');
+        updatePriceWithCoupon();
+    };
+
+    const updatePriceWithCoupon = () => {
+        if (!originalTotal) {
+            const totalElement = document.getElementById('modalTotal');
+            if (totalElement) {
+                setOriginalTotal(parseFloat(totalElement.textContent.replace(/[$,]/g, '')));
+            }
+            return;
+        }
+
+        let finalTotal = originalTotal;
+        let discountAmount = 0;
+
+        if (appliedCoupon) {
+            if (appliedCoupon.type === 'percentage') {
+                discountAmount = originalTotal * appliedCoupon.discount;
             } else {
-                if (warning) warning.style.display = 'none';
+                discountAmount = Math.min(appliedCoupon.discount, originalTotal);
             }
 
-            // Update meter (assuming max display is 100)
-            if (meter) {
-                meter.style.width = Math.min(creditBalance, 100) + '%';
-            }
-        };
+            finalTotal = originalTotal - discountAmount;
+        }
 
-        // Coupon Functions
-        const toggleCoupon = () => {
-            setIsCouponOpen(!isCouponOpen);
-            if (!isCouponOpen && couponCodeRef.current) {
-                couponCodeRef.current.focus();
-            }
-        };
+        // Update BNPL amounts would happen here in a real implementation
+    };
 
-        const applyCoupon = () => {
-            const code = couponCode.trim().toUpperCase();
+    const showCouponMessage = (text, type) => {
+        setCouponMessage(text);
+        setCouponMessageType(type);
+    };
 
-            if (!code) {
-                showCouponMessage('Please enter a promo code', 'error');
-                return;
-            }
+    const copyPromoCode = (code) => {
+        navigator.clipboard.writeText(code);
+        const btn = document.querySelector('.promo-copy-btn');
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.style.background = 'var(--success)';
 
-            const coupon = couponCodes[code];
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }
+    };
 
-            if (!coupon) {
-                showCouponMessage('Invalid promo code', 'error');
-                return;
-            }
-
-            // Check minimum credits requirement
-            if (coupon.minCredits && currentPackage.credits < coupon.minCredits) {
-                showCouponMessage(`This code requires minimum ${coupon.minCredits} credits`, 'error');
-                return;
-            }
-
-            // Apply coupon
-            setAppliedCoupon({ ...coupon, code });
-            updatePriceWithCoupon();
-
-            // Show success
-            showCouponMessage('Promo code applied!', 'success');
-            setIsCouponOpen(false);
-        };
-
-        const removeCoupon = () => {
-            setAppliedCoupon(null);
-            setCouponCode('');
-            setCouponMessage('');
-            updatePriceWithCoupon();
-        };
-
-        const updatePriceWithCoupon = () => {
-            if (!originalTotal) {
-                const totalElement = document.getElementById('modalTotal');
-                if (totalElement) {
-                    setOriginalTotal(parseFloat(totalElement.textContent.replace(/[$,]/g, '')));
-                }
-                return;
-            }
-
-            let finalTotal = originalTotal;
-            let discountAmount = 0;
-
-            if (appliedCoupon) {
-                if (appliedCoupon.type === 'percentage') {
-                    discountAmount = originalTotal * appliedCoupon.discount;
-                } else {
-                    discountAmount = Math.min(appliedCoupon.discount, originalTotal);
-                }
-
-                finalTotal = originalTotal - discountAmount;
-            }
-
-            // Update BNPL amounts would happen here in a real implementation
-        };
-
-        const showCouponMessage = (text, type) => {
-            setCouponMessage(text);
-            setCouponMessageType(type);
-        };
-
-        const copyPromoCode = (code) => {
-            navigator.clipboard.writeText(code);
-            const btn = document.querySelector('.promo-copy-btn');
-            if (btn) {
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                btn.style.background = 'var(--success)';
-
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = '';
-                }, 2000);
-            }
-        };
-
-        const closePromoBanner = () => {
-            const banner = document.getElementById('promoBanner');
-            if (banner) {
-                banner.style.display = 'none';
-            }
-        };
+    const closePromoBanner = () => {
+        const banner = document.getElementById('promoBanner');
+        if (banner) {
+            banner.style.display = 'none';
+        }
+    };
 
     function selectPackage(credits, total) {
         const button = event.target;
@@ -173,19 +173,19 @@ const BuyCreditsPage = () => {
         }, 500);
     }
 
-        // Payment Modal Functions
-        /*const showPaymentModal = (credits, total, isSubscription = false) => {
-            // Reset coupon
-            setAppliedCoupon(null);
-            setOriginalTotal(0);
-            setCouponCode('');
-            setCouponMessage('');
-            setIsCouponOpen(false);
+    // Payment Modal Functions
+    /*const showPaymentModal = (credits, total, isSubscription = false) => {
+        // Reset coupon
+        setAppliedCoupon(null);
+        setOriginalTotal(0);
+        setCouponCode('');
+        setCouponMessage('');
+        setIsCouponOpen(false);
 
-            setCurrentPackage({ credits, total, isSubscription });
-            setIsPaymentModalOpen(true);
-            document.body.style.overflow = 'hidden';
-        };*/
+        setCurrentPackage({ credits, total, isSubscription });
+        setIsPaymentModalOpen(true);
+        document.body.style.overflow = 'hidden';
+    };*/
 
     function showPaymentModal(credits, total, isSubscription = false) {
         const modal = document.getElementById('paymentModal');
@@ -239,113 +239,113 @@ const BuyCreditsPage = () => {
         document.body.style.overflow = '';
     }
 
-        // Express Payment Methods
-        const processApplePay = () => {
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            alert(`Redirecting to Apple Pay...\nTotal: ${total}\n\nIn production, this would use the Apple Pay JS API`);
-        };
+    // Express Payment Methods
+    const processApplePay = () => {
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        alert(`Redirecting to Apple Pay...\nTotal: ${total}\n\nIn production, this would use the Apple Pay JS API`);
+    };
 
-        const processGooglePay = () => {
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            alert(`Redirecting to Google Pay...\nTotal: ${total}\n\nIn production, this would use the Google Pay API`);
-        };
+    const processGooglePay = () => {
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        alert(`Redirecting to Google Pay...\nTotal: ${total}\n\nIn production, this would use the Google Pay API`);
+    };
 
-        // Buy Now Pay Later Methods
-        const processKlarna = () => {
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            const quarterAmount = document.getElementById('klarnaAmount')?.textContent || '$0.00 x 4';
-            alert(`Redirecting to Klarna checkout...\nTotal: ${total}\n${quarterAmount}\n\nYou can pay in 4 interest-free installments`);
-        };
+    // Buy Now Pay Later Methods
+    const processKlarna = () => {
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        const quarterAmount = document.getElementById('klarnaAmount')?.textContent || '$0.00 x 4';
+        alert(`Redirecting to Klarna checkout...\nTotal: ${total}\n${quarterAmount}\n\nYou can pay in 4 interest-free installments`);
+    };
 
-        const processAfterpay = () => {
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            const quarterAmount = document.getElementById('afterpayAmount')?.textContent || '$0.00 x 4';
-            alert(`Redirecting to Afterpay...\nTotal: ${total}\n${quarterAmount}\n\nPay in 4 interest-free installments`);
-        };
+    const processAfterpay = () => {
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        const quarterAmount = document.getElementById('afterpayAmount')?.textContent || '$0.00 x 4';
+        alert(`Redirecting to Afterpay...\nTotal: ${total}\n${quarterAmount}\n\nPay in 4 interest-free installments`);
+    };
 
-        const processAffirm = () => {
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            const monthlyAmount = document.getElementById('affirmAmount')?.textContent || '$0.00/mo for 12 months';
-            alert(`Redirecting to Affirm...\nTotal: ${total}\n${monthlyAmount}\n\nChoose your payment plan`);
-        };
+    const processAffirm = () => {
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        const monthlyAmount = document.getElementById('affirmAmount')?.textContent || '$0.00/mo for 12 months';
+        alert(`Redirecting to Affirm...\nTotal: ${total}\n${monthlyAmount}\n\nChoose your payment plan`);
+    };
 
-        // Card Payment Form
-        const setupPaymentForm = () => {
-            // Format card number
-            const cardInput = document.getElementById('cardNumber');
-            if (cardInput) {
-                cardInput.addEventListener('input', function(e) {
-                    let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                    let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
-                    e.target.value = formattedValue;
-                });
-            }
+    // Card Payment Form
+    const setupPaymentForm = () => {
+        // Format card number
+        const cardInput = document.getElementById('cardNumber');
+        if (cardInput) {
+            cardInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+                let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+                e.target.value = formattedValue;
+            });
+        }
 
-            // Format expiry
-            const expiryInput = document.getElementById('expiry');
-            if (expiryInput) {
-                expiryInput.addEventListener('input', function(e) {
-                    let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                    if (value.length >= 2) {
-                        value = value.substring(0, 2) + '/' + value.substring(2, 4);
-                    }
-                    e.target.value = value;
-                });
-            }
-        };
+        // Format expiry
+        const expiryInput = document.getElementById('expiry');
+        if (expiryInput) {
+            expiryInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+                if (value.length >= 2) {
+                    value = value.substring(0, 2) + '/' + value.substring(2, 4);
+                }
+                e.target.value = value;
+            });
+        }
+    };
 
-        const processCardPayment = (e) => {
-            if (e) e.preventDefault();
+    const processCardPayment = (e) => {
+        if (e) e.preventDefault();
 
-            const email = document.getElementById('email')?.value;
-            const cardNumber = document.getElementById('cardNumber')?.value;
-            const total = document.getElementById('submitAmount')?.textContent || '$0.00';
-            const button = document.querySelector('.submit-payment-btn');
+        const email = document.getElementById('email')?.value;
+        const cardNumber = document.getElementById('cardNumber')?.value;
+        const total = document.getElementById('submitAmount')?.textContent || '$0.00';
+        const button = document.querySelector('.submit-payment-btn');
 
-            if (button) {
-                const originalHTML = button.innerHTML;
-                button.classList.add('btn-loading');
-                button.innerHTML = '<span class="loading-text">Processing Payment...</span>';
-                button.disabled = true;
+        if (button) {
+            const originalHTML = button.innerHTML;
+            button.classList.add('btn-loading');
+            button.innerHTML = '<span class="loading-text">Processing Payment...</span>';
+            button.disabled = true;
 
-                // Simulate payment processing
-                setTimeout(() => {
-                    let message = `✅ Payment successful!\n\nEmail: ${email}\nCard: **** **** **** ${cardNumber?.slice(-4) || '****'}\nAmount: ${total}`;
+            // Simulate payment processing
+            setTimeout(() => {
+                let message = `✅ Payment successful!\n\nEmail: ${email}\nCard: **** **** **** ${cardNumber?.slice(-4) || '****'}\nAmount: ${total}`;
 
-                    if (appliedCoupon) {
-                        message += `\nPromo Code: ${appliedCoupon.code} applied`;
-                    }
+                if (appliedCoupon) {
+                    message += `\nPromo Code: ${appliedCoupon.code} applied`;
+                }
 
-                    message += '\n\nCredits have been added to your account!';
+                message += '\n\nCredits have been added to your account!';
 
-                    alert(message);
+                alert(message);
 
-                    // Reset button
-                    button.classList.remove('btn-loading');
-                    button.innerHTML = originalHTML;
-                    button.disabled = false;
+                // Reset button
+                button.classList.remove('btn-loading');
+                button.innerHTML = originalHTML;
+                button.disabled = false;
 
-                    // Close modal
-                    closePaymentModal();
+                // Close modal
+                closePaymentModal();
 
-                    // Update balance
-                    setCreditBalance(prev => prev + currentPackage.credits);
-                }, 2000);
-            }
-        };
+                // Update balance
+                setCreditBalance(prev => prev + currentPackage.credits);
+            }, 2000);
+        }
+    };
 
-        // Update existing functions to use modal
-       /* const selectPackage = (credits, total) => {
-            showPaymentModal(credits, total);
-        };*/
+    // Update existing functions to use modal
+    /* const selectPackage = (credits, total) => {
+         showPaymentModal(credits, total);
+     };*/
 
-        const purchaseCustom = () => {
-            debugger
-            const amount = parseInt(customAmount);
-            if (amount && calculationResult) {
-                showPaymentModal(amount, calculationResult.total);
-            }
-        };
+    const purchaseCustom = () => {
+        debugger
+        const amount = parseInt(customAmount);
+        if (amount && calculationResult) {
+            showPaymentModal(amount, calculationResult.total);
+        }
+    };
 
     function saveMonthlySubscription() {
         const selected = document.querySelector('input[name="monthly"]:checked').value;
@@ -403,51 +403,51 @@ const BuyCreditsPage = () => {
         }
     }
 
-        const saveAutoRecharge = () => {
-            const button = document.querySelector('.auto-recharge');
+    const saveAutoRecharge = () => {
+        const button = document.querySelector('.auto-recharge');
 
-            // Show loading state
-            if (button) {
-                button.classList.add('loading');
-                button.innerHTML = 'Saving...';
-            }
+        // Show loading state
+        if (button) {
+            button.classList.add('loading');
+            button.innerHTML = 'Saving...';
+        }
 
-            // Simulate API call
-            setTimeout(() => {
-                if (!isAutoRechargeEnabled) {
-                    if (button) {
-                        button.classList.remove('loading');
-                        button.innerHTML = 'Save Auto-Recharge Settings';
-                    }
-                    alert('Auto-recharge has been disabled');
-                    return;
-                }
-
-                let price;
-                switch(rechargeAmount) {
-                    case '5': price = 1000; break;
-                    case '10': price = 1800; break;
-                    case '25': price = 4000; break;
-                    case '50': price = 7000; break;
-                    case '100': price = 12500; break;
-                    default: price = 0;
-                }
-
+        // Simulate API call
+        setTimeout(() => {
+            if (!isAutoRechargeEnabled) {
                 if (button) {
                     button.classList.remove('loading');
                     button.innerHTML = 'Save Auto-Recharge Settings';
                 }
+                alert('Auto-recharge has been disabled');
+                return;
+            }
 
-                alert(`✅ Auto-recharge settings saved!\n\nWhen your balance drops below ${rechargeThreshold} credits, we'll automatically purchase ${rechargeAmount} credits for $${price.toLocaleString('en-US', {minimumFractionDigits: 2})}.\n\nPayment method on file will be charged automatically.`);
-            }, 1500);
-        };
+            let price;
+            switch(rechargeAmount) {
+                case '5': price = 1000; break;
+                case '10': price = 1800; break;
+                case '25': price = 4000; break;
+                case '50': price = 7000; break;
+                case '100': price = 12500; break;
+                default: price = 0;
+            }
 
-        // Payment Method Functions
-        function showAddPaymentModal() {
-            const modal = document.getElementById('addPaymentModal');
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
+            if (button) {
+                button.classList.remove('loading');
+                button.innerHTML = 'Save Auto-Recharge Settings';
+            }
+
+            alert(`✅ Auto-recharge settings saved!\n\nWhen your balance drops below ${rechargeThreshold} credits, we'll automatically purchase ${rechargeAmount} credits for $${price.toLocaleString('en-US', {minimumFractionDigits: 2})}.\n\nPayment method on file will be charged automatically.`);
+        }, 1500);
+    };
+
+    // Payment Method Functions
+    function showAddPaymentModal() {
+        const modal = document.getElementById('addPaymentModal');
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
 
     function closeAddPaymentModal() {
         const modal = document.getElementById('addPaymentModal');
@@ -462,19 +462,19 @@ const BuyCreditsPage = () => {
         });
     }
 
-        const switchPaymentTab = (tab) => {
-            // Update tabs
-            document.querySelectorAll('.payment-tab').forEach(t => {
-                t.classList.remove('active');
-            });
-            event.target.classList.add('active');
+    const switchPaymentTab = (tab) => {
+        // Update tabs
+        document.querySelectorAll('.payment-tab').forEach(t => {
+            t.classList.remove('active');
+        });
+        event.target.classList.add('active');
 
-            // Update content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tab + 'Tab').classList.add('active');
-        };
+        // Update content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(tab + 'Tab').classList.add('active');
+    };
 
     function selectCrypto(crypto) {
         // Hide options, show form
@@ -525,23 +525,23 @@ const BuyCreditsPage = () => {
         }, 1500);
     }
 
-        const addBankAccount = () => {
-            const button = document.querySelector('.add-payment-submit');
-            if (button) {
-                const originalText = button.textContent;
-                button.classList.add('btn-loading');
-                button.textContent = 'Verifying Account...';
+    const addBankAccount = () => {
+        const button = document.querySelector('.add-payment-submit');
+        if (button) {
+            const originalText = button.textContent;
+            button.classList.add('btn-loading');
+            button.textContent = 'Verifying Account...';
 
-                setTimeout(() => {
-                    button.classList.remove('btn-loading');
-                    button.textContent = originalText;
-                    alert('✅ Bank account added!\n\nWe\'ve sent two small deposits to verify your account.\nPlease check your bank statement in 2-3 business days and verify the amounts.');
-                    closeAddPaymentModal();
-                }, 2000);
-            }
-        };
+            setTimeout(() => {
+                button.classList.remove('btn-loading');
+                button.textContent = originalText;
+                alert('✅ Bank account added!\n\nWe\'ve sent two small deposits to verify your account.\nPlease check your bank statement in 2-3 business days and verify the amounts.');
+                closeAddPaymentModal();
+            }, 2000);
+        }
+    };
 
-        function addCryptoWallet() {
+    function addCryptoWallet() {
         const button = event.target;
         const originalText = button.textContent;
         const walletAddress = document.getElementById('walletAddress').value;
@@ -565,27 +565,27 @@ const BuyCreditsPage = () => {
         }, 1500);
     }
 
-        const editPaymentMethod = (id) => {
-            alert(`Editing payment method ${id}...\n\nThis would allow updating:\n• Card number\n• Expiry date\n• Billing address`);
-        };
+    const editPaymentMethod = (id) => {
+        alert(`Editing payment method ${id}...\n\nThis would allow updating:\n• Card number\n• Expiry date\n• Billing address`);
+    };
 
-        const removePaymentMethod = (id) => {
-            if (confirm('Are you sure you want to remove this payment method?')) {
-                const button = document.querySelector(`[onclick="removePaymentMethod(${id})"]`);
-                const item = button?.closest('.payment-method-item');
+    const removePaymentMethod = (id) => {
+        if (confirm('Are you sure you want to remove this payment method?')) {
+            const button = document.querySelector(`[onclick="removePaymentMethod(${id})"]`);
+            const item = button?.closest('.payment-method-item');
 
-                if (item) {
-                    // Add fade out animation
-                    item.style.opacity = '0.5';
-                    item.style.pointerEvents = 'none';
+            if (item) {
+                // Add fade out animation
+                item.style.opacity = '0.5';
+                item.style.pointerEvents = 'none';
 
-                    setTimeout(() => {
-                        item.style.display = 'none';
-                        alert('Payment method removed successfully');
-                    }, 500);
-                }
+                setTimeout(() => {
+                    item.style.display = 'none';
+                    alert('Payment method removed successfully');
+                }, 500);
             }
-        };
+        }
+    };
 
     function setDefaultPayment(id) {
         const button = event.target;
@@ -616,53 +616,53 @@ const BuyCreditsPage = () => {
         }, 1000);
     }
 
-        const toggleAutoRecharge = () => {
-            setIsAutoRechargeEnabled(!isAutoRechargeEnabled);
+    const toggleAutoRecharge = () => {
+        setIsAutoRechargeEnabled(!isAutoRechargeEnabled);
 
-            const settings = document.getElementById('rechargeSettings');
-            const status = document.getElementById('rechargeStatus');
-            const statusIndicator = status?.querySelector('.status-indicator');
-            const statusText = status?.querySelector('.status-text');
+        const settings = document.getElementById('rechargeSettings');
+        const status = document.getElementById('rechargeStatus');
+        const statusIndicator = status?.querySelector('.status-indicator');
+        const statusText = status?.querySelector('.status-text');
 
-            if (settings && statusIndicator && statusText) {
-                if (!isAutoRechargeEnabled) {
-                    settings.classList.add('active');
-                    statusIndicator.classList.remove('inactive');
-                    statusIndicator.classList.add('active');
-                    statusText.textContent = 'Auto-recharge is enabled';
-                    status.style.background = 'rgba(22, 163, 74, 0.05)';
-                    status.style.borderColor = 'rgba(22, 163, 74, 0.2)';
-                } else {
-                    settings.classList.remove('active');
-                    statusIndicator.classList.remove('active');
-                    statusIndicator.classList.add('inactive');
-                    statusText.textContent = 'Auto-recharge is disabled';
-                    status.style.background = '';
-                    status.style.borderColor = '';
-                }
+        if (settings && statusIndicator && statusText) {
+            if (!isAutoRechargeEnabled) {
+                settings.classList.add('active');
+                statusIndicator.classList.remove('inactive');
+                statusIndicator.classList.add('active');
+                statusText.textContent = 'Auto-recharge is enabled';
+                status.style.background = 'rgba(22, 163, 74, 0.05)';
+                status.style.borderColor = 'rgba(22, 163, 74, 0.2)';
+            } else {
+                settings.classList.remove('active');
+                statusIndicator.classList.remove('active');
+                statusIndicator.classList.add('inactive');
+                statusText.textContent = 'Auto-recharge is disabled';
+                status.style.background = '';
+                status.style.borderColor = '';
             }
-        };
+        }
+    };
 
-        const updateRechargeExample = () => {
-            let price;
-            switch(rechargeAmount) {
-                case '5': price = '$1,000'; break;
-                case '10': price = '$1,800'; break;
-                case '25': price = '$4,000'; break;
-                case '50': price = '$7,000'; break;
-                case '100': price = '$12,500'; break;
-                default: price = '$0';
-            }
+    const updateRechargeExample = () => {
+        let price;
+        switch(rechargeAmount) {
+            case '5': price = '$1,000'; break;
+            case '10': price = '$1,800'; break;
+            case '25': price = '$4,000'; break;
+            case '50': price = '$7,000'; break;
+            case '100': price = '$12,500'; break;
+            default: price = '$0';
+        }
 
-            // Update example display
-            const exampleThreshold = document.getElementById('exampleThreshold');
-            const exampleAmount = document.getElementById('exampleAmount');
-            const examplePrice = document.getElementById('examplePrice');
+        // Update example display
+        const exampleThreshold = document.getElementById('exampleThreshold');
+        const exampleAmount = document.getElementById('exampleAmount');
+        const examplePrice = document.getElementById('examplePrice');
 
-            if (exampleThreshold) exampleThreshold.textContent = rechargeThreshold;
-            if (exampleAmount) exampleAmount.textContent = rechargeAmount;
-            if (examplePrice) examplePrice.textContent = price;
-        };
+        if (exampleThreshold) exampleThreshold.textContent = rechargeThreshold;
+        if (exampleAmount) exampleAmount.textContent = rechargeAmount;
+        if (examplePrice) examplePrice.textContent = price;
+    };
 
     function calculateCustom() {
         const amount = parseInt(customAmount);
@@ -712,24 +712,24 @@ const BuyCreditsPage = () => {
         setCalculationResult({subtotal, total, discount})
     }
 
-        // Event handlers for key presses
-        const handleCustomAmountKeyPress = (e) => {
-            if (e.key === 'Enter') {
-                calculateCustom();
-            }
-        };
+    // Event handlers for key presses
+    const handleCustomAmountKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            calculateCustom();
+        }
+    };
 
-        const handleCouponCodeKeyPress = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                applyCoupon();
-            }
-        };
+    const handleCouponCodeKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            applyCoupon();
+        }
+    };
 
-        // Update balance when creditBalance changes
-        useEffect(() => {
-            checkBalance();
-        }, [creditBalance]);
+    // Update balance when creditBalance changes
+    useEffect(() => {
+        checkBalance();
+    }, [creditBalance]);
 
     return (
         <div className="purchase-credits">

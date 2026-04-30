@@ -3,8 +3,21 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
     Search, Loader2, Coins, Plus, Minus, X, Users as UsersIcon, ShieldCheck,
+    History, ArrowUpCircle, RefreshCw, Zap,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
+
+const TX_TYPE_META = {
+    subscription_grant: { label: 'Subscription started', Icon: Zap,           color: '#4f46e5' },
+    upgrade_grant:      { label: 'Plan upgraded',         Icon: ArrowUpCircle, color: '#4f46e5' },
+    renewal_reset:      { label: 'Monthly renewal',       Icon: RefreshCw,     color: '#0891b2' },
+    admin_adjust:       { label: 'Admin adjustment',      Icon: ShieldCheck,   color: '#7c3aed' },
+    consume:            { label: 'Used',                  Icon: Minus,         color: '#b91c1c' },
+    refund:             { label: 'Refund',                Icon: Plus,          color: '#047857' },
+};
+
+const fmtDateTime = (val) =>
+    val ? new Date(val).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const STATUS_BG = {
     active: { bg: '#ecfdf5', color: '#047857' },
@@ -19,6 +32,7 @@ export default function AdminUsers() {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [adjustTarget, setAdjustTarget] = useState(null);
+    const [historyTarget, setHistoryTarget] = useState(null);
 
     const refresh = async (q = search) => {
         setLoading(true);
@@ -133,12 +147,21 @@ export default function AdminUsers() {
                                         <td style={td}>{(bal?.monthly_credits ?? 0).toLocaleString()}</td>
                                         <td style={td}>{(bal?.bonus_credits ?? 0).toLocaleString()}</td>
                                         <td style={{ ...td, textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => setAdjustTarget({ user: u, balance: bal })}
-                                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                                            >
-                                                <Coins size={12} /> Adjust
-                                            </button>
+                                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                <button
+                                                    onClick={() => setHistoryTarget(u)}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: '#fff', color: '#4b5563', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                                                    title="View credit history"
+                                                >
+                                                    <History size={12} /> History
+                                                </button>
+                                                <button
+                                                    onClick={() => setAdjustTarget({ user: u, balance: bal })}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                                                >
+                                                    <Coins size={12} /> Adjust
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -155,6 +178,98 @@ export default function AdminUsers() {
                     onDone={() => { setAdjustTarget(null); refresh(); }}
                 />
             )}
+
+            {historyTarget && (
+                <HistoryModal
+                    user={historyTarget}
+                    onClose={() => setHistoryTarget(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+function HistoryModal({ user, onClose }) {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await axiosInstance.get(`/credits/admin/users/${user.id}/history?limit=200`);
+                if (!cancelled) setHistory(Array.isArray(data) ? data : []);
+            } catch (e) {
+                toast.error(e?.response?.data?.message || 'Failed to load history');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user.id]);
+
+    return (
+        <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 760, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '18px 22px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <History size={18} color="#4f46e5" />
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Credit History</div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>{user.full_name || '—'} · {user.email}</div>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}>
+                        <X size={18} />
+                    </button>
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                    {loading ? (
+                        <div style={{ padding: 40, textAlign: 'center' }}>
+                            <Loader2 size={24} style={{ color: '#4f46e5', animation: 'spin 1s linear infinite' }} />
+                        </div>
+                    ) : history.length === 0 ? (
+                        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
+                            No credit activity yet.
+                        </div>
+                    ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0 }}>
+                                    <th style={th}>When</th>
+                                    <th style={th}>Event</th>
+                                    <th style={th}>Description</th>
+                                    <th style={{ ...th, textAlign: 'right' }}>Amount</th>
+                                    <th style={{ ...th, textAlign: 'right' }}>Balance after</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {history.map((tx) => {
+                                    const meta = TX_TYPE_META[tx.type] || { label: tx.type, Icon: Coins, color: '#6b7280' };
+                                    const Ico = meta.Icon;
+                                    const positive = tx.amount > 0;
+                                    return (
+                                        <tr key={tx.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ ...td, fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtDateTime(tx.created_at)}</td>
+                                            <td style={td}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: meta.color, fontWeight: 600, fontSize: 12 }}>
+                                                    <Ico size={12} /> {meta.label}
+                                                </span>
+                                            </td>
+                                            <td style={{ ...td, fontSize: 12, color: '#4b5563' }}>{tx.description || '—'}</td>
+                                            <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: positive ? '#047857' : '#b91c1c', fontSize: 13 }}>
+                                                {positive ? '+' : ''}{tx.amount.toLocaleString()}
+                                            </td>
+                                            <td style={{ ...td, textAlign: 'right', fontSize: 12 }}>
+                                                <div style={{ color: '#1f2937' }}>{(tx.monthly_after + tx.bonus_after).toLocaleString()}</div>
+                                                <div style={{ fontSize: 10, color: '#9ca3af' }}>{tx.monthly_after}m + {tx.bonus_after}b</div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

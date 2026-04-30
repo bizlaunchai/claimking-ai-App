@@ -332,6 +332,18 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                         </div>
                     )}
 
+                    {editor.mode === 'edit' && (editor.plan.stripe_product_id || editor.plan.stripe_price_id) && (
+                        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.05, marginBottom: 8 }}>Stripe identifiers</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '6px 12px', fontFamily: 'monospace', fontSize: 12, color: '#1f2937', alignItems: 'center' }}>
+                                <div style={{ color: '#6b7280' }}>Product ID</div>
+                                <div style={{ wordBreak: 'break-all' }}>{editor.plan.stripe_product_id || <span style={{ color: '#9ca3af' }}>— not synced —</span>}</div>
+                                <div style={{ color: '#6b7280' }}>Price ID</div>
+                                <div style={{ wordBreak: 'break-all' }}>{editor.plan.stripe_price_id || <span style={{ color: '#9ca3af' }}>— not synced —</span>}</div>
+                            </div>
+                        </div>
+                    )}
+
                     <Field label="Plan name *">
                         <input style={input} value={f.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="e.g. Pro" />
                     </Field>
