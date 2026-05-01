@@ -119,7 +119,7 @@ export default function OnboardingModal() {
                         </div>
 
                         <form onSubmit={handleOnboarding} className="space-y-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10 border border-gray-100 p-6 md:p-8 rounded-[2.5rem] bg-gray-50/50 relative overflow-hidden">
+                            <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 md:gap-10 border border-gray-100 p-6 md:p-8 rounded-[2.5rem] bg-gray-50/50 relative overflow-hidden">
 
                                 {/* Background Decoration */}
                                 <Briefcase className="absolute -right-10 -bottom-10 w-48 h-48 text-gray-200/30 -rotate-12 pointer-events-none" />
@@ -170,7 +170,7 @@ export default function OnboardingModal() {
                                 </div>
 
                                 {/* Right Column: Logo Upload */}
-                                <div className="space-y-2 relative z-1 flex flex-col">
+                                {/*<div className="space-y-2 relative z-1 flex flex-col">
                                     <label className="text-sm font-bold flex items-center gap-2 text-gray-700 ml-1">
                                         <Sparkles className="w-4 h-4 text-yellow-600" /> Business Logo
                                     </label>
@@ -185,7 +185,7 @@ export default function OnboardingModal() {
                                             uploadFolderName={'business_logo'}
                                         />
                                     </div>
-                                </div>
+                                </div>*/}
                             </div>
 
                             {error && (
