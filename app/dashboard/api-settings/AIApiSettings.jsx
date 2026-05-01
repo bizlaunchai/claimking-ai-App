@@ -357,6 +357,47 @@ export default function IntegrationPage() {
                     </div>
                 </Card>
 
+                {/* Image Generation Providers */}
+                <Card
+                    accent="#0ea5e9" iconBg="#e0f2fe" icon={ImageIcon} title="Image Generation" delay={80}
+                    badge={<StatusBadge loading={summaryLoading} configured={summary.gemini.configured || summary.replicate.configured} />}
+                >
+                    <div className="grid-2">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <img className="provider-logo" src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" />
+                                <span className="provider-name">Gemini Image (active)</span>
+                            </div>
+                            <F hint="Powers 3D Mockups today. Uses your existing Gemini API key — no extra setup needed.">
+                                <div style={{ fontSize: 13, color: summary.gemini.configured ? '#047857' : '#92400e' }}>
+                                    {summary.gemini.configured
+                                        ? '✓ Ready — Gemini key already saved above.'
+                                        : 'Save a Gemini API key in the AI Engine card above to enable image generation.'}
+                                </div>
+                            </F>
+                        </div>
+                        <div className="divider-v" />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: 16, height: 16, borderRadius: 4, background: '#000', color: '#fff',
+                                    fontWeight: 700, fontSize: 10, lineHeight: 1,
+                                }}>R</span>
+                                <span className="provider-name">Replicate (optional)</span>
+                            </div>
+                            <F hint="Higher-fidelity FLUX / Stable Diffusion image edits. Adds itself as the default once a token is saved.">
+                                <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                                    <input className="input mono" type="password" placeholder={secretPlaceholder(summary.replicate.configured, 'r8_...')} value={repToken} onChange={e => setRepToken(e.target.value)} />
+                                    <button className="btn btn-indigo" onClick={() => callApi('/replicate-token-save', { apiToken: repToken }, setRepSt, setRepErr, null, 'replicate')} disabled={repSt === 'loading'}>
+                                        {summary.replicate.configured ? 'Update Token' : 'Save Connection'} <SI status={repSt} />
+                                    </button>
+                                </div>
+                            </F>
+                            <Banner status={repSt} error={repErr} />
+                        </div>
+                    </div>
+                </Card>
 
                 {/* Call Tracking */}
                 <Card

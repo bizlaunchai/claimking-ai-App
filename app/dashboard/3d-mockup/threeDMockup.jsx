@@ -1,231 +1,421 @@
 'use client'
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import "./3d-mockup.css"
-import FileUploader from "@/utiles/FileUploader.jsx";
+import dynamic from "next/dynamic";
+import axiosInstance from "@/lib/axiosInstance";
+import { toast } from "sonner";
 
+const FileUploader = dynamic(() => import("@/utiles/FileUploader.jsx"), { ssr: false });
+
+// ──────────────────────────────────────────────────────────────────────────────
+//   Static catalogues (these don't come from the backend — they're spec data)
+// ──────────────────────────────────────────────────────────────────────────────
+const SHINGLE_TYPES = ['Architectural', '3-Tab', 'Designer', 'Wood Shakes', 'Slate', 'Metal', 'Clay Tile', 'Concrete Tile'];
+
+const ROOFING_COLORS = [
+    { brand: 'GAF Timberline HDZ', colors: [
+        { name: 'Charcoal', value: '#2d2d2d' },
+        { name: 'Weathered Wood', value: '#8b7355' },
+        { name: 'Hickory', value: '#6b5d4f' },
+        { name: 'Slate', value: '#5a5a5a' },
+        { name: 'Mission Brown', value: '#7d6144' },
+        { name: 'Hunter Green', value: '#2f4538' },
+        { name: 'Shakewood', value: '#8b6f47' },
+        { name: 'Biscayne Blue', value: '#a0826d' },
+        { name: 'Birchwood', value: '#c8b88b' },
+        { name: 'Copper Canyon', value: '#8a7a65' },
+    ]},
+    { brand: 'Owens Corning Duration', colors: [
+        { name: 'Onyx Black', value: '#1a1a1a' },
+        { name: 'Estate Gray', value: '#6b6b6b' },
+        { name: 'Brownwood', value: '#8b4513' },
+        { name: 'Teak', value: '#d2691e' },
+        { name: 'Chateau Green', value: '#556b2f' },
+        { name: 'Harbor Blue', value: '#4682b4' },
+        { name: 'Aged Copper', value: '#b87333' },
+        { name: 'Terra Cotta', value: '#a0522d' },
+        { name: 'Sand Dune', value: '#bc8f8f' },
+    ]},
+];
+
+const SIDING_MATERIALS = ['Vinyl Lap', 'Fiber Cement', 'Wood', 'Board & Batten', 'Brick', 'Stone'];
+
+const SIDING_COLORS = [
+    { name: 'Arctic White', value: '#ffffff' },
+    { name: 'Cream',         value: '#f5f5f0' },
+    { name: 'Sterling Gray', value: '#9ca3af' },
+    { name: 'Iron Gray',     value: '#4b5563' },
+    { name: 'Cape Cod Blue', value: '#5b8fa3' },
+    { name: 'Sandstone',     value: '#d4a574' },
+];
+
+const TRIM_COLORS = [
+    { name: 'White',  value: '#ffffff' },
+    { name: 'Almond', value: '#f5f5dc' },
+    { name: 'Brown',  value: '#8b7355' },
+    { name: 'Black',  value: '#2f2f2f' },
+    { name: 'Gray',   value: '#808080' },
+    { name: 'Copper', value: '#b87333' },
+];
+
+const QUALITY_OPTIONS = [
+    { id: 'fast',     label: 'Fast',     time: '~30 seconds — Draft' },
+    { id: 'standard', label: 'Standard', time: '~1 minute — Good'   },
+    { id: 'premium',  label: 'Premium',  time: '~2 minutes — Best'  },
+];
+
+// ──────────────────────────────────────────────────────────────────────────────
+//   Authed image — backend /s3/file requires Bearer auth, so a plain <img>
+//   won't load it. We fetch as a blob and turn it into an object URL.
+// ──────────────────────────────────────────────────────────────────────────────
+const AuthedImage = ({ src, alt = '', style, className }) => {
+    const [blobUrl, setBlobUrl] = useState(null);
+    const [errored, setErrored] = useState(false);
+
+    useEffect(() => {
+        if (!src) { setBlobUrl(null); return; }
+        let active = true;
+        let createdUrl = null;
+        setErrored(false);
+
+        (async () => {
+            try {
+                const res = await axiosInstance.get(src, { responseType: 'blob' });
+                if (!active) return;
+                createdUrl = URL.createObjectURL(res.data);
+                setBlobUrl(createdUrl);
+            } catch {
+                if (active) setErrored(true);
+            }
+        })();
+
+        return () => {
+            active = false;
+            if (createdUrl) URL.revokeObjectURL(createdUrl);
+        };
+    }, [src]);
+
+    if (errored) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Image unavailable</div>;
+    if (!blobUrl) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Loading…</div>;
+    return <img src={blobUrl} alt={alt} style={style} className={className} />;
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+//   Main component
+// ──────────────────────────────────────────────────────────────────────────────
 const ThreeDMockup = () => {
+    // ── Client selection ─────────────────────────────────────────────────────
     const [clientTab, setClientTab] = useState('existing');
     const [selectedClient, setSelectedClient] = useState(null);
+
+    const [clientSearch, setClientSearch] = useState('');
+    const [clients, setClients] = useState([]);
+    const [clientsLoading, setClientsLoading] = useState(false);
+
+    const [newClientForm, setNewClientForm] = useState({
+        first_name: '', last_name: '', email: '', phone: '',
+        address: '', city: '', state: '', zip_code: '',
+        preferred_contact: 'both',
+    });
+    const [creatingClient, setCreatingClient] = useState(false);
+
+    // ── Mockup configuration ────────────────────────────────────────────────
     const [materialTab, setMaterialTab] = useState('roofing');
-    // const [selectedPhoto, setSelectedPhoto] = useState(null);
+    const [selectedShingleType, setSelectedShingleType] = useState('Architectural');
+    const [selectedSidingMaterial, setSelectedSidingMaterial] = useState('Vinyl Lap');
+    const [selectedColors, setSelectedColors] = useState({
+        roofing: null, siding: null, trim: null, windows: null,
+    });
+    const [advanced, setAdvanced] = useState({
+        keepRoof: false, ridgeVent: false, shadows: false, wetEffect: false,
+    });
+    const [aiInstructions, setAiInstructions] = useState('');
+    const [selectedQuality, setSelectedQuality] = useState('standard');
+
+    // ── Photo & generation ──────────────────────────────────────────────────
+    const [files, setFiles] = useState([]);
+    const sourcePhotoKey = files?.[0]?.serverResponse?.payload?.key || null;
+
+    const [currentMockup, setCurrentMockup] = useState(null);
+    const [versions, setVersions] = useState([]);
+    const [activeVersionId, setActiveVersionId] = useState(null);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [previewMode, setPreviewMode] = useState('result'); // original | result | split
+
+    // ── Provider availability  ──────────────────────────────────────────────
+    const [providerStatus, setProviderStatus] = useState({});
+
+    // ── Modals + sharing ─────────────────────────────────────────────────────
     const [showGallery, setShowGallery] = useState(false);
     const [showRecent, setShowRecent] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
     const [showSharing, setShowSharing] = useState(false);
-    const [selectedQuality, setSelectedQuality] = useState('standard');
-    const [selectedShingleType, setSelectedShingleType] = useState('Architectural');
-    const [selectedColors, setSelectedColors] = useState({
-        roofing: null,
-        siding: null,
-        trim: null,
-        windows: null
-    });
-    const [files, setFiles] = useState([])
-    const selectedPhoto = files?.[0]?.serverResponse?.payload?.url || null;
-    
-    const fileInputRef = useRef(null);
+    const [galleryItems, setGalleryItems] = useState([]);
+    const [recentItems, setRecentItems] = useState([]);
 
-    // Client selection handlers
-    const switchClientTab = (tab) => {
-        setClientTab(tab);
-    };
+    // ── Derived view-state ──────────────────────────────────────────────────
+    const activeVersion = useMemo(
+        () => versions.find(v => v.id === activeVersionId) ?? versions.find(v => v.is_current) ?? null,
+        [versions, activeVersionId],
+    );
 
-    const handleClientSelect = (clientName) => {
+    const sourceImageSrc = sourcePhotoKey ? `/s3/file?key=${encodeURIComponent(sourcePhotoKey)}` : null;
+    const generatedImageSrc = activeVersion?.generated_image_url ?? null;
+
+    // ── Effects: load existing clients when search changes ──────────────────
+    useEffect(() => {
+        let cancelled = false;
+        if (clientTab !== 'existing') return;
+        setClientsLoading(true);
+        const timer = setTimeout(async () => {
+            try {
+                const params = {};
+                if (clientSearch.trim()) params.search = clientSearch.trim();
+                const res = await axiosInstance.get('/client-portal', { params });
+                if (cancelled) return;
+                setClients(res.data?.data ?? []);
+            } catch {
+                /* axiosInstance toasts the error */
+            } finally {
+                if (!cancelled) setClientsLoading(false);
+            }
+        }, 250);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [clientTab, clientSearch]);
+
+    // ── Effects: provider status ────────────────────────────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/mockup/providers');
+                setProviderStatus(res.data?.data ?? {});
+            } catch { /* ignore */ }
+        })();
+    }, []);
+
+    // ── Effects: gallery / recent (lazy when modal opens) ──────────────────
+    useEffect(() => {
+        if (!showGallery && !showRecent) return;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/mockup');
+                const items = res.data?.data ?? [];
+                setGalleryItems(items);
+                setRecentItems(items.slice(0, 10));
+            } catch { /* ignore */ }
+        })();
+    }, [showGallery, showRecent]);
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Client handlers
+    // ────────────────────────────────────────────────────────────────────────
+    const switchClientTab = (tab) => setClientTab(tab);
+
+    const handleSelectExistingClient = (client) => {
         setSelectedClient({
-            name: clientName,
-            address: '123 Main St, Dallas, TX 75201'
+            id: client.id,
+            name: client.full_name || `${client.first_name} ${client.last_name}`,
+            address: [client.address, client.city, client.state, client.zip_code].filter(Boolean).join(', '),
         });
     };
 
-    const createClient = () => {
-        setSelectedClient({
-            name: 'New Client',
-            address: 'New Address'
-        });
-    };
+    const handleNewClientField = (field, value) =>
+        setNewClientForm(prev => ({ ...prev, [field]: value }));
 
-    const changeClient = () => {
-        setSelectedClient(null);
-    };
+    const submitNewClient = async () => {
+        const required = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code'];
+        const missing = required.filter(k => !newClientForm[k]?.trim());
+        if (missing.length) { toast.error('Please fill in all required fields'); return; }
 
-    // Material tab switching
-    const switchMaterialTab = (tab) => {
-        setMaterialTab(tab);
-    };
-
-    // Photo upload handlers
-    const handlePhotoUpload = (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                // setSelectedPhoto(e.target.result);
-            };
-            reader.readAsDataURL(file);
+        setCreatingClient(true);
+        try {
+            const res = await axiosInstance.post('/client-portal', {
+                first_name: newClientForm.first_name,
+                last_name: newClientForm.last_name,
+                email: newClientForm.email,
+                phone: newClientForm.phone,
+                address: newClientForm.address,
+                city: newClientForm.city,
+                state: newClientForm.state.toUpperCase().slice(0, 2),
+                zip_code: newClientForm.zip_code,
+                property_type: 'single-family',
+                insurance_company: 'other',
+                claim_status: 1,
+            });
+            const created = res.data?.data;
+            toast.success('Client created');
+            handleSelectExistingClient(created);
+            setNewClientForm({
+                first_name: '', last_name: '', email: '', phone: '',
+                address: '', city: '', state: '', zip_code: '',
+                preferred_contact: 'both',
+            });
+            setClientTab('existing');
+        } catch {
+            /* toasted */
+        } finally {
+            setCreatingClient(false);
         }
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const file = e.dataTransfer.files?.[0];
-        if (file && file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                // setSelectedPhoto(e.target.result);
-            };
-            reader.readAsDataURL(file);
-        }
+    const changeClient = () => setSelectedClient(null);
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Material handlers
+    // ────────────────────────────────────────────────────────────────────────
+    const switchMaterialTab = (tab) => setMaterialTab(tab);
+
+    const selectColor = (category, colorObj) => {
+        setSelectedColors(prev => ({ ...prev, [category]: colorObj }));
     };
 
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
-    // Selection handlers
-    const selectShingleType = (type) => {
-        setSelectedShingleType(type);
-    };
-
-    const selectColor = (colorName, category) => {
-        setSelectedColors(prev => ({
-            ...prev,
-            [category]: colorName
-        }));
-    };
-
-    const selectQuality = (quality) => {
-        setSelectedQuality(quality);
-    };
+    const toggleAdvanced = (key) =>
+        setAdvanced(prev => ({ ...prev, [key]: !prev[key] }));
 
     const addPrompt = (text) => {
-        const textarea = document.querySelector('.instruction-textarea');
-        if (textarea) {
-            textarea.value += (textarea.value ? ' ' : '') + text;
+        setAiInstructions(prev => prev ? `${prev} ${text}` : text);
+    };
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Build the material_settings JSON the backend expects
+    // ────────────────────────────────────────────────────────────────────────
+    const buildMaterialSettings = useCallback(() => {
+        const toPick = (cat) => {
+            const c = selectedColors[cat];
+            if (!c) return null;
+            return { color: c.name, hex: c.value };
+        };
+        const roofingPick = toPick('roofing');
+        return {
+            shingleType: selectedShingleType,
+            roofing: roofingPick ? { ...roofingPick, brand: selectedColors.roofing?.brand ?? null } : null,
+            siding: selectedColors.siding
+                ? { color: selectedColors.siding.name, hex: selectedColors.siding.value, material: selectedSidingMaterial }
+                : null,
+            trim: toPick('trim'),
+            windows: toPick('windows'),
+            advanced,
+        };
+    }, [selectedColors, selectedShingleType, selectedSidingMaterial, advanced]);
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Generate / re-generate
+    // ────────────────────────────────────────────────────────────────────────
+    const generateMockup = async () => {
+        if (!sourcePhotoKey) { toast.error('Upload a property photo first'); return; }
+        if (isGenerating) return;
+
+        setIsGenerating(true);
+        try {
+            const payload = {
+                mockup_id: currentMockup?.id,
+                client_id: selectedClient?.id,
+                source_photo_key: sourcePhotoKey,
+                material_settings: buildMaterialSettings(),
+                ai_instructions: aiInstructions || undefined,
+                quality: selectedQuality,
+                title: selectedClient ? `${selectedClient.name} — Mockup` : undefined,
+            };
+            const res = await axiosInstance.post('/mockup/generate', payload);
+            const mockup = res.data?.data?.mockup;
+            const version = res.data?.data?.version;
+
+            setCurrentMockup(mockup);
+            setVersions(prev => {
+                const filtered = prev.filter(v => v.id !== version.id).map(v => ({ ...v, is_current: false }));
+                return [...filtered, version];
+            });
+            setActiveVersionId(version.id);
+            setPreviewMode('result');
+            toast.success('Mockup generated');
+        } catch {
+            /* toasted */
+        } finally {
+            setIsGenerating(false);
         }
     };
 
-    // Generation handlers
-    const generateMockup = () => {
-        alert('Generating mockup with AI... This would process the image with your selections.');
+    const selectVersion = async (versionId) => {
+        if (!currentMockup) return;
+        setActiveVersionId(versionId);
+        try {
+            await axiosInstance.patch(`/mockup/${currentMockup.id}/select-version`, { version_id: versionId });
+            setVersions(prev => prev.map(v => ({ ...v, is_current: v.id === versionId })));
+        } catch { /* toasted */ }
     };
 
-    const confirmMockup = () => {
-        setShowSharing(true);
-        setTimeout(() => {
-            document.getElementById('sharingSection')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+    // ────────────────────────────────────────────────────────────────────────
+    //   Confirm / start-over
+    // ────────────────────────────────────────────────────────────────────────
+    const confirmMockup = async () => {
+        if (!currentMockup) { toast.error('Generate a mockup first'); return; }
+        try {
+            await axiosInstance.patch(`/mockup/${currentMockup.id}`, { status: 'approved' });
+            toast.success('Mockup approved & saved to client file');
+            setShowSharing(true);
+            setTimeout(() => {
+                document.getElementById('sharingSection')?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        } catch { /* toasted */ }
     };
 
     const refineMore = () => {
-        alert('Refining mockup further...');
+        toast.info('Tweak materials or AI instructions, then click Generate Mockup again.');
     };
 
     const startOver = () => {
-        if (confirm('Are you sure you want to start over?')) {
-            setSelectedClient(null);
-            // setSelectedPhoto(null);
-            setShowSharing(false);
-            setMaterialTab('roofing');
-            setSelectedColors({
-                roofing: null,
-                siding: null,
-                trim: null,
-                windows: null
-            });
-        }
+        if (!confirm('Discard this mockup and start over?')) return;
+        setSelectedClient(null);
+        setFiles([]);
+        setCurrentMockup(null);
+        setVersions([]);
+        setActiveVersionId(null);
+        setMaterialTab('roofing');
+        setSelectedColors({ roofing: null, siding: null, trim: null, windows: null });
+        setAdvanced({ keepRoof: false, ridgeVent: false, shadows: false, wetEffect: false });
+        setAiInstructions('');
+        setShowSharing(false);
     };
 
-    const saveTemplate = () => {
-        alert('Saving current configuration as template...');
-    };
+    const saveTemplate = () => toast.info('Templates: coming soon.');
+    const shareViaSMS   = () => toast.info('SMS sharing: coming soon.');
+    const shareViaEmail = () => toast.info('Email sharing: coming soon.');
 
-    // Sharing handlers
-    const shareViaSMS = () => {
-        alert('Opening SMS sharing dialog...');
-    };
-
-    const shareViaEmail = () => {
-        alert('Opening email composer with mockup...');
-    };
-
-    // Modal handlers
+    // ────────────────────────────────────────────────────────────────────────
+    //   Modal close
+    // ────────────────────────────────────────────────────────────────────────
     const closeModal = (modalType) => {
-        switch(modalType) {
-            case 'gallery':
-                setShowGallery(false);
-                break;
-            case 'recent':
-                setShowRecent(false);
-                break;
-            case 'templates':
-                setShowTemplates(false);
-                break;
-            case 'tutorial':
-                setShowTutorial(false);
-                break;
-        }
+        const setters = {
+            gallery: setShowGallery, recent: setShowRecent,
+            templates: setShowTemplates, tutorial: setShowTutorial,
+        };
+        setters[modalType]?.(false);
         document.body.style.overflow = '';
     };
 
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (e.target.classList.contains('modal-overlay')) {
-                const modalId = e.target.id;
-                if (modalId === 'galleryModal') setShowGallery(false);
-                if (modalId === 'recentModal') setShowRecent(false);
-                if (modalId === 'templatesModal') setShowTemplates(false);
-                if (modalId === 'tutorialModal') setShowTutorial(false);
+        const handler = (e) => {
+            if (e.target.classList?.contains('modal-overlay')) {
+                if (e.target.id === 'galleryModal') setShowGallery(false);
+                if (e.target.id === 'recentModal') setShowRecent(false);
+                if (e.target.id === 'templatesModal') setShowTemplates(false);
+                if (e.target.id === 'tutorialModal') setShowTutorial(false);
                 document.body.style.overflow = '';
             }
         };
-        
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
+        document.addEventListener('click', handler);
+        return () => document.removeEventListener('click', handler);
     }, []);
 
-    const shingleTypes = ['Architectural', '3-Tab', 'Designer', 'Wood Shakes', 'Slate', 'Metal', 'Clay Tile', 'Concrete Tile'];
-    
-    const roofingColors = [
-        { brand: 'GAF Timberline HDZ', colors: [
-            { name: 'Charcoal', value: '#2d2d2d' },
-            { name: 'Weathered Wood', value: '#8b7355' },
-            { name: 'Hickory', value: '#6b5d4f' },
-            { name: 'Slate', value: '#5a5a5a' },
-            { name: 'Mission Brown', value: '#7d6144' },
-            { name: 'Hunter Green', value: '#2f4538' },
-            { name: 'Shakewood', value: '#8b6f47' },
-            { name: 'Biscayne Blue', value: '#a0826d' },
-            { name: 'Birchwood', value: '#c8b88b' },
-            { name: 'Copper Canyon', value: '#8a7a65' }
-        ]},
-        { brand: 'Owens Corning Duration', colors: [
-            { name: 'Onyx Black', value: '#1a1a1a' },
-            { name: 'Estate Gray', value: '#6b6b6b' },
-            { name: 'Brownwood', value: '#8b4513' },
-            { name: 'Teak', value: '#d2691e' },
-            { name: 'Chateau Green', value: '#556b2f' },
-            { name: 'Harbor Blue', value: '#4682b4' },
-            { name: 'Aged Copper', value: '#b87333' },
-            { name: 'Terra Cotta', value: '#a0522d' },
-            { name: 'Sand Dune', value: '#bc8f8f' }
-        ]}
-    ];
-
-    const sidingColors = [
-        { name: 'Arctic White', value: '#ffffff' },
-        { name: 'Cream', value: '#f5f5f0' },
-        { name: 'Sterling Gray', value: '#9ca3af' },
-        { name: 'Iron Gray', value: '#4b5563' },
-        { name: 'Cape Cod Blue', value: '#5b8fa3' },
-        { name: 'Sandstone', value: '#d4a574' }
-    ];
+    // ────────────────────────────────────────────────────────────────────────
+    //   Render
+    // ────────────────────────────────────────────────────────────────────────
+    const aiReady = providerStatus.gemini || providerStatus.replicate;
 
     return (
         <div className="mockup-container">
-            {/* Header Section */}
+            {/* Header */}
             <div className="mockup-3d-header-section">
                 <div className="mockup-3d-header-content">
                     <div className="mockup-3d-header-left">
@@ -237,7 +427,9 @@ const ThreeDMockup = () => {
                         </div>
                         <p className="mockup-3d-page-subtitle">AI-powered exterior visualization tool</p>
                         <div className="mockup-3d-status-badges">
-                            <div className="mockup-3d-status-badge active">AI Ready</div>
+                            <div className={`mockup-3d-status-badge ${aiReady ? 'active' : ''}`}>
+                                {aiReady ? 'AI Ready' : 'AI Not Configured'}
+                            </div>
                             <div className="mockup-3d-status-badge active">HD Rendering</div>
                             <div className="mockup-3d-status-badge active">Photorealistic Mode</div>
                         </div>
@@ -251,91 +443,139 @@ const ThreeDMockup = () => {
                 </div>
             </div>
 
-            {/* Main Container */}
             <div className="main-container">
-                {/* Client Selection Card */}
+                {/* ─────────────── Client selection ─────────────── */}
                 <div className="client-selection-card">
                     <div className="tabs">
-                        <button 
-                            className={`tab-btn ${clientTab === 'existing' ? 'active' : ''}`} 
+                        <button
+                            className={`tab-btn ${clientTab === 'existing' ? 'active' : ''}`}
                             onClick={() => switchClientTab('existing')}
-                        >
-                            Existing Client
-                        </button>
-                        <button 
-                            className={`tab-btn ${clientTab === 'new' ? 'active' : ''}`} 
+                        >Existing Client</button>
+                        <button
+                            className={`tab-btn ${clientTab === 'new' ? 'active' : ''}`}
                             onClick={() => switchClientTab('new')}
-                        >
-                            New Client
-                        </button>
+                        >New Client</button>
                     </div>
-                    
-                    {/* Existing Client Tab */}
+
                     {clientTab === 'existing' && (
                         <div className="tab-content active">
-                            <input 
-                                type="text" 
-                                className="search-input" 
-                                placeholder="Type client name, address, or phone..."
+                            <input
+                                type="text"
+                                className="search-input"
+                                placeholder="Type client name, address, email or phone…"
+                                value={clientSearch}
+                                onChange={(e) => setClientSearch(e.target.value)}
                             />
-                            
-                            {/*<div style={{ display: 'grid', gap: '0.5rem' }}>
-                                <div className="client-option" onClick={() => handleClientSelect('Johnson Property')}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: '6px', cursor: 'pointer' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, color: '#1f2937' }}>Johnson Property</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>123 Main St, Dallas, TX • 12 mockups on file</div>
-                                        </div>
-                                        <button className="btn btn-outline" style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem' }}>Select Client</button>
+
+                            <div style={{ display: 'grid', gap: '0.5rem', maxHeight: 280, overflowY: 'auto' }}>
+                                {clientsLoading && <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>Searching…</div>}
+                                {!clientsLoading && clients.length === 0 && (
+                                    <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>
+                                        No clients found. Switch to <strong>New Client</strong> to add one.
                                     </div>
-                                </div>
-                            </div>*/}
+                                )}
+                                {clients.map(c => (
+                                    <div
+                                        key={c.id}
+                                        className="client-option"
+                                        onClick={() => handleSelectExistingClient(c)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: 6 }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#1f2937' }}>{c.full_name}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                                                    {[c.address, c.city, c.state].filter(Boolean).join(', ')}
+                                                </div>
+                                            </div>
+                                            <button
+                                                className="btn btn-outline"
+                                                style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem' }}
+                                                onClick={(e) => { e.stopPropagation(); handleSelectExistingClient(c); }}
+                                            >Select Client</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
-                    
-                    {/* New Client Tab */}
+
                     {clientTab === 'new' && (
                         <div className="tab-content active">
-                            <form className="form-grid">
+                            <div className="form-grid">
                                 <div className="form-group">
-                                    <label className="form-label required">Full Name</label>
-                                    <input type="text" className="form-input" placeholder="John Smith" />
+                                    <label className="form-label required">First Name</label>
+                                    <input type="text" className="form-input" placeholder="John"
+                                           value={newClientForm.first_name}
+                                           onChange={(e) => handleNewClientField('first_name', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">Last Name</label>
+                                    <input type="text" className="form-input" placeholder="Smith"
+                                           value={newClientForm.last_name}
+                                           onChange={(e) => handleNewClientField('last_name', e.target.value)} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label required">Email</label>
-                                    <input type="email" className="form-input" placeholder="john@example.com" />
-                                </div>
-                                <div className="form-group full-width">
-                                    <label className="form-label required">Property Address</label>
-                                    <input type="text" className="form-input" placeholder="123 Main Street, Dallas, TX 75201" />
+                                    <input type="email" className="form-input" placeholder="john@example.com"
+                                           value={newClientForm.email}
+                                           onChange={(e) => handleNewClientField('email', e.target.value)} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label required">Phone</label>
-                                    <input type="tel" className="form-input" placeholder="(555) 123-4567" />
+                                    <input type="tel" className="form-input" placeholder="(555) 123-4567"
+                                           value={newClientForm.phone}
+                                           onChange={(e) => handleNewClientField('phone', e.target.value)} />
+                                </div>
+                                <div className="form-group full-width">
+                                    <label className="form-label required">Address</label>
+                                    <input type="text" className="form-input" placeholder="123 Main Street"
+                                           value={newClientForm.address}
+                                           onChange={(e) => handleNewClientField('address', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">City</label>
+                                    <input type="text" className="form-input" placeholder="Dallas"
+                                           value={newClientForm.city}
+                                           onChange={(e) => handleNewClientField('city', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">State</label>
+                                    <input type="text" className="form-input" maxLength={2} placeholder="TX"
+                                           value={newClientForm.state}
+                                           onChange={(e) => handleNewClientField('state', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">ZIP Code</label>
+                                    <input type="text" className="form-input" placeholder="75201"
+                                           value={newClientForm.zip_code}
+                                           onChange={(e) => handleNewClientField('zip_code', e.target.value)} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Preferred Contact</label>
                                     <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                        <label style={{ fontSize: '0.875rem' }}>
-                                            <input type="radio" name="contact" value="sms" /> SMS
-                                        </label>
-                                        <label style={{ fontSize: '0.875rem' }}>
-                                            <input type="radio" name="contact" value="email" /> Email
-                                        </label>
-                                        <label style={{ fontSize: '0.875rem' }}>
-                                            <input type="radio" name="contact" value="both" defaultChecked /> Both
-                                        </label>
+                                        {['sms', 'email', 'both'].map(o => (
+                                            <label key={o} style={{ fontSize: '0.875rem' }}>
+                                                <input type="radio" name="contact" value={o}
+                                                       checked={newClientForm.preferred_contact === o}
+                                                       onChange={() => handleNewClientField('preferred_contact', o)} />
+                                                {' '}{o.toUpperCase()}
+                                            </label>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="form-group full-width">
-                                    <button type="button" className="btn btn-primary" onClick={createClient}>Create & Continue</button>
+                                    <button type="button" className="btn btn-primary"
+                                            onClick={submitNewClient}
+                                            disabled={creatingClient}>
+                                        {creatingClient ? 'Creating…' : 'Create & Continue'}
+                                    </button>
                                 </div>
-                            </form>
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* Selected Client Bar */}
                 {selectedClient && (
                     <div className="selected-client-bar active">
                         <div className="client-info">
@@ -350,138 +590,80 @@ const ThreeDMockup = () => {
                     </div>
                 )}
 
-                {/* Three Panel Mockup Interface */}
+                {/* ─────────────── Mockup interface ─────────────── */}
                 <div className="mockup-interface">
-                    {/* Left Panel - Photo Upload & Management */}
+                    {/* Left panel — photo upload */}
                     <div className="panel-card">
                         <h3 className="panel-header">Photo Upload & Management</h3>
-                        
-                        {/*<div
-                            className={`upload-zone ${selectedPhoto ? 'has-photo' : ''}`}
-                            onClick={() => fileInputRef.current?.click()}
-                            onDrop={handleDrop}
-                            onDragOver={handleDragOver}
-                        >
-                            <div className="upload-icon"></div>
-                            <p className="upload-text">Upload Property Photo</p>
-                            <p className="upload-subtext">JPG, PNG, HEIF • Max 50MB</p>
-                            <p className="upload-subtext" style={{ marginTop: '0.5rem' }}>High resolution, well-lit, minimal shadows</p>
-                            <input 
-                                ref={fileInputRef}
-                                type="file" 
-                                style={{ display: 'none' }} 
-                                accept="image/*"
-                                onChange={handlePhotoUpload}
-                            />
-                        </div>*/}
 
-                        <FileUploader label={'Upload Property Photo'} files={files} setFiles={setFiles} allowedExtensions={['.jpg', '.png', '.heif']} maxFiles={1} maxSizeMB={50} />
-                        
-                        <div className="upload-buttons">
-                            <button className="upload-btn">Take Photo</button>
-                            <button className="upload-btn">Choose from Gallery</button>
-                        </div>
+                        <FileUploader
+                            label="Upload Property Photo"
+                            files={files}
+                            setFiles={setFiles}
+                            allowedExtensions={['.jpg', '.jpeg', '.png', '.heif']}
+                            maxFiles={1}
+                            maxSizeMB={50}
+                            uploadFolderName="mockup-sources"
+                        />
 
-                        {/* Photo Display */}
-                       {/* {selectedPhoto && (
-                            <div className="photo-display active">
-                                <div className="photo-preview">
-                                    <img src={selectedPhoto} alt="Property preview" />
+                        {sourcePhotoKey && (
+                            <>
+                                <div className="photo-display active" style={{ marginTop: 12 }}>
+                                    <div className="photo-preview" style={{ aspectRatio: '4/3', overflow: 'hidden', borderRadius: 8, background: '#f3f4f6' }}>
+                                        <AuthedImage src={sourceImageSrc} alt="Source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
                                 </div>
-                                <div className="photo-info">
-                                    <div>Filename: house_front.jpg</div>
-                                    <div>Dimensions: 4032 x 3024</div>
-                                    <div>Size: 8.2 MB</div>
+                                <div className="analysis-box">
+                                    <div className="analysis-title">Source ready for AI editing</div>
+                                    <div className="analysis-items">
+                                        <div className="analysis-item">✓ Image stored securely</div>
+                                        <div className="analysis-item">✓ Ready for color & material edits</div>
+                                        <div className="analysis-item">✓ Will keep camera angle & lighting unchanged</div>
+                                    </div>
                                 </div>
-                                <div className="photo-actions">
-                                    <button className="photo-action-btn" onClick={() => fileInputRef.current?.click()}>Replace Photo</button>
-                                    <button className="photo-action-btn">Enhance Quality</button>
-                                </div>
-                            </div>
+                            </>
                         )}
-*/}
-                        {/* Photo Analysis Results */}
-                        <div className="analysis-box">
-                            <div className="analysis-title">Detected Elements:</div>
-                            <div className="analysis-items">
-                                <div className="analysis-item">✓ Asphalt shingle roof (gray)</div>
-                                <div className="analysis-item">✓ Vinyl siding (beige)</div>
-                                <div className="analysis-item">✓ Brick accent (red)</div>
-                                <div className="analysis-item">✓ 2 garage doors (white)</div>
-                                <div className="analysis-item">✓ 6 windows visible</div>
-                                <div className="analysis-item">✓ Front door (brown)</div>
-                                <div className="analysis-item">✓ Gutters (white)</div>
-                                <div className="analysis-item">✓ 2 stories</div>
-                            </div>
-                        </div>
                     </div>
 
-                    {/* Middle Panel - Customization Controls */}
+                    {/* Middle panel — material/color customisation */}
                     <div className="panel-card">
                         <h3 className="panel-header">Material & Color Customization</h3>
-                        
+
                         <div className="material-tabs">
-                            <button 
-                                className={`material-tab ${materialTab === 'roofing' ? 'active' : ''}`} 
-                                onClick={() => switchMaterialTab('roofing')}
-                            >
-                                Roofing
-                            </button>
-                            <button 
-                                className={`material-tab ${materialTab === 'siding' ? 'active' : ''}`} 
-                                onClick={() => switchMaterialTab('siding')}
-                            >
-                                Siding
-                            </button>
-                            <button 
-                                className={`material-tab ${materialTab === 'trim' ? 'active' : ''}`} 
-                                onClick={() => switchMaterialTab('trim')}
-                            >
-                                Trim & Accents
-                            </button>
-                            <button 
-                                className={`material-tab ${materialTab === 'windows' ? 'active' : ''}`} 
-                                onClick={() => switchMaterialTab('windows')}
-                            >
-                                Windows & Doors
-                            </button>
-                            <button 
-                                className={`material-tab ${materialTab === 'additional' ? 'active' : ''}`} 
-                                onClick={() => switchMaterialTab('additional')}
-                            >
-                                Additional
-                            </button>
+                            {[
+                                ['roofing', 'Roofing'],
+                                ['siding', 'Siding'],
+                                ['trim', 'Trim & Accents'],
+                                ['windows', 'Windows & Doors'],
+                            ].map(([id, label]) => (
+                                <button key={id}
+                                        className={`material-tab ${materialTab === id ? 'active' : ''}`}
+                                        onClick={() => switchMaterialTab(id)}>{label}</button>
+                            ))}
                         </div>
 
-                        {/* Roofing Tab */}
                         {materialTab === 'roofing' && (
                             <div className="material-content active">
                                 <div style={{ marginBottom: '1rem' }}>
                                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Shingle Type</div>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                                        {shingleTypes.map(type => (
-                                            <button 
-                                                key={type}
-                                                className={`shingle-type-btn ${selectedShingleType === type ? 'selected' : ''}`} 
-                                                onClick={() => selectShingleType(type)}
-                                            >
-                                                {type}
-                                            </button>
+                                        {SHINGLE_TYPES.map(type => (
+                                            <button key={type}
+                                                    className={`shingle-type-btn ${selectedShingleType === type ? 'selected' : ''}`}
+                                                    onClick={() => setSelectedShingleType(type)}>{type}</button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {roofingColors.map(brand => (
+                                {ROOFING_COLORS.map(brand => (
                                     <div key={brand.brand} className="color-section">
                                         <div className="color-brand">{brand.brand}</div>
                                         <div className="color-grid">
                                             {brand.colors.map(color => (
-                                                <div 
-                                                    key={color.name}
-                                                    className={`color-swatch ${selectedColors.roofing === color.name ? 'selected' : ''}`} 
-                                                    onClick={() => selectColor(color.name, 'roofing')}
-                                                >
-                                                    <div className="swatch-color" style={{ background: color.value }}></div>
+                                                <div key={color.name}
+                                                     className={`color-swatch ${selectedColors.roofing?.name === color.name ? 'selected' : ''}`}
+                                                     onClick={() => selectColor('roofing', { ...color, brand: brand.brand })}>
+                                                    <div className="swatch-color" style={{ background: color.value }} />
                                                     <div className="swatch-name">{color.name}</div>
                                                 </div>
                                             ))}
@@ -492,37 +674,34 @@ const ThreeDMockup = () => {
                                 <div className="advanced-section">
                                     <div className="advanced-title">Advanced Options</div>
                                     <div className="checkbox-group">
-                                        <div className="checkbox-item">
-                                            <input type="checkbox" id="keepRoof" />
-                                            <label htmlFor="keepRoof" className="checkbox-label">Keep existing roof color</label>
-                                        </div>
-                                        <div className="checkbox-item">
-                                            <input type="checkbox" id="ridgeVent" />
-                                            <label htmlFor="ridgeVent" className="checkbox-label">Add ridge venting appearance</label>
-                                        </div>
-                                        <div className="checkbox-item">
-                                            <input type="checkbox" id="shadows" />
-                                            <label htmlFor="shadows" className="checkbox-label">Show architectural shadows</label>
-                                        </div>
-                                        <div className="checkbox-item">
-                                            <input type="checkbox" id="wetEffect" />
-                                            <label htmlFor="wetEffect" className="checkbox-label">Wet/rain effect</label>
-                                        </div>
+                                        {[
+                                            ['keepRoof',  'Keep existing roof color'],
+                                            ['ridgeVent', 'Add ridge venting appearance'],
+                                            ['shadows',   'Show architectural shadows'],
+                                            ['wetEffect', 'Wet/rain effect'],
+                                        ].map(([key, label]) => (
+                                            <div key={key} className="checkbox-item">
+                                                <input type="checkbox" id={key} checked={advanced[key]} onChange={() => toggleAdvanced(key)} />
+                                                <label htmlFor={key} className="checkbox-label">{label}</label>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Siding Tab */}
                         {materialTab === 'siding' && (
                             <div className="material-content active">
                                 <div style={{ marginBottom: '1rem' }}>
                                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Material Type</div>
                                     <div className="material-grid">
-                                        {['Vinyl Lap', 'Fiber Cement', 'Wood', 'Board & Batten', 'Brick', 'Stone'].map(material => (
-                                            <div key={material} className="material-option">
-                                                <div className="material-preview"></div>
-                                                <div className="material-name">{material}</div>
+                                        {SIDING_MATERIALS.map(m => (
+                                            <div key={m}
+                                                 className={`material-option ${selectedSidingMaterial === m ? 'selected' : ''}`}
+                                                 onClick={() => setSelectedSidingMaterial(m)}
+                                                 style={{ cursor: 'pointer' }}>
+                                                <div className="material-preview" />
+                                                <div className="material-name">{m}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -531,13 +710,11 @@ const ThreeDMockup = () => {
                                 <div className="color-section">
                                     <div className="color-brand">Popular Colors</div>
                                     <div className="color-grid">
-                                        {sidingColors.map(color => (
-                                            <div 
-                                                key={color.name}
-                                                className={`color-swatch ${selectedColors.siding === color.name ? 'selected' : ''}`} 
-                                                onClick={() => selectColor(color.name, 'siding')}
-                                            >
-                                                <div className="swatch-color" style={{ background: color.value }}></div>
+                                        {SIDING_COLORS.map(color => (
+                                            <div key={color.name}
+                                                 className={`color-swatch ${selectedColors.siding?.name === color.name ? 'selected' : ''}`}
+                                                 onClick={() => selectColor('siding', color)}>
+                                                <div className="swatch-color" style={{ background: color.value }} />
                                                 <div className="swatch-name">{color.name}</div>
                                             </div>
                                         ))}
@@ -546,62 +723,60 @@ const ThreeDMockup = () => {
                             </div>
                         )}
 
-                        {/* Trim & Accents Tab */}
                         {materialTab === 'trim' && (
                             <div className="material-content active">
-                                <div style={{ marginBottom: '1.5rem' }}>
-                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Gutters</div>
-                                    <div style={{ marginBottom: '0.75rem' }}>
-                                        <label style={{ fontSize: '0.8rem', color: '#6b7280' }}>Style:</label>
-                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                                            <button className="shingle-type-btn selected">K-Style</button>
-                                            <button className="shingle-type-btn">Half-Round</button>
-                                            <button className="shingle-type-btn">Box Style</button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.8rem', color: '#6b7280' }}>Color:</label>
-                                        <div className="color-grid" style={{ marginTop: '0.5rem' }}>
-                                            {['#ffffff', '#f5f5dc', '#8b7355', '#2f2f2f', '#808080', '#b87333'].map((color, idx) => (
-                                                <div key={idx} className="color-swatch">
-                                                    <div className="swatch-color" style={{ background: color }}></div>
-                                                    <div className="swatch-name">{['White', 'Almond', 'Brown', 'Black', 'Gray', 'Copper'][idx]}</div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                <div className="color-section">
+                                    <div className="color-brand">Trim & Gutter Color</div>
+                                    <div className="color-grid">
+                                        {TRIM_COLORS.map(color => (
+                                            <div key={color.name}
+                                                 className={`color-swatch ${selectedColors.trim?.name === color.name ? 'selected' : ''}`}
+                                                 onClick={() => selectColor('trim', color)}>
+                                                <div className="swatch-color" style={{ background: color.value }} />
+                                                <div className="swatch-name">{color.name}</div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Windows & Doors Tab */}
                         {materialTab === 'windows' && (
                             <div className="material-content active">
-                                <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Window & door customization options...</p>
+                                <div className="color-section">
+                                    <div className="color-brand">Window Frame & Door Color</div>
+                                    <div className="color-grid">
+                                        {TRIM_COLORS.map(color => (
+                                            <div key={color.name}
+                                                 className={`color-swatch ${selectedColors.windows?.name === color.name ? 'selected' : ''}`}
+                                                 onClick={() => selectColor('windows', color)}>
+                                                <div className="swatch-color" style={{ background: color.value }} />
+                                                <div className="swatch-name">{color.name}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        {/* Additional Tab */}
-                        {materialTab === 'additional' && (
-                            <div className="material-content active">
-                                <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Additional element customization...</p>
-                            </div>
-                        )}
-
-                        {/* AI Instruction Box */}
                         <div className="ai-instruction-section">
                             <div className="instruction-label">AI Instructions (Be Specific)</div>
-                            <textarea 
-                                className="instruction-textarea" 
-                                placeholder="Describe exactly what you want to see in this mockup. Be specific about colors, materials, and any special details. For example: 'Change roof to GAF Charcoal architectural shingles, keep the brick but make siding Arctic White vinyl, black window frames, remove shutters, add white gutters.'"
-                            ></textarea>
-                            
+                            <textarea
+                                className="instruction-textarea"
+                                placeholder="Describe exactly what you want — e.g. 'Change roof to GAF Charcoal architectural shingles, keep the brick, make siding Arctic White vinyl, black window frames, white gutters.'"
+                                value={aiInstructions}
+                                onChange={(e) => setAiInstructions(e.target.value)}
+                            />
                             <div className="prompt-chips">
-                                <button className="prompt-chip" onClick={() => addPrompt('Make it look modern')}>Make it look modern</button>
-                                <button className="prompt-chip" onClick={() => addPrompt('Traditional colonial style')}>Traditional colonial style</button>
-                                <button className="prompt-chip" onClick={() => addPrompt('Match neighborhood HOA')}>Match neighborhood HOA</button>
-                                <button className="prompt-chip" onClick={() => addPrompt('Storm damage replacement')}>Storm damage replacement</button>
-                                <button className="prompt-chip" onClick={() => addPrompt('Increase curb appeal')}>Increase curb appeal</button>
+                                {[
+                                    'Make it look modern',
+                                    'Traditional colonial style',
+                                    'Match neighborhood HOA',
+                                    'Storm damage replacement',
+                                    'Increase curb appeal',
+                                ].map(p => (
+                                    <button key={p} className="prompt-chip" onClick={() => addPrompt(p)}>{p}</button>
+                                ))}
                             </div>
 
                             <div className="iteration-info">
@@ -617,303 +792,248 @@ const ThreeDMockup = () => {
                         </div>
                     </div>
 
-                    {/* Right Panel - Preview & Results */}
+                    {/* Right panel — preview & generation */}
                     <div className="panel-card">
                         <h3 className="panel-header">Preview & Results</h3>
-                        
-                        <div className="preview-window" id="previewWindow">
-                            {selectedPhoto ? (
-                                <img src={selectedPhoto} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : (
+
+                        <div className="preview-window" id="previewWindow" style={{ position: 'relative' }}>
+                            {!sourcePhotoKey && (
                                 <div className="preview-placeholder">
                                     <p>Upload a photo to begin</p>
                                     <p style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Preview will appear here</p>
                                 </div>
                             )}
+
+                            {sourcePhotoKey && previewMode === 'original' && (
+                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            )}
+
+                            {sourcePhotoKey && previewMode === 'result' && (
+                                generatedImageSrc
+                                    ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    : <AuthedImage src={sourceImageSrc} alt="Source (no generation yet)" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
+                            )}
+
+                            {sourcePhotoKey && previewMode === 'split' && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', width: '100%', height: '100%' }}>
+                                    <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    {generatedImageSrc
+                                        ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', color: '#9ca3af', fontSize: 12 }}>Generate to compare</div>}
+                                </div>
+                            )}
+
+                            {isGenerating && (
+                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+                                    <div style={{ width: 40, height: 40, border: '3px solid #e5e7eb', borderTopColor: '#4f46e5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                    <div style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>Generating mockup…</div>
+                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Quality: {selectedQuality}</div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="preview-controls">
-                            <button className="preview-control-btn">Original</button>
-                            <button className="preview-control-btn">Split View</button>
-                            <button className="preview-control-btn">Full Screen</button>
+                            <button className={`preview-control-btn ${previewMode === 'original' ? 'active' : ''}`} onClick={() => setPreviewMode('original')}>Original</button>
+                            <button className={`preview-control-btn ${previewMode === 'result' ? 'active' : ''}`}   onClick={() => setPreviewMode('result')}>Result</button>
+                            <button className={`preview-control-btn ${previewMode === 'split' ? 'active' : ''}`}    onClick={() => setPreviewMode('split')}>Split View</button>
                         </div>
 
                         <div className="generation-section">
-                            <button className="generate-btn" onClick={generateMockup}>Generate Mockup</button>
-                            
+                            <button
+                                className="generate-btn"
+                                onClick={generateMockup}
+                                disabled={isGenerating || !sourcePhotoKey || !aiReady}
+                            >
+                                {isGenerating
+                                    ? 'Generating…'
+                                    : (currentMockup ? 'Generate Another Version' : 'Generate Mockup')}
+                            </button>
+
+                            {!aiReady && !Object.keys(providerStatus).length && (
+                                <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 6 }}>Checking AI status…</div>
+                            )}
+                            {!aiReady && Object.keys(providerStatus).length > 0 && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', textAlign: 'center', marginTop: 6 }}>
+                                    No image AI configured. Save a Gemini key in API Settings.
+                                </div>
+                            )}
+
                             <div className="quality-selector">
-                                <div 
-                                    className={`quality-option ${selectedQuality === 'fast' ? 'selected' : ''}`} 
-                                    onClick={() => selectQuality('fast')}
-                                >
-                                    <span className="quality-label">Fast</span>
-                                    <span className="quality-time">30 seconds - Draft</span>
-                                </div>
-                                <div 
-                                    className={`quality-option ${selectedQuality === 'standard' ? 'selected' : ''}`} 
-                                    onClick={() => selectQuality('standard')}
-                                >
-                                    <span className="quality-label">Standard</span>
-                                    <span className="quality-time">1 minute - Good</span>
-                                </div>
-                                <div 
-                                    className={`quality-option ${selectedQuality === 'premium' ? 'selected' : ''}`} 
-                                    onClick={() => selectQuality('premium')}
-                                >
-                                    <span className="quality-label">Premium</span>
-                                    <span className="quality-time">2 minutes - Best</span>
-                                </div>
-                            </div>
-
-                            <button className="btn btn-outline" style={{ width: '100%' }}>Generate 3 Variations</button>
-                        </div>
-
-                        <div style={{ margin: '1rem 0' }}>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.5rem' }}>Version History</div>
-                            <div className="version-history">
-                                <div className="version-thumb active">
-                                    <div className="version-label">Original</div>
-                                </div>
-                                <div className="version-thumb">
-                                    <div className="version-label">V1</div>
-                                </div>
-                                <div className="version-thumb">
-                                    <div className="version-label">V2</div>
-                                </div>
-                                <div className="version-thumb">
-                                    <div className="version-label">Current</div>
-                                </div>
+                                {QUALITY_OPTIONS.map(q => (
+                                    <div key={q.id}
+                                         className={`quality-option ${selectedQuality === q.id ? 'selected' : ''}`}
+                                         onClick={() => setSelectedQuality(q.id)}>
+                                        <span className="quality-label">{q.label}</span>
+                                        <span className="quality-time">{q.time}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="confidence-section">
-                            <div className="confidence-title">AI Accuracy Indicator</div>
-                            <div className="confidence-item">
-                                <span className="confidence-label">Overall:</span>
-                                <span className="confidence-value high">94% accurate</span>
+                        {versions.length > 0 && (
+                            <div style={{ margin: '1rem 0' }}>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.5rem' }}>Version History</div>
+                                <div className="version-history">
+                                    {versions.map(v => (
+                                        <div key={v.id}
+                                             className={`version-thumb ${activeVersionId === v.id || (!activeVersionId && v.is_current) ? 'active' : ''}`}
+                                             onClick={() => selectVersion(v.id)}
+                                             title={`Generated ${new Date(v.created_at).toLocaleString()}`}>
+                                            {v.generated_image_url
+                                                ? <AuthedImage src={v.generated_image_url} alt={`V${v.version_number}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                : <div style={{ width: '100%', height: '100%', background: '#f3f4f6' }} />}
+                                            <div className="version-label">V{v.version_number}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="confidence-item">
-                                <span className="confidence-label">Roof:</span>
-                                <span className="confidence-value high">96% ✓</span>
+                        )}
+
+                        {activeVersion && (
+                            <div className="confidence-section">
+                                <div className="confidence-title">Generation Details</div>
+                                <div className="confidence-item">
+                                    <span className="confidence-label">Provider:</span>
+                                    <span className="confidence-value high">{activeVersion.provider}</span>
+                                </div>
+                                <div className="confidence-item">
+                                    <span className="confidence-label">Model:</span>
+                                    <span className="confidence-value high">{activeVersion.model || '—'}</span>
+                                </div>
+                                <div className="confidence-item">
+                                    <span className="confidence-label">Time:</span>
+                                    <span className="confidence-value high">{activeVersion.generation_time_ms ? `${(activeVersion.generation_time_ms / 1000).toFixed(1)}s` : '—'}</span>
+                                </div>
+                                <div className="confidence-item">
+                                    <span className="confidence-label">Quality:</span>
+                                    <span className="confidence-value medium">{activeVersion.quality}</span>
+                                </div>
                             </div>
-                            <div className="confidence-item">
-                                <span className="confidence-label">Siding:</span>
-                                <span className="confidence-value high">92% ✓</span>
-                            </div>
-                            <div className="confidence-item">
-                                <span className="confidence-label">Details:</span>
-                                <span className="confidence-value medium">88% ⚠</span>
-                            </div>
-                        </div>
+                        )}
 
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
-                            <button className="btn btn-primary" onClick={confirmMockup}>Confirm This Mockup</button>
-                            <button className="btn btn-secondary" onClick={refineMore}>Refine Further</button>
+                            <button className="btn btn-primary" onClick={confirmMockup} disabled={!currentMockup}>Confirm This Mockup</button>
+                            <button className="btn btn-secondary" onClick={refineMore} disabled={!currentMockup}>Refine Further</button>
                             <button className="btn btn-outline" onClick={startOver}>Start Over</button>
                             <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
                         </div>
                     </div>
                 </div>
 
-                {/* Sharing Section */}
+                {/* Sharing */}
                 {showSharing && (
                     <div className="sharing-section" id="sharingSection">
                         <h3 className="sharing-title">Share Your Mockup</h3>
-                        
                         <div className="share-buttons">
                             <button className="share-btn" onClick={shareViaSMS}>
-                                <div className="share-icon"></div>
+                                <div className="share-icon" />
                                 <div className="share-label">Send via SMS</div>
                                 <div className="share-sublabel">Text to client's phone</div>
                             </button>
                             <button className="share-btn" onClick={shareViaEmail}>
-                                <div className="share-icon"></div>
+                                <div className="share-icon" />
                                 <div className="share-label">Send via Email</div>
                                 <div className="share-sublabel">Professional presentation</div>
                             </button>
-                        </div>
-
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Advanced Sharing</div>
-                            <div className="checkbox-group">
-                                <div className="checkbox-item">
-                                    <input type="checkbox" id="addPortal" defaultChecked />
-                                    <label htmlFor="addPortal" className="checkbox-label">Add to client portal automatically</label>
-                                </div>
-                                <div className="checkbox-item">
-                                    <input type="checkbox" id="includeEstimate" />
-                                    <label htmlFor="includeEstimate" className="checkbox-label">Include in next estimate</label>
-                                </div>
-                                <div className="checkbox-item">
-                                    <input type="checkbox" id="createPresentation" />
-                                    <label htmlFor="createPresentation" className="checkbox-label">Create printed presentation</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Download Options</div>
-                            <div className="download-options">
-                                <button className="download-btn">Original Size (4K)</button>
-                                <button className="download-btn">Web Size (1080p)</button>
-                                <button className="download-btn">Comparison GIF</button>
-                                <button className="download-btn">All Versions (ZIP)</button>
-                            </div>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Modals */}
-            {/* Gallery Modal */}
+            {/* ─────────────── Modals ─────────────── */}
             {showGallery && (
-                <div className="modal-overlay active" id="galleryModal" onClick={(e) => e.target.id === 'galleryModal' && closeModal('gallery')}>
+                <div className="modal-overlay active" id="galleryModal">
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">Mockup Gallery</h2>
                             <button className="modal-close" onClick={() => closeModal('gallery')}>×</button>
                         </div>
                         <div className="modal-body">
-                            <div className="gallery-filters">
-                                <input type="text" className="modal-search-input" placeholder="Search by client name or address..." />
-                                <select className="filter-select">
-                                    <option>All Mockups</option>
-                                    <option>This Week</option>
-                                    <option>This Month</option>
-                                    <option>Approved</option>
-                                    <option>Pending</option>
-                                </select>
-                            </div>
                             <div className="gallery-grid">
-                                {/*{['Johnson Property', 'Smith Residence', 'Davis Complex', 'Wilson Estate'].map((client, idx) => (
-                                    <div key={idx} className="gallery-item">
-                                        <div className="gallery-image"></div>
+                                {galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>No mockups yet.</div>}
+                                {galleryItems.map(m => (
+                                    <div key={m.id} className="gallery-item">
+                                        <div className="gallery-image" style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, aspectRatio: '4/3', background: '#f3f4f6' }}>
+                                            {m.current_version?.generated_image_url
+                                                ? <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 12 }}>Pending</div>}
+                                        </div>
                                         <div className="gallery-info">
-                                            <div className="gallery-client">{client}</div>
-                                            <div className="gallery-date">Oct {19 - idx}, 2025</div>
-                                            <div className="gallery-type">Roof + Siding</div>
+                                            <div className="gallery-client">{m.title || 'Untitled mockup'}</div>
+                                            <div className="gallery-date">{new Date(m.updated_at).toLocaleDateString()}</div>
+                                            <div className="gallery-type">Status: {m.status}</div>
                                         </div>
                                     </div>
-                                ))}*/}
+                                ))}
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Recent Projects Modal */}
             {showRecent && (
-                <div className="modal-overlay active" id="recentModal" onClick={(e) => e.target.id === 'recentModal' && closeModal('recent')}>
+                <div className="modal-overlay active" id="recentModal">
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">Recent Projects</h2>
                             <button className="modal-close" onClick={() => closeModal('recent')}>×</button>
                         </div>
                         <div className="modal-body">
-                            {/*<div className="recent-list">
-                                <div className="recent-item">
-                                    <div className="recent-preview"></div>
+                            {recentItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>Nothing recent yet.</div>}
+                            {recentItems.map(m => (
+                                <div key={m.id} className="recent-item">
+                                    <div className="recent-preview" style={{ overflow: 'hidden', borderRadius: 8 }}>
+                                        {m.current_version?.generated_image_url
+                                            ? <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            : null}
+                                    </div>
                                     <div className="recent-details">
-                                        <div className="recent-title">Johnson Property - Complete Exterior</div>
+                                        <div className="recent-title">{m.title || 'Untitled mockup'}</div>
                                         <div className="recent-info">
-                                            <span>Today at 2:45 PM</span> • 
-                                            <span>3 versions generated</span> • 
-                                            <span className="status-approved">Approved</span>
-                                        </div>
-                                        <div className="recent-materials">
-                                            GAF Charcoal roof • CertainTeed Arctic White siding • Black trim
-                                        </div>
-                                        <div className="recent-actions">
-                                            <button className="action-btn">Open</button>
-                                            <button className="action-btn">Duplicate</button>
-                                            <button className="action-btn">Share</button>
+                                            <span>{new Date(m.updated_at).toLocaleString()}</span>
+                                            {' • '}
+                                            <span className={m.status === 'approved' ? 'status-approved' : 'status-pending'}>{m.status}</span>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="recent-item">
-                                    <div className="recent-preview"></div>
-                                    <div className="recent-details">
-                                        <div className="recent-title">Smith Residence - Roof Replacement</div>
-                                        <div className="recent-info">
-                                            <span>Yesterday at 4:15 PM</span> • 
-                                            <span>2 versions generated</span> • 
-                                            <span className="status-pending">Pending Review</span>
-                                        </div>
-                                        <div className="recent-materials">
-                                            Owens Corning Estate Gray roof • Existing siding kept
-                                        </div>
-                                        <div className="recent-actions">
-                                            <button className="action-btn">Open</button>
-                                            <button className="action-btn">Duplicate</button>
-                                            <button className="action-btn">Share</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>*/}
+                            ))}
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Templates Modal */}
             {showTemplates && (
-                <div className="modal-overlay active" id="templatesModal" onClick={(e) => e.target.id === 'templatesModal' && closeModal('templates')}>
+                <div className="modal-overlay active" id="templatesModal">
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">Mockup Templates</h2>
                             <button className="modal-close" onClick={() => closeModal('templates')}>×</button>
                         </div>
                         <div className="modal-body">
-                           {/* <div className="templates-grid">
-                                {[
-                                    { name: 'Modern Farmhouse', desc: 'White siding, black trim, charcoal roof' },
-                                    { name: 'Classic Colonial', desc: 'Cream siding, white trim, weathered wood roof' },
-                                    { name: 'Contemporary Clean', desc: 'Gray siding, black windows, slate roof' },
-                                    { name: 'Craftsman Style', desc: 'Cedar siding, brown trim, architectural shingles' }
-                                ].map((template, idx) => (
-                                    <div key={idx} className="template-card">
-                                        <div className="template-preview"></div>
-                                        <div className="template-name">{template.name}</div>
-                                        <div className="template-description">{template.desc}</div>
-                                        <button className="template-use-btn">Use Template</button>
-                                    </div>
-                                ))}
-                            </div>*/}
-                            <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                                <button className="btn btn-primary">Create New Template</button>
-                            </div>
+                            <div style={{ color: '#6b7280', fontSize: 14 }}>Templates feature is coming soon.</div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Tutorial Modal */}
             {showTutorial && (
-                <div className="modal-overlay active" id="tutorialModal" onClick={(e) => e.target.id === 'tutorialModal' && closeModal('tutorial')}>
+                <div className="modal-overlay active" id="tutorialModal">
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">3D Mockup Studio Tutorial</h2>
                             <button className="modal-close" onClick={() => closeModal('tutorial')}>×</button>
                         </div>
                         <div className="modal-body">
-                            <div className="tutorial-video">
-                                <div style={{ aspectRatio: '16/9', background: '#000', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ textAlign: 'center', color: 'white' }}>
-                                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>▶</div>
-                                        <p>Video Tutorial</p>
-                                        <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>Duration: 5:23</p>
-                                    </div>
-                                </div>
-                            </div>
                             <div className="tutorial-steps">
-                                <h3 style={{ margin: '1.5rem 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Quick Start Guide</h3>
+                                <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Quick Start Guide</h3>
                                 {[
-                                    { num: 1, title: 'Upload Property Photo', desc: 'Take or upload a clear photo of the property. Best results with good lighting and minimal shadows.' },
-                                    { num: 2, title: 'Select Materials & Colors', desc: 'Choose roofing type, siding material, and colors from our extensive catalog.' },
-                                    { num: 3, title: 'Add AI Instructions', desc: 'Be specific about what you want. The more detail, the better the result.' },
-                                    { num: 4, title: 'Generate & Refine', desc: 'Generate the mockup and refine as needed. Each iteration improves accuracy.' }
-                                ].map((step, idx) => (
-                                    <div key={idx} className="step-item">
+                                    { num: 1, title: 'Pick or create a client',     desc: 'Mockups are saved per-client so you can re-share them later.' },
+                                    { num: 2, title: 'Upload property photo',       desc: 'Front-facing photo, good lighting, minimal shadow.' },
+                                    { num: 3, title: 'Select materials & colors',   desc: 'Choose roof, siding, trim and accent colors.' },
+                                    { num: 4, title: 'Add AI instructions',         desc: 'Be specific. Process one major change at a time.' },
+                                    { num: 5, title: 'Generate & refine',           desc: 'Each click creates a new version you can compare.' },
+                                ].map(step => (
+                                    <div key={step.num} className="step-item">
                                         <div className="step-number">{step.num}</div>
                                         <div className="step-content">
                                             <div className="step-title">{step.title}</div>
@@ -931,4 +1051,3 @@ const ThreeDMockup = () => {
 };
 
 export default ThreeDMockup;
-
