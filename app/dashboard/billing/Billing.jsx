@@ -159,8 +159,16 @@ export default function Billing() {
 
     const sub = me?.subscription;
     const balance = me?.balance;
-    const currentPlanId = sub?.plan_id;
     const isActive = sub?.status === 'active' || sub?.status === 'trialing';
+    // Only treat the plan as "current" when the subscription is actually active
+    // or trialing. An incomplete / past_due / canceled record may carry a stale
+    // plan_id from an abandoned checkout — those should not show as Current.
+    const currentPlanId = isActive ? sub?.plan_id : null;
+    // Whether to render the "Current Subscription" card at all. We hide the card
+    // for users who never finished checkout (incomplete) or whose sub is fully
+    // canceled — in both cases the user has no live plan and should see the
+    // picker, not stale plan data.
+    const hasLiveSub = !!sub?.plan && !['incomplete', 'incomplete_expired', 'canceled'].includes(sub?.status);
 
     const subscribe = async (planId) => {
         setActionLoading(`sub-${planId}`);
@@ -283,14 +291,14 @@ export default function Billing() {
                         <div className="card-head">
                             <ShieldCheck size={18} color="#4f46e5" />
                             <span style={{ fontWeight: 600, fontSize: 15, color: '#111827', flex: 1 }}>Current Subscription</span>
-                            {statusInfo && (
+                            {hasLiveSub && statusInfo && (
                                 <span className="pill" style={{ background: statusInfo.bg, color: statusInfo.color, borderColor: statusInfo.border }}>
                                     {statusInfo.label}
                                 </span>
                             )}
                         </div>
                         <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            {sub?.plan ? (
+                            {hasLiveSub ? (
                                 <>
                                     <div>
                                         <div className="label">Plan</div>
@@ -454,6 +462,7 @@ export default function Billing() {
                                             <th style={th}>Date</th>
                                             <th style={th}>Number</th>
                                             <th style={th}>Period</th>
+                                            <th style={th}>Next Billing</th>
                                             <th style={th}>Amount</th>
                                             <th style={th}>Status</th>
                                             <th style={{ ...th, textAlign: 'right' }}>Actions</th>
@@ -472,6 +481,16 @@ export default function Billing() {
                                                                 {fmtDate(new Date(inv.period_start * 1000))} – {fmtDate(new Date(inv.period_end * 1000))}
                                                             </span>
                                                         ) : '—'}
+                                                    </td>
+                                                    <td style={td}>
+                                                        {inv.period_end && inv.status === 'paid' ? (
+                                                            <span style={{ fontSize: 12, color: '#047857', fontWeight: 600 }}>
+                                                                <Calendar size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+                                                                {fmtDate(new Date(inv.period_end * 1000))}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ fontSize: 12, color: '#9ca3af' }}>—</span>
+                                                        )}
                                                     </td>
                                                     <td style={{ ...td, fontWeight: 600 }}>{fmtAmount(inv.amount_paid || inv.amount_due, inv.currency)}</td>
                                                     <td style={td}>
@@ -527,8 +546,8 @@ export default function Billing() {
                                             <th style={th}>When</th>
                                             <th style={th}>Event</th>
                                             <th style={th}>Description</th>
-                                            <th style={{ ...th, textAlign: 'right' }}>Amount</th>
-                                            <th style={{ ...th, textAlign: 'right' }}>Balance after</th>
+                                            <th style={{ ...th, textAlign: 'right' }}>Credit</th>
+                                            <th style={{ ...th, textAlign: 'right' }}>Credit after</th>
                                         </tr>
                                     </thead>
                                     <tbody>
