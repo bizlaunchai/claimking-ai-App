@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import GoogleAuth from "@/components/auth/GoogleAuth.jsx";
+import OutlookAuth from "@/components/auth/OutlookAuth.jsx";
 
 export function LoginForm({ className, ...props }) {
   const [email, setEmail] = useState("");
@@ -108,6 +109,7 @@ export function LoginForm({ className, ...props }) {
                 </div>
 
                 <GoogleAuth/>
+                <OutlookAuth/>
 
               </div>
               <div className="mt-4 text-center text-sm">
