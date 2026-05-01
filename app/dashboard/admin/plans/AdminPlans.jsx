@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
-    Plus, X, Loader2, Edit3, Archive, Trash2, CheckCircle2,
+    Plus, X, Loader2, Edit3, Archive, ArchiveRestore, Trash2, CheckCircle2,
     Coins, DollarSign, Star, FileText, AlertCircle, Sparkles,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
@@ -139,6 +139,20 @@ export default function AdminPlans() {
         }
     };
 
+    const unarchive = async (p) => {
+        if (!confirm(`Unarchive "${p.name}"?\nThe plan will move back to Draft so you can review and re-activate it.`)) return;
+        setBusyId(`unarchive-${p.id}`);
+        try {
+            await axiosInstance.post(`/plans/${p.id}/unarchive`);
+            toast.success('Plan unarchived (now Draft)');
+            await refresh();
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Unarchive failed');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     const remove = async (p) => {
         if (!confirm(`Permanently delete draft plan "${p.name}"? This cannot be undone.`)) return;
         setBusyId(`delete-${p.id}`);
@@ -266,7 +280,14 @@ export default function AdminPlans() {
                                                     </>
                                                 )}
                                                 {p.status === 'archived' && (
-                                                    <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>
+                                                    <button
+                                                        style={btnIcon('#047857')}
+                                                        title="Unarchive (restore as Draft)"
+                                                        disabled={busyId === `unarchive-${p.id}`}
+                                                        onClick={() => unarchive(p)}
+                                                    >
+                                                        {busyId === `unarchive-${p.id}` ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ArchiveRestore size={14} />}
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>
