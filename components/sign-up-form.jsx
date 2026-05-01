@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useRef, useState } from "react";
 import GoogleAuth from "@/components/auth/GoogleAuth.jsx";
+import OutlookAuth from "@/components/auth/OutlookAuth.jsx";
 import { MapPin, Phone, Sparkles, Upload, X, ImageIcon } from "lucide-react";
 import axiosInstance from "@/lib/axiosInstance.js";
 
@@ -363,6 +364,7 @@ export function SignUpForm({ className, ...props }) {
               </div>
 
               <GoogleAuth />
+              <OutlookAuth />
 
               <p className="text-center text-sm text-muted-foreground pt-2">
                 Already have an account?{" "}
