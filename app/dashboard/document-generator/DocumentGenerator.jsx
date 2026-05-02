@@ -731,15 +731,7 @@ const DocumentGenerator = () => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    {modalError && (
-                        <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm" role="alert">
-                            <span aria-hidden="true">⚠️</span>
-                            <div>
-                                <div className="font-semibold mb-0.5">Couldn't generate the document</div>
-                                <div>{modalError}</div>
-                            </div>
-                        </div>
-                    )}
+
 
                     <div className="form-group">
                         <label className="form-label light">What type of document do you need?</label>
@@ -845,7 +837,17 @@ const DocumentGenerator = () => {
                                 </>
                             )}
                         </button>
+
                     </div>
+                    {modalError && (
+                        <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm" role="alert">
+                            <span aria-hidden="true">⚠️</span>
+                            <div>
+                                <div className="font-semibold mb-0.5">Couldn't generate the document</div>
+                                <div>{modalError}</div>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 
