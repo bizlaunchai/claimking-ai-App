@@ -141,6 +141,7 @@ const ThreeDMockup = () => {
     const [activeVersionId, setActiveVersionId] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [previewMode, setPreviewMode] = useState('result'); // original | result | split
+    const [generationError, setGenerationError] = useState(null); // { title, message, hint } | null
 
     // ── Provider availability  ──────────────────────────────────────────────
     const [providerStatus, setProviderStatus] = useState({});
@@ -223,10 +224,18 @@ const ThreeDMockup = () => {
     const handleNewClientField = (field, value) =>
         setNewClientForm(prev => ({ ...prev, [field]: value }));
 
+    const [clientFormError, setClientFormError] = useState(null);
+
     const submitNewClient = async () => {
+        setClientFormError(null);
         const required = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code'];
         const missing = required.filter(k => !newClientForm[k]?.trim());
-        if (missing.length) { toast.error('Please fill in all required fields'); return; }
+        if (missing.length) {
+            const msg = `Please fill in: ${missing.map(f => f.replace('_', ' ')).join(', ')}`;
+            setClientFormError(msg);
+            toast.error(msg);
+            return;
+        }
 
         setCreatingClient(true);
         try {
@@ -252,8 +261,10 @@ const ThreeDMockup = () => {
                 preferred_contact: 'both',
             });
             setClientTab('existing');
-        } catch {
-            /* toasted */
+        } catch (err) {
+            // axiosInstance has already toasted; keep the message inline too so
+            // the user can see the validation reason without scrolling to the toast.
+            setClientFormError(err?.userMessage ?? 'Could not create client.');
         } finally {
             setCreatingClient(false);
         }
@@ -300,6 +311,65 @@ const ThreeDMockup = () => {
     }, [selectedColors, selectedShingleType, selectedSidingMaterial, advanced]);
 
     // ────────────────────────────────────────────────────────────────────────
+    //   Map a backend / network error to an inline panel message.
+    //   Toast is already handled globally by axiosInstance — this is the
+    //   sticky banner inside the preview panel so the user can read it.
+    // ────────────────────────────────────────────────────────────────────────
+    const buildGenerationError = (err) => {
+        const status = err?.response?.status ?? 0;
+        const raw = (err?.userMessage ?? err?.message ?? '').toString();
+        const lower = raw.toLowerCase();
+
+        if (lower.includes('quota') || lower.includes('429') || status === 429) {
+            return {
+                title: 'AI quota exceeded',
+                message: 'Your Gemini free tier has no image-generation quota left.',
+                hint: 'Enable billing on your Google AI key (aistudio.google.com → API keys → Set up Billing) — same key keeps working. Or save a Replicate token in API Settings.',
+            };
+        }
+        if (lower.includes('api key not configured') || lower.includes('no image generation provider')) {
+            return {
+                title: 'AI not configured',
+                message: 'No image AI is connected to your account.',
+                hint: 'Open Dashboard → API Settings and save a Gemini key, then come back.',
+            };
+        }
+        if (lower.includes('no gemini image model is available')) {
+            return {
+                title: 'No image model available',
+                message: 'Your Gemini API key cannot access any image-capable model.',
+                hint: 'Most likely the key is on the free tier. Enable billing in Google AI Studio, or set the env var GEMINI_IMAGE_MODEL to a model your key has access to.',
+            };
+        }
+        if (lower.includes('s3 credentials not configured')) {
+            return {
+                title: 'File storage not set up',
+                message: 'AWS S3 storage is required to save generated images.',
+                hint: 'Configure it under API Settings → AWS S3 Storage.',
+            };
+        }
+        if (status === 401) {
+            return {
+                title: 'Session expired',
+                message: 'Please refresh the page and log in again.',
+                hint: null,
+            };
+        }
+        if (status === 0) {
+            return {
+                title: 'Network error',
+                message: 'Could not reach the server.',
+                hint: 'Check your internet connection and that the backend is running.',
+            };
+        }
+        return {
+            title: 'Generation failed',
+            message: raw || 'The mockup could not be generated.',
+            hint: 'Try again, or simplify your instructions and re-generate.',
+        };
+    };
+
+    // ────────────────────────────────────────────────────────────────────────
     //   Generate / re-generate
     // ────────────────────────────────────────────────────────────────────────
     const generateMockup = async () => {
@@ -307,6 +377,7 @@ const ThreeDMockup = () => {
         if (isGenerating) return;
 
         setIsGenerating(true);
+        setGenerationError(null);
         try {
             const payload = {
                 mockup_id: currentMockup?.id,
@@ -329,8 +400,8 @@ const ThreeDMockup = () => {
             setActiveVersionId(version.id);
             setPreviewMode('result');
             toast.success('Mockup generated');
-        } catch {
-            /* toasted */
+        } catch (err) {
+            setGenerationError(buildGenerationError(err));
         } finally {
             setIsGenerating(false);
         }
@@ -376,6 +447,7 @@ const ThreeDMockup = () => {
         setAdvanced({ keepRoof: false, ridgeVent: false, shadows: false, wetEffect: false });
         setAiInstructions('');
         setShowSharing(false);
+        setGenerationError(null);
     };
 
     const saveTemplate = () => toast.info('Templates: coming soon.');
@@ -564,6 +636,23 @@ const ThreeDMockup = () => {
                                         ))}
                                     </div>
                                 </div>
+                                {clientFormError && (
+                                    <div
+                                        className="form-group full-width"
+                                        role="alert"
+                                        style={{
+                                            background: '#fef2f2',
+                                            border: '1px solid #fecaca',
+                                            borderLeft: '4px solid #dc2626',
+                                            color: '#7f1d1d',
+                                            padding: '10px 12px',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                        }}
+                                    >
+                                        {clientFormError}
+                                    </div>
+                                )}
                                 <div className="form-group full-width">
                                     <button type="button" className="btn btn-primary"
                                             onClick={submitNewClient}
@@ -831,6 +920,47 @@ const ThreeDMockup = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* Inline error banner — sticks until user generates again or dismisses */}
+                        {generationError && (
+                            <div
+                                role="alert"
+                                style={{
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderLeft: '4px solid #dc2626',
+                                    color: '#7f1d1d',
+                                    padding: '12px 14px',
+                                    borderRadius: 8,
+                                    margin: '0.75rem 0',
+                                    fontSize: 13,
+                                    lineHeight: 1.5,
+                                    position: 'relative',
+                                }}
+                            >
+                                <button
+                                    onClick={() => setGenerationError(null)}
+                                    aria-label="Dismiss error"
+                                    style={{
+                                        position: 'absolute', top: 6, right: 8,
+                                        background: 'transparent', border: 'none',
+                                        color: '#7f1d1d', fontSize: 18, cursor: 'pointer',
+                                        lineHeight: 1, padding: 4,
+                                    }}
+                                >×</button>
+                                <div style={{ fontWeight: 700, marginBottom: 4, paddingRight: 20 }}>
+                                    {generationError.title}
+                                </div>
+                                <div style={{ marginBottom: generationError.hint ? 6 : 0 }}>
+                                    {generationError.message}
+                                </div>
+                                {generationError.hint && (
+                                    <div style={{ fontSize: 12, color: '#991b1b', fontStyle: 'italic' }}>
+                                        {generationError.hint}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="preview-controls">
                             <button className={`preview-control-btn ${previewMode === 'original' ? 'active' : ''}`} onClick={() => setPreviewMode('original')}>Original</button>
