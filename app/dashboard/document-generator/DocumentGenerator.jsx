@@ -1,5 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
 import "./document-generator.css"
 
 const DocumentGenerator = () => {
@@ -13,7 +15,11 @@ const DocumentGenerator = () => {
     const [clientInfo, setClientInfo] = useState('');
     const [specificDetails, setSpecificDetails] = useState('');
     const [tone, setTone] = useState('Professional');
+    const [generatedDoc, setGeneratedDoc] = useState(null);
+    const [showResultModal, setShowResultModal] = useState(false);
     const categoriesSectionRef = useRef(null);
+    const [modalError, setModalError] = useState('');
+
 
     const documents = [
         // Estimates & Quotes
@@ -85,35 +91,113 @@ const DocumentGenerator = () => {
     };
 
     const handleDocumentClick = (doc) => {
-        alert(`Opening template: ${doc.name}\n\nThis would open the document editor with the selected template.`);
+        // Pre-fill the AI generator with the selected template name and open
+        // the modal so the user can refine details before generating.
+        setDocumentType(doc.name);
+        setShowModal(true);
+    };
+
+    const callGenerateApi = async (payload) => {
+        const res = await axiosInstance.post('/document/generate', payload);
+        return res?.data?.data;
+    };
+
+    const resetForm = () => {
+        setDocumentType('');
+        setRequirements('');
+        setClientInfo('');
+        setSpecificDetails('');
+        setTone('Professional');
     };
 
     const handleGenerate = async () => {
+        if (!documentType.trim()) {
+            toast.error('Document type required', {
+                description: 'Describe what document you need before generating.',
+            });
+            return;
+        }
         setIsGenerating(true);
-        setTimeout(() => {
-            alert('Document generated successfully! It would open in the editor now.');
+        try {
+            const data = await callGenerateApi({
+                documentType: documentType.trim(),
+                requirements: requirements.trim() || undefined,
+                tone,
+            });
+            setGeneratedDoc(data);
+            setShowResultModal(true);
+            toast.success('Document generated', {
+                description: `${data?.credits?.cost ?? 0} credits used.`,
+            });
+            resetForm();
+        } catch (e) {
+            if (e?.response?.status !== 402) {
+                console.log(e);
+            }
+        } finally {
             setIsGenerating(false);
-            setShowModal(false);
-            setDocumentType('');
-            setRequirements('');
-            setClientInfo('');
-            setSpecificDetails('');
-            setTone('Professional');
-        }, 2000);
+        }
     };
 
     const handleModalGenerate = async () => {
+        if (!documentType.trim()) {
+            toast.error('Document type required', {
+                description: 'Describe what document you need before generating.',
+            });
+            return;
+        }
         setIsGenerating(true);
-        setTimeout(() => {
-            alert('Document generated successfully! It would open in the editor now.');
-            setIsGenerating(false);
+        setModalError('');
+        try {
+            const data = await callGenerateApi({
+                documentType: documentType.trim(),
+                clientInfo: clientInfo.trim() || undefined,
+                specificDetails: specificDetails.trim() || undefined,
+                tone,
+            });
+            setGeneratedDoc(data);
             setShowModal(false);
-            setDocumentType('');
-            setRequirements('');
-            setClientInfo('');
-            setSpecificDetails('');
-            setTone('Professional');
-        }, 2000);
+            setShowResultModal(true);
+            toast.success('Document generated', {
+                description: `${data?.credits?.cost ?? 0} credits used.`,
+            });
+            resetForm();
+        } catch (e) {
+            setModalError(e?.userMessage || 'Something went wrong. Please try again.');
+            if (e?.response?.status !== 402) {
+                console.log(e);
+            }
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleCopyResult = async () => {
+        if (!generatedDoc?.content) return;
+        try {
+            await navigator.clipboard.writeText(generatedDoc.content);
+            toast.success('Copied to clipboard');
+        } catch {
+            toast.error('Copy failed', { description: 'Select the text manually and copy.' });
+        }
+    };
+
+    const handleDownloadResult = () => {
+        if (!generatedDoc?.content) return;
+        const safeName = (generatedDoc.documentType || 'document')
+            .replace(/[^a-z0-9-_ ]/gi, '')
+            .trim()
+            .replace(/\s+/g, '-')
+            .toLowerCase() || 'document';
+        const blob = new Blob([generatedDoc.content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -404,6 +488,24 @@ const DocumentGenerator = () => {
                                 )}
                             </button>
                         </div>
+                        {modalError && (
+                            <div style={{
+                                marginTop: '12px',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                color: '#dc2626',
+                                fontSize: '13px',
+                                lineHeight: '1.5',
+                                display: 'flex',
+                                gap: '8px',
+                                alignItems: 'flex-start',
+                            }}>
+                                <span style={{ fontSize: '15px', flexShrink: 0 }}>⚠️</span>
+                                <span>{modalError}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -470,12 +572,13 @@ const DocumentGenerator = () => {
                 <div className="modal active" onClick={(e) => {
                     if (e.target.classList.contains('modal')) {
                         setShowModal(false);
+                        setModalError('');
                     }
                 }}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3 className="modal-title">AI Document Generator</h3>
-                            <button className="close-modal" onClick={() => setShowModal(false)}>
+                            <button className="close-modal" onClick={() => { setShowModal(false); setModalError(''); }}>
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <line x1="18" y1="6" x2="6" y2="18"/>
                                     <line x1="6" y1="6" x2="18" y2="18"/>
@@ -550,6 +653,69 @@ const DocumentGenerator = () => {
                                             Generate Document Now
                                         </>
                                     )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Generated Document Result Modal */}
+            {showResultModal && generatedDoc && (
+                <div className="modal active" onClick={(e) => {
+                    if (e.target.classList.contains('modal')) {
+                        setShowResultModal(false);
+                    }
+                }}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '820px' }}>
+                        <div className="modal-header">
+                            <h3 className="modal-title">{generatedDoc.documentType || 'Generated Document'}</h3>
+                            <button className="close-modal" onClick={() => setShowResultModal(false)}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <div style={{
+                                fontSize: '12px',
+                                color: '#6b7280',
+                                marginBottom: '12px',
+                                display: 'flex',
+                                gap: '12px',
+                                flexWrap: 'wrap',
+                            }}>
+                                <span>Provider: <strong>{generatedDoc.provider}</strong></span>
+                                <span>Model: <strong>{generatedDoc.model}</strong></span>
+                                <span>Tone: <strong>{generatedDoc.tone}</strong></span>
+                                {typeof generatedDoc?.credits?.cost === 'number' && (
+                                    <span>Credits used: <strong>{generatedDoc.credits.cost}</strong></span>
+                                )}
+                            </div>
+                            <textarea
+                                readOnly
+                                value={generatedDoc.content}
+                                style={{
+                                    width: '100%',
+                                    minHeight: '420px',
+                                    padding: '14px',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    fontFamily: 'inherit',
+                                    fontSize: '14px',
+                                    lineHeight: '1.6',
+                                    resize: 'vertical',
+                                    background: '#fafafa',
+                                    color: '#111827',
+                                }}
+                            />
+                            <div className="form-actions" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                <button className="generate-btn" onClick={handleCopyResult} style={{ flex: 1 }}>
+                                    Copy
+                                </button>
+                                <button className="generate-btn" onClick={handleDownloadResult} style={{ flex: 1 }}>
+                                    Download .txt
                                 </button>
                             </div>
                         </div>
