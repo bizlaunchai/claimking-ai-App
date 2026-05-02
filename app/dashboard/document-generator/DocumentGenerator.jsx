@@ -2,7 +2,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import DocumentResultModal from './DocumentResultModal';
 import "./document-generator.css"
+
+/**
+ * Map an axios error to a friendly, generic message we can show inline so
+ * the user understands roughly what went wrong without seeing a stack trace
+ * or backend internals.
+ */
+const friendlyGenerationError = (e) => {
+    const status = e?.response?.status;
+    const raw = (e?.userMessage || e?.response?.data?.message || '').toString().toLowerCase();
+
+    if (status === 401) return 'Your session expired. Please refresh the page and sign in again.';
+    if (status === 402) return 'You don\'t have enough credits to generate this document. Top up credits or contact your admin.';
+    if (status === 403) return 'This feature is currently disabled for your account.';
+    if (status === 422) return 'Setup is incomplete — likely a missing API key. Open API Settings to add it.';
+    if (status === 404) return 'Required record (such as the selected client) could not be found.';
+    if (raw.includes('api key not configured') || raw.includes('not configured')) {
+        return 'AI provider key is not set up yet. Open API Settings to add your OpenAI / Claude key.';
+    }
+    if (raw.includes('quota') || raw.includes('rate limit') || raw.includes('429')) {
+        return 'The AI provider hit a rate limit. Wait a minute and try again.';
+    }
+    if (status >= 500) return 'The AI provider had a hiccup on our side. Please try again in a moment.';
+    if (!status) return 'Could not reach the server. Check your connection and try again.';
+    return 'Something went wrong while generating the document. Please try again.';
+};
 
 const DocumentGenerator = () => {
     const [activeCategory, setActiveCategory] = useState('all');
@@ -19,6 +45,59 @@ const DocumentGenerator = () => {
     const [showResultModal, setShowResultModal] = useState(false);
     const categoriesSectionRef = useRef(null);
     const [modalError, setModalError] = useState('');
+    // Inline error banner shown above the page-level "Create Custom Document"
+    // form when generation fails. Generic, user-friendly copy only.
+    const [formError, setFormError] = useState('');
+
+    // Existing clients for the "Client / Project" dropdown.
+    // Per Brief §09 documents must auto-populate from the customer file rather
+    // than asking the user to retype info that already exists in the system.
+    const [clients, setClients] = useState([]);
+    const [clientsLoading, setClientsLoading] = useState(false);
+    const [selectedClientId, setSelectedClientId] = useState('');
+
+    // Recent generated documents (for the "Recently Generated" section).
+    const [recentDocs, setRecentDocs] = useState([]);
+    const [recentLoading, setRecentLoading] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setClientsLoading(true);
+            try {
+                const res = await axiosInstance.get('/client-portal');
+                const list = Array.isArray(res?.data) ? res.data : (res?.data?.data ?? []);
+                if (!cancelled) setClients(list);
+            } catch {
+                /* interceptor already toasts */
+            } finally {
+                if (!cancelled) setClientsLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const fetchRecentDocs = async () => {
+        setRecentLoading(true);
+        try {
+            const res = await axiosInstance.get('/document/recent', { params: { limit: 20 } });
+            const list = res?.data?.data ?? [];
+            setRecentDocs(list);
+        } catch {
+            /* interceptor toasts */
+        } finally {
+            setRecentLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRecentDocs();
+    }, []);
+
+    // Clear stale errors when the AI Generator modal is (re)opened.
+    useEffect(() => {
+        if (showModal) setModalError('');
+    }, [showModal]);
 
 
     const documents = [
@@ -108,19 +187,20 @@ const DocumentGenerator = () => {
         setClientInfo('');
         setSpecificDetails('');
         setTone('Professional');
+        setSelectedClientId('');
     };
 
     const handleGenerate = async () => {
         if (!documentType.trim()) {
-            toast.error('Document type required', {
-                description: 'Describe what document you need before generating.',
-            });
+            setFormError('Please describe what document you need before generating.');
             return;
         }
         setIsGenerating(true);
+        setFormError('');
         try {
             const data = await callGenerateApi({
                 documentType: documentType.trim(),
+                clientId: selectedClientId || undefined,
                 requirements: requirements.trim() || undefined,
                 tone,
             });
@@ -130,10 +210,9 @@ const DocumentGenerator = () => {
                 description: `${data?.credits?.cost ?? 0} credits used.`,
             });
             resetForm();
+            fetchRecentDocs();
         } catch (e) {
-            if (e?.response?.status !== 402) {
-                console.log(e);
-            }
+            setFormError(friendlyGenerationError(e));
         } finally {
             setIsGenerating(false);
         }
@@ -141,9 +220,7 @@ const DocumentGenerator = () => {
 
     const handleModalGenerate = async () => {
         if (!documentType.trim()) {
-            toast.error('Document type required', {
-                description: 'Describe what document you need before generating.',
-            });
+            setModalError('Please describe what document you need before generating.');
             return;
         }
         setIsGenerating(true);
@@ -151,6 +228,7 @@ const DocumentGenerator = () => {
         try {
             const data = await callGenerateApi({
                 documentType: documentType.trim(),
+                clientId: selectedClientId || undefined,
                 clientInfo: clientInfo.trim() || undefined,
                 specificDetails: specificDetails.trim() || undefined,
                 tone,
@@ -162,43 +240,65 @@ const DocumentGenerator = () => {
                 description: `${data?.credits?.cost ?? 0} credits used.`,
             });
             resetForm();
+            fetchRecentDocs();
         } catch (e) {
-            setModalError(e?.userMessage || 'Something went wrong. Please try again.');
-            if (e?.response?.status !== 402) {
-                console.log(e);
-            }
+            setModalError(friendlyGenerationError(e));
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const handleCopyResult = async () => {
-        if (!generatedDoc?.content) return;
+    const handleOpenRecent = async (docId) => {
         try {
-            await navigator.clipboard.writeText(generatedDoc.content);
-            toast.success('Copied to clipboard');
+            const res = await axiosInstance.get(`/document/${docId}`);
+            const row = res?.data?.data;
+            if (!row) return;
+            setGeneratedDoc({
+                id: row.id,
+                title: row.title,
+                content: row.content,
+                provider: row.provider,
+                model: row.model,
+                tone: row.tone,
+                documentType: row.document_type,
+                clientId: row.client_id,
+                createdAt: row.created_at,
+                credits: { cost: row.credits_cost, balance_after: null },
+            });
+            setShowResultModal(true);
         } catch {
-            toast.error('Copy failed', { description: 'Select the text manually and copy.' });
+            /* interceptor toasts */
         }
     };
 
-    const handleDownloadResult = () => {
-        if (!generatedDoc?.content) return;
-        const safeName = (generatedDoc.documentType || 'document')
-            .replace(/[^a-z0-9-_ ]/gi, '')
-            .trim()
-            .replace(/\s+/g, '-')
-            .toLowerCase() || 'document';
-        const blob = new Blob([generatedDoc.content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    const handleDeleteRecent = async (docId, ev) => {
+        ev?.stopPropagation?.();
+        if (!confirm('Delete this generated document? This cannot be undone.')) return;
+        try {
+            await axiosInstance.delete(`/document/${docId}`);
+            toast.success('Document deleted');
+            setRecentDocs((prev) => prev.filter((d) => d.id !== docId));
+        } catch {
+            /* interceptor toasts */
+        }
     };
+
+    const formatRelativeTime = (iso) => {
+        if (!iso) return '';
+        const diffMs = Date.now() - new Date(iso).getTime();
+        if (Number.isNaN(diffMs)) return '';
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+        return new Date(iso).toLocaleDateString();
+    };
+
+    // Result-modal copy/download logic now lives in DocumentResultModal.jsx,
+    // which uses the centralized .ck-modal* styles in app/styles/modal.css.
 
     return (
         <div>
@@ -442,6 +542,15 @@ const DocumentGenerator = () => {
                     </div>
 
                     <div className="create-form">
+                        {formError && (
+                            <div className="ck-alert ck-alert--error" role="alert">
+                                <span className="ck-alert-icon" aria-hidden="true">⚠️</span>
+                                <div className="ck-alert-body">
+                                    <div className="ck-alert-title">Couldn't generate the document</div>
+                                    <div>{formError}</div>
+                                </div>
+                            </div>
+                        )}
                         <div className="form-group">
                             <label className="form-label">Document Type</label>
                             <input
@@ -451,6 +560,37 @@ const DocumentGenerator = () => {
                                 value={documentType}
                                 onChange={(e) => setDocumentType(e.target.value)}
                             />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">
+                                Client / Project
+                                <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
+                                    — auto-populates name, address, carrier &amp; claim info
+                                </span>
+                            </label>
+                            <select
+                                className="form-input"
+                                value={selectedClientId}
+                                onChange={(e) => setSelectedClientId(e.target.value)}
+                                disabled={clientsLoading}
+                            >
+                                <option value="">
+                                    {clientsLoading
+                                        ? 'Loading clients…'
+                                        : clients.length === 0
+                                            ? 'No clients yet — add one in CRM'
+                                            : '-- Select existing client (optional) --'}
+                                </option>
+                                {clients.map((c) => {
+                                    const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+                                    const loc = [c.city, c.state].filter(Boolean).join(', ');
+                                    return (
+                                        <option key={c.id} value={c.id}>
+                                            {name}{loc ? ` — ${loc}` : ''}{c.claim_number ? ` (claim ${c.claim_number})` : ''}
+                                        </option>
+                                    );
+                                })}
+                            </select>
                         </div>
                         <div className="form-group">
                             <label className="form-label">Specific Requirements</label>
@@ -514,45 +654,54 @@ const DocumentGenerator = () => {
             <div className="recent-section">
                 <div className="section-header">
                     <h2 className="section-title">Recently Generated</h2>
-                    <button className="nav-btn">View All</button>
+                    <button className="nav-btn" onClick={fetchRecentDocs} disabled={recentLoading}>
+                        {recentLoading ? 'Loading…' : 'Refresh'}
+                    </button>
                 </div>
                 <div className="recent-list">
-                    {/*<div className="recent-item">
-                        <div className="recent-icon">📊</div>
-                        <div className="recent-info">
-                            <div className="recent-name">Smith Residence - Roof Estimate</div>
-                            <div className="recent-meta">Created 2 hours ago • Roofing Estimate</div>
+                    {recentLoading && recentDocs.length === 0 && (
+                        <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
+                            Loading…
                         </div>
-                        <div className="recent-actions">
-                            <button className="action-btn">Edit</button>
-                            <button className="action-btn">Download</button>
-                            <button className="action-btn">Share</button>
+                    )}
+                    {!recentLoading && recentDocs.length === 0 && (
+                        <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
+                            No documents yet — generate your first document above.
                         </div>
-                    </div>
-                    <div className="recent-item">
-                        <div className="recent-icon">✍️</div>
-                        <div className="recent-info">
-                            <div className="recent-name">Johnson Property - Work Authorization</div>
-                            <div className="recent-meta">Created yesterday • Contract</div>
+                    )}
+                    {recentDocs.map((doc) => (
+                        <div
+                            key={doc.id}
+                            className="recent-item"
+                            onClick={() => handleOpenRecent(doc.id)}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <div className="recent-icon">📄</div>
+                            <div className="recent-info">
+                                <div className="recent-name">{doc.title || doc.document_type}</div>
+                                <div className="recent-meta">
+                                    {formatRelativeTime(doc.created_at)}
+                                    {' • '}
+                                    {doc.document_type}
+                                    {doc.provider ? ` • ${doc.provider}` : ''}
+                                </div>
+                            </div>
+                            <div className="recent-actions">
+                                <button
+                                    className="action-btn"
+                                    onClick={(ev) => { ev.stopPropagation(); handleOpenRecent(doc.id); }}
+                                >
+                                    Open
+                                </button>
+                                <button
+                                    className="action-btn"
+                                    onClick={(ev) => handleDeleteRecent(doc.id, ev)}
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
-                        <div className="recent-actions">
-                            <button className="action-btn">Edit</button>
-                            <button className="action-btn">Download</button>
-                            <button className="action-btn">Share</button>
-                        </div>
-                    </div>
-                    <div className="recent-item">
-                        <div className="recent-icon">➕</div>
-                        <div className="recent-info">
-                            <div className="recent-name">Williams Claim - Supplement Request</div>
-                            <div className="recent-meta">Created 3 days ago • Supplement</div>
-                        </div>
-                        <div className="recent-actions">
-                            <button className="action-btn">Edit</button>
-                            <button className="action-btn">Download</button>
-                            <button className="action-btn">Share</button>
-                        </div>
-                    </div>*/}
+                    ))}
                 </div>
             </div>
 
@@ -586,6 +735,15 @@ const DocumentGenerator = () => {
                             </button>
                         </div>
                         <div className="modal-body">
+                            {modalError && (
+                                <div className="ck-alert ck-alert--error" role="alert">
+                                    <span className="ck-alert-icon" aria-hidden="true">⚠️</span>
+                                    <div className="ck-alert-body">
+                                        <div className="ck-alert-title">Couldn't generate the document</div>
+                                        <div>{modalError}</div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="form-group">
                                 <label className="form-label light">What type of document do you need?</label>
                                 <input
@@ -597,11 +755,47 @@ const DocumentGenerator = () => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label className="form-label light">Client/Project Information</label>
+                                <label className="form-label light">
+                                    Client / Project
+                                    <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
+                                        — auto-populates name, address, carrier, policy &amp; claim number
+                                    </span>
+                                </label>
+                                <select
+                                    className="form-input light"
+                                    value={selectedClientId}
+                                    onChange={(e) => setSelectedClientId(e.target.value)}
+                                    disabled={clientsLoading}
+                                >
+                                    <option value="">
+                                        {clientsLoading
+                                            ? 'Loading clients…'
+                                            : clients.length === 0
+                                                ? 'No clients yet — add one in CRM'
+                                                : '-- Select existing client (optional) --'}
+                                    </option>
+                                    {clients.map((c) => {
+                                        const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+                                        const loc = [c.city, c.state].filter(Boolean).join(', ');
+                                        return (
+                                            <option key={c.id} value={c.id}>
+                                                {name}{loc ? ` — ${loc}` : ''}{c.claim_number ? ` (claim ${c.claim_number})` : ''}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label light">
+                                    Extra context
+                                    <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
+                                        — only what is NOT already on the client file
+                                    </span>
+                                </label>
                                 <input
                                     type="text"
                                     className="form-input light"
-                                    placeholder="Client name, property address, claim number..."
+                                    placeholder="e.g. specific event date, adjuster name, optional notes…"
                                     value={clientInfo}
                                     onChange={(e) => setClientInfo(e.target.value)}
                                 />
@@ -660,67 +854,12 @@ const DocumentGenerator = () => {
                 </div>
             )}
 
-            {/* Generated Document Result Modal */}
+            {/* Generated-document result modal (centralized .ck-modal styles) */}
             {showResultModal && generatedDoc && (
-                <div className="modal active" onClick={(e) => {
-                    if (e.target.classList.contains('modal')) {
-                        setShowResultModal(false);
-                    }
-                }}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '820px' }}>
-                        <div className="modal-header">
-                            <h3 className="modal-title">{generatedDoc.documentType || 'Generated Document'}</h3>
-                            <button className="close-modal" onClick={() => setShowResultModal(false)}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"/>
-                                    <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="modal-body">
-                            <div style={{
-                                fontSize: '12px',
-                                color: '#6b7280',
-                                marginBottom: '12px',
-                                display: 'flex',
-                                gap: '12px',
-                                flexWrap: 'wrap',
-                            }}>
-                                <span>Provider: <strong>{generatedDoc.provider}</strong></span>
-                                <span>Model: <strong>{generatedDoc.model}</strong></span>
-                                <span>Tone: <strong>{generatedDoc.tone}</strong></span>
-                                {typeof generatedDoc?.credits?.cost === 'number' && (
-                                    <span>Credits used: <strong>{generatedDoc.credits.cost}</strong></span>
-                                )}
-                            </div>
-                            <textarea
-                                readOnly
-                                value={generatedDoc.content}
-                                style={{
-                                    width: '100%',
-                                    minHeight: '420px',
-                                    padding: '14px',
-                                    border: '1px solid #e5e7eb',
-                                    borderRadius: '8px',
-                                    fontFamily: 'inherit',
-                                    fontSize: '14px',
-                                    lineHeight: '1.6',
-                                    resize: 'vertical',
-                                    background: '#fafafa',
-                                    color: '#111827',
-                                }}
-                            />
-                            <div className="form-actions" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                <button className="generate-btn" onClick={handleCopyResult} style={{ flex: 1 }}>
-                                    Copy
-                                </button>
-                                <button className="generate-btn" onClick={handleDownloadResult} style={{ flex: 1 }}>
-                                    Download .txt
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <DocumentResultModal
+                    doc={generatedDoc}
+                    onClose={() => setShowResultModal(false)}
+                />
             )}
             </div>
         </div>

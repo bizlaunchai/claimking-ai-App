@@ -1,6 +1,7 @@
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import "./styles/modal.css";
 import AppHeader from "@/components/layout/AppHeader";
 import React from "react";
 import AppFooter from "@/components/layout/AppFooter";

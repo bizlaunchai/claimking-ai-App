@@ -1,0 +1,221 @@
+/* ============================================================
+   Centralized modal styles for ClaimKing.AI dashboard.
+
+   Why this file exists:
+   The original page-level CSS files (3d-mockup.css, claims.css,
+   client-portal.css, document-generator.css, measurement.css,
+   purchase-credits.css, supplement.css, ai-call-center.css) each
+   redefine `.modal`, `.modal-content`, `.modal-header`, `.modal-body`,
+   `.modal-title`, `.close-modal`. That made every modal subtly
+   different, broke z-index in some pages, and duplicated ~60 lines
+   of CSS across 8 files.
+
+   This file ships ONE source of truth using the `.ck-modal*` prefix.
+   New modals should use these classes. The legacy `.modal` classes
+   are left untouched so old screens still render.
+
+   Imported once from app/globals.css.
+   ============================================================ */
+
+.ck-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: ckModalFadeIn 0.18s ease-out;
+}
+
+.ck-modal {
+    background: #ffffff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 720px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+    animation: ckModalSlideUp 0.22s ease-out;
+}
+
+.ck-modal--lg { max-width: 900px; }
+.ck-modal--sm { max-width: 480px; }
+
+.ck-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
+}
+
+.ck-modal-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.ck-modal-subtitle {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 400;
+}
+
+.ck-modal-close {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: #f3f4f6;
+    color: #374151;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.2s ease;
+}
+
+.ck-modal-close:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+    transform: rotate(90deg);
+}
+
+.ck-modal-body {
+    padding: 18px 22px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    color: #111827;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.ck-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 22px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.ck-modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed #e5e7eb;
+}
+
+.ck-modal-meta strong {
+    color: #111827;
+    font-weight: 600;
+}
+
+.ck-modal-textarea {
+    width: 100%;
+    min-height: 360px;
+    max-height: 60vh;
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fafafa;
+    color: #111827;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.ck-btn {
+    flex: 1 1 120px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ck-btn--primary {
+    background: #1a1f3a;
+    color: #ffffff;
+}
+.ck-btn--primary:hover { background: #0f1430; }
+
+.ck-btn--secondary {
+    background: #ffffff;
+    color: #111827;
+    border-color: #d1d5db;
+}
+.ck-btn--secondary:hover { background: #f3f4f6; }
+
+.ck-btn--danger {
+    background: #ffffff;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+.ck-btn--danger:hover { background: #fef2f2; }
+
+/* Reusable inline error banner — used inside the doc-generator forms
+   so the user sees a friendly explanation when generation fails. */
+.ck-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+.ck-alert--error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+.ck-alert--info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+}
+
+.ck-alert-icon { flex-shrink: 0; line-height: 1; font-size: 16px; }
+.ck-alert-body { flex: 1 1 auto; }
+.ck-alert-title { font-weight: 600; margin-bottom: 2px; }
+
+@keyframes ckModalFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes ckModalSlideUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 640px) {
+    .ck-modal-header,
+    .ck-modal-body,
+    .ck-modal-footer { padding-left: 16px; padding-right: 16px; }
+    .ck-modal-title { font-size: 1rem; }
+    .ck-btn { flex: 1 1 100%; }
+}
