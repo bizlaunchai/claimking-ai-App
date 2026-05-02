@@ -521,6 +521,20 @@
     font-size: 1rem;
     transition: all 0.3s ease;
 }
+.form-input-select {
+    width: 100%;
+    padding: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+.form-input-select option {
+    background: #1e1e2e;
+    color: white;
+}
 
 .form-input.light {
     color: #1a1f3a;
@@ -750,69 +764,13 @@
     box-shadow: 0 8px 30px rgba(253, 184, 19, 0.5);
 }
 
-/* Modal */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal.active {
-    display: flex;
-}
-
-.modal-content {
-    background: white;
-    border-radius: 16px;
-    width: 90%;
-    max-width: 600px;
-    max-height: 90vh;
-    overflow-y: auto;
-    animation: slideUp 0.3s ease;
-}
-
-.modal-header {
-    padding: 2rem;
-    border-bottom: 2px solid #e5e7eb;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1a1f3a;
-}
-
-.close-modal {
-    width: 32px;
-    height: 32px;
-    background: #f9fafb;
-    border: none;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.close-modal:hover {
-    background: #FDB813;
-    transform: rotate(90deg);
-}
-
-.modal-body {
-    padding: 2rem;
-}
+/* Modal styles removed — this page now uses Radix Dialog
+ * (components/ui/dialog.tsx). Old .modal / .modal-content / .modal-header /
+ * .modal-title / .close-modal / .modal-body rules used to leak globally and
+ * collide with the same class names defined in other dashboard pages
+ * (client-portal, claims, supplements, …), which broke modals on those pages
+ * after the user navigated away from this one. Keep this page free of any
+ * `.modal*` rules. */
 
 /* Animations */
 @keyframes slideDown {
@@ -837,32 +795,200 @@
     }
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* ============================================================
+   Responsive — tablet + mobile
+   Breakpoints:
+     - 1024px: tighten desktop layout
+     - 768px:  tablet
+     - 480px:  phones
+   ============================================================ */
+
+@media (max-width: 1024px) {
+    .document-generator-header-container {
+        padding: 0 1.25rem;
+    }
     .main-container {
-        padding: 90px 1rem 1rem;
+        padding: 100px 1.25rem 2rem;
+    }
+    .stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .quick-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    /* Header — stack logo + nav-actions, allow nav buttons to wrap */
+    .document-generator-header {
+        padding: 0.75rem 0;
+    }
+    .document-generator-header-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 0 1rem;
+    }
+    .document-generator-logo-section {
+        justify-content: center;
+    }
+    .document-generator-nav-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    .document-generator-nav-btn {
+        font-size: 0.8rem;
+        padding: 0.45rem 0.75rem;
     }
 
+    /* Main + hero */
+    .main-container {
+        padding: 88px 1rem 1.25rem;
+    }
+    .hero-section {
+        margin-bottom: 1.75rem;
+    }
     .hero-title {
-        font-size: 2rem;
+        font-size: 1.75rem;
+    }
+    .hero-subtitle {
+        font-size: 1rem;
     }
 
+    /* Stats — 2 columns on tablet, single column below 480px (handled lower) */
+    .stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    /* Search bar — stack vertically, full-width controls */
+    .search-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1rem;
+        gap: 0.75rem;
+    }
+    .search-box {
+        min-width: 0;
+        width: 100%;
+    }
+    .filter-dropdown {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* Quick action cards — single column */
     .quick-actions {
         grid-template-columns: 1fr;
+        gap: 1rem;
+        margin-bottom: 1.75rem;
     }
 
+    /* Categories — horizontal scroll for tabs, single-column grid */
     .documents-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.75rem;
+    }
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    .category-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        padding-bottom: 0.25rem;
+    }
+    .category-tab {
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
+    /* Create-form (page-level inline form) */
+    .create-document-section {
+        padding: 1.5rem 1rem;
+    }
     .create-header {
         flex-direction: column;
         text-align: center;
+        gap: 0.75rem;
+    }
+    .create-form .form-input,
+    .create-form .form-textarea {
+        font-size: 16px; /* keep ≥16px on iOS so input doesn't trigger zoom */
+    }
+    .form-actions {
+        flex-direction: column;
+    }
+    .generate-btn {
+        width: 100%;
     }
 
-    .category-tabs {
-        flex-wrap: nowrap;
-        overflow-x: scroll;
+    /* Recent items — compact stack */
+    .recent-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    .recent-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    .recent-actions .action-btn {
+        flex: 1 1 auto;
+    }
+
+    /* Floating AI button — smaller on mobile */
+    .ai-assistant-btn {
+        bottom: 1rem;
+        right: 1rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .document-generator-logo-text {
+        font-size: 1.05rem;
+    }
+    .hero-title {
+        font-size: 1.4rem;
+        letter-spacing: -0.5px;
+    }
+    .hero-subtitle {
+        font-size: 0.95rem;
+    }
+    .hero-badge {
+        font-size: 0.7rem;
+    }
+
+    /* Stats — single column on phones */
+    .stats-bar {
+        grid-template-columns: 1fr;
+    }
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    /* Documents grid — 2 columns minimum on small phones */
+    .documents-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .document-card {
+        padding: 0.75rem;
+    }
+
+    /* Tighten paddings */
+    .main-container {
+        padding: 80px 0.75rem 1rem;
+    }
+    .quick-actions .action-card,
+    .recent-item {
+        padding: 1rem;
     }
 }
 

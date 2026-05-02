@@ -3,7 +3,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import DocumentResultModal from './DocumentResultModal';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
 import "./document-generator.css"
+import Link from "next/link";
 
 /**
  * Map an axios error to a friendly, generic message we can show inline so
@@ -297,8 +305,9 @@ const DocumentGenerator = () => {
         return new Date(iso).toLocaleDateString();
     };
 
-    // Result-modal copy/download logic now lives in DocumentResultModal.jsx,
-    // which uses the centralized .ck-modal* styles in app/styles/modal.css.
+    // Result-modal copy/download logic lives in DocumentResultModal.jsx,
+    // which is built on the shadcn/Radix <Dialog> primitive (portal-rendered,
+    // immune to cross-page CSS conflicts).
 
     return (
         <div>
@@ -315,12 +324,12 @@ const DocumentGenerator = () => {
                             </svg>
                             My Documents
                         </button>
-                        <button className="document-generator-nav-btn">
+                        <Link href='#recent' className="document-generator-nav-btn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             Recent
-                        </button>
+                        </Link>
                         <button className="document-generator-nav-btn primary" onClick={() => setShowModal(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 4v16m8-8H4"/>
@@ -543,10 +552,13 @@ const DocumentGenerator = () => {
 
                     <div className="create-form">
                         {formError && (
-                            <div className="ck-alert ck-alert--error" role="alert">
-                                <span className="ck-alert-icon" aria-hidden="true">⚠️</span>
-                                <div className="ck-alert-body">
-                                    <div className="ck-alert-title">Couldn't generate the document</div>
+                            <div
+                                className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm mb-3"
+                                role="alert"
+                            >
+                                <span aria-hidden="true">⚠️</span>
+                                <div>
+                                    <div className="font-semibold mb-0.5">Couldn't generate the document</div>
                                     <div>{formError}</div>
                                 </div>
                             </div>
@@ -569,12 +581,12 @@ const DocumentGenerator = () => {
                                 </span>
                             </label>
                             <select
-                                className="form-input"
+                                className="form-input-select text-black"
                                 value={selectedClientId}
                                 onChange={(e) => setSelectedClientId(e.target.value)}
                                 disabled={clientsLoading}
                             >
-                                <option value="">
+                                <option value="" className='text-black'>
                                     {clientsLoading
                                         ? 'Loading clients…'
                                         : clients.length === 0
@@ -651,7 +663,7 @@ const DocumentGenerator = () => {
             </div>
 
             {/* Recent Documents */}
-            <div className="recent-section">
+            <div id="recent" className="recent-section">
                 <div className="section-header">
                     <h2 className="section-title">Recently Generated</h2>
                     <button className="nav-btn" onClick={fetchRecentDocs} disabled={recentLoading}>
@@ -705,162 +717,145 @@ const DocumentGenerator = () => {
                 </div>
             </div>
 
-            {/* AI Assistant Button */}
-            <button className="ai-assistant-btn" onClick={() => alert('AI Assistant would open here - ready to help you find or create any document!')}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21.928 11.607c-.202-.488-.635-.605-.928-.633V8c0-1.103-.897-2-2-2h-6V4.61c.305-.274.5-.668.5-1.11a1.5 1.5 0 0 0-3 0c0 .442.195.836.5 1.11V6H5c-1.103 0-2 .897-2 2v2.997l-.082.006A1 1 0 0 0 1.99 12v2a1 1 0 0 0 1 1H3v5c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2v-5a1 1 0 0 0 1-1v-1.938a1.006 1.006 0 0 0-.072-.455zM5 20V8h14l.001 3.996L19 12v2l.001.005.001 5.995H5z"/>
-                    <ellipse cx="8.5" cy="12" rx="1.5" ry="2"/>
-                    <ellipse cx="15.5" cy="12" rx="1.5" ry="2"/>
-                    <path d="M8 16h8v2H8z"/>
-                </svg>
-                AI Document Assistant
-            </button>
 
-            {/* Modal for AI Generator */}
-            {showModal && (
-                <div className="modal active" onClick={(e) => {
-                    if (e.target.classList.contains('modal')) {
-                        setShowModal(false);
-                        setModalError('');
-                    }
-                }}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3 className="modal-title">AI Document Generator</h3>
-                            <button className="close-modal" onClick={() => { setShowModal(false); setModalError(''); }}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="18" y1="6" x2="6" y2="18"/>
-                                    <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="modal-body">
-                            {modalError && (
-                                <div className="ck-alert ck-alert--error" role="alert">
-                                    <span className="ck-alert-icon" aria-hidden="true">⚠️</span>
-                                    <div className="ck-alert-body">
-                                        <div className="ck-alert-title">Couldn't generate the document</div>
-                                        <div>{modalError}</div>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="form-group">
-                                <label className="form-label light">What type of document do you need?</label>
-                                <input
-                                    type="text"
-                                    className="form-input light"
-                                    placeholder="e.g., 'Insurance claim denial appeal letter'"
-                                    value={documentType}
-                                    onChange={(e) => setDocumentType(e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label light">
-                                    Client / Project
-                                    <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
-                                        — auto-populates name, address, carrier, policy &amp; claim number
-                                    </span>
-                                </label>
-                                <select
-                                    className="form-input light"
-                                    value={selectedClientId}
-                                    onChange={(e) => setSelectedClientId(e.target.value)}
-                                    disabled={clientsLoading}
-                                >
-                                    <option value="">
-                                        {clientsLoading
-                                            ? 'Loading clients…'
-                                            : clients.length === 0
-                                                ? 'No clients yet — add one in CRM'
-                                                : '-- Select existing client (optional) --'}
-                                    </option>
-                                    {clients.map((c) => {
-                                        const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
-                                        const loc = [c.city, c.state].filter(Boolean).join(', ');
-                                        return (
-                                            <option key={c.id} value={c.id}>
-                                                {name}{loc ? ` — ${loc}` : ''}{c.claim_number ? ` (claim ${c.claim_number})` : ''}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label light">
-                                    Extra context
-                                    <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
-                                        — only what is NOT already on the client file
-                                    </span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="form-input light"
-                                    placeholder="e.g. specific event date, adjuster name, optional notes…"
-                                    value={clientInfo}
-                                    onChange={(e) => setClientInfo(e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label light">Specific Details</label>
-                                <textarea
-                                    className="form-textarea light"
-                                    placeholder="Any specific points to include, damage details, amounts, dates..."
-                                    value={specificDetails}
-                                    onChange={(e) => setSpecificDetails(e.target.value)}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label light">Tone & Style</label>
-                                <select 
-                                    className="filter-dropdown" 
-                                    style={{ width: '100%' }}
-                                    value={tone}
-                                    onChange={(e) => setTone(e.target.value)}
-                                >
-                                    <option>Professional</option>
-                                    <option>Formal Legal</option>
-                                    <option>Friendly</option>
-                                    <option>Urgent</option>
-                                    <option>Diplomatic</option>
-                                </select>
-                            </div>
-                            <div className="form-actions">
-                                <button 
-                                    className="generate-btn" 
-                                    style={{ width: '100%' }}
-                                    onClick={handleModalGenerate}
-                                    disabled={isGenerating}
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                                                <polyline points="22 4 12 14.01 9 11.01"/>
-                                            </svg>
-                                            Generating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                                            </svg>
-                                            Generate Document Now
-                                        </>
-                                    )}
-                                </button>
+            {/* AI Document Generator input — Radix Dialog (portal-rendered, no .modal class) */}
+            <Dialog
+                open={showModal}
+                onOpenChange={(next) => { setShowModal(next); if (!next) setModalError(''); }}
+            >
+                <DialogContent style={{ maxWidth: '900px', width: '95%' }}>
+                    <DialogHeader>
+                        <DialogTitle>AI Document Generator</DialogTitle>
+                        <DialogDescription>
+                            Pick a client and tell the AI what you need. The customer file fills in the rest.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {modalError && (
+                        <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm" role="alert">
+                            <span aria-hidden="true">⚠️</span>
+                            <div>
+                                <div className="font-semibold mb-0.5">Couldn't generate the document</div>
+                                <div>{modalError}</div>
                             </div>
                         </div>
+                    )}
+
+                    <div className="form-group">
+                        <label className="form-label light">What type of document do you need?</label>
+                        <input
+                            type="text"
+                            className="form-input light"
+                            placeholder="e.g., 'Insurance claim denial appeal letter'"
+                            value={documentType}
+                            onChange={(e) => setDocumentType(e.target.value)}
+                        />
                     </div>
-                </div>
-            )}
+                    <div className="form-group">
+                        <label className="form-label light">
+                            Client / Project
+                            <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
+                                — auto-populates name, address, carrier, policy &amp; claim number
+                            </span>
+                        </label>
+                        <select
+                            className="form-input light"
+                            value={selectedClientId}
+                            onChange={(e) => setSelectedClientId(e.target.value)}
+                            disabled={clientsLoading}
+                        >
+                            <option value="">
+                                {clientsLoading
+                                    ? 'Loading clients…'
+                                    : clients.length === 0
+                                        ? 'No clients yet — add one in CRM'
+                                        : '-- Select existing client (optional) --'}
+                            </option>
+                            {clients.map((c) => {
+                                const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+                                const loc = [c.city, c.state].filter(Boolean).join(', ');
+                                return (
+                                    <option key={c.id} value={c.id}>
+                                        {name}{loc ? ` — ${loc}` : ''}{c.claim_number ? ` (claim ${c.claim_number})` : ''}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label light">
+                            Extra context
+                            <span style={{ marginLeft: 6, color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>
+                                — only what is NOT already on the client file
+                            </span>
+                        </label>
+                        <input
+                            type="text"
+                            className="form-input light"
+                            placeholder="e.g. specific event date, adjuster name, optional notes…"
+                            value={clientInfo}
+                            onChange={(e) => setClientInfo(e.target.value)}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label light">Specific Details</label>
+                        <textarea
+                            className="form-textarea light"
+                            placeholder="Any specific points to include, damage details, amounts, dates..."
+                            value={specificDetails}
+                            onChange={(e) => setSpecificDetails(e.target.value)}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label light">Tone &amp; Style</label>
+                        <select
+                            className="filter-dropdown"
+                            style={{ width: '100%' }}
+                            value={tone}
+                            onChange={(e) => setTone(e.target.value)}
+                        >
+                            <option>Professional</option>
+                            <option>Formal Legal</option>
+                            <option>Friendly</option>
+                            <option>Urgent</option>
+                            <option>Diplomatic</option>
+                        </select>
+                    </div>
+                    <div className="form-actions">
+                        <button
+                            className="generate-btn"
+                            style={{ width: '100%' }}
+                            onClick={handleModalGenerate}
+                            disabled={isGenerating}
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                                        <polyline points="22 4 12 14.01 9 11.01"/>
+                                    </svg>
+                                    Generating...
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                                    </svg>
+                                    Generate Document Now
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
-            {/* Generated-document result modal (centralized .ck-modal styles) */}
-            {showResultModal && generatedDoc && (
-                <DocumentResultModal
-                    doc={generatedDoc}
-                    onClose={() => setShowResultModal(false)}
-                />
-            )}
+            {/* Generated-document result modal — Radix Dialog (portal-rendered) */}
+            <DocumentResultModal
+                doc={generatedDoc}
+                open={showResultModal && !!generatedDoc}
+                onClose={() => setShowResultModal(false)}
+            />
+
             </div>
         </div>
     );

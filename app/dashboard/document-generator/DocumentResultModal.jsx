@@ -1,16 +1,29 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { toast } from 'sonner';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog';
 
 /**
- * Dedicated modal that renders a single generated document.
+ * Result modal for a single generated document.
  *
- * - Uses the centralized `.ck-modal*` styles (app/styles/modal.css) so it
- *   does not depend on the old `.modal` rules duplicated across each page's
- *   stylesheet.
- * - Pure presentational: it owns no fetch logic. Parent supplies the document
- *   payload and an onClose callback.
+ * Implementation note (important):
+ * This component uses the shadcn / Radix `<Dialog>` primitive, which renders
+ * into a portal attached to document.body and identifies state via
+ * data-attributes (not class names). That gives us automatic protection
+ * against the cross-page `.modal { display: none }` collisions we hit when
+ * each dashboard page used to ship its own copy of the modal CSS in its
+ * page-level stylesheet.
+ *
+ * Open/close is driven by the `open` prop. Pass `onClose` so the caller
+ * stays the source of truth.
  *
  * Expected `doc` shape (matches what /document/generate returns):
  *   {
@@ -19,17 +32,8 @@ import { toast } from 'sonner';
  *     credits: { cost, balance_after }
  *   }
  */
-const DocumentResultModal = ({ doc, onClose }) => {
+const DocumentResultModal = ({ doc, open, onClose }) => {
     if (!doc) return null;
-
-    // Close on Escape — better keyboard behavior than the old modal.
-    useEffect(() => {
-        const onKey = (e) => {
-            if (e.key === 'Escape') onClose?.();
-        };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
 
     const safeFileBase = (name) =>
         (name || 'document')
@@ -141,60 +145,71 @@ window.onload = function () { setTimeout(function(){ window.focus(); window.prin
         win.document.close();
     };
 
-    const handleOverlayClick = (e) => {
-        if (e.target === e.currentTarget) onClose?.();
-    };
-
     const subtitleParts = [];
     if (doc.documentType && doc.documentType !== doc.title) subtitleParts.push(doc.documentType);
     if (doc.tone) subtitleParts.push(`Tone: ${doc.tone}`);
 
     return (
-        <div className="ck-modal-overlay" onClick={handleOverlayClick} role="dialog" aria-modal="true">
-            <div className="ck-modal ck-modal--lg">
-                <div className="ck-modal-header">
-                    <div>
-                        <h3 className="ck-modal-title">{doc.title || doc.documentType || 'Generated Document'}</h3>
-                        {subtitleParts.length > 0 && (
-                            <div className="ck-modal-subtitle">{subtitleParts.join(' · ')}</div>
-                        )}
-                    </div>
+        <Dialog open={!!open} onOpenChange={(next) => { if (!next) onClose?.(); }}>
+            <DialogContent style={{ maxWidth: '900px', width: '95%' }}>
+                <DialogHeader className="flex flex-col gap-1.5 pr-8">
+                    <DialogTitle className="break-words">
+                        {doc.title || doc.documentType || 'Generated Document'}
+                    </DialogTitle>
+                    {subtitleParts.length > 0 && (
+                        <DialogDescription>{subtitleParts.join(' · ')}</DialogDescription>
+                    )}
+                </DialogHeader>
+
+                <div className="flex flex-wrap gap-3 text-xs text-gray-500 border-b border-dashed border-gray-200 pb-3 mb-1">
+                    {doc.provider && <span>Provider: <strong className="text-gray-900 font-semibold">{doc.provider}</strong></span>}
+                    {doc.model && <span>Model: <strong className="text-gray-900 font-semibold">{doc.model}</strong></span>}
+                    {typeof doc?.credits?.cost === 'number' && (
+                        <span>Credits used: <strong className="text-gray-900 font-semibold">{doc.credits.cost}</strong></span>
+                    )}
+                    {doc.createdAt && (
+                        <span>Created: <strong className="text-gray-900 font-semibold">{new Date(doc.createdAt).toLocaleString()}</strong></span>
+                    )}
+                </div>
+
+                <textarea
+                    readOnly
+                    value={doc.content || ''}
+                    className="w-full min-h-[360px] max-h-[60vh] p-4 border border-gray-200 rounded-md bg-gray-50 text-gray-900 text-sm leading-relaxed resize-y font-[inherit]"
+                />
+
+                <DialogFooter className="sm:justify-start gap-2 flex-wrap">
                     <button
                         type="button"
-                        className="ck-modal-close"
-                        onClick={onClose}
-                        aria-label="Close"
+                        className="flex-1 min-w-[120px] px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-900 text-sm font-semibold hover:bg-gray-100 transition"
+                        onClick={handleCopy}
                     >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        Copy
                     </button>
-                </div>
-
-                <div className="ck-modal-body">
-                    <div className="ck-modal-meta">
-                        {doc.provider && <span>Provider: <strong>{doc.provider}</strong></span>}
-                        {doc.model && <span>Model: <strong>{doc.model}</strong></span>}
-                        {typeof doc?.credits?.cost === 'number' && (
-                            <span>Credits used: <strong>{doc.credits.cost}</strong></span>
-                        )}
-                        {doc.createdAt && (
-                            <span>Created: <strong>{new Date(doc.createdAt).toLocaleString()}</strong></span>
-                        )}
-                    </div>
-
-                    <textarea readOnly value={doc.content || ''} className="ck-modal-textarea" />
-                </div>
-
-                <div className="ck-modal-footer">
-                    <button type="button" className="ck-btn ck-btn--secondary" onClick={handleCopy}>Copy</button>
-                    <button type="button" className="ck-btn ck-btn--primary" onClick={handleDownloadPdf}>Download PDF</button>
-                    <button type="button" className="ck-btn ck-btn--secondary" onClick={handleDownloadDoc}>Download .doc</button>
-                    <button type="button" className="ck-btn ck-btn--secondary" onClick={handleDownloadTxt}>Download .txt</button>
-                </div>
-            </div>
-        </div>
+                    <button
+                        type="button"
+                        className="flex-1 min-w-[120px] px-3 py-2 rounded-md bg-[#1a1f3a] text-white text-sm font-semibold hover:bg-[#0f1430] transition"
+                        onClick={handleDownloadPdf}
+                    >
+                        Download PDF
+                    </button>
+                    <button
+                        type="button"
+                        className="flex-1 min-w-[120px] px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-900 text-sm font-semibold hover:bg-gray-100 transition"
+                        onClick={handleDownloadDoc}
+                    >
+                        Download .doc
+                    </button>
+                    <button
+                        type="button"
+                        className="flex-1 min-w-[120px] px-3 py-2 rounded-md border border-gray-300 bg-white text-gray-900 text-sm font-semibold hover:bg-gray-100 transition"
+                        onClick={handleDownloadTxt}
+                    >
+                        Download .txt
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
 
