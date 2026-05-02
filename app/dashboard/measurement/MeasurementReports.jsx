@@ -394,6 +394,9 @@ const Page = () => {
                             >
                                 Upload Report
                             </button>
+                            {/* Ground Photos & Drone tabs hidden for V1 — focus is on
+                                PDF / image / report extraction (Brief §05). Re-enable when
+                                photogrammetry / drone pipelines are ready.
                             <button
                                 className={`input-tab ${activeInputTab === 'ground' ? 'active' : ''}`}
                                 onClick={() => switchInputTab('ground')}
@@ -406,6 +409,7 @@ const Page = () => {
                             >
                                 Drone
                             </button>
+                            */}
                         </div>
 
                         {/* Upload Report Tab */}
@@ -437,7 +441,10 @@ const Page = () => {
                             </div>
                         )}
 
-                        {/* Ground Photos Tab */}
+                        {/* Ground Photos & Drone tabs hidden for V1 — see comment above
+                            on the input-tabs buttons for context. Re-enable along with the
+                            tab buttons when those pipelines are ready.
+
                         {activeInputTab === 'ground' && (
                             <div className="tab-content active">
                                 <div className="photo-requirements">
@@ -499,7 +506,6 @@ const Page = () => {
                             </div>
                         )}
 
-                        {/* Drone Tab */}
                         {activeInputTab === 'drone' && (
                             <div className="tab-content active">
                                 <div style={{
@@ -518,11 +524,6 @@ const Page = () => {
                                         For highest accuracy (99.5%)
                                     </div>
                                 </div>
-
-                                {/*<div className="upload-zone">
-                                    <p className="upload-text" style={{marginBottom: '0.5rem'}}>Upload drone photos or video</p>
-                                    <p className="upload-subtext">JPG, PNG, MP4, MOV</p>
-                                </div>*/}
 
                                 <FileUploader label={'Upload drone photos or video'} files={droneFiles} setFiles={setDroneFiles} allowedExtensions={['.jpg', '.png', '.mp4', '.mov']} maxSizeMB={10} maxFiles={1} />
 
@@ -548,6 +549,7 @@ const Page = () => {
                                 </div>
                             </div>
                         )}
+                        */}
                     </div>
 
                     {/* Middle Column - Measurement Configuration */}
