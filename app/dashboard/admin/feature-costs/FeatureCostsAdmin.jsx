@@ -7,16 +7,24 @@ import axiosInstance from '@/lib/axiosInstance.js';
 /**
  * Admin page: edit how many credits each AI-heavy feature costs per run.
  *
- * GET    /credits/feature-costs                      → list (any authed user can read)
- * PUT    /credits/admin/feature-costs/:key           → admin update
- * POST   /credits/admin/feature-costs                → admin create new
- * DELETE /credits/admin/feature-costs/:key           → admin remove
+ * Endpoints:
+ *   GET    /credits/feature-catalog                    → code-defined catalog (dropdown source)
+ *   GET    /credits/feature-costs                      → DB rows (each tagged with `in_catalog`)
+ *   POST   /credits/admin/feature-costs                → admin create new (key MUST be in catalog)
+ *   PUT    /credits/admin/feature-costs/:key           → admin update
+ *   DELETE /credits/admin/feature-costs/:key           → admin remove
  *
- * Non-admins hitting PUT/POST/DELETE get 403 — we surface that as a toast.
+ * The "Add feature" form uses a dropdown sourced from `/credits/feature-catalog`,
+ * so admins can only register keys the backend code actually understands.
+ * Already-configured keys are disabled in the dropdown.
+ *
+ * Rows in the table whose key is NOT in the catalog are flagged as orphans
+ * (a dev removed the feature from code but the DB row lingers).
  */
 export default function FeatureCostsAdmin() {
-    const [items, setItems] = useState([]);          // server snapshot
-    const [drafts, setDrafts] = useState({});        // feature_key -> { credits_cost, is_active, label, description }
+    const [items, setItems] = useState([]);            // server snapshot of feature_credit_costs
+    const [catalog, setCatalog] = useState([]);        // code-defined feature catalog
+    const [drafts, setDrafts] = useState({});          // feature_key -> { credits_cost, is_active, label, description }
     const [loading, setLoading] = useState(true);
     const [savingKey, setSavingKey] = useState(null);
     const [search, setSearch] = useState('');
@@ -31,8 +39,12 @@ export default function FeatureCostsAdmin() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await axiosInstance.get('/credits/feature-costs');
-            setItems(res.data ?? []);
+            const [costsRes, catalogRes] = await Promise.all([
+                axiosInstance.get('/credits/feature-costs'),
+                axiosInstance.get('/credits/feature-catalog'),
+            ]);
+            setItems(costsRes.data ?? []);
+            setCatalog(catalogRes.data ?? []);
             setDrafts({}); // reset edits on refetch
         } catch {
             /* toasted globally */
@@ -42,6 +54,12 @@ export default function FeatureCostsAdmin() {
     }, []);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+
+    /** Catalog entries that don't yet have a DB row — these are what the dropdown offers. */
+    const availableForDropdown = useMemo(() => {
+        const configuredKeys = new Set(items.map(i => i.feature_key));
+        return catalog.filter(entry => !configuredKeys.has(entry.key));
+    }, [items, catalog]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -146,29 +164,58 @@ export default function FeatureCostsAdmin() {
         } catch { /* toasted */ }
     };
 
-    const createNew = async () => {
-        const k = newRow.feature_key.trim();
-        if (!/^[a-z][a-z0-9_]{1,79}$/.test(k)) {
-            toast.error('feature_key must be lowercase snake_case, starting with a letter');
+    /** When admin picks a key from the dropdown, prefill label/description/cost from catalog. */
+    const onCatalogPick = (key) => {
+        const entry = catalog.find(e => e.key === key);
+        if (!entry) {
+            setNewRow(r => ({ ...r, feature_key: key }));
             return;
         }
-        if (!newRow.label.trim()) { toast.error('Label is required'); return; }
+        setNewRow({
+            feature_key: entry.key,
+            label: entry.label,
+            description: entry.description ?? '',
+            credits_cost: entry.defaultCost,
+            is_active: true,
+        });
+    };
+
+    const openAddForm = () => {
+        // Reset to clean state so the dropdown shows "Select feature…"
+        setNewRow({ feature_key: '', label: '', description: '', credits_cost: 1, is_active: true });
+        setNewOpen(true);
+    };
+
+    const createNew = async () => {
+        const k = newRow.feature_key.trim();
+        if (!k) {
+            toast.error('Pick a feature from the dropdown');
+            return;
+        }
+        if (!catalog.some(e => e.key === k)) {
+            toast.error(`"${k}" is not a registered feature in the backend code.`);
+            return;
+        }
         const cost = Number(newRow.credits_cost);
-        if (!Number.isFinite(cost) || cost < 0) { toast.error('Credits cost must be ≥ 0'); return; }
+        if (!Number.isFinite(cost) || cost < 0) {
+            toast.error('Credits cost must be ≥ 0');
+            return;
+        }
 
         setCreating(true);
         try {
             const res = await axiosInstance.post('/credits/admin/feature-costs', {
                 feature_key: k,
-                label: newRow.label,
+                // label/description are optional — backend falls back to catalog defaults
+                label: newRow.label || undefined,
                 description: newRow.description || undefined,
                 credits_cost: cost,
                 is_active: !!newRow.is_active,
             });
-            setItems(prev => [...prev, res.data]);
+            setItems(prev => [...prev, { ...res.data, in_catalog: true }]);
             setNewRow({ feature_key: '', label: '', description: '', credits_cost: 1, is_active: true });
             setNewOpen(false);
-            toast.success('Feature cost created');
+            toast.success(`"${res.data.label}" added`);
         } catch { /* toasted */ } finally {
             setCreating(false);
         }
@@ -222,7 +269,16 @@ export default function FeatureCostsAdmin() {
                         <button className="fc-btn fc-btn-ghost" onClick={fetchAll} disabled={loading}>
                             Refresh
                         </button>
-                        <button className="fc-btn fc-btn-primary" onClick={() => setNewOpen(o => !o)}>
+                        <button
+                            className="fc-btn fc-btn-primary"
+                            onClick={() => (newOpen ? setNewOpen(false) : openAddForm())}
+                            disabled={!newOpen && availableForDropdown.length === 0}
+                            title={
+                                !newOpen && availableForDropdown.length === 0
+                                    ? 'Every catalog feature already has a cost configured'
+                                    : ''
+                            }
+                        >
                             <Plus size={14} /> Add feature
                         </button>
                     </div>
@@ -231,62 +287,100 @@ export default function FeatureCostsAdmin() {
                 {/* New-row form */}
                 {newOpen && (
                     <div className="fc-card" style={{ padding: 18 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12 }}>New feature cost</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                            <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Feature key</label>
-                                <input
-                                    className="fc-input"
-                                    placeholder="e.g. estimate_generate"
-                                    value={newRow.feature_key}
-                                    onChange={(e) => setNewRow(r => ({ ...r, feature_key: e.target.value.trim().toLowerCase() }))}
-                                />
-                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>lowercase, snake_case, starts with a letter</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12 }}>
+                            Register a new feature cost
+                        </div>
+
+                        {availableForDropdown.length === 0 ? (
+                            <div
+                                role="alert"
+                                style={{
+                                    background: '#fffbeb', border: '1px solid #fcd34d',
+                                    borderLeft: '4px solid #d97706', color: '#78350f',
+                                    padding: '12px 14px', borderRadius: 8, fontSize: 13,
+                                }}
+                            >
+                                Every feature in the application catalog already has a cost configured. To add a new one, a developer needs to register it in <span className="fc-mono">backend/src/billing/credits/feature-catalog.ts</span> first.
                             </div>
-                            <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Label</label>
-                                <input
-                                    className="fc-input"
-                                    placeholder="Friendly name"
-                                    value={newRow.label}
-                                    onChange={(e) => setNewRow(r => ({ ...r, label: e.target.value }))}
-                                />
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>
+                                        Feature
+                                    </label>
+                                    <select
+                                        className="fc-input"
+                                        value={newRow.feature_key}
+                                        onChange={(e) => onCatalogPick(e.target.value)}
+                                    >
+                                        <option value="">— Select a feature —</option>
+                                        {availableForDropdown.map(entry => (
+                                            <option key={entry.key} value={entry.key}>
+                                                {entry.label}  ({entry.key})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                                        Only features registered by the backend appear here. Already-configured ones are hidden.
+                                    </div>
+                                </div>
+
+                                {newRow.feature_key && (
+                                    <>
+                                        <div>
+                                            <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Label (optional override)</label>
+                                            <input
+                                                className="fc-input"
+                                                placeholder="Default: catalog label"
+                                                value={newRow.label}
+                                                onChange={(e) => setNewRow(r => ({ ...r, label: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Cost (credits)</label>
+                                            <input
+                                                type="number" min={0} className="fc-input"
+                                                value={newRow.credits_cost}
+                                                onChange={(e) => setNewRow(r => ({ ...r, credits_cost: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Active</label>
+                                            <select
+                                                className="fc-input"
+                                                value={newRow.is_active ? 'on' : 'off'}
+                                                onChange={(e) => setNewRow(r => ({ ...r, is_active: e.target.value === 'on' }))}
+                                            >
+                                                <option value="on">Enabled</option>
+                                                <option value="off">Disabled</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Description (optional override)</label>
+                                            <input
+                                                className="fc-input"
+                                                placeholder="Default: catalog description"
+                                                value={newRow.description}
+                                                onChange={(e) => setNewRow(r => ({ ...r, description: e.target.value }))}
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                            <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Cost (credits)</label>
-                                <input
-                                    type="number" min={0} className="fc-input"
-                                    value={newRow.credits_cost}
-                                    onChange={(e) => setNewRow(r => ({ ...r, credits_cost: e.target.value }))}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Active</label>
-                                <select
-                                    className="fc-input"
-                                    value={newRow.is_active ? 'on' : 'off'}
-                                    onChange={(e) => setNewRow(r => ({ ...r, is_active: e.target.value === 'on' }))}
+                        )}
+
+                        {availableForDropdown.length > 0 && (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+                                <button className="fc-btn fc-btn-ghost" onClick={() => setNewOpen(false)}>Cancel</button>
+                                <button
+                                    className="fc-btn fc-btn-primary"
+                                    onClick={createNew}
+                                    disabled={creating || !newRow.feature_key}
                                 >
-                                    <option value="on">Enabled</option>
-                                    <option value="off">Disabled</option>
-                                </select>
+                                    <Plus size={14} /> {creating ? 'Creating…' : 'Create'}
+                                </button>
                             </div>
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Description (optional)</label>
-                                <input
-                                    className="fc-input"
-                                    placeholder="What does this feature do?"
-                                    value={newRow.description}
-                                    onChange={(e) => setNewRow(r => ({ ...r, description: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
-                            <button className="fc-btn fc-btn-ghost" onClick={() => setNewOpen(false)}>Cancel</button>
-                            <button className="fc-btn fc-btn-primary" onClick={createNew} disabled={creating}>
-                                <Plus size={14} /> {creating ? 'Creating…' : 'Create'}
-                            </button>
-                        </div>
+                        )}
                     </div>
                 )}
 
@@ -328,10 +422,31 @@ export default function FeatureCostsAdmin() {
                         const draft = getDraft(item);
                         const dirty = isDirty(item);
                         const saving = savingKey === item.feature_key;
+                        const isOrphan = item.in_catalog === false;
 
                         return (
-                            <div key={item.feature_key} className="fc-row">
-                                <div className="fc-mono">{item.feature_key}</div>
+                            <div
+                                key={item.feature_key}
+                                className="fc-row"
+                                style={isOrphan ? { background: '#fffbeb' } : undefined}
+                            >
+                                <div className="fc-mono" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <span>{item.feature_key}</span>
+                                    {isOrphan && (
+                                        <span
+                                            title="This key has no matching feature in the backend code. Either restore it in feature-catalog.ts or delete this row."
+                                            style={{
+                                                fontSize: 10, fontWeight: 700, letterSpacing: 0.04,
+                                                textTransform: 'uppercase', color: '#92400e',
+                                                background: '#fef3c7', border: '1px solid #fcd34d',
+                                                padding: '2px 6px', borderRadius: 4,
+                                                display: 'inline-flex', alignItems: 'center', gap: 4, width: 'fit-content',
+                                            }}
+                                        >
+                                            <AlertTriangle size={10} /> Orphan — not in code
+                                        </span>
+                                    )}
+                                </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                     <input
