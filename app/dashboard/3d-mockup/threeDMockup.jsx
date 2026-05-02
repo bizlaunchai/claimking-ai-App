@@ -146,6 +146,10 @@ const ThreeDMockup = () => {
     // ── Provider availability  ──────────────────────────────────────────────
     const [providerStatus, setProviderStatus] = useState({});
 
+    // ── Credits (cost per generation + user's current balance) ─────────────
+    const [mockupCost, setMockupCost] = useState(null);     // { credits_cost, is_active, label } | null
+    const [creditBalance, setCreditBalance] = useState(null); // { monthly_credits, bonus_credits, ... } | null
+
     // ── Modals + sharing ─────────────────────────────────────────────────────
     const [showGallery, setShowGallery] = useState(false);
     const [showRecent, setShowRecent] = useState(false);
@@ -194,6 +198,30 @@ const ThreeDMockup = () => {
             } catch { /* ignore */ }
         })();
     }, []);
+
+    // ── Effects: mockup credit cost + user's balance (refresh after generate) ─
+    const refreshCreditsState = useCallback(async () => {
+        try {
+            const [costRes, balanceRes] = await Promise.all([
+                axiosInstance.get('/credits/feature-costs/mockup_generate', { suppressErrorToast: true }),
+                axiosInstance.get('/credits/me',                              { suppressErrorToast: true }),
+            ]);
+            setMockupCost(costRes.data ?? null);
+            setCreditBalance(balanceRes.data ?? null);
+        } catch {
+            // Pre-credit-system installs return 404 — leave both null and
+            // we'll skip the credit gate in the UI.
+        }
+    }, []);
+
+    useEffect(() => { refreshCreditsState(); }, [refreshCreditsState]);
+
+    // Derived view-state for the credit display
+    const totalCredits = (creditBalance?.monthly_credits ?? 0) + (creditBalance?.bonus_credits ?? 0);
+    const requiredCredits = mockupCost?.credits_cost ?? 0;
+    const featureDisabledByAdmin = mockupCost && mockupCost.is_active === false;
+    const insufficientCredits = mockupCost && !featureDisabledByAdmin && totalCredits < requiredCredits;
+    const creditsKnown = mockupCost !== null && creditBalance !== null;
 
     // ── Effects: gallery / recent (lazy when modal opens) ──────────────────
     useEffect(() => {
@@ -320,6 +348,24 @@ const ThreeDMockup = () => {
         const raw = (err?.userMessage ?? err?.message ?? '').toString();
         const lower = raw.toLowerCase();
 
+        if (status === 402 || lower.includes('insufficient credits')) {
+            const required = err?.response?.data?.required ?? requiredCredits;
+            const available = err?.response?.data?.available ?? totalCredits;
+            return {
+                title: 'Not enough credits',
+                message: `This action needs ${required} credits — you have ${available}.`,
+                hint: 'Buy more credits, upgrade your plan in Billing, or ask your admin to top you up.',
+            };
+        }
+
+        if (status === 403 && lower.includes('disabled by admin')) {
+            return {
+                title: 'Feature disabled',
+                message: raw || 'This feature is currently disabled by your admin.',
+                hint: 'Reach out to your admin to re-enable 3D Mockup generation.',
+            };
+        }
+
         if (lower.includes('quota') || lower.includes('429') || status === 429) {
             return {
                 title: 'AI quota exceeded',
@@ -391,6 +437,7 @@ const ThreeDMockup = () => {
             const res = await axiosInstance.post('/mockup/generate', payload);
             const mockup = res.data?.data?.mockup;
             const version = res.data?.data?.version;
+            const credits = res.data?.data?.credits;
 
             setCurrentMockup(mockup);
             setVersions(prev => {
@@ -399,9 +446,28 @@ const ThreeDMockup = () => {
             });
             setActiveVersionId(version.id);
             setPreviewMode('result');
-            toast.success('Mockup generated');
+
+            // Sync local credit balance from the server response (saves a round-trip).
+            if (credits?.balance_after) {
+                setCreditBalance(prev => ({
+                    ...(prev ?? {}),
+                    monthly_credits: credits.balance_after.monthly,
+                    bonus_credits:   credits.balance_after.bonus,
+                }));
+            } else {
+                refreshCreditsState();
+            }
+
+            toast.success(
+                credits?.cost
+                    ? `Mockup generated — ${credits.cost} credits used`
+                    : 'Mockup generated',
+            );
         } catch (err) {
             setGenerationError(buildGenerationError(err));
+            // 402 changed nothing on the server, but other errors might have —
+            // refresh to stay in sync.
+            if (err?.response?.status !== 402) refreshCreditsState();
         } finally {
             setIsGenerating(false);
         }
@@ -504,6 +570,23 @@ const ThreeDMockup = () => {
                             </div>
                             <div className="mockup-3d-status-badge active">HD Rendering</div>
                             <div className="mockup-3d-status-badge active">Photorealistic Mode</div>
+                            {creditsKnown && (
+                                <div
+                                    className="mockup-3d-status-badge active"
+                                    style={{
+                                        background: insufficientCredits
+                                            ? 'linear-gradient(135deg, #fef2f2, #fff)'
+                                            : 'linear-gradient(135deg, #f0fdf4, #fff)',
+                                        borderColor: insufficientCredits ? '#fecaca' : '#bbf7d0',
+                                        color: insufficientCredits ? '#991b1b' : '#166534',
+                                        fontWeight: 600,
+                                    }}
+                                    title={`Monthly: ${creditBalance.monthly_credits ?? 0} • Bonus: ${creditBalance.bonus_credits ?? 0}`}
+                                >
+                                    {totalCredits} credits
+                                    {requiredCredits > 0 && ` • ${requiredCredits}/run`}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="mockup-3d-header-actions">
@@ -972,11 +1055,26 @@ const ThreeDMockup = () => {
                             <button
                                 className="generate-btn"
                                 onClick={generateMockup}
-                                disabled={isGenerating || !sourcePhotoKey || !aiReady}
+                                disabled={
+                                    isGenerating
+                                    || !sourcePhotoKey
+                                    || !aiReady
+                                    || featureDisabledByAdmin
+                                    || insufficientCredits
+                                }
                             >
                                 {isGenerating
                                     ? 'Generating…'
-                                    : (currentMockup ? 'Generate Another Version' : 'Generate Mockup')}
+                                    : featureDisabledByAdmin
+                                        ? 'Disabled by admin'
+                                        : insufficientCredits
+                                            ? `Need ${requiredCredits} credits`
+                                            : (currentMockup ? 'Generate Another Version' : 'Generate Mockup')}
+                                {!isGenerating && !featureDisabledByAdmin && !insufficientCredits && requiredCredits > 0 && (
+                                    <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.85 }}>
+                                        ({requiredCredits} credit{requiredCredits === 1 ? '' : 's'})
+                                    </span>
+                                )}
                             </button>
 
                             {!aiReady && !Object.keys(providerStatus).length && (
@@ -985,6 +1083,16 @@ const ThreeDMockup = () => {
                             {!aiReady && Object.keys(providerStatus).length > 0 && (
                                 <div style={{ fontSize: 12, color: '#b91c1c', textAlign: 'center', marginTop: 6 }}>
                                     No image AI configured. Save a Gemini key in API Settings.
+                                </div>
+                            )}
+                            {insufficientCredits && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', textAlign: 'center', marginTop: 6 }}>
+                                    You have {totalCredits} credits — need {requiredCredits}. Top up in Billing.
+                                </div>
+                            )}
+                            {featureDisabledByAdmin && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', textAlign: 'center', marginTop: 6 }}>
+                                    3D Mockup generation is currently disabled by your admin.
                                 </div>
                             )}
 

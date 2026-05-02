@@ -515,6 +515,17 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                     <span className="nav-text">Users & Credits</span>
                                 </Link>
                             </div>
+
+                            <div className="nav-item">
+                                <Link href="/dashboard/admin/feature-costs" className={`nav-link ${pathname.startsWith('/dashboard/admin/feature-costs') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Feature Credit Costs">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18h-2v1.93A8.001 8.001 0 014.07 13H6v-2H4.07A8.001 8.001 0 0111 4.07V6h2V4.07A8.001 8.001 0 0119.93 11H18v2h1.93A8.001 8.001 0 0113 19.93zM12 7a5 5 0 100 10 5 5 0 000-10zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Feature Costs</span>
+                                </Link>
+                            </div>
                         </div>
                     )}
 
