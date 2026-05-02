@@ -836,23 +836,24 @@
 
 .form-input {
     padding: 0.625rem 0.875rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #e5e7eb!important;
     border-radius: 6px;
     font-size: 0.875rem;
     transition: all 0.2s ease;
+    color: #374151!important;
 }
 
 .form-input:focus {
     outline: none;
-    border-color: #FDB813;
+    border-color: #FDB813!important;
     box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
 }
 
 .form-select {
-    padding: 0.625rem 0.875rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    font-size: 0.875rem;
+    padding: 0.625rem 0.875rem!important;
+    border: 1px solid #e5e7eb!important;
+    border-radius: 6px!important;
+    font-size: 0.875rem!important;
     background: white;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -860,13 +861,13 @@
 
 .form-select:focus {
     outline: none;
-    border-color: #FDB813;
-    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
+    border-color: #FDB813!important;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1) !important;
 }
 
 .form-textarea {
     padding: 0.625rem 0.875rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #e5e7eb!important;
     border-radius: 6px;
     font-size: 0.875rem;
     resize: vertical;
@@ -876,7 +877,7 @@
 
 .form-textarea:focus {
     outline: none;
-    border-color: #FDB813;
+    border-color: #FDB813!important;
     box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
 }
 
