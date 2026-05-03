@@ -6,7 +6,7 @@ import {
     Sparkles, CheckCircle2, XCircle, Loader2, Zap, CreditCard,
     Coins, Calendar, AlertCircle, ArrowUpCircle, Receipt, ShieldCheck,
     Download, ExternalLink, ArrowDownCircle, RefreshCw, Plus, Minus,
-    History,
+    History, Ticket, Gift,
 } from 'lucide-react';
 import axiosInstance from '../../../lib/axiosInstance.js';
 
@@ -130,6 +130,10 @@ export default function Billing() {
     const [creditHistory, setCreditHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null); // string key
+    const [couponDialog, setCouponDialog] = useState(null); // { plan }
+    const [couponCode, setCouponCode] = useState('');
+    const [couponPreview, setCouponPreview] = useState(null); // validation result
+    const [couponBusy, setCouponBusy] = useState(false);
 
     const refresh = async () => {
         try {
@@ -170,15 +174,57 @@ export default function Billing() {
     // picker, not stale plan data.
     const hasLiveSub = !!sub?.plan && !['incomplete', 'incomplete_expired', 'canceled'].includes(sub?.status);
 
-    const subscribe = async (planId) => {
+    const openSubscribeDialog = (plan) => {
+        setCouponDialog({ plan });
+        setCouponCode('');
+        setCouponPreview(null);
+    };
+
+    const closeCouponDialog = () => {
+        if (couponBusy) return;
+        setCouponDialog(null);
+        setCouponCode('');
+        setCouponPreview(null);
+    };
+
+    const validateCoupon = async () => {
+        if (!couponCode.trim() || !couponDialog?.plan) return;
+        setCouponBusy(true);
+        try {
+            const { data } = await axiosInstance.post('/coupons/validate', {
+                code: couponCode.trim().toUpperCase(),
+                planId: couponDialog.plan.id,
+            });
+            setCouponPreview(data);
+            if (!data.valid) toast.error(data.reason || 'Coupon not valid');
+            else toast.success('Coupon applied');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Failed to validate coupon');
+        } finally {
+            setCouponBusy(false);
+        }
+    };
+
+    const subscribe = async (planId, code = null) => {
         setActionLoading(`sub-${planId}`);
         try {
-            const { data } = await axiosInstance.post('/subscriptions/checkout', { planId });
+            const { data } = await axiosInstance.post('/subscriptions/checkout', {
+                planId,
+                couponCode: code || undefined,
+            });
             window.location.href = data.url;
         } catch (e) {
             toast.error(e?.response?.data?.message || 'Failed to start checkout');
             setActionLoading(null);
         }
+    };
+
+    const confirmSubscribe = () => {
+        if (!couponDialog?.plan) return;
+        subscribe(
+            couponDialog.plan.id,
+            couponPreview?.valid ? couponCode.trim().toUpperCase() : null,
+        );
     };
 
     const changePlan = async (planId) => {
@@ -377,6 +423,12 @@ export default function Billing() {
                             {plans.map((p) => {
                                 const isCurrent = currentPlanId === p.id;
                                 const isLoadingPlan = actionLoading === `sub-${p.id}` || actionLoading === `change-${p.id}`;
+                                const hasPlanDiscount = (p.discount_percent ?? 0) > 0 || (p.discount_amount_cents ?? 0) > 0;
+                                const discountedPriceCents = hasPlanDiscount
+                                    ? (p.discount_percent > 0
+                                        ? Math.max(0, p.price_cents - Math.floor(p.price_cents * p.discount_percent / 100))
+                                        : Math.max(0, p.price_cents - p.discount_amount_cents))
+                                    : p.price_cents;
                                 return (
                                     <div key={p.id} className={`plan-card ${p.is_popular ? 'popular' : ''} ${isCurrent ? 'current' : ''}`}>
                                         {isCurrent && <span className="badge"><CheckCircle2 size={10} style={{ verticalAlign: -1, marginRight: 4 }} />Current</span>}
@@ -387,10 +439,27 @@ export default function Billing() {
                                             {p.description && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{p.description}</div>}
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                                            <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>{fmtMoney(p.price_cents)}</span>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>{fmtMoney(discountedPriceCents)}</span>
                                             <span style={{ color: '#6b7280', fontSize: 14 }}>/ month</span>
+                                            {hasPlanDiscount && (
+                                                <span style={{ textDecoration: 'line-through', color: '#9ca3af', fontSize: 14 }}>
+                                                    {fmtMoney(p.price_cents)}
+                                                </span>
+                                            )}
                                         </div>
+
+                                        {hasPlanDiscount && (
+                                            <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 4, padding: '3px 10px', background: '#ecfdf5', color: '#047857', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04 }}>
+                                                <Gift size={11} /> {p.discount_percent > 0 ? `${p.discount_percent}% off` : `${fmtMoney(p.discount_amount_cents)} off`}
+                                            </div>
+                                        )}
+
+                                        {p.trial_days > 0 && (
+                                            <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 4, padding: '3px 10px', background: '#eff6ff', color: '#1d4ed8', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04 }}>
+                                                <Sparkles size={11} /> {p.trial_days}-day free trial
+                                            </div>
+                                        )}
 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4f46e5', fontSize: 13, fontWeight: 600 }}>
                                             <Coins size={14} /> {p.monthly_credits.toLocaleString()} credits / month
@@ -425,10 +494,10 @@ export default function Billing() {
                                                 <button
                                                     className="btn btn-primary"
                                                     style={{ width: '100%' }}
-                                                    onClick={() => subscribe(p.id)}
+                                                    onClick={() => openSubscribeDialog(p)}
                                                     disabled={isLoadingPlan}
                                                 >
-                                                    <Zap size={14} /> Subscribe
+                                                    <Zap size={14} /> {p.trial_days > 0 ? 'Start Trial' : 'Subscribe'}
                                                     {isLoadingPlan && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
                                                 </button>
                                             )}
@@ -584,6 +653,130 @@ export default function Billing() {
                 </div>
 
                 <div style={{ height: 40 }} />
+            </div>
+
+            {couponDialog && (
+                <CouponDialog
+                    plan={couponDialog.plan}
+                    code={couponCode}
+                    setCode={setCouponCode}
+                    preview={couponPreview}
+                    busy={couponBusy}
+                    submitting={actionLoading === `sub-${couponDialog.plan.id}`}
+                    onClose={closeCouponDialog}
+                    onValidate={validateCoupon}
+                    onConfirm={confirmSubscribe}
+                />
+            )}
+        </div>
+    );
+}
+
+function CouponDialog({ plan, code, setCode, preview, busy, submitting, onClose, onValidate, onConfirm }) {
+    const trialDays = plan.trial_days || 0;
+    const planDiscount = preview?.valid
+        ? preview.originalPriceCents
+        : ((plan.discount_percent ?? 0) > 0
+            ? Math.max(0, plan.price_cents - Math.floor(plan.price_cents * plan.discount_percent / 100))
+            : (plan.discount_amount_cents ?? 0) > 0
+                ? Math.max(0, plan.price_cents - plan.discount_amount_cents)
+                : plan.price_cents);
+    const finalCents = preview?.valid ? preview.finalPriceCents : planDiscount;
+
+    return (
+        <div
+            onClick={onClose}
+            style={{
+                position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.55)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20,
+            }}
+        >
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 460, width: '100%' }}>
+                <div style={{ padding: '18px 22px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Ticket size={18} color="#4f46e5" />
+                    <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
+                        {trialDays > 0 ? 'Start Trial' : 'Subscribe'} — {plan.name}
+                    </span>
+                    <button onClick={onClose} disabled={submitting} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}>
+                        <XCircle size={18} />
+                    </button>
+                </div>
+
+                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {trialDays > 0 && (
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: '10px 12px', borderRadius: 8, fontSize: 13, display: 'flex', gap: 8 }}>
+                            <Sparkles size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                            <span>You'll get a {trialDays}-day free trial. Your card won't be charged until the trial ends. Each user can take a trial only once.</span>
+                        </div>
+                    )}
+
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.05, marginBottom: 5 }}>
+                            Have a coupon code?
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input
+                                style={{ flex: 1, padding: '10px 12px', background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#111827', outline: 'none', textTransform: 'uppercase', fontFamily: 'monospace' }}
+                                value={code}
+                                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                placeholder="WELCOME20"
+                                disabled={submitting}
+                            />
+                            <button
+                                onClick={onValidate}
+                                disabled={busy || submitting || !code.trim()}
+                                style={{ padding: '10px 14px', background: '#fff', color: '#1f2937', border: '1px solid #e5e7eb', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                            >
+                                {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : 'Apply'}
+                            </button>
+                        </div>
+                        {preview && (
+                            <div style={{ marginTop: 8, fontSize: 13, color: preview.valid ? '#047857' : '#b91c1c', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {preview.valid ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                {preview.valid
+                                    ? `Saving ${fmtMoney(preview.discountCents)} — total ${fmtMoney(preview.finalPriceCents)}`
+                                    : preview.reason}
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, fontSize: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#6b7280' }}>
+                            <span>Plan price</span>
+                            <span>{fmtMoney(plan.price_cents)} / mo</span>
+                        </div>
+                        {planDiscount !== plan.price_cents && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#047857' }}>
+                                <span>Plan discount</span>
+                                <span>−{fmtMoney(plan.price_cents - planDiscount)}</span>
+                            </div>
+                        )}
+                        {preview?.valid && preview.discountCents > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#047857' }}>
+                                <span>Coupon ({code.trim().toUpperCase()})</span>
+                                <span>−{fmtMoney(preview.discountCents)}</span>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb', fontWeight: 700, color: '#111827' }}>
+                            <span>{trialDays > 0 ? 'After trial' : 'Today'}</span>
+                            <span>{fmtMoney(finalCents)} / mo</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ padding: '14px 22px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button onClick={onClose} disabled={submitting} style={{ padding: '10px 16px', background: '#fff', color: '#1f2937', border: '1px solid #e5e7eb', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        disabled={submitting}
+                        style={{ padding: '10px 18px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        {submitting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                        Continue to checkout
+                    </button>
+                </div>
             </div>
         </div>
     );
