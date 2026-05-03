@@ -179,7 +179,10 @@ export default function AdminCoupons() {
                 await axiosInstance.post('/coupons/admin', createPayload);
                 toast.success('Coupon created');
             } else {
-                await axiosInstance.patch(`/coupons/admin/${editor.coupon.id}`, payload);
+                // `code` is immutable after creation — UpdateCouponDto does
+                // not accept it, so strip it before sending the PATCH.
+                const { code: _omit, ...updatePayload } = payload;
+                await axiosInstance.patch(`/coupons/admin/${editor.coupon.id}`, updatePayload);
                 toast.success('Coupon updated');
             }
             setEditor(null);
