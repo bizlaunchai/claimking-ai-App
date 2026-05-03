@@ -142,6 +142,9 @@ const ThreeDMockup = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [previewMode, setPreviewMode] = useState('result'); // original | result | split
     const [generationError, setGenerationError] = useState(null); // { title, message, hint } | null
+    const [splitPos, setSplitPos] = useState(50); // 0-100, position of split view divider
+    const [showFullscreen, setShowFullscreen] = useState(false);
+    const splitRef = useRef(null);
 
     // ── Provider availability  ──────────────────────────────────────────────
     const [providerStatus, setProviderStatus] = useState({});
@@ -315,6 +318,33 @@ const ThreeDMockup = () => {
     const addPrompt = (text) => {
         setAiInstructions(prev => prev ? `${prev} ${text}` : text);
     };
+
+    // ── Split-view drag handler ──────────────────────────────────────────────
+    const updateSplitFromEvent = useCallback((clientX) => {
+        const el = splitRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const pct = ((clientX - rect.left) / rect.width) * 100;
+        setSplitPos(Math.max(0, Math.min(100, pct)));
+    }, []);
+
+    const startSplitDrag = useCallback((e) => {
+        e.preventDefault();
+        const move = (ev) => {
+            const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+            updateSplitFromEvent(x);
+        };
+        const stop = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', stop);
+            window.removeEventListener('touchmove', move);
+            window.removeEventListener('touchend', stop);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', stop);
+        window.addEventListener('touchmove', move, { passive: false });
+        window.addEventListener('touchend', stop);
+    }, [updateSplitFromEvent]);
 
     // ────────────────────────────────────────────────────────────────────────
     //   Build the material_settings JSON the backend expects
@@ -798,9 +828,34 @@ const ThreeDMockup = () => {
                     </div>
 
                     {/* Middle panel — material/color customisation */}
-                    <div className="panel-card">
+                    <div className="panel-card" style={{ position: 'relative' }}>
                         <h3 className="panel-header">Material & Color Customization</h3>
 
+                        {!sourcePhotoKey && (
+                            <div style={{
+                                background: '#fef9e6',
+                                border: '1px dashed #FDB813',
+                                borderRadius: 8,
+                                padding: '1rem',
+                                color: '#92400e',
+                                fontSize: 13,
+                                textAlign: 'center',
+                                marginBottom: '1rem',
+                                fontWeight: 500,
+                            }}>
+                                📷 Upload a property photo first to unlock material, color &amp; AI instruction options.
+                            </div>
+                        )}
+
+                        <div
+                            style={{
+                                opacity: sourcePhotoKey ? 1 : 0.45,
+                                pointerEvents: sourcePhotoKey ? 'auto' : 'none',
+                                filter: sourcePhotoKey ? 'none' : 'grayscale(0.3)',
+                                transition: 'opacity 0.2s ease',
+                            }}
+                            aria-disabled={!sourcePhotoKey}
+                        >
                         <div className="material-tabs">
                             {[
                                 ['roofing', 'Roofing'],
@@ -962,6 +1017,7 @@ const ThreeDMockup = () => {
                                 </div>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     {/* Right panel — preview & generation */}
@@ -977,22 +1033,51 @@ const ThreeDMockup = () => {
                             )}
 
                             {sourcePhotoKey && previewMode === 'original' && (
-                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                             )}
 
                             {sourcePhotoKey && previewMode === 'result' && (
                                 generatedImageSrc
-                                    ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    : <AuthedImage src={sourceImageSrc} alt="Source (no generation yet)" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
+                                    ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                    : <AuthedImage src={sourceImageSrc} alt="Source (no generation yet)" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', opacity: 0.55 }} />
                             )}
 
                             {sourcePhotoKey && previewMode === 'split' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', width: '100%', height: '100%' }}>
-                                    <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    {generatedImageSrc
-                                        ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', color: '#9ca3af', fontSize: 12 }}>Generate to compare</div>}
-                                </div>
+                                generatedImageSrc ? (
+                                    <div
+                                        ref={splitRef}
+                                        className="split-compare"
+                                        style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
+                                    >
+                                        <AuthedImage src={sourceImageSrc} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                        <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
+                                            <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                        </div>
+                                        <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>BEFORE</div>
+                                        <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(253,184,19,0.9)', color: '#1a1f3a', fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>AFTER</div>
+                                        <div
+                                            onMouseDown={startSplitDrag}
+                                            onTouchStart={startSplitDrag}
+                                            style={{ position: 'absolute', top: 0, bottom: 0, left: `${splitPos}%`, width: 4, background: '#fff', boxShadow: '0 0 6px rgba(0,0,0,0.5)', cursor: 'ew-resize', transform: 'translateX(-50%)' }}
+                                        >
+                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 36, height: 36, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1f3a', fontSize: 14, fontWeight: 700 }}>⇆</div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6', color: '#6b7280', fontSize: 13 }}>
+                                        Generate a mockup to enable side-by-side comparison
+                                    </div>
+                                )
+                            )}
+
+                            {sourcePhotoKey && (
+                                <button
+                                    onClick={() => setShowFullscreen(true)}
+                                    title="Open fullscreen"
+                                    style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                                >
+                                    ⛶ Fullscreen
+                                </button>
                             )}
 
                             {isGenerating && (
@@ -1159,6 +1244,60 @@ const ThreeDMockup = () => {
                 </div>
 
                 {/* Sharing */}
+                {showFullscreen && sourcePhotoKey && (
+                    <div
+                        onClick={() => setShowFullscreen(false)}
+                        style={{
+                            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)',
+                            zIndex: 9999, display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center', padding: 20,
+                        }}
+                    >
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowFullscreen(false); }}
+                            style={{ position: 'absolute', top: 16, right: 20, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
+                        >✕ Close</button>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                            <button onClick={(e) => { e.stopPropagation(); setPreviewMode('original'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: previewMode === 'original' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: previewMode === 'original' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Original</button>
+                            <button onClick={(e) => { e.stopPropagation(); setPreviewMode('result'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: previewMode === 'result' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: previewMode === 'result' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Result</button>
+                            <button onClick={(e) => { e.stopPropagation(); setPreviewMode('split'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: previewMode === 'split' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: previewMode === 'split' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Split View</button>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()} style={{ width: '90vw', height: '80vh', position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
+                            {previewMode === 'original' && (
+                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            )}
+                            {previewMode === 'result' && (
+                                generatedImageSrc
+                                    ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    : <div style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>No generation yet</div>
+                            )}
+                            {previewMode === 'split' && generatedImageSrc && (
+                                <div
+                                    ref={splitRef}
+                                    style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
+                                >
+                                    <AuthedImage src={sourceImageSrc} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
+                                        <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    </div>
+                                    <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>BEFORE</div>
+                                    <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(253,184,19,0.95)', color: '#1a1f3a', fontSize: 12, padding: '4px 10px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>AFTER</div>
+                                    <div
+                                        onMouseDown={startSplitDrag}
+                                        onTouchStart={startSplitDrag}
+                                        style={{ position: 'absolute', top: 0, bottom: 0, left: `${splitPos}%`, width: 4, background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.6)', cursor: 'ew-resize', transform: 'translateX(-50%)' }}
+                                    >
+                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 44, height: 44, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1f3a', fontSize: 16, fontWeight: 700 }}>⇆</div>
+                                    </div>
+                                </div>
+                            )}
+                            {previewMode === 'split' && !generatedImageSrc && (
+                                <div style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 14 }}>Generate a mockup to enable split view</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {showSharing && (
                     <div className="sharing-section" id="sharingSection">
                         <h3 className="sharing-title">Share Your Mockup</h3>
