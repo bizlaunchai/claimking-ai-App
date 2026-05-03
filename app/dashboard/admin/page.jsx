@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Package, Users, ShoppingCart, KeyRound } from 'lucide-react';
+import { Package, Users, ShoppingCart, KeyRound, Ticket } from 'lucide-react';
 
 export default function AdminHome() {
     const links = [
@@ -24,6 +24,13 @@ export default function AdminHome() {
             desc: 'View users, adjust credits, manage credit history.',
             Icon: Users,
             color: '#0d9488',
+        },
+        {
+            href: '/dashboard/admin/coupons',
+            title: 'Coupons',
+            desc: 'Create discount codes, set limits, and assign to users.',
+            Icon: Ticket,
+            color: '#0891b2',
         },
         {
             href: '/dashboard/admin/api-settings',

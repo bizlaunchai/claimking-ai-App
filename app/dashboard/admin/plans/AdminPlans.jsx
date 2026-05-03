@@ -19,6 +19,7 @@ const fmtMoney = (cents) =>
 const blank = {
     name: '', description: '', priceDollars: '', monthlyCredits: '',
     features: [''], isPopular: false, sortOrder: 0,
+    trialDays: 0, discountPercent: 0, discountAmountDollars: '',
 };
 
 export default function AdminPlans() {
@@ -54,6 +55,11 @@ export default function AdminPlans() {
             features: Array.isArray(p.features) && p.features.length ? p.features : [''],
             isPopular: !!p.is_popular,
             sortOrder: p.sort_order ?? 0,
+            trialDays: p.trial_days ?? 0,
+            discountPercent: p.discount_percent ?? 0,
+            discountAmountDollars: p.discount_amount_cents
+                ? (p.discount_amount_cents / 100).toFixed(2)
+                : '',
         },
     });
 
@@ -91,6 +97,11 @@ export default function AdminPlans() {
             features: f.features.map((x) => x.trim()).filter(Boolean),
             isPopular: !!f.isPopular,
             sortOrder: Number(f.sortOrder) || 0,
+            trialDays: Math.max(0, Math.floor(Number(f.trialDays) || 0)),
+            discountPercent: Math.max(0, Math.min(100, Math.floor(Number(f.discountPercent) || 0))),
+            discountAmountCents: f.discountAmountDollars
+                ? Math.round(Number(f.discountAmountDollars) * 100)
+                : 0,
         };
 
         setSaving(true);
@@ -202,6 +213,8 @@ export default function AdminPlans() {
                                 <th style={th}>Plan</th>
                                 <th style={th}>Price</th>
                                 <th style={th}>Credits / mo</th>
+                                <th style={th}>Trial</th>
+                                <th style={th}>Discount</th>
                                 <th style={th}>Status</th>
                                 <th style={th}>Stripe</th>
                                 <th style={{ ...th, textAlign: 'right' }}>Actions</th>
@@ -225,6 +238,22 @@ export default function AdminPlans() {
                                         </td>
                                         <td style={td}>{fmtMoney(p.price_cents)}</td>
                                         <td style={td}>{p.monthly_credits.toLocaleString()}</td>
+                                        <td style={td}>
+                                            {p.trial_days > 0 ? (
+                                                <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{p.trial_days}d</span>
+                                            ) : (
+                                                <span style={{ color: '#9ca3af' }}>—</span>
+                                            )}
+                                        </td>
+                                        <td style={td}>
+                                            {p.discount_percent > 0 ? (
+                                                <span style={{ color: '#047857', fontWeight: 600 }}>{p.discount_percent}%</span>
+                                            ) : p.discount_amount_cents > 0 ? (
+                                                <span style={{ color: '#047857', fontWeight: 600 }}>−{fmtMoney(p.discount_amount_cents)}</span>
+                                            ) : (
+                                                <span style={{ color: '#9ca3af' }}>—</span>
+                                            )}
+                                        </td>
                                         <td style={td}>
                                             <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color, border: `1px solid ${sty.border}` }}>
                                                 {sty.label}
@@ -446,6 +475,48 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                                 <span style={{ fontSize: 13, color: '#4b5563' }}>Show "Popular" badge</span>
                             </label>
                         </Field>
+                    </div>
+
+                    {/* Trial + Discount */}
+                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.05 }}>
+                            Trial & Discount
+                        </div>
+                        <Field label="Free trial (days)">
+                            <input
+                                style={input}
+                                type="number" min="0" max="365" step="1"
+                                value={f.trialDays}
+                                onChange={(e) => onChange({ trialDays: e.target.value })}
+                                placeholder="0 = no trial"
+                            />
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                                Each user can take a trial only once across all plans.
+                            </div>
+                        </Field>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <Field label="Discount %">
+                                <input
+                                    style={input}
+                                    type="number" min="0" max="100" step="1"
+                                    value={f.discountPercent}
+                                    onChange={(e) => onChange({ discountPercent: e.target.value, discountAmountDollars: '' })}
+                                    placeholder="0"
+                                />
+                            </Field>
+                            <Field label="Discount (USD)">
+                                <input
+                                    style={input}
+                                    type="number" min="0" step="0.01"
+                                    value={f.discountAmountDollars}
+                                    onChange={(e) => onChange({ discountAmountDollars: e.target.value, discountPercent: 0 })}
+                                    placeholder="0.00"
+                                />
+                            </Field>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>
+                            Plan-level discount applies to every checkout. Percent takes priority over fixed amount when both are set.
+                        </div>
                     </div>
                 </div>
 
