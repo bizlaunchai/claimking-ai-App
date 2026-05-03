@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaimKing.AI - Estimate Builder</title>
+</head>
+<body class="mode-insurance">
+
+<!-- ============ ICONS (reusable SVG sprite) ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M12 6L9 9L3 7L4 16H20L21 7L15 9L12 6Z" fill="currentColor"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 8.4L24 12l-9.6 3.6L12 24l-2.4-8.4L0 12l9.6-3.6L12 0z"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+    <symbol id="i-trending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></symbol>
+  </defs>
+</svg>
+
+<!-- ============ HEADER ============ -->
+<header class="header">
+<div class="header-content">
+  <div class="logo-section">
+    <svg class="logo-icon" viewBox="0 0 24 24"><use href="#i-crown"/></svg>
+    <span class="logo-text">ClaimKing.AI</span>
+  </div>
+  <div class="client-selector">
+    <button class="client-display empty" id="clientDisplay" onclick="openClientPicker()">
+      <svg class="icon icon-sm" style="color:#9ca3af"><use href="#i-user"/></svg>
+      <span class="label">Client:</span>
+      <span class="client-name empty" id="selectedClient">Choose Client</span>
+    </button>
+    <div class="estimate-type-selector" role="tablist" aria-label="Estimate type">
+      <button class="type-btn active" data-mode="insurance" onclick="setEstimateType('insurance')">Insurance</button>
+      <button class="type-btn" data-mode="retail" onclick="setEstimateType('retail')">Retail</button>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="save-indicator" id="saveIndicator" style="display:none">
+      <span class="dot"></span>
+      <span id="saveText">Saved</span>
+    </div>
+    <div style="position:relative">
+      <button class="more-options-btn" onclick="toggleMoreOptions()" aria-haspopup="true" aria-expanded="false">
+        <svg class="icon icon-sm"><use href="#i-dots"/></svg>
+        More
+      </button>
+      <div class="more-options-menu" id="moreOptionsMenu" role="menu">
+        <div class="menu-section">
+          <button class="menu-item" onclick="openItemLibrary()"><svg class="icon icon-sm"><use href="#i-grid"/></svg> Item Library</button>
+          <button class="menu-item" onclick="openBundles()"><svg class="icon icon-sm"><use href="#i-package"/></svg> Manage Bundles</button>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-section">
+          <button class="menu-item" onclick="openTemplates()"><svg class="icon icon-sm"><use href="#i-doc"/></svg> Estimate Templates</button>
+          <button class="menu-item" onclick="saveAsTemplate()"><svg class="icon icon-sm"><use href="#i-cloud"/></svg> Save as Template</button>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-section">
+          <button class="menu-item" onclick="openRateLearning()"><svg class="icon icon-sm"><use href="#i-brain"/></svg> Train AI on My Rates</button>
+          <button class="menu-item" onclick="openTermsEditor()"><svg class="icon icon-sm"><use href="#i-doc"/></svg> Edit Terms &amp; Conditions</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</header>
+
+<!-- ============ MAIN ============ -->
+<main class="main-container">
+
+  <!-- STAGE 1: Start (shown until first action) -->
+  <div class="start-stage" id="startStage">
+    <h1>Build a new estimate</h1>
+    <p>Pick how you want to start. Most contractors save 30+ minutes per estimate by uploading a measurement report.</p>
+    <div class="start-options">
+      <button class="start-card primary" onclick="openAIGenerator()">
+        <div class="start-card-icon"><svg class="icon icon-lg"><use href="#i-sparkle"/></svg></div>
+        <h3>Upload &amp; Auto-Build</h3>
+        <p>Drop in a measurement report or photos. AI builds your estimate using your rates.</p>
+      </button>
+      <button class="start-card alt" onclick="startBlank()">
+        <div class="start-card-icon"><svg class="icon icon-lg"><use href="#i-edit"/></svg></div>
+        <h3>Start Blank</h3>
+        <p>Build from scratch with your saved sections and items.</p>
+      </button>
+    </div>
+    <p class="start-help">First time here? <a href="#" onclick="openRateLearning();return false">Train the AI on your past estimates</a> so it uses your real prices.</p>
+  </div>
+
+  <!-- STAGE 2: AI bar (slim, shown after estimate exists) -->
+  <div class="ai-bar" id="aiBar" style="display:none">
+    <div class="ai-bar-icon"><svg class="icon"><use href="#i-sparkle"/></svg></div>
+    <div class="ai-bar-text">
+      <div class="ai-bar-title" id="aiBarTitle">AI is ready to help</div>
+      <div class="ai-bar-sub" id="aiBarSub">Upload a measurement report to auto-fill, or add items manually below.</div>
+    </div>
+    <div class="ai-bar-actions">
+      <button class="btn-ai-ghost" onclick="openAIGenerator()">
+        <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-upload"/></svg>
+        Upload &amp; Build
+      </button>
+      <button class="btn-ai" onclick="askAIToReview()">
+        <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-refresh"/></svg>
+        AI Review
+      </button>
+    </div>
+  </div>
+
+  <!-- STAGE 2: Builder -->
+  <div class="builder-section" id="builderSection" style="display:none">
+
+    <!-- LEFT: Sections + Items -->
+    <aside class="left-panel">
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Sections</h3>
+          <button class="add-section-btn" onclick="openAddSection()" title="Add section" aria-label="Add section">
+            <svg class="icon icon-sm"><use href="#i-plus"/></svg>
+          </button>
+        </div>
+        <div class="sections-list" id="sectionsList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Add Items</h3>
+          <button class="see-all-btn" onclick="openItemLibrary()">
+            <svg class="icon icon-sm"><use href="#i-grid"/></svg>
+            All
+          </button>
+        </div>
+        <input type="text" class="search-input" id="itemSearch" placeholder="Search items..." onkeyup="searchItems()">
+        <div class="category-tabs" id="categoryTabs">
+          <button class="category-tab active" data-cat="roofing" onclick="showCategory('roofing',event)">Roofing</button>
+          <button class="category-tab" data-cat="siding" onclick="showCategory('siding',event)">Siding</button>
+          <button class="category-tab" data-cat="gutters" onclick="showCategory('gutters',event)">Gutters</button>
+          <button class="category-tab" data-cat="windows" onclick="showCategory('windows',event)">Windows</button>
+          <button class="category-tab" data-cat="general" onclick="showCategory('general',event)">General</button>
+        </div>
+        <div class="items-list" id="itemsList"></div>
+        <button onclick="openCustomItem()" style="width:100%;margin-top:10px;padding:9px;background:#fffef7;border:1px dashed #FDB813;border-radius:7px;color:#92400e;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          <svg class="icon icon-sm"><use href="#i-plus"/></svg>
+          Add New Item
+        </button>
+      </div>
+    </aside>
+
+    <!-- CENTER: Estimate document -->
+    <section class="estimate-panel" id="estimatePanel">
+      <div class="estimate-header">
+        <div class="company-info">
+          <svg viewBox="0 0 24 24"><use href="#i-crown"/></svg>
+          <div>
+            <div class="company-info-text">CLAIMKING</div>
+            <div class="company-info-sub">Insurance Restoration Estimate</div>
+          </div>
+        </div>
+        <div class="client-info">
+          <div><strong>Client:</strong> <span id="estimateClient">Not selected</span></div>
+          <div><strong>Date:</strong> <span id="estimateDate"></span></div>
+          <div><strong>Claim #:</strong> <span id="claimNumber">—</span></div>
+        </div>
+      </div>
+
+      <h1 class="estimate-title" id="estimateTitle" onclick="editEstimateTitle()" title="Click to edit">INSURANCE ESTIMATE</h1>
+
+      <div class="scope-callout" id="scopeCallout">
+        <div class="scope-callout-title">
+          <svg class="icon icon-sm"><use href="#i-warning"/></svg>
+          Critical scope items
+        </div>
+        <ul id="criticalItems"></ul>
+      </div>
+
+      <div id="estimateSections"></div>
+
+      <!-- Totals -->
+      <div class="totals-section">
+        <div class="total-row">
+          <span>Subtotal</span>
+          <span class="total-value" id="subtotal">$0.00</span>
+        </div>
+        <div class="total-row">
+          <span class="toggle-input">
+            <input type="checkbox" id="overheadToggle" checked onchange="updateTotals()">
+            <span>Overhead &amp; Profit (20%)</span>
+          </span>
+          <span class="total-value" id="overhead">$0.00</span>
+        </div>
+        <div class="total-row">
+          <span class="toggle-input">
+            <input type="checkbox" id="taxToggle" checked onchange="updateTotals()">
+            <input type="text" id="taxName" value="Sales Tax" style="width:90px">
+            <span>(</span>
+            <input type="number" id="taxPercent" value="8" step="0.1" min="0" max="100" style="width:48px;text-align:center" onchange="updateTotals()">
+            <span>%)</span>
+          </span>
+          <span class="total-value" id="tax">$0.00</span>
+        </div>
+        <div class="total-row final">
+          <span>Total RCV</span>
+          <span class="total-value final" id="totalRCV">$0.00</span>
+        </div>
+      </div>
+
+      <button class="finalize-btn" id="finalizeBtn" onclick="openFinalize()" disabled>
+        <svg class="icon"><use href="#i-check-circle"/></svg>
+        Finalize Estimate
+      </button>
+
+      <!-- ============ TERMS & CONDITIONS ============ -->
+      <div class="terms-wrapper" id="termsWrapper">
+        <div class="terms-toolbar">
+          <div class="terms-toolbar-left">
+            <svg class="icon icon-sm" style="color:#6b7280"><use href="#i-doc"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Terms &amp; Conditions appended to PDF</span>
+          </div>
+          <button class="btn btn-secondary" style="padding:5px 10px;font-size:11.5px" onclick="openTermsEditor()">
+            <svg class="icon icon-sm"><use href="#i-edit"/></svg>
+            Edit Terms
+          </button>
+        </div>
+        <div class="terms-content" id="termsContent"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT RAIL: Tabs (Code, Database, Docs, Sign/Pay) -->
+    <aside class="right-rail">
+      <div class="rail-tabs" role="tablist">
+        <button class="rail-tab active" data-pane="code" onclick="switchRailTab('code')" role="tab">
+          <svg class="icon icon-sm"><use href="#i-shield"/></svg>
+          Code
+        </button>
+        <button class="rail-tab" data-pane="library" onclick="switchRailTab('library')" role="tab">
+          <svg class="icon icon-sm"><use href="#i-book"/></svg>
+          Library
+        </button>
+        <button class="rail-tab" data-pane="docs" onclick="switchRailTab('docs')" role="tab">
+          <svg class="icon icon-sm"><use href="#i-camera"/></svg>
+          Docs
+        </button>
+        <button class="rail-tab" data-pane="sign" onclick="switchRailTab('sign')" role="tab">
+          <svg class="icon icon-sm"><use href="#i-pen"/></svg>
+          Sign
+        </button>
+      </div>
+      <div class="rail-content">
+
+        <!-- CODE COMPLIANCE PANE -->
+        <div class="rail-pane active" id="pane-code">
+          <h3>Code requirements</h3>
+          <p class="desc">Check the boxes for items required by code, then tap "Add to Estimate" below.</p>
+          <div id="codeItemsContainer"></div>
+          <button class="rail-action-btn" onclick="addAllCheckedCodes()">
+            <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-plus"/></svg>
+            Add Checked Items to Estimate
+          </button>
+        </div>
+
+        <!-- CODE/MFR LIBRARY PANE -->
+        <div class="rail-pane" id="pane-library">
+          <h3>Code &amp; manufacturer database</h3>
+          <p class="desc">Search IRC/IBC codes and manufacturer-required items. Tap an item to add it.</p>
+          <input type="text" class="search-input" id="codeDbSearch" placeholder="Search codes, materials, manufacturers..." onkeyup="filterCodeDb()" style="margin-bottom:8px">
+          <div class="filter-row">
+            <select class="filter-select" id="codeDatabase" onchange="filterCodeDb()">
+              <option value="all">All Codes</option>
+              <option value="irc">IRC 2021</option>
+              <option value="ibc">IBC 2021</option>
+              <option value="local">Local</option>
+            </select>
+            <select class="filter-select" id="mfrDatabase" onchange="filterCodeDb()">
+              <option value="all">All Mfrs</option>
+              <option value="gaf">GAF</option>
+              <option value="certainteed">CertainTeed</option>
+              <option value="owens">Owens Corning</option>
+            </select>
+          </div>
+          <div id="codeDbList"></div>
+          <div id="codeDbEmpty" style="display:none;text-align:center;padding:20px;color:#9ca3af;font-size:12px;font-style:italic">No matches. Try a different search.</div>
+        </div>
+
+        <!-- DOCUMENTATION PANE -->
+        <div class="rail-pane" id="pane-docs">
+          <h3>Photo documentation</h3>
+          <p class="desc">Upload damage photos. AI auto-stamps with claim number, address, and date.</p>
+          <div class="doc-card">
+            <div class="doc-card-title"><svg class="icon icon-sm"><use href="#i-camera"/></svg> Bulk photo upload</div>
+            <div class="doc-card-meta">No photos uploaded yet</div>
+            <button class="doc-card-action" onclick="uploadBulkPhotos()">Upload Photos</button>
+          </div>
+          <div class="doc-card">
+            <div class="doc-card-title"><svg class="icon icon-sm"><use href="#i-doc"/></svg> Supporting docs package</div>
+            <div class="doc-card-meta">Code citations, mfr specs, photos</div>
+            <button class="doc-card-action" onclick="generateSupportingDocs()">Generate Package</button>
+          </div>
+        </div>
+
+        <!-- SIGNATURE / PAYMENT PANE -->
+        <div class="rail-pane" id="pane-sign">
+          <h3>Signature &amp; payment</h3>
+          <p class="desc">Send to homeowner for digital signature and collect deposit.</p>
+          <div class="sig-section">
+            <div class="sig-section-title">Digital signature</div>
+            <div class="sig-canvas">
+              <div class="sig-canvas-text">Homeowner signature pending</div>
+            </div>
+            <button class="sig-action" onclick="requestSignature()">
+              <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-send"/></svg>
+              Send for Signature
+            </button>
+          </div>
+          <div class="sig-section">
+            <div class="sig-section-title">Collect deposit</div>
+            <div class="payment-amount-box">
+              <label style="font-size:11.5px;font-weight:600;display:block;margin-bottom:6px">Amount</label>
+              <div style="display:flex;gap:6px;align-items:center;font-size:12px">
+                <input type="radio" name="paymentType" value="percentage" checked onchange="updatePaymentAmount()" id="ptPct">
+                <label for="ptPct">%</label>
+                <input type="number" id="paymentPct" value="50" min="0" max="100" onchange="updatePaymentAmount()" style="width:55px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px">
+                <span style="margin:0 6px;color:#9ca3af">or</span>
+                <input type="radio" name="paymentType" value="fixed" onchange="updatePaymentAmount()" id="ptFixed">
+                <label for="ptFixed">$</label>
+                <input type="number" id="paymentFixed" value="0" min="0" step="100" onchange="updatePaymentAmount()" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px">
+              </div>
+              <div class="payment-amount-display">Due: <span id="paymentDisplay">$0.00</span></div>
+            </div>
+            <div class="pay-method-row">
+              <label><input type="radio" name="payMethod" checked> <svg class="icon icon-sm"><use href="#i-card"/></svg> Stripe</label>
+              <label><input type="radio" name="payMethod"> <svg class="icon icon-sm"><use href="#i-card"/></svg> QuickBooks</label>
+              <label><input type="radio" name="payMethod"> <svg class="icon icon-sm"><use href="#i-card"/></svg> GoHighLevel</label>
+            </div>
+            <button class="sig-action" style="background:#10b981" onclick="generateInvoice()">
+              <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-send"/></svg>
+              Send Invoice
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
+</main>
+
+<!-- ============ AI GENERATOR MODAL ============ -->
+<div class="modal" id="aiModal">
+  <div class="modal-content" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title"><svg class="icon" style="color:#FDB813;vertical-align:middle"><use href="#i-sparkle"/></svg> AI Estimate Generator</div>
+      <button class="modal-close" onclick="closeModal('aiModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-grid">
+        <div class="upload-box" onclick="uploadFile('measurement')" id="measurementBox">
+          <div class="upload-box-icon"><svg class="icon"><use href="#i-doc"/></svg></div>
+          <div class="upload-box-label">Measurement Reports</div>
+          <div class="upload-box-hint">EagleView, HOVER, or PDF — multiple OK</div>
+          <div class="upload-box-file" id="measurementFile" style="display:none"></div>
+        </div>
+        <div class="upload-box" onclick="uploadFile('photos')" id="photosBox">
+          <div class="upload-box-icon"><svg class="icon"><use href="#i-camera"/></svg></div>
+          <div class="upload-box-label">Damage Photos</div>
+          <div class="upload-box-hint">Multiple photos OK</div>
+          <div class="upload-box-file" id="photosFile" style="display:none"></div>
+        </div>
+      </div>
+
+      <details style="margin:14px 0;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px">
+        <summary style="font-size:13px;font-weight:600;cursor:pointer">Optional: Upload existing adjuster estimate</summary>
+        <div style="margin-top:12px">
+          <div class="upload-grid">
+            <div class="upload-box" onclick="uploadFile('estimate1')" id="estimate1Box">
+              <div class="upload-box-icon"><svg class="icon"><use href="#i-doc"/></svg></div>
+              <div class="upload-box-label">Adjuster Estimate</div>
+              <div class="upload-box-hint">For supplement analysis</div>
+              <div class="upload-box-file" id="estimate1File" style="display:none"></div>
+            </div>
+            <div class="upload-box" onclick="uploadFile('estimate2')" id="estimate2Box">
+              <div class="upload-box-icon"><svg class="icon"><use href="#i-doc"/></svg></div>
+              <div class="upload-box-label">Prior Supplements</div>
+              <div class="upload-box-hint">Already approved items</div>
+              <div class="upload-box-file" id="estimate2File" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div class="field">
+        <label>Focus areas (optional)</label>
+        <div class="selected-chips" id="selectedChips"></div>
+        <div class="chip-row">
+          <button class="chip" onclick="toggleSuggestion(this,'Complete roof replacement')">Complete roof replacement</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Code upgrades')">Code upgrades</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Hail damage')">Hail damage</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Wind damage')">Wind damage</button>
+          <button class="chip" onclick="toggleSuggestion(this,'2 layers tear off')">2 layers tear off</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Include O&P')">Include O&amp;P</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Brittle test failed')">Brittle test failed</button>
+          <button class="chip" onclick="toggleSuggestion(this,'Build supplement')">Build supplement</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Additional notes (optional)</label>
+        <textarea id="aiMessage" placeholder="Anything specific. e.g. Steep roof, two layers, brittle test failed on north slope..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('aiModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="generateAIEstimate()">
+        <svg class="icon icon-sm"><use href="#i-sparkle"/></svg>
+        Generate Estimate
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RATE LEARNING MODAL ============ -->
+<div class="modal" id="rateLearningModal">
+  <div class="modal-content" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title"><svg class="icon" style="color:#FDB813;vertical-align:middle"><use href="#i-brain"/></svg> Train AI on Your Rates</div>
+      <button class="modal-close" onclick="closeModal('rateLearningModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="rate-learning-intro">
+        <h4><svg class="icon icon-sm"><use href="#i-trending"/></svg> Why this matters</h4>
+        <p>Upload past estimates so the AI learns <strong>your prices</strong>, <strong>your line-item style</strong>, and <strong>what insurers accepted</strong>. The more you upload, the closer auto-generated estimates match what you'd write by hand.</p>
+      </div>
+
+      <div class="rate-stats">
+        <div class="rate-stat">
+          <div class="rate-stat-num" id="rateStatAccepted">0</div>
+          <div class="rate-stat-label">Accepted</div>
+        </div>
+        <div class="rate-stat">
+          <div class="rate-stat-num" id="rateStatDeclined">0</div>
+          <div class="rate-stat-label">Declined</div>
+        </div>
+        <div class="rate-stat">
+          <div class="rate-stat-num" id="rateStatConfidence">—</div>
+          <div class="rate-stat-label">AI Confidence</div>
+        </div>
+      </div>
+
+      <div class="rate-upload-section">
+        <h4><span class="pill accepted">ACCEPTED</span> Estimates the insurer paid</h4>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:8px">Best signal. AI learns your real rates and what got approved.</p>
+        <div class="upload-box" style="padding:14px" onclick="uploadRateFile('accepted')">
+          <div class="upload-box-icon"><svg class="icon"><use href="#i-upload"/></svg></div>
+          <div class="upload-box-label">Drop accepted estimates here</div>
+          <div class="upload-box-hint">PDFs, Xactimate exports, or JSON. Multi-select OK.</div>
+        </div>
+        <div class="uploaded-list" id="acceptedList"></div>
+      </div>
+
+      <div class="rate-upload-section">
+        <h4><span class="pill declined">DECLINED</span> Estimates that were rejected or short-paid</h4>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:8px">AI learns what to avoid and which line items get pushback. Add a short note about what got cut, if you can.</p>
+        <div class="upload-box" style="padding:14px" onclick="uploadRateFile('declined')">
+          <div class="upload-box-icon"><svg class="icon"><use href="#i-upload"/></svg></div>
+          <div class="upload-box-label">Drop declined estimates here</div>
+          <div class="upload-box-hint">PDFs, Xactimate exports, or JSON. Multi-select OK.</div>
+        </div>
+        <div class="uploaded-list" id="declinedList"></div>
+      </div>
+
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;font-size:12px;color:#0c4a6e;line-height:1.5">
+        <strong>Privacy:</strong> Your estimates are used only to train your account's AI. Other ClaimKing users never see your rates or files.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('rateLearningModal')">Close</button>
+      <button class="btn btn-primary" onclick="retrainAI()">
+        <svg class="icon icon-sm"><use href="#i-refresh"/></svg>
+        Retrain AI Now
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADD SECTION MODAL ============ -->
+<div class="modal" id="addSectionModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Add a section</div>
+      <button class="modal-close" onclick="closeModal('addSectionModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div id="sectionTemplates"></div>
+      <div class="field" style="margin-top:14px">
+        <label>Or custom name</label>
+        <input type="text" id="customSectionName" placeholder="e.g. Detached Garage Roof">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addSectionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addCustomSection()">Add Section</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CUSTOM ITEM MODAL ============ -->
+<div class="modal" id="customItemModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Add new item</div>
+      <button class="modal-close" onclick="closeModal('customItemModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Description <span style="color:#dc2626">*</span></label>
+        <input type="text" id="customItemName" placeholder="e.g. Custom soffit detail with cedar trim">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="field">
+          <label>Qty <span style="color:#dc2626">*</span></label>
+          <input type="number" id="customItemQty" value="1" min="0" step="0.01">
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="customItemUnit">
+            <option value="EA">EA</option>
+            <option value="SQ">SQ</option>
+            <option value="LF">LF</option>
+            <option value="SF">SF</option>
+            <option value="HR">HR</option>
+            <option value="LS">LS</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Unit price <span style="color:#dc2626">*</span></label>
+          <input type="number" id="customItemPrice" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="field">
+        <label>Add to section</label>
+        <select id="customItemSection"></select>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;cursor:pointer">
+        <input type="checkbox" id="customItemSave" checked>
+        <span>Save to my item library for next time (under <select id="customItemCategory" style="border:1px solid #e5e7eb;border-radius:4px;padding:2px 4px;font-size:12px"><option value="roofing">Roofing</option><option value="siding">Siding</option><option value="gutters">Gutters</option><option value="windows">Windows</option><option value="general" selected>General</option></select>)</span>
+      </label>
+      <div id="customItemLivePreview" style="margin-top:14px;padding:10px 12px;background:#fffef7;border:1px solid #FDB813;border-radius:7px;font-size:12.5px;display:none">
+        <strong id="customItemPreviewName">Item name</strong>
+        <span style="color:#6b7280"> · </span>
+        <span id="customItemPreviewQty">1</span>
+        <span id="customItemPreviewUnit"> EA</span>
+        <span style="color:#6b7280"> @ </span>
+        <span id="customItemPreviewPrice">$0.00</span>
+        <span style="float:right;font-weight:700;color:#059669">Total: <span id="customItemPreviewTotal">$0.00</span></span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('customItemModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomItem()">
+        <svg class="icon icon-sm"><use href="#i-plus"/></svg>
+        Add to Estimate
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CLIENT PICKER MODAL ============ -->
+<div class="modal" id="clientPickerModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Select a client</div>
+      <button class="modal-close" onclick="closeModal('clientPickerModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="search-input" id="clientSearch" placeholder="Search clients...">
+      <div id="clientList" style="max-height:340px;overflow-y:auto;margin-top:10px"></div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:14px;justify-content:center" onclick="addNewClient()">
+        <svg class="icon icon-sm"><use href="#i-plus"/></svg>
+        Add New Client
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TERMS EDITOR MODAL ============ -->
+<div class="modal" id="termsEditorModal">
+  <div class="modal-content" style="max-width:760px">
+    <div class="modal-header">
+      <div class="modal-title">Edit Terms &amp; Conditions</div>
+      <button class="modal-close" onclick="closeModal('termsEditorModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:#0c4a6e;line-height:1.5">
+        These terms appear on every estimate PDF you send. Edit company info and terms text below. Changes apply to all future estimates immediately.
+      </div>
+
+      <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280">Company Info</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field">
+          <label>Company Name (display)</label>
+          <input type="text" id="termsEditCompanyName">
+        </div>
+        <div class="field">
+          <label>Legal Name</label>
+          <input type="text" id="termsEditLegalName">
+        </div>
+      </div>
+      <div class="field">
+        <label>Billing Address</label>
+        <input type="text" id="termsEditAddress">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="field">
+          <label>Phone</label>
+          <input type="text" id="termsEditPhone">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="termsEditEmail">
+        </div>
+        <div class="field">
+          <label>Website</label>
+          <input type="text" id="termsEditWebsite">
+        </div>
+      </div>
+
+      <h3 style="font-size:13px;font-weight:700;margin:18px 0 10px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280">Short Terms (bulleted under Terms section)</h3>
+      <div class="field">
+        <label>One per line. HTML &lt;strong&gt; tags allowed.</label>
+        <textarea id="termsEditShort" style="min-height:140px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px"></textarea>
+      </div>
+
+      <h3 style="font-size:13px;font-weight:700;margin:18px 0 10px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280">Full Terms &amp; Conditions Body</h3>
+      <div class="field">
+        <label>The long-form contract terms. Use blank lines to separate paragraphs.</label>
+        <textarea id="termsEditFullTerms" style="min-height:300px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-danger" onclick="resetTermsToDefault()">Reset to Default</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="closeModal('termsEditorModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTermsEdit()">
+          <svg class="icon icon-sm"><use href="#i-check"/></svg>
+          Save Terms
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ FINALIZE MODAL ============ -->
+<div class="modal" id="finalizeModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">Finalize estimate</div>
+      <button class="modal-close" onclick="closeModal('finalizeModal')"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">Choose how to deliver this estimate.</p>
+      <div style="display:grid;gap:8px">
+        <button class="menu-item" style="border:1px solid #e5e7eb;padding:14px" onclick="sendEstimate()">
+          <svg class="icon"><use href="#i-send"/></svg>
+          <div style="flex:1;text-align:left">
+            <div style="font-weight:600">Email to client</div>
+            <div style="font-size:11.5px;color:#6b7280">Send PDF with portal link</div>
+          </div>
+        </button>
+        <button class="menu-item" style="border:1px solid #e5e7eb;padding:14px" onclick="downloadPDF()">
+          <svg class="icon"><use href="#i-download"/></svg>
+          <div style="flex:1;text-align:left">
+            <div style="font-weight:600">Download PDF</div>
+            <div style="font-size:11.5px;color:#6b7280">Save locally</div>
+          </div>
+        </button>
+        <button class="menu-item" style="border:1px solid #e5e7eb;padding:14px" onclick="saveToPortal()">
+          <svg class="icon"><use href="#i-cloud"/></svg>
+          <div style="flex:1;text-align:left">
+            <div style="font-weight:600">Save to client portal</div>
+            <div style="font-size:11.5px;color:#6b7280">Client sees it instantly</div>
+          </div>
+        </button>
+        <button class="menu-item" style="border:1px solid #e5e7eb;padding:14px" onclick="sendToCRM()">
+          <svg class="icon"><use href="#i-refresh"/></svg>
+          <div style="flex:1;text-align:left">
+            <div style="font-weight:600">Sync to CRM</div>
+            <div style="font-size:11.5px;color:#6b7280">JobNimbus, AccuLynx, Salesforce</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOADING ============ -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-content">
+    <div class="loader"></div>
+    <div class="loading-text" id="loadingText">Working on it...</div>
+    <div class="loading-sub" id="loadingSub">This usually takes 10-20 seconds</div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ====================== STATE ======================
+const state = {
+  client: null,
+  mode: 'insurance',
+  sections: [],
+  activeSection: null,
+  selectedChips: [],
+  uploads: { measurement: [], photos: [], estimate1: [], estimate2: [] },
+  rateFiles: { accepted: [], declined: [] },
+  hasStarted: false,
+  saving: false,
+};
+
+// Sample item library (in production, this is loaded from /api/items?company_id=...)
+const ITEM_LIBRARY = {
+  roofing: [
+    { name: 'Tear Off - 1 Layer', price: 65, unit: 'SQ' },
+    { name: '30yr Architectural Shingles', price: 125, unit: 'SQ' },
+    { name: 'Synthetic Underlayment', price: 45, unit: 'SQ' },
+    { name: 'Ice & Water Shield', price: 125, unit: 'SQ' },
+    { name: 'Ridge Cap', price: 4.50, unit: 'LF' },
+    { name: 'Drip Edge', price: 3.75, unit: 'LF' },
+  ],
+  siding: [
+    { name: 'Vinyl Siding', price: 85, unit: 'SQ' },
+    { name: 'Hardie Board', price: 165, unit: 'SQ' },
+  ],
+  gutters: [
+    { name: 'Seamless Gutters 5"', price: 7.50, unit: 'LF' },
+    { name: 'Downspouts', price: 5.50, unit: 'LF' },
+  ],
+  windows: [
+    { name: 'Double Hung Window', price: 450, unit: 'EA' },
+  ],
+  general: [
+    { name: 'Dumpster Rental', price: 550, unit: 'EA' },
+    { name: 'Building Permit', price: 350, unit: 'EA' },
+  ],
+};
+
+const CODE_ITEMS = [
+  { id: 'ice-water', name: 'Ice & Water Shield', ref: 'IRC R905.1.2 - Required in valleys and eaves', price: 125, unit: 'SQ' },
+  { id: 'drip-edge', name: 'Drip Edge', ref: 'IRC R905.2.8.5 - Required at eaves and gables', price: 3.75, unit: 'LF' },
+  { id: 'ridge-vent', name: 'Ridge Vent System', ref: 'IRC R806 - 1:150 ventilation ratio', price: 4.50, unit: 'LF' },
+  { id: 'starter', name: 'Starter Strip', ref: 'Manufacturer warranty requirement', price: 2.50, unit: 'LF' },
+  { id: 'step-flash', name: 'Step Flashing', ref: 'IRC R905.2.8.3 - Where roof meets walls', price: 8.50, unit: 'LF' },
+  { id: 'pipe-boot', name: 'Pipe Boot Flashings', ref: 'IRC R903.3 - All roof penetrations', price: 45, unit: 'EA' },
+];
+
+const CODE_DB = [
+  { name: 'Ice & Water Shield - Valleys & Eaves', meta: 'IRC R905.1.2 - Required in valleys and at eaves', price: 125, unit: 'SQ', code: 'irc', mfr: 'all', star: true },
+  { name: 'Drip Edge Metal', meta: 'IRC R905.2.8.5 - Required at eaves and gables', price: 3.75, unit: 'LF', code: 'irc', mfr: 'all', star: true },
+  { name: 'Proper Attic Ventilation', meta: 'IRC R806.1 - 1:150 ventilation ratio', price: 4.50, unit: 'LF', code: 'irc', mfr: 'all', star: true },
+  { name: 'Step Flashing', meta: 'IRC R905.2.8.3 - Where roof meets walls', price: 8.50, unit: 'LF', code: 'irc', mfr: 'all' },
+  { name: 'Cricket/Saddle for Chimney', meta: 'IRC R903.2.2 - Chimneys >30" wide', price: 450, unit: 'EA', code: 'irc', mfr: 'all' },
+  { name: 'Valley Metal', meta: 'IRC R905.2.8.2 - W-type valley required', price: 12.50, unit: 'LF', code: 'irc', mfr: 'all' },
+  { name: 'Pipe Boot Flashings', meta: 'IRC R903.3 - All roof penetrations', price: 45, unit: 'EA', code: 'irc', mfr: 'all' },
+  { name: 'Soffit Vents', meta: 'IRC R806.2 - Intake ventilation required', price: 12, unit: 'LF', code: 'irc', mfr: 'all' },
+  { name: 'Permit & Inspection', meta: 'Local Building Code - Roof replacement', price: 350, unit: 'EA', code: 'local', mfr: 'all' },
+  { name: 'High Wind Installation (Zone 3)', meta: 'ASCE 7-16 - 6-nail pattern + sealed deck', price: 25, unit: 'SQ', code: 'ibc', mfr: 'all' },
+  { name: 'Class A Fire Rating', meta: 'IBC 1505.2 - Required in wildfire areas', price: 165, unit: 'SQ', code: 'ibc', mfr: 'all' },
+  { name: 'Class 4 Impact Resistant Shingles', meta: 'FM 4473 - Hail impact resistance', price: 225, unit: 'SQ', code: 'ibc', mfr: 'all' },
+  { name: 'GAF Deck-Armor Underlayment', meta: 'Breathable synthetic - warranty compliance', price: 65, unit: 'SQ', code: 'all', mfr: 'gaf' },
+];
+
+const SECTION_TEMPLATES = {
+  insurance: [
+    { id: 'dwelling-roof', name: 'Dwelling Roof', desc: 'Main roof scope' },
+    { id: 'dwelling-siding', name: 'Dwelling Siding', desc: 'Exterior wall material' },
+    { id: 'gutters', name: 'Gutters & Downspouts', desc: 'Drainage' },
+    { id: 'soffit-fascia', name: 'Soffit & Fascia', desc: 'Roof edge components' },
+    { id: 'detached-garage', name: 'Detached Garage', desc: 'Separate structure' },
+    { id: 'fence', name: 'Fence', desc: 'Wood, vinyl, or metal' },
+    { id: 'interior', name: 'Interior Water Damage', desc: 'Drywall, ceiling, flooring' },
+  ],
+  retail: [
+    { id: 'roof-replacement', name: 'Roof Replacement', desc: 'Full tear-off and install' },
+    { id: 'siding-package', name: 'Siding Package', desc: 'With trim and accessories' },
+    { id: 'gutter-guard', name: 'Gutters + Gutter Guard', desc: 'Bundled upsell' },
+    { id: 'attic-insulation', name: 'Attic Insulation', desc: 'Energy efficiency upsell' },
+  ]
+};
+
+// Company profile - in production loaded from /api/company. Editable in Settings.
+const COMPANY = {
+  name: 'ClaimKing',
+  legal_name: 'ClaimKing LLC',
+  address: '4019 S Main St, Akron, OH 44216',
+  phone: '(330) 918-1018',
+  email: 'info@claimking.ai',
+  website: 'www.claimking.ai',
+  hours: '7:00 AM – 10:00 PM Eastern, 7 Days',
+  general_email: 'info@claimking.ai',
+  claims_email: 'claims@claimking.ai',
+  insurance: {
+    carrier: 'National Specialty Insurance Company',
+    policy_number: 'IBL-FKZY6JRT4-2',
+    each_occurrence: '$1,000,000',
+    aggregate: '$1,000,000',
+    products_completed: '$1,000,000',
+    personal_injury: '$1,000,000',
+    damage_to_premises: '$100,000',
+    medical: '$5,000',
+    period: '01/03/2026 – 01/03/2027',
+    completed_ops_through: '01/03/2028',
+    producer: 'Verifly/Thimble Insurance Services',
+    claim_url: 'app.thimble.com/widgets/report-claim',
+    claim_email: '9730Thimble@sedgwick.com',
+    endorsements: [
+      'Primary & Non-Contributory (CG 20 01)',
+      'Waiver of Subrogation (CG 24 04)',
+      'Designated Additional Insured (THSN IL 20 20)',
+      'Additional Insured – Completed Operations (CG 20 37)',
+      'Roofing Operations Exclusion: Residential, 3 stories and under',
+      'Anti-Stacking | Exposure Period | Ohio Cancellation/Nonrenewal',
+    ],
+  },
+};
+
+// Terms & Conditions - the long form attached to every estimate.
+// Editable per company in Settings → Terms.
+const DEFAULT_TERMS = {
+  short_terms: [
+    'This estimate is valid for 30 days from the date above.',
+    'All work performed by licensed and insured contractors.',
+    '<strong>Service Time:</strong> The hours and quantities shown reflect estimated scope. Actual on-site conditions may require adjustment. Final invoicing will reflect the actual time and services provided on-site.',
+    '<strong>Insurance & Water Mitigation:</strong> In most cases, homeowner insurance policies cover emergency water mitigation services, including ice dam removal, when ice dams are causing active interior water damage. Ice dam removal is a recognized mitigation measure to prevent further loss and is typically covered as an emergency service under standard homeowner policies. We encourage homeowners to file a claim and provide this estimate to their insurance carrier or adjuster for review.',
+    '<strong>Disclaimer:</strong> ClaimKing is not a licensed public adjuster, attorney, or legal advisor. We do not guarantee insurance coverage or claim outcomes. The information provided regarding insurance is based on our extensive field experience working with insurance carriers and adjusters across multiple states and is not intended as legal or insurance advice.',
+    'Insurance proceeds may be assigned directly to ClaimKing.',
+    'Additional damage discovered during service will be documented and submitted as a supplement.',
+    'Interior damage repairs are not included in this estimate and will be assessed separately.',
+    'Non-refundable deposits: Once equipment has been dispatched, deposits are non-refundable. Cancellations require 24-hour notice.',
+    '<strong>This estimate is for budgetary and scheduling purposes. Final invoicing will reflect the actual time and services provided on-site.</strong>',
+    'Certificate of Insurance (COI) or W-9 form available upon request.',
+    '<strong>Questions or Concerns:</strong> If any adjuster, insurance representative, or homeowner has questions regarding our services, pricing, or scope of work, please contact us directly.',
+  ],
+  industry_pricing_note: 'ClaimKing pricing is comparable to industry leaders in restoration services and other nationally recognized providers. Our rates reflect the specialized nature of insurance restoration work, including specialized equipment deployed per job, certified technician labor, and comprehensive safety compliance. Emergency jobs with active interior leaks require priority dispatch and carry a surcharge due to the urgency of water mitigation and the need to prevent escalating insured losses.',
+  payment_terms: {
+    card_processing_fee: 'A 3% processing fee applies to all credit and debit card transactions. Customers may avoid this fee by paying via cash, check, or ACH bank transfer.',
+    card_on_file: 'By providing your credit or debit card for deposit or payment, you authorize ClaimKing to securely store your card through our PCI-compliant payment processor (Stripe). Your card on file will be charged for the remaining balance upon completion of services.',
+    payment_due: 'Upon completion of services unless a separate written payment agreement was arranged prior to the start of work.',
+  },
+  full_terms: `By signing any estimate, proposal, or contract, making a deposit payment, or verbally or electronically authorizing work to begin, the Customer acknowledges that they have read, understand, and agree to these Terms and Conditions in their entirety.
+
+<strong>PARTIES & CONTRACTOR INFORMATION.</strong> These Terms govern all services provided by ClaimKing ("Contractor") to the customer identified on the associated estimate ("Customer"). Business Hours: 7:00 AM – 10:00 PM Eastern, 7 Days. General Email: info@claimking.ai. Insurance Claims: claims@claimking.ai.
+
+<strong>SCOPE OF WORK.</strong> Contractor agrees to perform the specific services described in the written estimate. All labor, materials, and equipment necessary to complete the listed scope will be supplied by Contractor unless otherwise specified. Work beyond the written scope constitutes a change order requiring written authorization and additional payment agreement. Contractor may identify additional necessary work discovered during a project; Customer will be notified and must authorize in writing before it proceeds. Contractor is not responsible for pre-existing structural, cosmetic, or functional deficiencies unless specifically included in the written scope. Photographs will be taken before, during, and after all projects.
+
+<strong>CONTRACT TIME & SCHEDULING.</strong> Work shall commence no later than 60 days after contract execution and shall be substantially completed within 30 days of commencement unless otherwise stated. Contractor shall not be liable for delays caused by acts of God, severe weather, material shortages, supply chain disruptions, labor strikes, or government-mandated shutdowns. In the event of delay caused solely by Contractor, Contractor shall pay liquidated damages of 3% of the Contract Price per day, not exceeding the total contract price.
+
+<strong>PAYMENT TERMS.</strong> A deposit of 50% of the total contract price is due upon execution unless an alternative arrangement is specified in writing. The remaining balance is due upon final completion. For insurance-funded projects, Customer authorizes Contractor to receive Actual Cash Value (ACV) payment at project commencement; Customer is responsible for ensuring recoverable depreciation and supplement amounts are paid to Contractor upon receipt from the insurer. Accepted payment methods: Check (payable to ClaimKing LLC), ACH/Bank Transfer, Credit or Debit Card (3% processing fee applies), and Financing through approved providers. Any balance unpaid more than 30 days past due will accrue interest at 18% per annum. If Contractor pursues legal collection, Customer is responsible for all actual legal fees, costs, and disbursements. Upon completion, Contractor will place a company yard sign on the property unless Customer has notified us otherwise.
+
+<strong>CANCELLATION POLICY.</strong> For gutter, siding, soffit/fascia, and exterior service contracts, Owner may cancel within 3 business days and receive a full refund. After 3 days but before work commences, Owner forfeits the deposit and pays a proportional amount for labor and materials furnished. For roofing, heat cables, siding, and gutter guard projects, materials are ordered immediately upon deposit receipt and cancellations are not accepted; Customer is liable for all material costs, restocking fees, and labor expended.
+
+<strong>PERMITS & LICENSES.</strong> Contractor maintains all required state licenses and will obtain or assist in obtaining any required permits. Permit fees are the homeowner's responsibility unless explicitly included in the estimate.
+
+<strong>ROOFING SERVICES.</strong> Minimum contract value: $11,000. Contractor primarily installs GAF shingle systems. Color and style selections must be confirmed in writing before ordering; once ordered, selections are final. Any rotted or damaged decking discovered during tear-off will be priced as additional scope. Contractor will not install in rain, snow, below-freezing temperatures, or unsafe wind conditions. Magnetic nail sweep included on cleanup. 10-year workmanship and leak warranty on full installations, subject to biennial condition reviews. Approximately 90% of projects completed by Contractor's own crew.
+
+<strong>GUTTER SERVICES.</strong> Minimums: Gutter installation $900, Gutter guards $1,500. Proper installation requires sound fascia boards; rotted fascia pauses work until repaired. Contractor is not responsible for water intrusion caused by shingles extending less than 1 inch past the drip edge. Guard installation extends warranty from 5 to 10 years. Strap gutter projects carry a 50% surcharge. Workmanship warranty: 5 years (10 with approved guard installation).
+
+<strong>GUTTER MAINTENANCE PLANS.</strong> Contractor clears gutters, downspouts, and performs minor repairs. Cannot accommodate specific date/time requests. Owner provides reasonable access, notifies Contractor upon property sale, and maintains valid payment. 30-day written cancellation notice required. Auto-renews annually.
+
+<strong>WINTER SERVICES.</strong> Ice Dam Removal: $950–$1,200/hr per machine, 3–4 hour minimum. Emergency and after-hours rates apply. Treated as emergency water mitigation, often covered by homeowner insurance. Contractor is not a licensed public adjuster and cannot guarantee insurance coverage. Not responsible for pre-existing water damage. Roof Snow Removal reduces structural load but is not a guarantee against future ice dams. Heat Cable Installation: minimum $35/LF, $3,000 minimum. Customer responsible for operation, maintenance, and GFCI-protected outlet.
+
+<strong>Industry Pricing Note:</strong> ClaimKing is comparable to the industry leader in ice dam removal services and other nationally recognized providers. Our rates reflect the specialized nature of commercial steam ice dam removal, including equipment deployed per job, certified technician labor, and comprehensive safety compliance. Emergency jobs with active interior leaks require priority dispatch and carry a surcharge due to the urgency of water mitigation and the need to prevent escalating insured losses.
+
+<strong>SIDING & EXTERIOR.</strong> Minimum: $8,800. All material rates include a 10% uplift. Customer confirms color/material selections in writing before ordering. Contractor may discover moisture damage, mold, or rot behind existing siding; Customer notified with pricing. Not installed below manufacturer temperature thresholds.
+
+<strong>SOFFIT, FASCIA & VENTILATION.</strong> Work often reveals hidden rot, moisture damage, or pest infestation; Contractor will photograph and notify Customer before proceeding. Not responsible for paint or caulking at trim edges unless in scope. Ventilation installed per local building code; no guarantee on attic temperature performance.
+
+<strong>INSURANCE RESTORATION.</strong> ClaimKing is NOT a licensed public adjuster, attorney, or legal advisor. Contractor communicates with insurance carriers solely as a licensed contractor regarding scope, methods, codes, and pricing. Customer must file all claims directly, provide adjuster reports promptly, and is responsible for deductible, depreciation holdback, and uncovered items. Deductible waiving is prohibited. Supplements submitted on Customer's behalf. Assignment of Benefits (AOB) may be requested. Policy Analyzer tool is informational only and does not constitute legal or insurance advice.
+
+<strong>MOLD INSPECTION.</strong> Standard Inspection (2 air samples): $1,495. Additional Air: $395. Surface: $295. IAQ/Thermal: $195. PRV Base: $1,595. PRV Sample: $350. $500 deposit required. Visual and air/surface sampling only; not remediation. Third-party accredited lab analysis. Reports for Customer use only.
+
+<strong>PRESSURE WASHING & HOUSE WASHING.</strong> Minimums: Roof cleaning $925, House washing $850. Customer must close windows/doors and remove outdoor items prior to service. Results vary; 100% stain removal not guaranteed. Soft wash used for roofs to preserve shingle integrity.
+
+<strong>CHIMNEY SERVICES.</strong> Limited to exterior structural repairs, flashing, crown, cap, and surface restoration. No interior chimney liner or flue work unless in scope. Not CSIA-certified. Mortar repairs require adequate cure time. Not responsible for chimney movement from foundation or soil issues.
+
+<strong>UNDERGROUND DRAINS.</strong> Minimum: $4,000. Exterior drainage only; no interior basement waterproofing unless in scope. Customer responsible for calling 811 before excavation. Not responsible for undisclosed underground utilities. Results vary by soil, grade, and water volume.
+
+<strong>LIMITED WARRANTY.</strong> Warranty Periods: Gutter Install 5yr (10yr with guards), Gutter Guards 5yr, Heat Cable 5yr workmanship, Full Roof Replace 10yr + manufacturer, Roof Repair 1yr, Siding 5yr + manufacturer, Soffit/Fascia 5yr, Pressure Washing none. NOT covered: owner abuse, acts of God, normal wear, condensation, alterations by others, manufacturer defects, structural movement, water infiltration from short shingles. Claims must be reported within 5 days to (330) 918-1018 and info@claimking.ai. Warranty is transferable to subsequent property purchasers for the remaining period.
+
+<strong>LIMITATION OF LIABILITY.</strong> Contractor's total liability shall not exceed the total amount paid for the specific service. No liability for indirect, consequential, or incidental damages, lost profits, loss of use, damage to home contents, or emotional distress. General liability insurance: $1,000,000 per occurrence (Policy IBL-FKZY6JRT4-2).
+
+<strong>OSHA COMPLIANCE.</strong> All crew members are OSHA-certified. Fall protection (PFAS) hardware may be installed for work 6 feet or more above ground; Owner consents to installation. Customer ensures safe, unobstructed access to work areas.
+
+<strong>PROPERTY ACCESS.</strong> Customer grants Contractor reasonable access. Reasonable precautions taken to protect landscaping; minor grass damage is incidental and not considered negligence. Customer must disclose underground irrigation, septic, utility, or specialty systems before work begins.
+
+<strong>LICENSING & INSURANCE.</strong> ClaimKing is a licensed, insured exterior contractor operating nationwide. Certificates of insurance, license verifications, and W-9 available upon request.
+
+<strong>CHANGE ORDERS.</strong> Any modifications to the original scope must be agreed in writing before work commences. 50% deposit required on all change orders, balance due upon completion.
+
+<strong>ASSIGNMENT.</strong> Contractor may assign or delegate to qualified subcontractors; Contractor remains responsible for quality and completion. Customer may not assign without consent.
+
+<strong>DISPUTE RESOLUTION.</strong> Both parties agree to first attempt resolution through direct communication. This Agreement is governed by Ohio law. Legal actions shall be brought exclusively in Summit County, Ohio courts. If any provision is unenforceable, it shall be severed and the remainder continues in full effect.
+
+<strong>ENTIRE AGREEMENT.</strong> This Agreement together with the written estimate constitutes the entire agreement, superseding all prior negotiations. Any modification must be in writing and signed by both parties. By executing any estimate, proposal, or contract, or by making a deposit payment, Customer acknowledges having read, understood, and agreed to all terms herein.`,
+};
+
+// Live company state (cloned from defaults; user can override in Settings)
+const companyState = JSON.parse(JSON.stringify(COMPANY));
+const termsState = JSON.parse(JSON.stringify(DEFAULT_TERMS));
+
+// ====================== INIT ======================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('estimateDate').textContent = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  renderItemLibrary('roofing');
+  renderCodeItems();
+  renderCodeDb();
+  renderTerms();
+  // Load any persisted rate-learning files
+  loadRateFiles();
+});
+
+// ====================== STAGE TRANSITIONS ======================
+function startBlank() {
+  if (!ensureClient()) return;
+  state.hasStarted = true;
+  // Add a default section based on mode
+  const defaultSection = state.mode === 'insurance'
+    ? { id: 'dwelling-roof', name: 'Dwelling Roof' }
+    : { id: 'roof-replacement', name: 'Roof Replacement' };
+  addSection(defaultSection);
+  showBuilder();
+  toast('Empty estimate ready. Add items from the left.', 'success');
+}
+
+function showBuilder() {
+  document.getElementById('startStage').style.display = 'none';
+  document.getElementById('aiBar').style.display = 'flex';
+  document.getElementById('builderSection').style.display = 'grid';
+  document.getElementById('saveIndicator').style.display = 'flex';
+  state.hasStarted = true;
+}
+
+// ====================== CLIENT ======================
+function ensureClient() {
+  if (!state.client) {
+    openClientPicker();
+    toast('Pick a client first', 'warn');
+    return false;
+  }
+  return true;
+}
+
+// Demo client list. In production: GET /api/clients?company_id=...
+const CLIENTS = [
+  { id: 1, name: 'Robert Wilson', address: '123 Maple St, Akron OH', claim: '2024-1041' },
+  { id: 2, name: 'Sarah Chen', address: '88 Oak Ave, Canton OH', claim: '2024-1042' },
+  { id: 3, name: 'Mike Foster', address: '450 Pine Rd, Wooster OH', claim: '2024-1043' },
+];
+
+function openClientPicker() {
+  const list = document.getElementById('clientList');
+  list.innerHTML = CLIENTS.map(c => `
+    <div class="item-row client-row" data-client-id="${c.id}" style="cursor:pointer">
+      <div class="item-info">
+        <div class="item-name">${c.name}</div>
+        <div style="font-size:11px;color:#6b7280">${c.address} · Claim ${c.claim}</div>
+      </div>
+    </div>
+  `).join('');
+  // Wire clicks via event delegation - works regardless of name special chars
+  list.querySelectorAll('.client-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = parseInt(row.dataset.clientId, 10);
+      const c = CLIENTS.find(x => x.id === id);
+      if (c) selectClient(c);
+    });
+  });
+  document.getElementById('clientPickerModal').classList.add('active');
+}
+
+function selectClient(c) {
+  state.client = c;
+  document.getElementById('selectedClient').textContent = c.name;
+  document.getElementById('selectedClient').classList.remove('empty');
+  document.getElementById('clientDisplay').classList.remove('empty');
+  document.getElementById('estimateClient').textContent = c.name;
+  document.getElementById('claimNumber').textContent = c.claim;
+  closeModal('clientPickerModal');
+  toast(`Client set: ${c.name}`, 'success');
+  updateFinalizeState();
+  // Update start screen to show the client is selected and what's next
+  updateStartStageForClient();
+}
+
+function updateStartStageForClient() {
+  // If user is still on the start screen, give a clear visual confirmation
+  const startStage = document.getElementById('startStage');
+  if (startStage.style.display === 'none') return; // already in builder
+  const helpEl = startStage.querySelector('.start-help');
+  if (state.client && helpEl) {
+    helpEl.innerHTML = `Client <strong style="color:#1a1f3a">${state.client.name}</strong> selected. Pick how to start above.`;
+    helpEl.style.color = '#059669';
+  }
+}
+
+function addNewClient() {
+  closeModal('clientPickerModal');
+  toast('Open Add Client form', 'success');
+}
+
+// ====================== ESTIMATE TYPE ======================
+function setEstimateType(mode) {
+  state.mode = mode;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.body.className = `mode-${mode}`;
+  document.getElementById('estimateTitle').textContent = mode === 'insurance' ? 'INSURANCE ESTIMATE' : 'RETAIL PROPOSAL';
+  document.querySelector('.company-info-sub').textContent = mode === 'insurance' ? 'Insurance Restoration Estimate' : 'Retail Service Proposal';
+  toast(`Switched to ${mode} mode`, 'success');
+}
+
+// ====================== AI GENERATOR ======================
+function openAIGenerator() {
+  if (!ensureClient()) return;
+  document.getElementById('aiModal').classList.add('active');
+}
+
+function uploadFile(type) {
+  const i = document.createElement('input');
+  i.type = 'file';
+  i.accept = type === 'photos' ? 'image/*' : '.pdf,.jpg,.png,.xml';
+  i.multiple = true; // all types support multiple
+  i.onchange = e => {
+    const files = [...e.target.files];
+    if (!files.length) return;
+    // Append, don't replace - so user can pick more later
+    state.uploads[type] = [...(state.uploads[type] || []), ...files];
+    renderUploadBox(type);
+  };
+  i.click();
+}
+
+function renderUploadBox(type) {
+  const box = document.getElementById(`${type}Box`);
+  const label = document.getElementById(`${type}File`);
+  const files = state.uploads[type] || [];
+  if (!box) return;
+  box.classList.toggle('has-file', files.length > 0);
+  if (label) {
+    if (files.length === 0) {
+      label.style.display = 'none';
+      label.innerHTML = '';
+    } else {
+      label.style.display = 'block';
+      label.innerHTML = files.map((f, idx) => `
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;text-align:left">
+          <svg class="icon icon-sm" style="color:#10b981;flex-shrink:0"><use href="#i-check"/></svg>
+          <span style="flex:1;color:#1a1f3a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+          <button type="button" class="remove-upload" data-type="${type}" data-idx="${idx}" style="background:transparent;border:none;color:#9ca3af;cursor:pointer;padding:2px;flex-shrink:0">
+            <svg class="icon icon-sm"><use href="#i-x"/></svg>
+          </button>
+        </div>
+      `).join('');
+      // Wire remove buttons (stop propagation so it doesn't re-open file picker)
+      label.querySelectorAll('.remove-upload').forEach(btn => {
+        btn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const t = btn.dataset.type;
+          const idx = parseInt(btn.dataset.idx, 10);
+          state.uploads[t].splice(idx, 1);
+          renderUploadBox(t);
+        });
+      });
+    }
+  }
+}
+
+function toggleSuggestion(el, text) {
+  el.classList.toggle('active');
+  if (el.classList.contains('active')) state.selectedChips.push(text);
+  else state.selectedChips = state.selectedChips.filter(c => c !== text);
+  renderSelectedChips();
+}
+
+function renderSelectedChips() {
+  const c = document.getElementById('selectedChips');
+  c.innerHTML = state.selectedChips.map(s => `
+    <span class="chip active">${s}<span class="remove" onclick="removeSelectedChip('${s}')">×</span></span>
+  `).join('');
+}
+
+function removeSelectedChip(s) {
+  state.selectedChips = state.selectedChips.filter(c => c !== s);
+  document.querySelectorAll('.chip').forEach(c => { if (c.textContent.replace('×','').trim() === s) c.classList.remove('active'); });
+  renderSelectedChips();
+}
+
+function generateAIEstimate() {
+  closeModal('aiModal');
+  showLoading('Analyzing your uploads...', 'Reading measurements, photos, and matching to your rates');
+  setTimeout(() => {
+    hideLoading();
+    showBuilder();
+    // Simulate AI result: add sections + items
+    if (state.sections.length === 0) {
+      addSection({ id: 'dwelling-roof', name: 'Dwelling Roof' });
+    }
+    const sec = state.sections[0];
+    sec.items = [
+      { name: 'Tear Off - 1 Layer', qty: 24, unit: 'SQ', price: 65 },
+      { name: '30yr Architectural Shingles', qty: 26, unit: 'SQ', price: 125 },
+      { name: 'Synthetic Underlayment', qty: 26, unit: 'SQ', price: 45 },
+      { name: 'Ridge Cap', qty: 45, unit: 'LF', price: 4.50 },
+      { name: 'Drip Edge', qty: 180, unit: 'LF', price: 3.75 },
+    ];
+    renderEstimate();
+    updateTotals();
+    triggerSave();
+    toast('AI estimate generated based on your saved rates', 'success');
+    document.getElementById('aiBarTitle').textContent = 'Estimate auto-generated';
+    document.getElementById('aiBarSub').textContent = 'AI used your trained rates. Review line items and tweak as needed.';
+  }, 1800);
+}
+
+function askAIToReview() {
+  showLoading('Reviewing estimate...', 'Checking for missing code items, price gaps, and supplement opportunities');
+  setTimeout(() => {
+    hideLoading();
+    toast('AI suggests adding Ice & Water Shield and Drip Edge', 'success');
+  }, 1500);
+}
+
+// ====================== SECTIONS ======================
+function addSection(s) {
+  if (state.sections.find(x => x.id === s.id)) {
+    toast(`"${s.name}" already in estimate`, 'warn');
+    return;
+  }
+  state.sections.push({ id: s.id, name: s.name, items: [] });
+  state.activeSection = s.id;
+  renderSectionsList();
+  renderEstimate();
+  triggerSave();
+}
+
+function renderSectionsList() {
+  const list = document.getElementById('sectionsList');
+  list.innerHTML = state.sections.map(s => `
+    <div class="section-item ${state.activeSection === s.id ? 'active' : ''}" onclick="selectSection('${s.id}')">
+      <span class="section-name">${s.name}</span>
+      <span class="section-count">${s.items.length}</span>
+    </div>
+  `).join('');
+}
+
+function selectSection(id) {
+  state.activeSection = id;
+  renderSectionsList();
+  // Scroll to section in estimate
+  const el = document.getElementById(`section-${id}`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function openAddSection() {
+  const templates = SECTION_TEMPLATES[state.mode] || SECTION_TEMPLATES.insurance;
+  const c = document.getElementById('sectionTemplates');
+  const available = templates.filter(t => !state.sections.find(s => s.id === t.id));
+  c.innerHTML = available.length === 0
+    ? '<p style="color:#6b7280;font-size:13px">All templates already added. Use custom name below.</p>'
+    : available.map(t => `
+      <div class="item-row template-row" data-template-id="${t.id}" style="padding:12px;cursor:pointer">
+        <div class="item-info">
+          <div class="item-name">${t.name}</div>
+          <div style="font-size:11px;color:#6b7280">${t.desc}</div>
+        </div>
+        <svg class="icon icon-sm" style="color:#9ca3af"><use href="#i-plus"/></svg>
+      </div>
+    `).join('');
+  c.querySelectorAll('.template-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const t = templates.find(x => x.id === row.dataset.templateId);
+      if (t) {
+        addSection({ id: t.id, name: t.name });
+        closeModal('addSectionModal');
+      }
+    });
+  });
+  document.getElementById('addSectionModal').classList.add('active');
+}
+
+function addCustomSection() {
+  const name = document.getElementById('customSectionName').value.trim();
+  if (!name) { toast('Enter a section name', 'warn'); return; }
+  const id = 'custom-' + Date.now();
+  addSection({ id, name });
+  document.getElementById('customSectionName').value = '';
+  closeModal('addSectionModal');
+}
+
+function deleteSection(id) {
+  if (!confirm('Delete this section and all its items?')) return;
+  state.sections = state.sections.filter(s => s.id !== id);
+  if (state.activeSection === id) state.activeSection = state.sections[0]?.id || null;
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+}
+
+function duplicateSection(id) {
+  const orig = state.sections.find(s => s.id === id);
+  if (!orig) return;
+  const copy = { id: 'copy-' + Date.now(), name: orig.name + ' (Copy)', items: [...orig.items.map(i => ({...i}))] };
+  state.sections.push(copy);
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+}
+
+function editSection(id) {
+  const s = state.sections.find(x => x.id === id);
+  const newName = prompt('Section name', s.name);
+  if (newName && newName.trim()) {
+    s.name = newName.trim();
+    renderSectionsList();
+    renderEstimate();
+    triggerSave();
+  }
+}
+
+// ====================== ESTIMATE RENDERING ======================
+function renderEstimate() {
+  const c = document.getElementById('estimateSections');
+  if (state.sections.length === 0) {
+    c.innerHTML = '<div class="empty-section">No sections yet. Add one from the left panel.</div>';
+    return;
+  }
+  c.innerHTML = state.sections.map(s => `
+    <div class="estimate-section" id="section-${s.id}">
+      <div class="section-header-bar">
+        <span>${s.name.toUpperCase()}</span>
+        <div class="section-controls">
+          <button class="section-btn" onclick="duplicateSection('${s.id}')" title="Duplicate"><svg class="icon icon-sm"><use href="#i-copy"/></svg></button>
+          <button class="section-btn" onclick="editSection('${s.id}')" title="Rename"><svg class="icon icon-sm"><use href="#i-edit"/></svg></button>
+          <button class="section-btn" onclick="deleteSection('${s.id}')" title="Delete"><svg class="icon icon-sm"><use href="#i-trash"/></svg></button>
+        </div>
+      </div>
+      <table class="estimate-table">
+        <thead><tr>
+          <th style="width:24px"></th>
+          <th>Description</th>
+          <th style="width:80px">Qty</th>
+          <th style="width:60px">Unit</th>
+          <th style="width:90px">Unit $</th>
+          <th style="width:100px">Total</th>
+          <th style="width:130px"></th>
+        </tr></thead>
+        <tbody data-section-id="${s.id}">
+          ${s.items.length === 0
+            ? `<tr><td colspan="7" class="empty-section">No items yet. Click items in the left panel to add.</td></tr>`
+            : s.items.map((it, idx) => `
+                <tr draggable="true" data-section-id="${s.id}" data-idx="${idx}">
+                  <td><span class="drag-handle" title="Drag to reorder"><svg class="icon icon-sm"><use href="#i-grip"/></svg></span></td>
+                  <td>${it.name}</td>
+                  <td><input type="number" class="qty-input" value="${it.qty}" min="0" step="0.01" onchange="updateItemQty('${s.id}',${idx},this.value)"></td>
+                  <td>${it.unit}</td>
+                  <td>$${it.price.toFixed(2)}</td>
+                  <td><strong>$${(it.qty * it.price).toFixed(2)}</strong></td>
+                  <td>
+                    <div class="line-actions">
+                      <button class="line-action-btn" onclick="moveItem('${s.id}',${idx},-1)" title="Move up" ${idx === 0 ? 'disabled' : ''}><svg class="icon icon-sm"><use href="#i-arrow-up"/></svg></button>
+                      <button class="line-action-btn" onclick="moveItem('${s.id}',${idx},1)" title="Move down" ${idx === s.items.length - 1 ? 'disabled' : ''}><svg class="icon icon-sm"><use href="#i-arrow-down"/></svg></button>
+                      <button class="line-action-btn" onclick="openMoveMenu(event,'${s.id}',${idx})" title="Move to section"><svg class="icon icon-sm"><use href="#i-move"/></svg></button>
+                      <button class="line-action-btn danger" onclick="removeItem('${s.id}',${idx})" title="Remove"><svg class="icon icon-sm"><use href="#i-trash"/></svg></button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')
+          }
+        </tbody>
+      </table>
+      <div class="add-item-area" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="add-item-btn" onclick="selectSection('${s.id}')">
+          <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-plus"/></svg>
+          Add from library
+        </button>
+        <button class="add-item-btn" onclick="openCustomItem('${s.id}')" style="background:#fffef7;border-color:#FDB813;color:#92400e">
+          <svg class="icon icon-sm" style="vertical-align:middle"><use href="#i-edit"/></svg>
+          Add new item
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addToEstimate(name, price, unit) {
+  if (!ensureClient()) return;
+  if (!state.hasStarted) showBuilder();
+  if (state.sections.length === 0) {
+    const def = state.mode === 'insurance' ? { id: 'dwelling-roof', name: 'Dwelling Roof' } : { id: 'roof-replacement', name: 'Roof Replacement' };
+    addSection(def);
+  }
+  const target = state.sections.find(s => s.id === state.activeSection) || state.sections[0];
+  // If duplicate, increment qty
+  const existing = target.items.find(i => i.name === name);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    target.items.push({ name, qty: 1, unit, price });
+  }
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+  toast(`Added ${name}`, 'success');
+}
+
+function updateItemQty(secId, idx, val) {
+  const s = state.sections.find(x => x.id === secId);
+  if (s && s.items[idx]) {
+    s.items[idx].qty = parseFloat(val) || 0;
+    renderEstimate();
+    updateTotals();
+    triggerSave();
+  }
+}
+
+function removeItem(secId, idx) {
+  const s = state.sections.find(x => x.id === secId);
+  if (s) {
+    s.items.splice(idx, 1);
+    renderSectionsList();
+    renderEstimate();
+    updateTotals();
+    triggerSave();
+  }
+}
+
+// ====================== LINE ITEM MOVEMENT ======================
+function moveItem(secId, idx, direction) {
+  const s = state.sections.find(x => x.id === secId);
+  if (!s) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= s.items.length) return;
+  const item = s.items.splice(idx, 1)[0];
+  s.items.splice(newIdx, 0, item);
+  renderEstimate();
+  triggerSave();
+}
+
+function openMoveMenu(event, secId, idx) {
+  event.stopPropagation();
+  closeAllMoveMenus();
+  const otherSections = state.sections.filter(s => s.id !== secId);
+  if (otherSections.length === 0) {
+    toast('No other sections to move to. Add another section first.', 'warn');
+    return;
+  }
+  const menu = document.createElement('div');
+  menu.className = 'move-menu active';
+  menu.innerHTML = `
+    <div class="move-menu-header">Move to section</div>
+    ${otherSections.map(s => `
+      <button class="move-menu-item" data-target="${s.id}">
+        <svg class="icon icon-sm" style="color:#9ca3af"><use href="#i-move"/></svg>
+        <span>${s.name}</span>
+      </button>
+    `).join('')}
+  `;
+  // Position near the button
+  const rect = event.currentTarget.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  // Position menu so it doesn't overflow viewport right edge
+  const menuWidth = 220;
+  let left = rect.right - menuWidth;
+  if (left < 8) left = 8;
+  if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
+  menu.style.left = left + 'px';
+  document.body.appendChild(menu);
+
+  menu.querySelectorAll('.move-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      moveItemToSection(secId, idx, btn.dataset.target);
+      closeAllMoveMenus();
+    });
+  });
+
+  // Close on outside click (next tick so this click doesn't immediately close it)
+  setTimeout(() => {
+    document.addEventListener('click', closeAllMoveMenus, { once: true });
+  }, 0);
+}
+
+function closeAllMoveMenus() {
+  document.querySelectorAll('.move-menu').forEach(m => m.remove());
+}
+
+function moveItemToSection(fromSecId, idx, toSecId) {
+  const fromSec = state.sections.find(s => s.id === fromSecId);
+  const toSec = state.sections.find(s => s.id === toSecId);
+  if (!fromSec || !toSec) return;
+  const item = fromSec.items.splice(idx, 1)[0];
+  toSec.items.push(item);
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+  toast(`Moved "${item.name}" to ${toSec.name}`, 'success');
+}
+
+// Drag-and-drop reordering within a section
+let dragSrc = null;
+document.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr[draggable="true"]');
+  if (!tr) return;
+  dragSrc = { secId: tr.dataset.sectionId, idx: parseInt(tr.dataset.idx, 10), el: tr };
+  tr.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  // Need to set data for Firefox to start the drag
+  try { e.dataTransfer.setData('text/plain', `${dragSrc.secId}:${dragSrc.idx}`); } catch(_) {}
+});
+
+document.addEventListener('dragend', e => {
+  if (dragSrc?.el) dragSrc.el.classList.remove('dragging');
+  document.querySelectorAll('tr.drag-over-top, tr.drag-over-bottom').forEach(r => {
+    r.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+  dragSrc = null;
+});
+
+document.addEventListener('dragover', e => {
+  if (!dragSrc) return;
+  const tr = e.target.closest('tr[draggable="true"]');
+  if (!tr || tr === dragSrc.el) return;
+  // Only same-section drag for now (cross-section uses the move-to menu)
+  if (tr.dataset.sectionId !== dragSrc.secId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('tr.drag-over-top, tr.drag-over-bottom').forEach(r => {
+    r.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+  const rect = tr.getBoundingClientRect();
+  const before = e.clientY < rect.top + rect.height / 2;
+  tr.classList.add(before ? 'drag-over-top' : 'drag-over-bottom');
+});
+
+document.addEventListener('drop', e => {
+  if (!dragSrc) return;
+  const tr = e.target.closest('tr[draggable="true"]');
+  if (!tr) return;
+  if (tr.dataset.sectionId !== dragSrc.secId) return;
+  e.preventDefault();
+  const targetIdx = parseInt(tr.dataset.idx, 10);
+  const rect = tr.getBoundingClientRect();
+  const before = e.clientY < rect.top + rect.height / 2;
+  let newIdx = before ? targetIdx : targetIdx + 1;
+  // Adjust if moving down (the splice will shift indices)
+  if (newIdx > dragSrc.idx) newIdx -= 1;
+  if (newIdx === dragSrc.idx) return; // no change
+  const sec = state.sections.find(s => s.id === dragSrc.secId);
+  if (!sec) return;
+  const item = sec.items.splice(dragSrc.idx, 1)[0];
+  sec.items.splice(newIdx, 0, item);
+  renderEstimate();
+  triggerSave();
+});
+
+// ====================== ITEM LIBRARY (left panel) ======================
+function renderItemLibrary(category) {
+  const list = document.getElementById('itemsList');
+  const items = ITEM_LIBRARY[category] || [];
+  if (items.length === 0) {
+    list.innerHTML = '<div class="empty-list">No items in this category</div>';
+    return;
+  }
+  list.innerHTML = items.map((it, idx) => `
+    <div class="item-row library-row" data-cat="${category}" data-idx="${idx}">
+      <div class="item-info">
+        <div class="item-name">${it.name}</div>
+        <div class="item-price">$${it.price.toFixed(2)}/${it.unit}</div>
+      </div>
+      <button class="item-edit-btn library-edit" data-cat="${category}" data-idx="${idx}">Edit</button>
+    </div>
+  `).join('');
+  wireLibraryRowClicks(list);
+}
+
+function wireLibraryRowClicks(container) {
+  container.querySelectorAll('.library-row').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('.library-edit')) return; // edit btn handles itself
+      const cat = row.dataset.cat;
+      const idx = parseInt(row.dataset.idx, 10);
+      const item = (ITEM_LIBRARY[cat] || [])[idx];
+      if (item) addToEstimate(item.name, item.price, item.unit);
+    });
+  });
+  container.querySelectorAll('.library-edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const cat = btn.dataset.cat;
+      const idx = parseInt(btn.dataset.idx, 10);
+      const item = (ITEM_LIBRARY[cat] || [])[idx];
+      if (item) editItemPrice(cat, idx);
+    });
+  });
+}
+
+function showCategory(cat, ev) {
+  document.querySelectorAll('.category-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
+  renderItemLibrary(cat);
+}
+
+function searchItems() {
+  const q = document.getElementById('itemSearch').value.toLowerCase();
+  const list = document.getElementById('itemsList');
+  if (!q) {
+    const active = document.querySelector('.category-tab.active').dataset.cat;
+    renderItemLibrary(active);
+    return;
+  }
+  // Search across all categories - track origin so click can find the item
+  const matches = [];
+  Object.entries(ITEM_LIBRARY).forEach(([cat, items]) => {
+    items.forEach((it, idx) => {
+      if (it.name.toLowerCase().includes(q)) matches.push({ ...it, _cat: cat, _idx: idx });
+    });
+  });
+  if (matches.length === 0) {
+    list.innerHTML = '<div class="empty-list">No matches</div>';
+    return;
+  }
+  list.innerHTML = matches.map(it => `
+    <div class="item-row library-row" data-cat="${it._cat}" data-idx="${it._idx}">
+      <div class="item-info">
+        <div class="item-name">${it.name}</div>
+        <div class="item-price">$${it.price.toFixed(2)}/${it.unit} <span style="color:#9ca3af;font-weight:400">· ${it._cat}</span></div>
+      </div>
+    </div>
+  `).join('');
+  wireLibraryRowClicks(list);
+}
+
+function editItemPrice(cat, idx) {
+  const item = (ITEM_LIBRARY[cat] || [])[idx];
+  if (!item) return;
+  const newPrice = prompt(`Edit price for "${item.name}" (per ${item.unit})`, item.price);
+  if (newPrice && !isNaN(newPrice) && parseFloat(newPrice) > 0) {
+    item.price = parseFloat(newPrice);
+    renderItemLibrary(cat);
+    toast(`Updated ${item.name} to $${item.price.toFixed(2)}/${item.unit}`, 'success');
+    // In production: PATCH /api/items/${item.id} { price: newPrice }
+  }
+}
+
+// ====================== CUSTOM ITEMS ======================
+function openCustomItem(targetSectionId) {
+  if (!ensureClient()) return;
+  if (!state.hasStarted) showBuilder();
+  // If no sections exist, create a default one so dropdown isn't empty
+  if (state.sections.length === 0) {
+    const def = state.mode === 'insurance' ? { id: 'dwelling-roof', name: 'Dwelling Roof' } : { id: 'roof-replacement', name: 'Roof Replacement' };
+    addSection(def);
+  }
+  // Populate section dropdown
+  const sel = document.getElementById('customItemSection');
+  sel.innerHTML = state.sections.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  sel.value = targetSectionId || state.activeSection || state.sections[0].id;
+  // Clear inputs
+  document.getElementById('customItemName').value = '';
+  document.getElementById('customItemQty').value = '1';
+  document.getElementById('customItemUnit').value = 'EA';
+  document.getElementById('customItemPrice').value = '';
+  document.getElementById('customItemSave').checked = true;
+  document.getElementById('customItemCategory').value = 'general';
+  document.getElementById('customItemLivePreview').style.display = 'none';
+  // Wire live preview
+  ['customItemName', 'customItemQty', 'customItemUnit', 'customItemPrice'].forEach(id => {
+    const el = document.getElementById(id);
+    el.oninput = el.onchange = updateCustomItemPreview;
+  });
+  document.getElementById('customItemModal').classList.add('active');
+  setTimeout(() => document.getElementById('customItemName').focus(), 100);
+}
+
+function updateCustomItemPreview() {
+  const name = document.getElementById('customItemName').value.trim();
+  const qty = parseFloat(document.getElementById('customItemQty').value) || 0;
+  const unit = document.getElementById('customItemUnit').value;
+  const price = parseFloat(document.getElementById('customItemPrice').value) || 0;
+  const preview = document.getElementById('customItemLivePreview');
+  if (!name || price <= 0) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  document.getElementById('customItemPreviewName').textContent = name;
+  document.getElementById('customItemPreviewQty').textContent = qty;
+  document.getElementById('customItemPreviewUnit').textContent = ' ' + unit;
+  document.getElementById('customItemPreviewPrice').textContent = '$' + price.toFixed(2);
+  document.getElementById('customItemPreviewTotal').textContent = '$' + (qty * price).toFixed(2);
+}
+
+function saveCustomItem() {
+  const name = document.getElementById('customItemName').value.trim();
+  const qty = parseFloat(document.getElementById('customItemQty').value);
+  const unit = document.getElementById('customItemUnit').value;
+  const price = parseFloat(document.getElementById('customItemPrice').value);
+  const sectionId = document.getElementById('customItemSection').value;
+  const saveToLib = document.getElementById('customItemSave').checked;
+  const category = document.getElementById('customItemCategory').value;
+
+  if (!name) { toast('Description is required', 'warn'); return; }
+  if (!qty || qty <= 0) { toast('Quantity must be greater than 0', 'warn'); return; }
+  if (!price || price <= 0) { toast('Unit price must be greater than 0', 'warn'); return; }
+
+  const target = state.sections.find(s => s.id === sectionId);
+  if (!target) { toast('Section not found', 'error'); return; }
+  target.items.push({ name, qty, unit, price });
+  state.activeSection = sectionId;
+
+  // Save to library for future use
+  if (saveToLib) {
+    if (!ITEM_LIBRARY[category]) ITEM_LIBRARY[category] = [];
+    // Avoid duplicates by name
+    if (!ITEM_LIBRARY[category].find(i => i.name === name)) {
+      ITEM_LIBRARY[category].push({ name, price, unit });
+      // Refresh visible category if matching
+      const activeCat = document.querySelector('.category-tab.active')?.dataset.cat;
+      if (activeCat === category) renderItemLibrary(category);
+      // In production: POST /api/items {category, name, price, unit}
+    }
+  }
+
+  closeModal('customItemModal');
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+  toast(`Added "${name}"${saveToLib ? ' and saved to library' : ''}`, 'success');
+}
+
+// ====================== TOTALS ======================
+function updateTotals() {
+  let subtotal = 0;
+  state.sections.forEach(s => s.items.forEach(i => subtotal += i.qty * i.price));
+  const opOn = document.getElementById('overheadToggle').checked;
+  const taxOn = document.getElementById('taxToggle').checked;
+  const taxPct = parseFloat(document.getElementById('taxPercent').value) || 0;
+  const op = opOn ? subtotal * 0.20 : 0;
+  const taxBase = subtotal + op;
+  const tax = taxOn ? taxBase * (taxPct / 100) : 0;
+  const total = subtotal + op + tax;
+  document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
+  document.getElementById('overhead').textContent = '$' + op.toFixed(2);
+  document.getElementById('tax').textContent = '$' + tax.toFixed(2);
+  document.getElementById('totalRCV').textContent = '$' + total.toFixed(2);
+  updatePaymentAmount();
+  updateFinalizeState();
+}
+
+function updateFinalizeState() {
+  const total = parseFloat(document.getElementById('totalRCV').textContent.replace(/[$,]/g, '')) || 0;
+  const btn = document.getElementById('finalizeBtn');
+  btn.disabled = !state.client || total <= 0;
+}
+
+// ====================== RIGHT RAIL ======================
+function switchRailTab(pane) {
+  document.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('active', t.dataset.pane === pane));
+  document.querySelectorAll('.rail-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${pane}`));
+}
+
+function renderCodeItems() {
+  const c = document.getElementById('codeItemsContainer');
+  c.innerHTML = CODE_ITEMS.map(item => `
+    <label class="compact-item" style="cursor:pointer">
+      <input type="checkbox" class="code-cb" data-id="${item.id}" data-name="${item.name}" data-price="${item.price}" data-unit="${item.unit}">
+      <div class="ci-body">
+        <div class="ci-name">${item.name}</div>
+        <div class="ci-meta">${item.ref}</div>
+      </div>
+      <div class="ci-price">$${item.price}/${item.unit}</div>
+    </label>
+  `).join('');
+}
+
+function addAllCheckedCodes() {
+  if (!ensureClient()) return;
+  const checked = document.querySelectorAll('#codeItemsContainer input.code-cb:checked');
+  if (checked.length === 0) {
+    toast('Tap items to check them, then add', 'warn');
+    return;
+  }
+  if (!state.hasStarted) showBuilder();
+  if (state.sections.length === 0) {
+    const def = state.mode === 'insurance' ? { id: 'dwelling-roof', name: 'Dwelling Roof' } : { id: 'roof-replacement', name: 'Roof Replacement' };
+    addSection(def);
+  }
+  let count = 0;
+  checked.forEach(cb => {
+    addToEstimateSilent(cb.dataset.name, parseFloat(cb.dataset.price), cb.dataset.unit);
+    cb.checked = false;
+    count++;
+  });
+  renderSectionsList();
+  renderEstimate();
+  updateTotals();
+  triggerSave();
+  toast(`Added ${count} code item${count > 1 ? 's' : ''} to estimate`, 'success');
+}
+
+// Like addToEstimate but no toast, no early-return, no per-item re-render. Use when batching.
+function addToEstimateSilent(name, price, unit) {
+  const target = state.sections.find(s => s.id === state.activeSection) || state.sections[0];
+  if (!target) return;
+  const existing = target.items.find(i => i.name === name);
+  if (existing) existing.qty += 1;
+  else target.items.push({ name, qty: 1, unit, price });
+}
+
+function renderCodeDb() {
+  const c = document.getElementById('codeDbList');
+  c.innerHTML = CODE_DB.map((item, idx) => `
+    <div class="compact-item codedb-row" data-idx="${idx}" data-code="${item.code}" data-mfr="${item.mfr}">
+      <div class="ci-body" style="margin-left:0">
+        <div class="ci-name">${item.star ? '★ ' : ''}${item.name}</div>
+        <div class="ci-meta">${item.meta}</div>
+      </div>
+      <div class="ci-price">$${item.price}/${item.unit}</div>
+    </div>
+  `).join('');
+  c.querySelectorAll('.codedb-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const item = CODE_DB[parseInt(row.dataset.idx, 10)];
+      if (item) addToEstimate(item.name, item.price, item.unit);
+    });
+  });
+}
+
+function filterCodeDb() {
+  const code = document.getElementById('codeDatabase').value;
+  const mfr = document.getElementById('mfrDatabase').value;
+  const q = (document.getElementById('codeDbSearch')?.value || '').toLowerCase().trim();
+  let visible = 0;
+  document.querySelectorAll('#codeDbList .compact-item').forEach(it => {
+    const ic = it.dataset.code;
+    const im = it.dataset.mfr;
+    const showC = (code === 'all' || ic === 'all' || ic === code);
+    const showM = (mfr === 'all' || im === 'all' || im === mfr);
+    const showQ = !q || it.textContent.toLowerCase().includes(q);
+    const show = showC && showM && showQ;
+    it.style.display = show ? 'flex' : 'none';
+    if (show) visible++;
+  });
+  const empty = document.getElementById('codeDbEmpty');
+  if (empty) empty.style.display = visible === 0 ? 'block' : 'none';
+}
+
+// ====================== DOCUMENTATION ======================
+function uploadBulkPhotos() {
+  const i = document.createElement('input');
+  i.type = 'file';
+  i.accept = 'image/*';
+  i.multiple = true;
+  i.onchange = e => {
+    if (e.target.files.length) {
+      toast(`Uploading ${e.target.files.length} photos with auto-stamp`, 'success');
+    }
+  };
+  i.click();
+}
+
+function generateSupportingDocs() {
+  showLoading('Building supporting docs package...', 'Code citations, mfr specs, stamped photos');
+  setTimeout(() => {
+    hideLoading();
+    toast('Supporting docs package ready', 'success');
+  }, 1500);
+}
+
+// ====================== SIGN / PAY ======================
+function updatePaymentAmount() {
+  const total = parseFloat((document.getElementById('totalRCV').textContent || '$0').replace(/[$,]/g, '')) || 0;
+  const type = document.querySelector('input[name="paymentType"]:checked')?.value || 'percentage';
+  const amt = type === 'percentage'
+    ? total * ((parseFloat(document.getElementById('paymentPct').value) || 50) / 100)
+    : parseFloat(document.getElementById('paymentFixed').value) || 0;
+  document.getElementById('paymentDisplay').textContent = '$' + amt.toFixed(2);
+}
+
+function requestSignature() { toast('Signature request sent to homeowner', 'success'); }
+function generateInvoice() { toast(`Invoice for ${document.getElementById('paymentDisplay').textContent} generated`, 'success'); }
+
+// ====================== RATE LEARNING ======================
+function openRateLearning() {
+  document.getElementById('rateLearningModal').classList.add('active');
+  renderRateStats();
+  renderRateLists();
+}
+
+function uploadRateFile(type) {
+  const i = document.createElement('input');
+  i.type = 'file';
+  i.accept = '.pdf,.json,.xml,.csv';
+  i.multiple = true;
+  i.onchange = e => {
+    [...e.target.files].forEach(f => {
+      state.rateFiles[type].push({
+        name: f.name,
+        size: f.size,
+        date: new Date().toLocaleDateString(),
+        note: ''
+      });
+    });
+    saveRateFiles();
+    renderRateLists();
+    renderRateStats();
+    toast(`${e.target.files.length} ${type} estimate(s) uploaded`, 'success');
+  };
+  i.click();
+}
+
+function removeRateFile(type, idx) {
+  state.rateFiles[type].splice(idx, 1);
+  saveRateFiles();
+  renderRateLists();
+  renderRateStats();
+}
+
+function renderRateLists() {
+  ['accepted', 'declined'].forEach(type => {
+    const c = document.getElementById(`${type}List`);
+    c.innerHTML = state.rateFiles[type].map((f, idx) => `
+      <div class="uploaded-row">
+        <svg class="icon icon-sm" style="color:#6b7280"><use href="#i-doc"/></svg>
+        <span class="name">${f.name}</span>
+        <span class="meta">${f.date}</span>
+        <button class="remove-btn" onclick="removeRateFile('${type}',${idx})" title="Remove">
+          <svg class="icon icon-sm"><use href="#i-trash"/></svg>
+        </button>
+      </div>
+    `).join('');
+  });
+}
+
+function renderRateStats() {
+  const a = state.rateFiles.accepted.length;
+  const d = state.rateFiles.declined.length;
+  document.getElementById('rateStatAccepted').textContent = a;
+  document.getElementById('rateStatDeclined').textContent = d;
+  let conf = '—';
+  if (a + d >= 20) conf = 'High';
+  else if (a + d >= 8) conf = 'Medium';
+  else if (a + d >= 1) conf = 'Low';
+  document.getElementById('rateStatConfidence').textContent = conf;
+}
+
+function saveRateFiles() {
+  // In production: POST to /api/rate-learning. For prototype, use a global state object.
+  // Note: Browser storage APIs (localStorage/sessionStorage) are not used in this artifact.
+}
+function loadRateFiles() { /* hydrate from /api in production */ }
+
+function retrainAI() {
+  const total = state.rateFiles.accepted.length + state.rateFiles.declined.length;
+  if (total === 0) { toast('Upload at least one estimate first', 'warn'); return; }
+  showLoading('Training AI on your rates...', `Analyzing ${total} estimate(s) to learn your pricing patterns`);
+  setTimeout(() => {
+    hideLoading();
+    closeModal('rateLearningModal');
+    toast(`AI retrained on ${total} estimates`, 'success');
+  }, 2200);
+}
+
+// ====================== MORE OPTIONS / MISC ======================
+function toggleMoreOptions() {
+  document.getElementById('moreOptionsMenu').classList.toggle('active');
+}
+function openItemLibrary() { toast('Item library: full editor coming', 'success'); }
+function openBundles() { toast('Manage bundles', 'success'); }
+function openTemplates() { toast('Estimate templates', 'success'); }
+function saveAsTemplate() { toast('Saved as template', 'success'); }
+
+function editEstimateTitle() {
+  const newTitle = prompt('Estimate title', document.getElementById('estimateTitle').textContent);
+  if (newTitle) document.getElementById('estimateTitle').textContent = newTitle.toUpperCase();
+}
+
+// ====================== TERMS & CONDITIONS ======================
+function renderTerms() {
+  const c = document.getElementById('termsContent');
+  if (!c) return;
+  const ins = companyState.insurance;
+  const fullTermsHtml = termsState.full_terms
+    .split(/\n\n+/)
+    .map(p => `<p>${p.trim()}</p>`)
+    .join('');
+  c.innerHTML = `
+    <div class="terms-status-key">
+      <strong>APPROVED</strong> = Deposit received, ready to schedule. &nbsp;
+      <strong>PENDING</strong> = Awaiting approval &amp; deposit. &nbsp;
+      <strong>QUOTED</strong> = Estimate provided, not yet sent to client.
+    </div>
+
+    <h2>Terms &amp; Conditions</h2>
+    <ul>
+      ${termsState.short_terms.map(t => `<li>${t}</li>`).join('')}
+    </ul>
+    <p style="font-size:10px;color:#9ca3af;margin-top:6px">Full Terms &amp; Conditions at ${companyState.website}/terms-and-conditions</p>
+
+    <div style="margin-top:14px;padding:12px 14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;font-size:11px">
+      <strong>Industry Pricing Note:</strong> ${termsState.industry_pricing_note}
+    </div>
+
+    <div class="terms-payment-box">
+      <h3>Payment Terms &amp; Card Authorization</h3>
+      <p><strong>Card Processing Fee:</strong> ${termsState.payment_terms.card_processing_fee}</p>
+      <p><strong>Card on File &amp; Auto-Charge Authorization:</strong> ${termsState.payment_terms.card_on_file}</p>
+      <p><strong>Payment Due:</strong> ${termsState.payment_terms.payment_due}</p>
+    </div>
+
+    <h2>Contractor Insurance &amp; Licensing</h2>
+    <div class="terms-grid">
+      <div class="terms-card">
+        <h3>General Liability Policy</h3>
+        <p><strong>Policy #:</strong> ${ins.policy_number}</p>
+        <p><strong>Carrier:</strong> ${ins.carrier}</p>
+        <p><strong>Producer:</strong> ${ins.producer}</p>
+        <p style="margin-top:6px"><strong>Each Occurrence Limit:</strong> ${ins.each_occurrence}</p>
+        <p><strong>General Aggregate Limit:</strong> ${ins.aggregate}</p>
+        <p><strong>Prod/Completed Ops:</strong> ${ins.products_completed}</p>
+        <p><strong>Personal &amp; Adv. Injury:</strong> ${ins.personal_injury}</p>
+        <p><strong>Damage to Rented Premises:</strong> ${ins.damage_to_premises}</p>
+        <p><strong>Medical Expense:</strong> ${ins.medical}</p>
+        <p style="margin-top:6px"><strong>Policy Period:</strong> ${ins.period}</p>
+        <p><strong>Products &amp; Completed Ops:</strong> Through ${ins.completed_ops_through}</p>
+        <p style="margin-top:6px"><strong>Report a Claim:</strong> ${ins.claim_url}</p>
+        <p><strong>Claims Contact:</strong> ${ins.claim_email}</p>
+      </div>
+      <div class="terms-card">
+        <h3>Named Insured</h3>
+        <p><strong>Company:</strong> ${companyState.name}</p>
+        <p><strong>Billing Address:</strong> ${companyState.address}</p>
+        <p><strong>Phone:</strong> ${companyState.phone}</p>
+        <p><strong>Email:</strong> ${companyState.general_email}</p>
+        <h3 style="margin-top:14px">Contractor Licenses</h3>
+        <p>Licensed &amp; Insured | Available upon request</p>
+        <p>Nationwide service. Licensed &amp; insured in all operating states.</p>
+        <p>COI or W-9 available upon request: ${companyState.phone} | ${companyState.general_email}</p>
+      </div>
+      <div class="terms-card">
+        <h3>Policy Endorsements</h3>
+        <ul style="margin:0 0 0 16px">
+          ${ins.endorsements.map(e => `<li>${e}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+
+    <h2>Full Terms &amp; Conditions</h2>
+    <p style="text-align:center;font-weight:700;color:#1a1f3a;margin-bottom:4px">${companyState.legal_name}</p>
+    <p style="text-align:center;color:#6b7280;margin-bottom:12px"><strong>Main Billing &amp; Legal Office:</strong> ${companyState.address} | ${companyState.phone} | ${companyState.general_email}</p>
+    ${fullTermsHtml}
+
+    <div class="terms-footer">
+      <p style="font-weight:700;color:#1a1f3a">Prepared by: ${state.client ? 'ClaimKing' : 'ClaimKing'}</p>
+      <p>${companyState.website}</p>
+      <p>Licensed &amp; Insured | $1,000,000 General Liability | Policy #: ${ins.policy_number}</p>
+      <p style="font-style:italic;margin-top:6px">Thank you for choosing ${companyState.name}! We look forward to restoring your property.</p>
+      <p style="margin-top:10px">Questions? ${companyState.phone} | ${companyState.general_email} | ${companyState.website}</p>
+      <p>Hours: ${companyState.hours} | ${companyState.address}</p>
+    </div>
+  `;
+}
+
+function openTermsEditor() {
+  document.getElementById('termsEditorModal').classList.add('active');
+  // Populate fields
+  document.getElementById('termsEditCompanyName').value = companyState.name;
+  document.getElementById('termsEditLegalName').value = companyState.legal_name;
+  document.getElementById('termsEditAddress').value = companyState.address;
+  document.getElementById('termsEditPhone').value = companyState.phone;
+  document.getElementById('termsEditEmail').value = companyState.general_email;
+  document.getElementById('termsEditWebsite').value = companyState.website;
+  document.getElementById('termsEditFullTerms').value = termsState.full_terms;
+  document.getElementById('termsEditShort').value = termsState.short_terms.map(t => t.replace(/<[^>]+>/g, '')).join('\n');
+}
+
+function saveTermsEdit() {
+  companyState.name = document.getElementById('termsEditCompanyName').value.trim() || COMPANY.name;
+  companyState.legal_name = document.getElementById('termsEditLegalName').value.trim() || COMPANY.legal_name;
+  companyState.address = document.getElementById('termsEditAddress').value.trim() || COMPANY.address;
+  companyState.phone = document.getElementById('termsEditPhone').value.trim() || COMPANY.phone;
+  companyState.general_email = document.getElementById('termsEditEmail').value.trim() || COMPANY.general_email;
+  companyState.website = document.getElementById('termsEditWebsite').value.trim() || COMPANY.website;
+  termsState.full_terms = document.getElementById('termsEditFullTerms').value || DEFAULT_TERMS.full_terms;
+  // Short terms - one per line, preserve as plain
+  const shortLines = document.getElementById('termsEditShort').value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (shortLines.length) termsState.short_terms = shortLines;
+  renderTerms();
+  closeModal('termsEditorModal');
+  toast('Terms updated', 'success');
+  // In production: PATCH /api/company { ...companyState, terms: termsState }
+}
+
+function resetTermsToDefault() {
+  if (!confirm('Reset Terms & Conditions to the default ClaimKing template? Your edits will be lost.')) return;
+  Object.assign(companyState, JSON.parse(JSON.stringify(COMPANY)));
+  Object.assign(termsState, JSON.parse(JSON.stringify(DEFAULT_TERMS)));
+  renderTerms();
+  closeModal('termsEditorModal');
+  toast('Reset to default terms', 'success');
+}
+
+// ====================== FINALIZE ======================
+function openFinalize() {
+  if (!ensureClient()) return;
+  document.getElementById('finalizeModal').classList.add('active');
+}
+function sendEstimate() { closeModal('finalizeModal'); const e = prompt('Email address'); if (e) toast(`Sent to ${e}`, 'success'); }
+function downloadPDF() { closeModal('finalizeModal'); window.print(); }
+function saveToPortal() { closeModal('finalizeModal'); toast('Saved to client portal', 'success'); }
+function sendToCRM() { closeModal('finalizeModal'); toast('Synced to CRM', 'success'); }
+
+// ====================== UTIL ======================
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function showLoading(text, sub) {
+  document.getElementById('loadingText').textContent = text;
+  document.getElementById('loadingSub').textContent = sub || '';
+  document.getElementById('loadingOverlay').classList.add('active');
+}
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
+
+let saveTimer = null;
+function triggerSave() {
+  const indicator = document.getElementById('saveIndicator');
+  const text = document.getElementById('saveText');
+  indicator.classList.add('saving');
+  text.textContent = 'Saving...';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    indicator.classList.remove('saving');
+    text.textContent = 'Saved';
+    // In production: POST current state to /api/estimates/:id
+  }, 600);
+}
+
+function toast(msg, type = '') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  const iconMap = { success: 'i-check-circle', warn: 'i-warning', error: 'i-warning' };
+  const ic = iconMap[type] || 'i-check';
+  t.innerHTML = `<svg class="icon icon-sm"><use href="#${ic}"/></svg><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .25s'; setTimeout(() => t.remove(), 250); }, 2800);
+}
+
+// Close menus on outside click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal')) e.target.classList.remove('active');
+  if (!e.target.closest('.more-options-btn') && !e.target.closest('.more-options-menu')) {
+    document.getElementById('moreOptionsMenu').classList.remove('active');
+  }
+});
+
+// Keyboard: Esc closes modals
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+});
+</script>
+</body>
+</html>
