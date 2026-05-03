@@ -526,6 +526,17 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                     <span className="nav-text">Feature Costs</span>
                                 </Link>
                             </div>
+
+                            <div className="nav-item">
+                                <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname.startsWith('/dashboard/admin/api-settings') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M12.65 10A6 6 0 1 0 7 16h5v3a1 1 0 0 0 1 1h2v2h4v-4h-3.35A6 6 0 0 0 12.65 10zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">API Settings</span>
+                                </Link>
+                            </div>
                         </div>
                     )}
 

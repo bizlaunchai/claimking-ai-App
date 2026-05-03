@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Package, Users, ShoppingCart } from 'lucide-react';
+import { Package, Users, ShoppingCart, KeyRound } from 'lucide-react';
 
 export default function AdminHome() {
     const links = [
@@ -24,6 +24,13 @@ export default function AdminHome() {
             desc: 'View users, adjust credits, manage credit history.',
             Icon: Users,
             color: '#0d9488',
+        },
+        {
+            href: '/dashboard/admin/api-settings',
+            title: 'API Settings',
+            desc: 'Configure shared OpenAI / Gemini / Claude / S3 credentials.',
+            Icon: KeyRound,
+            color: '#dc2626',
         },
     ];
 
