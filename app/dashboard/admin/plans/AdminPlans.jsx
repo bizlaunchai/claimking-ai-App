@@ -214,7 +214,7 @@ export default function AdminPlans() {
                                 <th style={th}>Price</th>
                                 <th style={th}>Credits / mo</th>
                                 <th style={th}>Trial</th>
-                                <th style={th}>Discount</th>
+                                {/*<th style={th}>Discount</th>*/}
                                 <th style={th}>Status</th>
                                 <th style={th}>Stripe</th>
                                 <th style={{ ...th, textAlign: 'right' }}>Actions</th>
@@ -245,7 +245,7 @@ export default function AdminPlans() {
                                                 <span style={{ color: '#9ca3af' }}>—</span>
                                             )}
                                         </td>
-                                        <td style={td}>
+                                       {/* <td style={td}>
                                             {p.discount_percent > 0 ? (
                                                 <span style={{ color: '#047857', fontWeight: 600 }}>{p.discount_percent}%</span>
                                             ) : p.discount_amount_cents > 0 ? (
@@ -253,7 +253,7 @@ export default function AdminPlans() {
                                             ) : (
                                                 <span style={{ color: '#9ca3af' }}>—</span>
                                             )}
-                                        </td>
+                                        </td>*/}
                                         <td style={td}>
                                             <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color, border: `1px solid ${sty.border}` }}>
                                                 {sty.label}
@@ -480,7 +480,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                     {/* Trial + Discount */}
                     <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.05 }}>
-                            Trial & Discount
+                            Trial
                         </div>
                         <Field label="Free trial (days)">
                             <input
@@ -494,7 +494,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                                 Each user can take a trial only once across all plans.
                             </div>
                         </Field>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                       {/* <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <Field label="Discount %">
                                 <input
                                     style={input}
@@ -516,7 +516,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280' }}>
                             Plan-level discount applies to every checkout. Percent takes priority over fixed amount when both are set.
-                        </div>
+                        </div>*/}
                     </div>
                 </div>
 
