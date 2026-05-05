@@ -4,6 +4,8 @@ import "./3d-mockup.css"
 import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
+import LocalFileUploader from "../../../utiles/LocalFileUploader.jsx";
+import Image from "next/image";
 
 const FileUploader = dynamic(() => import("@/utiles/FileUploader.jsx"), { ssr: false });
 
@@ -67,32 +69,51 @@ const QUALITY_OPTIONS = [
 // ──────────────────────────────────────────────────────────────────────────────
 //   Authed image — backend /s3/file requires Bearer auth, so a plain <img>
 //   won't load it. We fetch as a blob and turn it into an object URL.
+//   Module-level cache avoids re-fetching the same src on remount (switching
+//   between Original / Result / Split View should be instant).
 // ──────────────────────────────────────────────────────────────────────────────
+const authedImageCache = new Map();    // src -> blobUrl
+const authedImageInflight = new Map(); // src -> Promise<blobUrl>
+
 const AuthedImage = ({ src, alt = '', style, className }) => {
-    const [blobUrl, setBlobUrl] = useState(null);
+    const [blobUrl, setBlobUrl] = useState(() => (src ? authedImageCache.get(src) ?? null : null));
     const [errored, setErrored] = useState(false);
 
     useEffect(() => {
         if (!src) { setBlobUrl(null); return; }
+
+        const cached = authedImageCache.get(src);
+        if (cached) {
+            setBlobUrl(cached);
+            setErrored(false);
+            return;
+        }
+
         let active = true;
-        let createdUrl = null;
         setErrored(false);
 
-        (async () => {
-            try {
-                const res = await axiosInstance.get(src, { responseType: 'blob' });
-                if (!active) return;
-                createdUrl = URL.createObjectURL(res.data);
-                setBlobUrl(createdUrl);
-            } catch {
-                if (active) setErrored(true);
-            }
-        })();
+        let promise = authedImageInflight.get(src);
+        if (!promise) {
+            promise = axiosInstance
+                .get(src, { responseType: 'blob' })
+                .then((res) => {
+                    const url = URL.createObjectURL(res.data);
+                    authedImageCache.set(src, url);
+                    authedImageInflight.delete(src);
+                    return url;
+                })
+                .catch((e) => {
+                    authedImageInflight.delete(src);
+                    throw e;
+                });
+            authedImageInflight.set(src, promise);
+        }
 
-        return () => {
-            active = false;
-            if (createdUrl) URL.revokeObjectURL(createdUrl);
-        };
+        promise
+            .then((url) => { if (active) setBlobUrl(url); })
+            .catch(() => { if (active) setErrored(true); });
+
+        return () => { active = false; };
     }, [src]);
 
     if (errored) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Image unavailable</div>;
@@ -134,13 +155,14 @@ const ThreeDMockup = () => {
 
     // ── Photo & generation ──────────────────────────────────────────────────
     const [files, setFiles] = useState([]);
-    const sourcePhotoKey = files?.[0]?.serverResponse?.payload?.key || null;
+    // const sourcePhotoKey = files?.[0]?.serverResponse?.payload?.key || null;
+    const sourcePhotoKey = files?.[0]?.preview || null;
 
     const [currentMockup, setCurrentMockup] = useState(null);
     const [versions, setVersions] = useState([]);
     const [activeVersionId, setActiveVersionId] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [previewMode, setPreviewMode] = useState('result'); // original | result | split
+    const [previewMode, setPreviewMode] = useState('original'); // original | result | split
     const [generationError, setGenerationError] = useState(null); // { title, message, hint } | null
     const [splitPos, setSplitPos] = useState(50); // 0-100, position of split view divider
     const [showFullscreen, setShowFullscreen] = useState(false);
@@ -168,7 +190,7 @@ const ThreeDMockup = () => {
         [versions, activeVersionId],
     );
 
-    const sourceImageSrc = sourcePhotoKey ? `/s3/file?key=${encodeURIComponent(sourcePhotoKey)}` : null;
+    const sourceImageSrc = sourcePhotoKey ?? null;
     const generatedImageSrc = activeVersion?.generated_image_url ?? null;
 
     // ── Effects: load existing clients when search changes ──────────────────
@@ -449,22 +471,23 @@ const ThreeDMockup = () => {
     //   Generate / re-generate
     // ────────────────────────────────────────────────────────────────────────
     const generateMockup = async () => {
-        if (!sourcePhotoKey) { toast.error('Upload a property photo first'); return; }
+        const localFile = files?.[0]?.file ?? null;
+        if (!localFile) { toast.error('Upload a property photo first'); return; }
         if (isGenerating) return;
 
         setIsGenerating(true);
         setGenerationError(null);
         try {
-            const payload = {
-                mockup_id: currentMockup?.id,
-                client_id: selectedClient?.id,
-                source_photo_key: sourcePhotoKey,
-                material_settings: buildMaterialSettings(),
-                ai_instructions: aiInstructions || undefined,
-                quality: selectedQuality,
-                title: selectedClient ? `${selectedClient.name} — Mockup` : undefined,
-            };
-            const res = await axiosInstance.post('/mockup/generate', payload);
+            const formData = new FormData();
+            formData.append('source_photo', localFile);
+            if (currentMockup?.id) formData.append('mockup_id', currentMockup.id);
+            if (selectedClient?.id) formData.append('client_id', selectedClient.id);
+            formData.append('material_settings', JSON.stringify(buildMaterialSettings()));
+            if (aiInstructions) formData.append('ai_instructions', aiInstructions);
+            formData.append('quality', selectedQuality);
+            if (selectedClient) formData.append('title', `${selectedClient.name} — Mockup`);
+
+            const res = await axiosInstance.post('/mockup/generate', formData);
             const mockup = res.data?.data?.mockup;
             const version = res.data?.data?.version;
             const credits = res.data?.data?.credits;
@@ -798,7 +821,17 @@ const ThreeDMockup = () => {
                     <div className="panel-card">
                         <h3 className="panel-header">Photo Upload & Management</h3>
 
-                        <FileUploader
+                        {/*<FileUploader
+                            label="Upload Property Photo"
+                            files={files}
+                            setFiles={setFiles}
+                            allowedExtensions={['.jpg', '.jpeg', '.png', '.heif']}
+                            maxFiles={1}
+                            maxSizeMB={50}
+                            uploadFolderName="mockup-sources"
+                        />*/}
+
+                        <LocalFileUploader
                             label="Upload Property Photo"
                             files={files}
                             setFiles={setFiles}
@@ -812,7 +845,9 @@ const ThreeDMockup = () => {
                             <>
                                 <div className="photo-display active" style={{ marginTop: 12 }}>
                                     <div className="photo-preview" style={{ aspectRatio: '4/3', overflow: 'hidden', borderRadius: 8, background: '#f3f4f6' }}>
-                                        <AuthedImage src={sourceImageSrc} alt="Source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        {/*<AuthedImage src={sourcePhotoKey} alt="Source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />*/}
+                                        <Image src={sourcePhotoKey} alt={'photo'} width={300} height={300} />
+                                        {/*{sourcePhotoKey}*/}
                                     </div>
                                 </div>
                                 <div className="analysis-box">
@@ -1032,14 +1067,18 @@ const ThreeDMockup = () => {
                                 </div>
                             )}
 
+                            {/*{sourcePhotoKey && previewMode === 'original' && (
+                                <AuthedImage src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                            )}*/}
+
                             {sourcePhotoKey && previewMode === 'original' && (
-                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                <img src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                             )}
 
                             {sourcePhotoKey && previewMode === 'result' && (
                                 generatedImageSrc
                                     ? <AuthedImage src={generatedImageSrc} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
-                                    : <AuthedImage src={sourceImageSrc} alt="Source (no generation yet)" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', opacity: 0.55 }} />
+                                    : ''
                             )}
 
                             {sourcePhotoKey && previewMode === 'split' && (
@@ -1049,7 +1088,10 @@ const ThreeDMockup = () => {
                                         className="split-compare"
                                         style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
                                     >
-                                        <AuthedImage src={sourceImageSrc} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                        {/*<AuthedImage src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />*/}
+
+                                        <img src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+
                                         <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
                                             <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                                         </div>
@@ -1264,7 +1306,7 @@ const ThreeDMockup = () => {
                         </div>
                         <div onClick={(e) => e.stopPropagation()} style={{ width: '90vw', height: '80vh', position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
                             {previewMode === 'original' && (
-                                <AuthedImage src={sourceImageSrc} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                <img src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             )}
                             {previewMode === 'result' && (
                                 generatedImageSrc
@@ -1276,7 +1318,7 @@ const ThreeDMockup = () => {
                                     ref={splitRef}
                                     style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
                                 >
-                                    <AuthedImage src={sourceImageSrc} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <img src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
                                     <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
                                         <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
                                     </div>
