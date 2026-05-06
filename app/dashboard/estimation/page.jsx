@@ -1,11 +1,12 @@
-import React from 'react';
+import Estimation from "@/app/dashboard/estimation/Estimation.jsx";
+
+export const metadata = {
+    title: "Estimation | ClaimKing AI",
+    description: ""
+};
 
 const Page = () => {
-    return (
-        <div>
-            
-        </div>
-    );
+    return <Estimation/>;
 };
 
 export default Page;
