@@ -40,7 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .main-container{max-width:1600px;margin:20px auto;padding:0 20px}
 
 /* ===== STAGE 1: Empty state / Start ===== */
-.start-stage{background:#fff;border-radius:12px;padding:48px 32px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #e5e7eb;text-align:center;max-width:720px;margin:40px auto}
+.start-stage{background:#fff;border-radius:12px;padding:48px 32px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #e5e7eb;text-align:center;margin:40px auto}
 .start-stage h1{font-size:24px;font-weight:700;margin-bottom:8px;color:#1a1f3a}
 .start-stage p{color:#6b7280;margin-bottom:32px;font-size:15px}
 .start-options{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
