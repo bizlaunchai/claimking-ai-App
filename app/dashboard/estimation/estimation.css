@@ -392,3 +392,136 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
   .cs-form-grid{grid-template-columns:1fr}
   .cs-form-group.full-width{grid-column:span 1}
 }
+
+/* ====================================================================
+   Estimation — Start Stage layout
+   When the user hasn't picked a starting mode yet, centre everything
+   in a single column so the client picker and "Build a new estimate"
+   cards are visually balanced (instead of the squashed left + huge
+   right layout we get from the 2-col grid).
+   ==================================================================== */
+.est-start-layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem !important;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* All children share the same width and centre under the hero. */
+.est-start-layout > .cs-card,
+.est-start-layout > .start-stage,
+.est-start-layout > .cs-selected-bar {
+    max-width: 880px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Re-style the start-stage card so it feels at home inside the new layout */
+.est-start-layout > .start-stage {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 2rem 2.25rem 2.25rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    text-align: center;
+}
+
+.est-start-layout > .start-stage > h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    margin: 0 0 0.4rem 0;
+}
+
+.est-start-layout > .start-stage > p {
+    color: #6b7280;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    /*margin: 0 0 1.5rem 0;*/
+    /*max-width: 540px;*/
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.est-start-layout .start-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 1.25rem;
+}
+
+.est-start-layout .start-card {
+    background: white;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.4rem 1.25rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.est-start-layout .start-card:hover {
+    border-color: #FDB813;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(253, 184, 19, 0.15);
+}
+
+.est-start-layout .start-card.primary {
+    border-color: #FDB813;
+    background: linear-gradient(135deg, #fffdf5 0%, #fff 100%);
+}
+
+.est-start-layout .start-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #f3f4f6;
+    color: #1a1f3a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.85rem;
+}
+
+.est-start-layout .start-card.primary .start-card-icon {
+    background: #FDB813;
+    color: #1a1f3a;
+}
+
+.est-start-layout .start-card h3 {
+    font-size: 0.975rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    margin: 0 0 0.3rem 0;
+}
+
+.est-start-layout .start-card p {
+    font-size: 0.8rem;
+    color: #6b7280;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.est-start-layout .start-help {
+    color: #6b7280;
+    font-size: 0.8rem;
+    margin: 0;
+}
+.est-start-layout .start-help a {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+.est-start-layout .start-help a:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+    .est-start-layout > .start-stage {
+        padding: 1.5rem 1.25rem;
+    }
+    .est-start-layout .start-options {
+        grid-template-columns: 1fr;
+    }
+}

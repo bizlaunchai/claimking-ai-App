@@ -519,7 +519,7 @@ const Page = () => {
             </div>
 
             {/* Main Container */}
-            <div className="main-container">
+            <div className="main-container mr-grid">
                 {/* Client Selection Card */}
                 <div className="client-selection-card">
                     <div className="tabs">
