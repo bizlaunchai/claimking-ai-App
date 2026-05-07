@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast as sonner } from "sonner";
 import "./estimation.css";
+import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
 
 // ====================== STATIC DATA ======================
 /**
@@ -328,6 +329,16 @@ const Estimation = () => {
     // ── More options dropdown ────────────────────────────────────────────
     const [moreOpen, setMoreOpen] = useState(false);
 
+    // ── Credits + provider status (header display, like measurement page) ─
+    const [estimateCost, setEstimateCost] = useState(null);   // { credits_cost, is_active, label }
+    const [creditBalance, setCreditBalance] = useState(null); // { monthly_credits, bonus_credits }
+    const [providerStatus, setProviderStatus] = useState({ gemini: false, claude: false });
+
+    // ── Saved estimates list (View Saved Estimates modal) ────────────────
+    const [savedEstimates, setSavedEstimates] = useState([]);
+    const [savedEstimatesLoading, setSavedEstimatesLoading] = useState(false);
+    const [savedEstimatesModal, setSavedEstimatesModal] = useState(false);
+
     // ── Loading overlay + toasts + save indicator ────────────────────────
     const [loading, setLoading] = useState({ active: false, text: "", sub: "" });
     const [toasts, setToasts] = useState([]);
@@ -417,6 +428,46 @@ const Estimation = () => {
         const t = setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
         return () => { clearTimeout(t); document.removeEventListener("click", handler); };
     }, [moveMenu]);
+
+    // ── Credits: cost per generation + user's balance + AI provider status ─
+    const refreshCreditsState = useCallback(async () => {
+        try {
+            const [costRes, balanceRes] = await Promise.all([
+                axiosInstance.get('/credits/feature-costs/estimate_generate', { suppressErrorToast: true }),
+                axiosInstance.get('/credits/me', { suppressErrorToast: true }),
+            ]);
+            setEstimateCost(costRes.data ?? null);
+            setCreditBalance(balanceRes.data ?? null);
+        } catch { /* free-tier installs may 404 — leave null */ }
+    }, []);
+
+    useEffect(() => { refreshCreditsState(); }, [refreshCreditsState]);
+
+    // Reuse mockup's providers endpoint — same admin-managed Gemini/Claude keys.
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/mockup/providers', { suppressErrorToast: true });
+                setProviderStatus(res.data?.data ?? { gemini: false, claude: false });
+            } catch { /* ignore */ }
+        })();
+    }, []);
+
+    // ── Saved estimates list (TODO: wire to /estimates endpoint when built) ─
+    const refreshSavedEstimates = useCallback(async () => {
+        setSavedEstimatesLoading(true);
+        try {
+            // Backend module not built yet — gracefully no-op until /estimates ships.
+            const res = await axiosInstance.get('/estimates', { suppressErrorToast: true });
+            setSavedEstimates(res.data?.data ?? []);
+        } catch {
+            setSavedEstimates([]);
+        } finally {
+            setSavedEstimatesLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { refreshSavedEstimates(); }, [refreshSavedEstimates]);
 
     // ── Measurement → Estimate handoff (?measurement_id=...&client_id=...)
     //
@@ -936,6 +987,29 @@ const Estimation = () => {
     const finalizeDisabled = !client || totalRCV <= 0;
 
     // ====================== PAYMENT ======================
+    // ── Header derived state (matches Measurement page) ──────────────────
+    const aiReady = !!(providerStatus.gemini || providerStatus.claude);
+    const totalCredits =
+        (creditBalance?.monthly_credits ?? 0) + (creditBalance?.bonus_credits ?? 0);
+    const requiredCredits = estimateCost?.credits_cost ?? 0;
+    const featureDisabledByAdmin = estimateCost && estimateCost.is_active === false;
+    const insufficientCredits =
+        estimateCost && !featureDisabledByAdmin && totalCredits < requiredCredits;
+    const creditsKnown = estimateCost !== null && creditBalance !== null;
+
+    // Inline-style for the mode chip buttons inside the stat card.
+    const modeChipStyle = (active) => ({
+        padding: "5px 12px",
+        fontSize: 11,
+        fontWeight: 600,
+        border: "none",
+        borderRadius: 6,
+        cursor: "pointer",
+        background: active ? "#FDB813" : "transparent",
+        color: active ? "#1a1f3a" : "#6b7280",
+        transition: "all 0.15s ease",
+    });
+
     const paymentAmount = paymentType === "percentage"
         ? totalRCV * ((parseFloat(paymentPct) || 0) / 100)
         : (parseFloat(paymentFixed) || 0);
@@ -1129,54 +1203,131 @@ const Estimation = () => {
         <div className={`mode-${mode}`}>
             <IconSprite />
 
-            {/* ============ HEADER ============ */}
-            <header className="header">
-                <div className="header-content">
-                    <div className="logo-section">
-                        <svg className="logo-icon" viewBox="0 0 24 24"><use href="#i-crown" /></svg>
-                        <span className="logo-text">ClaimKing.AI</span>
-                    </div>
-                    <div className="client-selector">
-                        <div className="estimate-type-selector" role="tablist" aria-label="Estimate type">
-                            <button className={`type-btn ${mode === "insurance" ? "active" : ""}`} onClick={() => setEstimateType("insurance")}>Insurance</button>
-                            <button className={`type-btn ${mode === "retail" ? "active" : ""}`} onClick={() => setEstimateType("retail")}>Retail</button>
+            {/* ============ HEADER (mr-hero pattern, matches Measurement page) ============ */}
+            <div className="mr-hero">
+                <div className="mr-hero-inner">
+                    <div className="mr-hero-left">
+                        <div className="mr-hero-eyebrow">
+                            <span className="mr-hero-dot" />
+                            Estimation Studio
+                        </div>
+                        <h1 className="mr-hero-title">
+                            Build estimates <span className="mr-hero-title-accent">in minutes</span>
+                        </h1>
+                        <p className="mr-hero-subtitle">
+                            Pull measurements, materials, and code requirements into one structured, explainable estimate — ready for the carrier or homeowner.
+                        </p>
+
+                        <div className="mr-hero-stats">
+                            <div className={`mr-stat ${aiReady ? "mr-stat-ok" : "mr-stat-warn"}`}>
+                                <div className="mr-stat-icon">{aiReady ? "✓" : "!"}</div>
+                                <div>
+                                    <div className="mr-stat-label">AI Status</div>
+                                    <div className="mr-stat-value">{aiReady ? "Ready" : "Not configured"}</div>
+                                </div>
+                            </div>
+
+                            {creditsKnown && (
+                                <div className={`mr-stat ${insufficientCredits ? "mr-stat-warn" : "mr-stat-ok"}`}>
+                                    <div className="mr-stat-icon">⚡</div>
+                                    <div>
+                                        <div className="mr-stat-label">Credits</div>
+                                        <div className="mr-stat-value">
+                                            {totalCredits.toLocaleString()}
+                                            {requiredCredits > 0 && (
+                                                <span className="mr-stat-sub"> · {requiredCredits}/run</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Mode toggle as stat-chip */}
+                            <div className="mr-stat" role="tablist" aria-label="Estimate type" style={{ padding: 4, gap: 0 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setEstimateType("insurance")}
+                                    style={modeChipStyle(mode === "insurance")}
+                                >Insurance</button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEstimateType("retail")}
+                                    style={modeChipStyle(mode === "retail")}
+                                >Retail</button>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="mr-stat mr-stat-link"
+                                onClick={() => setSavedEstimatesModal(true)}
+                                title="View saved estimates"
+                            >
+                                <div className="mr-stat-icon">📋</div>
+                                <div style={{ textAlign: "left" }}>
+                                    <div className="mr-stat-label">Saved Estimates</div>
+                                    <div className="mr-stat-value">
+                                        {savedEstimates.length}
+                                        <span className="mr-stat-sub"> open</span>
+                                    </div>
+                                </div>
+                            </button>
                         </div>
                     </div>
-                    <div className="header-actions">
+
+                    <div className="mr-hero-actions">
                         {hasStarted && (
-                            <div className={`save-indicator ${saveIndicator.saving ? "saving" : ""}`} style={{ display: "flex" }}>
-                                <span className="dot"></span>
+                            <div className={`save-indicator ${saveIndicator.saving ? "saving" : ""}`}
+                                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px",
+                                          background: "#f9fafb", borderRadius: 8, fontSize: 12, color: "#6b7280",
+                                          border: "1px solid #e5e7eb" }}>
+                                <span className="dot" style={{ width: 6, height: 6, borderRadius: "50%",
+                                       background: saveIndicator.saving ? "#f59e0b" : "#10b981" }}></span>
                                 <span>{saveIndicator.text}</span>
                             </div>
                         )}
+
+                        {/* More menu — only the 2 real features (terms + rate-learning).
+                            Stub items removed; we'll add them back when their backends ship. */}
                         <div style={{ position: "relative" }}>
-                            <button className="more-options-btn" onClick={toggleMoreOptions} aria-haspopup="true" aria-expanded={moreOpen}>
+                            <button
+                                type="button"
+                                className="mr-btn-ghost"
+                                onClick={toggleMoreOptions}
+                                aria-haspopup="true"
+                                aria-expanded={moreOpen}
+                            >
                                 <svg className="icon icon-sm"><use href="#i-dots" /></svg>
                                 More
                             </button>
-                            <div className={`more-options-menu ${moreOpen ? "active" : ""}`} role="menu">
-                                <div className="menu-section">
-                                    <button className="menu-item" onClick={openItemLibrary}><svg className="icon icon-sm"><use href="#i-grid" /></svg> Item Library</button>
-                                    <button className="menu-item" onClick={openBundles}><svg className="icon icon-sm"><use href="#i-package" /></svg> Manage Bundles</button>
+                            {moreOpen && (
+                                <div className="more-options-menu active" role="menu" style={{ minWidth: 240 }}>
+                                    <div className="menu-section">
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openRateLearning(); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-brain" /></svg>
+                                            Train AI on My Rates
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openTermsEditor(); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-doc" /></svg>
+                                            Edit Terms &amp; Conditions
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="menu-divider"></div>
-                                <div className="menu-section">
-                                    <button className="menu-item" onClick={openTemplates}><svg className="icon icon-sm"><use href="#i-doc" /></svg> Estimate Templates</button>
-                                    <button className="menu-item" onClick={saveAsTemplate}><svg className="icon icon-sm"><use href="#i-cloud" /></svg> Save as Template</button>
-                                </div>
-                                <div className="menu-divider"></div>
-                                <div className="menu-section">
-                                    <button className="menu-item" onClick={() => { setMoreOpen(false); openRateLearning(); }}><svg className="icon icon-sm"><use href="#i-brain" /></svg> Train AI on My Rates</button>
-                                    <button className="menu-item" onClick={openTermsEditor}><svg className="icon icon-sm"><use href="#i-doc" /></svg> Edit Terms &amp; Conditions</button>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
-            </header>
+            </div>
 
             {/* ============ MAIN ============ */}
-            <main className="main-container">
+            <main className={`main-container ${hasStarted ? '' : 'est-start-layout'}`}>
 
                 {/* ─────────────── Client selection ─────────────── */}
                 {!client && (
@@ -2074,6 +2225,72 @@ const Estimation = () => {
                             <span>{s.name}</span>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {/* ============ SAVED ESTIMATES MODAL ============ */}
+            {savedEstimatesModal && (
+                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setSavedEstimatesModal(false); }}>
+                    <div className="modal-content" style={{ maxWidth: 720 }}>
+                        <div className="modal-header">
+                            <div className="modal-title">Saved Estimates</div>
+                            <button className="modal-close" onClick={() => setSavedEstimatesModal(false)}>
+                                <svg className="icon"><use href="#i-x" /></svg>
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            {savedEstimatesLoading ? (
+                                <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280", fontSize: 13 }}>
+                                    Loading…
+                                </div>
+                            ) : savedEstimates.length === 0 ? (
+                                <div style={{
+                                    padding: "2.5rem 1rem", textAlign: "center",
+                                    background: "#f9fafb", borderRadius: 10, border: "1px dashed #e5e7eb",
+                                }}>
+                                    <div style={{ fontSize: 30, marginBottom: 8 }}>📋</div>
+                                    <div style={{ fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                                        No saved estimates yet
+                                    </div>
+                                    <div style={{ fontSize: 12.5, color: "#6b7280", maxWidth: 380, margin: "0 auto", lineHeight: 1.5 }}>
+                                        Estimate save / load wires up once the backend module ships. For now, build estimates here and finalize them per session.
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ display: "grid", gap: 10, maxHeight: 480, overflowY: "auto" }}>
+                                    {savedEstimates.map((e) => (
+                                        <div
+                                            key={e.id}
+                                            style={{
+                                                padding: 14, border: "1px solid #e5e7eb", borderRadius: 10,
+                                                background: "white", cursor: "pointer", transition: "all 0.15s ease",
+                                            }}
+                                            onMouseEnter={(el) => { el.currentTarget.style.borderColor = "#FDB813"; }}
+                                            onMouseLeave={(el) => { el.currentTarget.style.borderColor = "#e5e7eb"; }}
+                                        >
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 600, color: "#1a1f3a", fontSize: 14 }}>
+                                                        {e.title || "Untitled estimate"}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                                                        {e.client?.name ?? "No client"} · {e.created_at ? new Date(e.created_at).toLocaleDateString() : "—"}
+                                                        {e.total_rcv ? ` · $${Number(e.total_rcv).toLocaleString()}` : ""}
+                                                    </div>
+                                                </div>
+                                                <span style={{
+                                                    background: e.status === "approved" ? "#dcfce7" : "#fef9c3",
+                                                    color: e.status === "approved" ? "#166534" : "#854d0e",
+                                                    fontSize: 10.5, fontWeight: 600, padding: "3px 9px",
+                                                    borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.3,
+                                                }}>{e.status ?? "draft"}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 
