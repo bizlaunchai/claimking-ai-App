@@ -1,6 +1,7 @@
 "use client"
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import "./measurement.css"
+import "./measurement-hero.css"
 import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
@@ -34,6 +35,15 @@ const Page = () => {
     const [savingEdits, setSavingEdits] = useState(false);
     const [confirming, setConfirming] = useState(false);
 
+    // ── Credits + provider status (header display) ──────────────────────
+    const [extractCost, setExtractCost] = useState(null);   // { credits_cost, is_active, label }
+    const [creditBalance, setCreditBalance] = useState(null); // { monthly_credits, bonus_credits }
+    const [providerStatus, setProviderStatus] = useState({ gemini: false });
+
+    // ── Saved measurement list (for the "View All Reports" modal) ───────
+    const [reportList, setReportList] = useState([]);
+    const [reportListLoading, setReportListLoading] = useState(false);
+
     // ── Misc UI state retained from earlier stub ─────────────────────────
     const [expandedSections, setExpandedSections] = useState(['roofing']);
     const [selectedAccuracy, setSelectedAccuracy] = useState('standard');
@@ -55,6 +65,49 @@ const Page = () => {
 
     // Refs
     const reportFileRef = useRef(null);
+
+    // ── Fetch credits cost + user balance + provider status (once) ──────
+    const refreshCreditsState = React.useCallback(async () => {
+        try {
+            const [costRes, balanceRes] = await Promise.all([
+                axiosInstance.get('/credits/feature-costs/measurement_extract', { suppressErrorToast: true }),
+                axiosInstance.get('/credits/me', { suppressErrorToast: true }),
+            ]);
+            setExtractCost(costRes.data ?? null);
+            setCreditBalance(balanceRes.data ?? null);
+        } catch { /* free-tier installs may 404; leave null */ }
+    }, []);
+
+    useEffect(() => { refreshCreditsState(); }, [refreshCreditsState]);
+
+    // Provider availability — to flip "AI Ready" badge with real data
+    useEffect(() => {
+        (async () => {
+            try {
+                // Reuse mockup's providers endpoint — same Gemini key.
+                const res = await axiosInstance.get('/mockup/providers', { suppressErrorToast: true });
+                setProviderStatus(res.data?.data ?? { gemini: false });
+            } catch { /* ignore */ }
+        })();
+    }, []);
+
+    // Fetch saved measurements list (lazy — only when modal opens)
+    const refreshReportList = React.useCallback(async () => {
+        setReportListLoading(true);
+        try {
+            const res = await axiosInstance.get('/measurement', { suppressErrorToast: true });
+            setReportList(res.data?.data ?? []);
+        } catch { /* ignore */ } finally { setReportListLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        // Refresh whenever the All Reports modal opens, OR after a new extraction
+        // succeeds (so the count badge stays accurate).
+        if (activeModal === 'allReports') refreshReportList();
+    }, [activeModal, refreshReportList]);
+
+    // Load list on mount so the header badge shows the real count.
+    useEffect(() => { refreshReportList(); }, [refreshReportList]);
 
     // ── Load clients (debounced search) ──────────────────────────────────
     useEffect(() => {
@@ -160,9 +213,22 @@ const Page = () => {
 
             const res = await axiosInstance.post('/measurement/extract', fd);
             const payload = res.data?.data;
+            const credits = res.data?.credits;
             setExtractResult(payload);
             // Seed the editable form with whatever the AI got.
             setEdits({ ...(payload?.extracted_data ?? {}) });
+            // Sync local credit balance from the server response (saves a round-trip).
+            if (credits?.balance_after) {
+                setCreditBalance(prev => ({
+                    ...(prev ?? {}),
+                    monthly_credits: credits.balance_after.monthly,
+                    bonus_credits: credits.balance_after.bonus,
+                }));
+            } else {
+                refreshCreditsState();
+            }
+            // Refresh the report list so the badge count updates immediately.
+            refreshReportList();
             toast.success(res.data?.message ?? 'Measurement extracted');
         } catch (err) {
             const msg = err?.userMessage || err?.response?.data?.message || 'Extraction failed';
@@ -214,6 +280,7 @@ const Page = () => {
             }
             const res = await axiosInstance.patch(`/measurement/${extractResult.id}/confirm`);
             setExtractResult(res.data?.data ?? extractResult);
+            refreshReportList();
             toast.success('Measurement confirmed — ready to use in an estimate');
         } catch { /* toasted */ } finally {
             setConfirming(false);
@@ -380,45 +447,73 @@ const Page = () => {
         return () => document.removeEventListener('click', handleClickOutside);
     }, [activeModal]);
 
+    // ── Derived view-state for the header ────────────────────────────────
+    const aiReady = !!providerStatus.gemini;
+    const totalCredits =
+        (creditBalance?.monthly_credits ?? 0) + (creditBalance?.bonus_credits ?? 0);
+    const requiredCredits = extractCost?.credits_cost ?? 0;
+    const featureDisabledByAdmin = extractCost && extractCost.is_active === false;
+    const insufficientCredits =
+        extractCost && !featureDisabledByAdmin && totalCredits < requiredCredits;
+    const creditsKnown = extractCost !== null && creditBalance !== null;
+    const savedReportsCount = reportList.length;
 
     return (
         <div>
-            <div className="measurement-header-section" style={{background: 'white'}}>
-                <div className="measurement-header-content">
-                    <div className="measurement-header-left">
-                        <div className="page-title">
-                            Measurement Report Analysis
+            <div className="mr-hero">
+                <div className="mr-hero-inner">
+                    <div className="mr-hero-left">
+                        <div className="mr-hero-eyebrow">
+                            <span className="mr-hero-dot" />
+                            Roof Measurement Studio
                         </div>
-                        <p className="page-subtitle">AI-powered measurements from photos or existing reports</p>
-                        <div className="status-badges">
-                            <div className="status-badge active">
-                                AI Ready
+                        <h1 className="mr-hero-title">
+                            Extract dimensions <span className="mr-hero-title-accent">in seconds</span>
+                        </h1>
+                        <p className="mr-hero-subtitle">
+                            Upload any roof measurement report — EagleView, HOVER, or PDF — and AI extracts every number you need.
+                        </p>
+
+                        <div className="mr-hero-stats">
+                            <div className={`mr-stat ${aiReady ? 'mr-stat-ok' : 'mr-stat-warn'}`}>
+                                <div className="mr-stat-icon">{aiReady ? '✓' : '!'}</div>
+                                <div>
+                                    <div className="mr-stat-label">AI Status</div>
+                                    <div className="mr-stat-value">{aiReady ? 'Ready' : 'Not configured'}</div>
+                                </div>
                             </div>
-                            <div className="status-badge active">
-                                Drone Compatible
-                            </div>
-                            <div className="status-badge active">
-                                98% Accuracy Rate
-                            </div>
+
+                            {creditsKnown && (
+                                <div className={`mr-stat ${insufficientCredits ? 'mr-stat-warn' : 'mr-stat-ok'}`}>
+                                    <div className="mr-stat-icon">⚡</div>
+                                    <div>
+                                        <div className="mr-stat-label">Credits</div>
+                                        <div className="mr-stat-value">
+                                            {totalCredits.toLocaleString()}
+                                            {requiredCredits > 0 && (
+                                                <span className="mr-stat-sub"> · {requiredCredits}/run</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button
+                                type="button"
+                                className="mr-stat mr-stat-link"
+                                onClick={() => openModal('allReports')}
+                                title="Open saved measurement reports"
+                            >
+                                <div className="mr-stat-icon">📁</div>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div className="mr-stat-label">View Reports</div>
+                                    <div className="mr-stat-value">
+                                        {savedReportsCount}
+                                        <span className="mr-stat-sub"> saved</span>
+                                    </div>
+                                </div>
+                            </button>
                         </div>
-                    </div>
-                    <div className="header-actions">
-                        <button className="btn btn-outline" onClick={() => openModal('allReports')}>
-                            View All Reports
-                            <span style={{
-                                background: '#dc2626',
-                                color: 'white',
-                                padding: '2px 6px',
-                                borderRadius: '10px',
-                                fontSize: '0.65rem'
-                            }}>0</span>
-                        </button>
-                        <button className="btn btn-outline" onClick={() => openModal('history')}>
-                            Measurement History
-                        </button>
-                        <button className="btn btn-outline" onClick={() => openModal('settings')}>
-                            Calibration Settings
-                        </button>
                     </div>
                 </div>
             </div>
@@ -605,7 +700,7 @@ const Page = () => {
                 )}
 
                 {/* Single-column upload + extraction flow */}
-                <div className="column-card" style={{ maxWidth: 880, margin: '0 auto' }}>
+                <div className="column-card">
                     <h3 className="column-header">Upload Measurement Report</h3>
 
                         <div className="input-tabs">
@@ -672,9 +767,28 @@ const Page = () => {
                                     className="btn btn-primary"
                                     style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}
                                     onClick={runExtraction}
-                                    disabled={extracting || measurementReportsFiles.length === 0}
+                                    disabled={
+                                        extracting
+                                        || measurementReportsFiles.length === 0
+                                        || !aiReady
+                                        || featureDisabledByAdmin
+                                        || insufficientCredits
+                                    }
                                 >
-                                    {extracting ? 'Extracting…' : 'Extract Measurements'}
+                                    {extracting
+                                        ? 'Extracting…'
+                                        : !aiReady
+                                            ? 'AI not configured'
+                                            : featureDisabledByAdmin
+                                                ? 'Feature disabled by admin'
+                                                : insufficientCredits
+                                                    ? `Need ${requiredCredits} credits`
+                                                    : 'Extract Measurements'}
+                                    {!extracting && aiReady && !featureDisabledByAdmin && !insufficientCredits && requiredCredits > 0 && (
+                                        <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.85 }}>
+                                            ({requiredCredits} credit{requiredCredits === 1 ? '' : 's'})
+                                        </span>
+                                    )}
                                 </button>
 
                                 {extractError && (
@@ -817,467 +931,42 @@ const Page = () => {
             </div>
 
             {
-                activeModal === 'allReports' &&  <div className={`modal-overlay`} id="allReportsModal">
-                    <div className="modal">
-                        <div className="modal-header">
-                            <h2 className="modal-title">All Measurement Reports</h2>
-                            <button className="modal-close" onClick={closeModal}>×</button>
-                        </div>
-
-                        <div className="modal-body">
-                            <div className="modal-search-bar">
-                                <input type="text" className="modal-search-input"
-                                       placeholder="Search reports by client, address, or report ID..."
-                                       onKeyUp={(e) => searchReports(e.target.value)}/>
-                                <select className="filter-select" onChange={(e) => filterReports(e.target.value)}>
-                                    <option value="all">All Reports</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="ai-generated">AI Generated</option>
-                                    <option value="uploaded">Uploaded</option>
-                                </select>
+                activeModal === 'allReports' && (
+                    <div className="modal-overlay" id="allReportsModal">
+                        <div className="modal" style={{ maxWidth: 920 }}>
+                            <div className="modal-header">
+                                <h2 className="modal-title">Saved Measurement Reports</h2>
+                                <button className="modal-close" onClick={closeModal}>×</button>
                             </div>
-
-
-                            <div className="reports-list">
-                               {/* <div className="report-item">
-                                    <div className="report-item-header">
-                                        <div>
-                                            <div className="report-title">Johnson Property - Full Exterior</div>
-                                            <div className="report-meta">Report #MR-2024-0892 • Oct 19, 2025 • AI
-                                                Generated
-                                            </div>
-                                        </div>
-                                        <div className="report-status completed">Completed</div>
-                                    </div>
-                                    <div className="report-details">
-                                        <span>32.5 squares</span> • <span>125 LF ridge</span> • <span>180 LF eave</span> • <span>96% confidence</span>
-                                    </div>
-                                    <div className="report-actions">
-                                        <button className="report-action-btn" onClick={() => viewReport('MR-2024-0892')}>View
-                                        </button>
-                                        <button className="report-action-btn"
-                                                onClick={() => downloadReport('MR-2024-0892')}>Download
-                                        </button>
-                                        <button className="report-action-btn" onClick={() => shareReport('MR-2024-0892')}>Share
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="report-item">
-                                    <div className="report-item-header">
-                                        <div>
-                                            <div className="report-title">Smith Residence - Roof Only</div>
-                                            <div className="report-meta">Report #MR-2024-0891 • Oct 18, 2025 • EagleView
-                                                Import
-                                            </div>
-                                        </div>
-                                        <div className="report-status completed">Completed</div>
-                                    </div>
-                                    <div className="report-details">
-                                        <span>28.0 squares</span> • <span>110 LF ridge</span> • <span>165 LF eave</span> • <span>100% verified</span>
-                                    </div>
-                                    <div className="report-actions">
-                                        <button className="report-action-btn" onClick={() => viewReport('MR-2024-0891')}>View
-                                        </button>
-                                        <button className="report-action-btn"
-                                                onClick={() => downloadReport('MR-2024-0891')}>Download
-                                        </button>
-                                        <button className="report-action-btn" onClick={() => shareReport('MR-2024-0891')}>Share
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="report-item">
-                                    <div className="report-item-header">
-                                        <div>
-                                            <div className="report-title">Davis Complex - Insurance Claim</div>
-                                            <div className="report-meta">Report #MR-2024-0890 • Oct 17, 2025 • AI
-                                                Generated
-                                            </div>
-                                        </div>
-                                        <div className="report-status pending">Pending Review</div>
-                                    </div>
-                                    <div className="report-details">
-                                        <span>45.2 squares</span> • <span>150 LF ridge</span> • <span>220 LF eave</span> • <span>94% confidence</span>
-                                    </div>
-                                    <div className="report-actions">
-                                        <button className="report-action-btn" onClick={() => viewReport('MR-2024-0890')}>View
-                                        </button>
-                                        <button className="report-action-btn"
-                                                onClick={() => downloadReport('MR-2024-0890')}>Download
-                                        </button>
-                                        <button className="report-action-btn" onClick={() => shareReport('MR-2024-0890')}>Share
-                                        </button>
-                                    </div>
-                                </div>*/}
-                            </div>
-
-                            <div className="modal-pagination">
-                                <span>Showing 0 of 0 reports</span>
-                                <button className="pagination-btn" onClick={loadMoreReports}>Load More</button>
+                            <div className="modal-body">
+                                <SavedReportsList
+                                    reports={reportList}
+                                    loading={reportListLoading}
+                                    onSelect={(row) => {
+                                        setExtractResult(row);
+                                        setEdits({ ...(row?.extracted_data ?? {}) });
+                                        closeModal();
+                                    }}
+                                    onUseInEstimate={(row) => {
+                                        const params = new URLSearchParams();
+                                        params.set('measurement_id', row.id);
+                                        if (row.client_id) params.set('client_id', row.client_id);
+                                        window.location.href = `/dashboard/estimation?${params.toString()}`;
+                                    }}
+                                    onDelete={async (row) => {
+                                        if (!window.confirm(`Delete "${row.title || 'Untitled measurement'}"?`)) return;
+                                        try {
+                                            await axiosInstance.delete(`/measurement/${row.id}`);
+                                            toast.success('Report deleted');
+                                            refreshReportList();
+                                        } catch { /* toasted */ }
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
-                </div>
+                )
             }
-
-            {
-                activeModal === 'history' && <div className={`modal-overlay`} id="historyModal">
-                    <div className="modal">
-                        <div className="modal-header">
-                            <h2 className="modal-title">Measurement History</h2>
-                            <button className="modal-close" onClick={closeModal}>×</button>
-                        </div>
-
-                        <div className="modal-body">
-
-                            <div className="date-filter">
-                                <div className="date-input-group">
-                                    <label>From:</label>
-                                    <input type="date" className="date-input" defaultValue="2025-09-01"/>
-                                </div>
-                                <div className="date-input-group">
-                                    <label>To:</label>
-                                    <input type="date" className="date-input" defaultValue="2025-10-19"/>
-                                </div>
-                                <button className="btn btn-primary" style={{padding: "0.5rem 1rem", fontSize: "0.875rem"}}>
-                                    Apply Filter
-                                </button>
-                            </div>
-
-
-                            <div className="history-timeline">
-                                {/*<div className="timeline-item">
-                                    <div className="timeline-date">October 19, 2025</div>
-                                    <div className="timeline-entries">
-                                        <div className="timeline-entry">
-                                            <span className="timeline-time">2:45 PM</span>
-                                            <span className="timeline-action">Generated Report</span>
-                                            <span className="timeline-client">Johnson Property</span>
-                                            <span className="timeline-method ai">AI Analysis</span>
-                                        </div>
-                                        <div className="timeline-entry">
-                                            <span className="timeline-time">11:30 AM</span>
-                                            <span className="timeline-action">Uploaded Photos</span>
-                                            <span className="timeline-client">Johnson Property</span>
-                                            <span className="timeline-method">12 ground photos</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="timeline-item">
-                                    <div className="timeline-date">October 18, 2025</div>
-                                    <div className="timeline-entries">
-                                        <div className="timeline-entry">
-                                            <span className="timeline-time">4:15 PM</span>
-                                            <span className="timeline-action">Imported Report</span>
-                                            <span className="timeline-client">Smith Residence</span>
-                                            <span className="timeline-method eagleview">EagleView</span>
-                                        </div>
-                                        <div className="timeline-entry">
-                                            <span className="timeline-time">9:00 AM</span>
-                                            <span className="timeline-action">Drone Analysis</span>
-                                            <span className="timeline-client">Wilson Estate</span>
-                                            <span className="timeline-method drone">Drone + AI</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="timeline-item">
-                                    <div className="timeline-date">October 17, 2025</div>
-                                    <div className="timeline-entries">
-                                        <div className="timeline-entry">
-                                            <span className="timeline-time">3:20 PM</span>
-                                            <span className="timeline-action">Manual Adjustment</span>
-                                            <span className="timeline-client">Davis Complex</span>
-                                            <span className="timeline-method">User Override</span>
-                                        </div>
-                                    </div>
-                                </div>*/}
-                            </div>
-
-
-                            <div className="history-stats">
-                                {/*<div className="stat-box">
-                                    <div className="stat-value">156</div>
-                                    <div className="stat-label">Total Measurements</div>
-                                </div>
-                                <div className="stat-box">
-                                    <div className="stat-value">94.2%</div>
-                                    <div className="stat-label">Avg Accuracy</div>
-                                </div>
-                                <div className="stat-box">
-                                    <div className="stat-value">3.5 min</div>
-                                    <div className="stat-label">Avg Process Time</div>
-                                </div>
-                                <div className="stat-box">
-                                    <div className="stat-value">82%</div>
-                                    <div className="stat-label">AI Generated</div>
-                                </div>*/}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-
-            {
-                activeModal === 'settings' && <div className={`modal-overlay`} id="settingsModal">
-                    <div className="modal">
-                        <div className="modal-header">
-                            <h2 className="modal-title">Calibration Settings</h2>
-                            <button className="modal-close" onClick={closeModal}>×</button>
-                        </div>
-
-                        <div className="modal-body">
-
-                            <div className="settings-tabs">
-                                <button className={`settings-tab ${activeSettingsTab === 'accuracy' ? 'active' : ''}`}
-                                        onClick={() => switchSettingsTab('accuracy', event)}>Accuracy Settings
-                                </button>
-                                <button className={`settings-tab ${activeSettingsTab === 'defaults' ? 'active' : ''}`} onClick={() => switchSettingsTab('defaults', event)}>Default
-                                    Values
-                                </button>
-                                <button className={`settings-tab ${activeSettingsTab === 'ai' ? 'active' : ''}`} onClick={() => switchSettingsTab('ai', event)}>AI Configuration
-                                </button>
-                                <button className={`settings-tab ${activeSettingsTab === 'units' ? 'active' : ''}`} onClick={() => switchSettingsTab('units', event)}>Units &
-                                    Format
-                                </button>
-                            </div>
-
-
-                            <div id="accuracySettings" className={`settings-content ${activeSettingsTab === 'accuracy' ? 'active' : ''}`}>
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Measurement Tolerances</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item">
-                                            <label>Roof Area Tolerance (%)</label>
-                                            <input
-                                                type="number"
-                                                className="setting-input"
-                                                defaultValue="0"
-                                                min="1"
-                                                max="10"
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Linear Measurement Tolerance (ft)</label>
-                                            <input
-                                                type="number"
-                                                className="setting-input"
-                                                defaultValue="0"
-                                                min="0.1"
-                                                max="2"
-                                                step="0.1"
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Minimum Confidence Score (%)</label>
-                                            <input
-                                                type="number"
-                                                className="setting-input"
-                                                defaultValue="0"
-                                                min="70"
-                                                max="100"
-                                            />
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Auto-Verify Threshold (%)</label>
-                                            <input
-                                                type="number"
-                                                className="setting-input"
-                                                defaultValue="0"
-                                                min="90"
-                                                max="100"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Photo Requirements</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item">
-                                            <label>Default Resolution</label>
-                                            <select className="setting-select" defaultValue="2560x1440">
-                                                <option value="1920x1080">1920x1080 (Full HD)</option>
-                                                <option value="2560x1440">2560x1440 (2K)</option>
-                                                <option value="3840x2160">3840x2160 (4K)</option>
-                                            </select>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Required Photos for Analysis</label>
-                                            <select className="setting-select" defaultValue={'8'}>
-                                                <option value='4'>4 (Basic)</option>
-                                                <option value={'8'}>8 (Standard)</option>
-                                                <option value={'12'}>12 (Comprehensive)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <div id="defaultsSettings" className={`settings-content ${activeSettingsTab === 'defaults' ? 'active' : ''}`}>
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Waste Factors</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item">
-                                            <label>Roofing Waste Factor (%)</label>
-                                            <input type="number" className="setting-input" defaultValue='10'  min="5" max="20"/>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Siding Waste Factor (%)</label>
-                                            <input type="number" className="setting-input" defaultValue="8" min="5" max="15"/>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Complex Roof Additional (%)</label>
-                                            <input type="number" className="setting-input" defaultValue="5" min="0" max="10"/>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Default Pitches</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item">
-                                            <label>Standard Pitch</label>
-                                            <select className="setting-select" defaultValue='6/12'>
-                                                <option value={'4-12'}>4/12</option>
-                                                <option value={'6/12'}>6/12</option>
-                                                <option value={'8/12'} >8/12</option>
-                                                <option value={'10/12'}>10/12</option>
-                                            </select>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Steep Pitch Threshold</label>
-                                            <select className="setting-select" defaultValue="9/12">
-                                                <option value='8/12'>8/12</option>
-                                                <option value={'9/12'}>9/12</option>
-                                                <option value={'10/12'}>10/12</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <div id="aiSettings" className={`settings-content ${activeSettingsTab === 'ai' ? 'active' : ''}`}>
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">AI Processing</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item full-width">
-                                            <label>Default AI Mode</label>
-                                            <select className="setting-select">
-                                                <option>Quick Estimate (85% accuracy)</option>
-                                                <option>Standard (92% accuracy)</option>
-                                                <option>Precision (98% accuracy)</option>
-                                            </select>
-                                        </div>
-                                        <div className="setting-item full-width">
-                                            <label>Auto-Enhance Photos</label>
-                                            <div className="toggle-group">
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" defaultChecked/>
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                                <span className="toggle-label">Automatically improve photo quality</span>
-                                            </div>
-                                        </div>
-                                        <div className="setting-item full-width">
-                                            <label>Shadow Compensation</label>
-                                            <div className="toggle-group">
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" defaultChecked/>
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                                <span className="toggle-label">Adjust for shadows in measurements</span>
-                                            </div>
-                                        </div>
-                                        <div className="setting-item full-width">
-                                            <label>Multi-Material Detection</label>
-                                            <div className="toggle-group">
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" defaultChecked/>
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                                <span
-                                                    className="toggle-label">Identify different materials automatically</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <div id="unitsSettings" className={`settings-content ${activeSettingsTab === 'units' ? 'active' : ''}`}>
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Measurement Units</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item">
-                                            <label>Area Units</label>
-                                            <select className="setting-select">
-                                                <option>Squares (100 sq ft)</option>
-                                                <option>Square Feet</option>
-                                                <option>Square Meters</option>
-                                            </select>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Linear Units</label>
-                                            <select className="setting-select" defaultValue='feet'>
-                                                <option value='feet'>Feet</option>
-                                                <option value='meters'>Meters</option>
-                                                <option value='yards'>Yards</option>
-                                            </select>
-                                        </div>
-                                        <div className="setting-item">
-                                            <label>Decimal Places</label>
-                                            <select className="setting-select" defaultValue='1'>
-                                                <option value={'0'}>0</option>
-                                                <option value={'1'}>1</option>
-                                                <option value={'2'}>2</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="settings-section">
-                                    <h3 className="settings-subtitle">Report Format</h3>
-                                    <div className="settings-grid">
-                                        <div className="setting-item full-width">
-                                            <label>Include Xactimate Codes</label>
-                                            <div className="toggle-group">
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" defaultChecked/>
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                                <span className="toggle-label">Show codes in generated reports</span>
-                                            </div>
-                                        </div>
-                                        <div className="setting-item full-width">
-                                            <label>Include Confidence Scores</label>
-                                            <div className="toggle-group">
-                                                <label className="toggle-switch">
-                                                    <input type="checkbox" defaultChecked/>
-                                                    <span className="toggle-slider"></span>
-                                                </label>
-                                                <span className="toggle-label">Display AI confidence in reports</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <div className="settings-footer">
-                                <button className="btn btn-outline" onClick={resetSettings}>Reset to Defaults</button>
-                                <button className="btn btn-primary" onClick={saveSettings}>Save Settings</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-
 
         </div>
     );
@@ -1392,6 +1081,167 @@ function ExtractedPanel({
                     Use in Estimate →
                 </button>
             </div>
+        </div>
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//   SavedReportsList — list of measurement rows from `GET /measurement`,
+//   shown inside the All Reports modal. Filters + per-row actions.
+// ──────────────────────────────────────────────────────────────────────────
+function SavedReportsList({ reports, loading, onSelect, onUseInEstimate, onDelete }) {
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+
+    const filtered = reports.filter((r) => {
+        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+        if (!search.trim()) return true;
+        const q = search.toLowerCase();
+        return (
+            (r.title || '').toLowerCase().includes(q) ||
+            (r.source_file_name || '').toLowerCase().includes(q) ||
+            (r.source_provider || '').toLowerCase().includes(q)
+        );
+    });
+
+    if (loading) {
+        return (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                Loading reports…
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <input
+                    type="text"
+                    placeholder="Search by title, filename, provider…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{
+                        flex: 1, padding: '10px 14px', border: '1px solid #e5e7eb',
+                        borderRadius: 8, fontSize: 13,
+                    }}
+                />
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{
+                        padding: '10px 14px', border: '1px solid #e5e7eb',
+                        borderRadius: 8, fontSize: 13, background: 'white',
+                    }}
+                >
+                    <option value="all">All statuses</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="extracted">Extracted (unverified)</option>
+                    <option value="failed">Failed</option>
+                    <option value="manual">Manual</option>
+                </select>
+            </div>
+
+            {reports.length === 0 ? (
+                <div style={{
+                    padding: '3rem 1rem', textAlign: 'center',
+                    background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb',
+                }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
+                    <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>No reports yet</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>
+                        Upload a measurement PDF to extract your first report.
+                    </div>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div style={{
+                    padding: '2rem', textAlign: 'center', color: '#6b7280', fontSize: 13,
+                }}>
+                    No reports match your filters.
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gap: 10, maxHeight: 520, overflowY: 'auto', paddingRight: 4 }}>
+                    {filtered.map((r) => {
+                        const sq = r.extracted_data?.squares;
+                        const ridge = r.extracted_data?.ridge_lf;
+                        const eave = r.extracted_data?.eave_lf;
+                        const conf = Math.round((r.confidence_score ?? 0) * 100);
+                        const statusColors = {
+                            confirmed: { bg: '#dcfce7', fg: '#166534' },
+                            extracted: { bg: '#fef9c3', fg: '#854d0e' },
+                            failed:    { bg: '#fee2e2', fg: '#991b1b' },
+                            manual:    { bg: '#dbeafe', fg: '#1e40af' },
+                        };
+                        const sc = statusColors[r.status] || statusColors.extracted;
+
+                        return (
+                            <div
+                                key={r.id}
+                                style={{
+                                    padding: 14, border: '1px solid #e5e7eb', borderRadius: 10,
+                                    background: 'white', transition: 'all 0.2s ease', cursor: 'pointer',
+                                }}
+                                onClick={() => onSelect(r)}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#FDB813'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(253,184,19,0.15)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none'; }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, color: '#1a1f3a', fontSize: 14, marginBottom: 3 }}>
+                                            {r.title || r.source_file_name || 'Untitled measurement'}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                            {new Date(r.created_at).toLocaleString()}
+                                            {r.source_provider && r.source_provider !== 'unknown' && ` · ${r.source_provider}`}
+                                            {conf > 0 && ` · ${conf}% confidence`}
+                                        </div>
+                                    </div>
+                                    <span style={{
+                                        background: sc.bg, color: sc.fg, fontSize: 11, fontWeight: 600,
+                                        padding: '3px 10px', borderRadius: 12, textTransform: 'uppercase',
+                                        letterSpacing: 0.3, whiteSpace: 'nowrap',
+                                    }}>{r.status}</span>
+                                </div>
+
+                                {(sq != null || ridge != null || eave != null) && (
+                                    <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#374151', marginBottom: 10, flexWrap: 'wrap' }}>
+                                        {sq != null && <span><strong>{sq}</strong> sq</span>}
+                                        {ridge != null && <span><strong>{ridge}</strong> LF ridge</span>}
+                                        {eave != null && <span><strong>{eave}</strong> LF eave</span>}
+                                        {r.extracted_data?.pitch && <span>Pitch <strong>{r.extracted_data.pitch}</strong></span>}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onUseInEstimate(r); }}
+                                        style={{
+                                            padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                            background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 6,
+                                        }}
+                                    >Use in Estimate →</button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onSelect(r); }}
+                                        style={{
+                                            padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                                            background: 'white', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6,
+                                        }}
+                                    >Open</button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onDelete(r); }}
+                                        style={{
+                                            padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                                            background: 'white', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, marginLeft: 'auto',
+                                        }}
+                                    >Delete</button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }

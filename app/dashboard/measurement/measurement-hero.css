@@ -1,0 +1,496 @@
+/* ====================================================================
+   Measurement Reports — Light, side-by-side redesign
+   Clean / minimal / professional. Loaded after measurement.css.
+   ==================================================================== */
+
+body { background: #f6f7f9; }
+
+/* ── Compact, light header ───────────────────────────────────────── */
+.mr-hero {
+    background: white;
+    color: #1a1f3a;
+    padding: 1rem 1.5rem;
+    margin: 0 0 1.25rem 0;
+    border-radius: 0;
+    border-bottom: 1px solid #e5e7eb;
+    position: relative;
+    overflow: visible;
+}
+
+.mr-hero::before { display: none; } /* kill the gold glow */
+
+.mr-hero-inner {
+    /*max-width: 1280px;*/
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.mr-hero-left {
+    flex: 1;
+    min-width: 280px;
+}
+
+/* Eyebrow tag — subtle */
+.mr-hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #b08510;
+    background: #fffbea;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid #fde68a;
+    margin-bottom: 0.4rem;
+}
+
+.mr-hero-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #FDB813;
+    box-shadow: 0 0 6px rgba(253, 184, 19, 0.6);
+    animation: mr-pulse 2s ease-in-out infinite;
+}
+@keyframes mr-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.mr-hero-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.25rem 0;
+    color: #1a1f3a;
+}
+
+.mr-hero-title-accent {
+    color: #b08510;
+    font-weight: 700;
+}
+
+.mr-hero-subtitle {
+    font-size: 0.8rem;
+    color: #6b7280;
+    line-height: 1.45;
+    max-width: 580px;
+    margin: 0 0 0.7rem 0;
+}
+
+/* ── Stat chips ──────────────────────────────────────────────────── */
+.mr-hero-stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.mr-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+
+.mr-stat-ok {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+.mr-stat-warn {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+/* Clickable stat — used for "View Reports" so it doubles as both an at-a-glance
+   counter and the entry point to the list modal. */
+.mr-stat-link {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    transition: all 0.15s ease;
+}
+.mr-stat-link:hover {
+    background: #fffbeb;
+    border-color: #FDB813;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(253, 184, 19, 0.15);
+}
+.mr-stat-link:hover .mr-stat-icon {
+    background: #FDB813;
+    color: white;
+    border-color: #FDB813;
+}
+.mr-stat-link:focus-visible {
+    outline: 2px solid #FDB813;
+    outline-offset: 2px;
+}
+
+.mr-stat-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: white;
+    color: #b08510;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid #fde68a;
+}
+
+.mr-stat-ok .mr-stat-icon {
+    background: white;
+    color: #16a34a;
+    border-color: #bbf7d0;
+}
+.mr-stat-warn .mr-stat-icon {
+    background: white;
+    color: #ea580c;
+    border-color: #fed7aa;
+}
+
+.mr-stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b7280;
+    line-height: 1.2;
+}
+
+.mr-stat-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a1f3a;
+    line-height: 1.2;
+}
+
+.mr-stat-sub {
+    font-size: 10px;
+    font-weight: 400;
+    color: #6b7280;
+    margin-left: 1px;
+}
+
+/* ── Header action buttons ───────────────────────────────────────── */
+.mr-hero-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.mr-btn-primary,
+.mr-btn-ghost {
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+}
+
+.mr-btn-primary {
+    background: #FDB813;
+    color: #1a1f3a;
+}
+.mr-btn-primary:hover { background: #f0a800; }
+
+.mr-btn-ghost {
+    background: white;
+    color: #374151;
+    border-color: #e5e7eb;
+}
+.mr-btn-ghost:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.mr-btn-badge {
+    background: rgba(26, 31, 58, 0.12);
+    color: #1a1f3a;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+/* ── PAGE LAYOUT — side-by-side ──────────────────────────────────── */
+/* The main-container holds: client card, selected bar, upload card. */
+/* We turn it into a 2-column grid: client (sidebar) + upload (main). */
+
+.mr-hero + .main-container {
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+}
+
+.main-container {
+    display: grid;
+    grid-template-columns: 600px 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+/* Client card — left sidebar (sticky on scroll) */
+.client-selection-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: start;
+    position: sticky;
+    top: 1rem;
+}
+
+/* Selected client bar — top of main column */
+.selected-client-bar {
+    grid-column: 2;
+    display: none;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef9e6 100%);
+    border: 1px solid #FDB813;
+    border-radius: 10px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0;
+}
+.selected-client-bar.active { display: flex; }
+
+.selected-client-bar .client-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.selected-client-bar .client-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+
+.selected-client-bar .client-address {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* Upload card — main column */
+.column-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    grid-column: 2;
+}
+
+.column-header {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1f3a;
+    margin: 0 0 1.25rem 0;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.column-header::before {
+    content: '';
+    width: 3px;
+    height: 18px;
+    background: #FDB813;
+    border-radius: 2px;
+}
+
+/* ── Client card internals ────────────────────────────────────── */
+.client-selection-card .tabs {
+    display: flex;
+    gap: 4px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 1rem;
+    border: none;
+    width: 100%;
+}
+
+.client-selection-card .tab-btn {
+    flex: 1;
+    padding: 7px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+}
+
+.client-selection-card .tab-btn:hover { color: #1a1f3a; }
+
+.client-selection-card .tab-btn.active {
+    background: white;
+    color: #1a1f3a;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+}
+
+.client-selection-card .search-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 12.5px;
+    margin-bottom: 10px;
+    transition: all 0.15s ease;
+}
+.client-selection-card .search-input:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
+}
+
+.client-option { transition: all 0.15s ease; }
+.client-option:hover > div {
+    background: #fffbeb !important;
+    border-color: #FDB813 !important;
+}
+
+/* New client form — single column in narrow sidebar */
+.client-selection-card .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.client-selection-card .form-group { display: flex; flex-direction: column; gap: 4px; }
+.client-selection-card .form-group.full-width { grid-column: span 2; }
+.client-selection-card .form-label { font-size: 11px; font-weight: 600; color: #374151; }
+.client-selection-card .form-label.required::after { content: ' *'; color: #dc2626; }
+.client-selection-card .form-input {
+    padding: 7px 10px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 7px;
+    font-size: 12px;
+    transition: all 0.15s ease;
+    background: white;
+}
+.client-selection-card .form-input:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
+}
+
+/* ── Upload card internals ────────────────────────────────────── */
+.column-card .input-tabs { display: none; }
+
+.provider-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+    margin-bottom: 4px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px dashed #e5e7eb;
+}
+
+.provider-badge {
+    background: white;
+    color: #4b5563;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid #e5e7eb;
+}
+
+.provider-badge::before {
+    content: '✓ ';
+    color: #16a34a;
+    font-weight: 700;
+}
+
+/* Extract button */
+.column-card .btn-primary {
+    padding: 11px 18px !important;
+    background: #FDB813 !important;
+    color: #1a1f3a !important;
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    border-radius: 9px !important;
+    box-shadow: 0 1px 2px rgba(253, 184, 19, 0.2);
+    transition: all 0.15s ease;
+    border: none !important;
+}
+.column-card .btn-primary:hover:not(:disabled) {
+    background: #f0a800 !important;
+    box-shadow: 0 3px 8px rgba(253, 184, 19, 0.35);
+}
+.column-card .btn-primary:disabled {
+    background: #e5e7eb !important;
+    color: #9ca3af !important;
+    cursor: not-allowed;
+    box-shadow: none !important;
+}
+
+/* ── Responsive: collapse to single column on tablets ──────────── */
+@media (max-width: 1024px) {
+    .main-container {
+        grid-template-columns: 1fr;
+    }
+    .client-selection-card {
+        position: static;
+        grid-column: 1;
+        grid-row: auto;
+    }
+    .selected-client-bar {
+        grid-column: 1;
+        grid-row: auto;
+    }
+    .column-card {
+        grid-column: 1;
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 640px) {
+    .mr-hero { padding: 0.85rem 1rem; }
+    .mr-hero-title { font-size: 1.1rem; }
+    .mr-hero-subtitle { font-size: 0.75rem; }
+    .mr-hero-actions { width: 100%; }
+    .mr-hero-actions .mr-btn-primary,
+    .mr-hero-actions .mr-btn-ghost { flex: 1; justify-content: center; }
+    .client-selection-card .form-grid {
+        grid-template-columns: 1fr;
+    }
+    .client-selection-card .form-group.full-width {
+        grid-column: span 1;
+    }
+}
