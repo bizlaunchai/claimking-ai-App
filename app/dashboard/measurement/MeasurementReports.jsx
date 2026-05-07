@@ -1,73 +1,236 @@
 "use client"
 import React, {useEffect, useRef, useState} from 'react';
 import "./measurement.css"
-import FileUploader from "@/utiles/FileUploader.jsx";
+import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
+import axiosInstance from "@/lib/axiosInstance";
+import { toast } from "sonner";
+
+const NEW_CLIENT_BLANK = {
+    first_name: '', last_name: '', email: '', phone: '',
+    address: '', city: '', state: '', zip_code: '',
+};
 
 const Page = () => {
 
-    // State management
+    // ── Client selection (real API-backed, mirrors 3D mockup) ────────────
     const [activeClientTab, setActiveClientTab] = useState('existing');
-    const [activeInputTab, setActiveInputTab] = useState('report');
     const [selectedClient, setSelectedClient] = useState(null);
+    const [clientSearch, setClientSearch] = useState('');
+    const [clientList, setClientList] = useState([]);
+    const [clientsLoading, setClientsLoading] = useState(false);
+    const [newClientForm, setNewClientForm] = useState(NEW_CLIENT_BLANK);
+    const [creatingClient, setCreatingClient] = useState(false);
+    const [clientFormError, setClientFormError] = useState(null);
+
+    // ── Upload + extraction ──────────────────────────────────────────────
+    const [activeInputTab, setActiveInputTab] = useState('report');
+    const [measurementReportsFiles, setMeasurementReportsFiles] = useState([]);
+    const [extracting, setExtracting] = useState(false);
+    const [extractResult, setExtractResult] = useState(null); // backend row
+    const [extractError, setExtractError] = useState(null);
+
+    // ── Editable copy of extracted_data (Module 7) ───────────────────────
+    const [edits, setEdits] = useState({});      // { field: value }
+    const [savingEdits, setSavingEdits] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+
+    // ── Misc UI state retained from earlier stub ─────────────────────────
     const [expandedSections, setExpandedSections] = useState(['roofing']);
     const [selectedAccuracy, setSelectedAccuracy] = useState('standard');
     const [completedPhotos, setCompletedPhotos] = useState([]);
     const [showReport, setShowReport] = useState(false);
     const [activeModal, setActiveModal] = useState(null);
     const [activeSettingsTab, setActiveSettingsTab] = useState('accuracy');
+    const [viewAllReportModal, setViewAllReportModal] = useState(false);
+    const [droneFiles, setDroneFiles] = useState([]);
+    // Cosmetic-only — old demo "processing log". Keeping it so the right-column
+    // visual matches the original mock-up. Nothing in the real extract flow
+    // writes to this; we just render the static lines.
     const [processingLog, setProcessingLog] = useState([
         { message: '• Detecting structure boundaries... Done', status: 'success' },
         { message: '• Identifying roof planes... Done', status: 'success' },
-        { message: '• Calculating square footage...', status: 'processing' },
-        { message: '• Measuring linear elements...', status: 'pending' }
+        { message: '• Calculating square footage... Done', status: 'success' },
+        { message: '• Measuring linear elements... Done', status: 'success' },
     ]);
-    const [viewAllReportModal, setViewAllReportModal] = useState(false)
-    const [measurementReportsFiles, setMeasurementReportsFiles] = useState([])
-    const [droneFiles, setDroneFiles] = useState([])
-
 
     // Refs
     const reportFileRef = useRef(null);
 
-    // Client functions
-    const switchClientTab = (tab) => {
-        setActiveClientTab(tab);
+    // ── Load clients (debounced search) ──────────────────────────────────
+    useEffect(() => {
+        if (activeClientTab !== 'existing' || selectedClient) return;
+        let cancelled = false;
+        setClientsLoading(true);
+        const timer = setTimeout(async () => {
+            try {
+                const params = {};
+                if (clientSearch.trim()) params.search = clientSearch.trim();
+                const res = await axiosInstance.get('/client-portal', { params });
+                if (cancelled) return;
+                setClientList(res.data?.data ?? []);
+            } catch { /* axiosInstance toasts */ } finally {
+                if (!cancelled) setClientsLoading(false);
+            }
+        }, 250);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [activeClientTab, clientSearch, selectedClient]);
+
+    // ── Client handlers ──────────────────────────────────────────────────
+    const switchClientTab = (tab) => setActiveClientTab(tab);
+
+    const selectClient = (raw) => {
+        const name =
+            raw.full_name ||
+            `${raw.first_name ?? ''} ${raw.last_name ?? ''}`.trim() ||
+            'Unnamed';
+        setSelectedClient({
+            id: raw.id,
+            name,
+            address: [raw.address, raw.city, raw.state, raw.zip_code].filter(Boolean).join(', '),
+            stats: '',
+        });
     };
 
-    const selectClient = (clientName) => {
-        setSelectedClient({
-            name: clientName,
-            address: '123 Main St, Dallas, TX 75201',
-            stats: 'Roof: ~3,500 sq ft | Last measured: 30 days ago'
-        });
-        startAnalysis();
-    };
+    const handleNewClientField = (field, value) =>
+        setNewClientForm(prev => ({ ...prev, [field]: value }));
 
-    const createClient = () => {
-        setSelectedClient({
-            name: 'New Client',
-            address: '123 Main Street, Dallas, TX 75201',
-            stats: 'New client - no previous measurements'
-        });
-        startAnalysis();
+    const createClient = async () => {
+        setClientFormError(null);
+        const required = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code'];
+        const missing = required.filter(k => !newClientForm[k]?.trim());
+        if (missing.length) {
+            const msg = `Please fill in: ${missing.map(f => f.replace('_', ' ')).join(', ')}`;
+            setClientFormError(msg);
+            toast.error(msg);
+            return;
+        }
+        setCreatingClient(true);
+        try {
+            const res = await axiosInstance.post('/client-portal', {
+                first_name: newClientForm.first_name,
+                last_name: newClientForm.last_name,
+                email: newClientForm.email,
+                phone: newClientForm.phone,
+                address: newClientForm.address,
+                city: newClientForm.city,
+                state: newClientForm.state.toUpperCase().slice(0, 2),
+                zip_code: newClientForm.zip_code,
+                property_type: 'single-family',
+                insurance_company: 'other',
+                claim_status: 1,
+            });
+            const created = res.data?.data;
+            toast.success('Client created');
+            if (created) selectClient(created);
+            setNewClientForm(NEW_CLIENT_BLANK);
+            setActiveClientTab('existing');
+        } catch (err) {
+            setClientFormError(err?.userMessage ?? 'Could not create client.');
+        } finally {
+            setCreatingClient(false);
+        }
     };
 
     const changeClient = () => {
         setSelectedClient(null);
+        setExtractResult(null);
+        setExtractError(null);
     };
 
-    // Input functions
-    const switchInputTab = (tab) => {
-        setActiveInputTab(tab);
-    };
+    // ── Input tab + file upload ──────────────────────────────────────────
+    const switchInputTab = (tab) => setActiveInputTab(tab);
 
-    const handleFileUpload = (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            console.log('File selected:', file.name);
-            // Handle file processing here
+    // ── REAL extraction flow: POST /measurement/extract ──────────────────
+    const runExtraction = async () => {
+        const localFile =
+            measurementReportsFiles?.[0]?.file ?? measurementReportsFiles?.[0] ?? null;
+        if (!localFile) {
+            toast.error('Upload a measurement report first');
+            return;
+        }
+        if (extracting) return;
+        setExtracting(true);
+        setExtractError(null);
+        setExtractResult(null);
+        try {
+            const fd = new FormData();
+            fd.append('source_file', localFile);
+            if (selectedClient?.id) fd.append('client_id', selectedClient.id);
+            if (selectedClient?.name) fd.append('title', `${selectedClient.name} — Measurement`);
+
+            const res = await axiosInstance.post('/measurement/extract', fd);
+            const payload = res.data?.data;
+            setExtractResult(payload);
+            // Seed the editable form with whatever the AI got.
+            setEdits({ ...(payload?.extracted_data ?? {}) });
+            toast.success(res.data?.message ?? 'Measurement extracted');
+        } catch (err) {
+            const msg = err?.userMessage || err?.response?.data?.message || 'Extraction failed';
+            setExtractError(msg);
+        } finally {
+            setExtracting(false);
         }
     };
+
+    // ── Edit a single measurement field ──────────────────────────────────
+    const updateField = (field, raw) => {
+        // For pitch we keep the string as-is; everything else is numeric.
+        const value =
+            field === 'pitch'
+                ? (raw === '' ? null : raw)
+                : (raw === '' || raw === null || raw === undefined
+                    ? null
+                    : Number.isFinite(Number(raw)) ? Number(raw) : null);
+        setEdits(prev => ({ ...prev, [field]: value }));
+    };
+
+    // ── Save edits → PATCH /measurement/:id ──────────────────────────────
+    const saveEdits = async () => {
+        if (!extractResult?.id || savingEdits) return;
+        setSavingEdits(true);
+        try {
+            const res = await axiosInstance.patch(`/measurement/${extractResult.id}`, {
+                extracted_data: edits,
+            });
+            setExtractResult(res.data?.data ?? extractResult);
+            toast.success('Measurements saved');
+        } catch { /* axiosInstance toasts */ } finally {
+            setSavingEdits(false);
+        }
+    };
+
+    // ── Confirm → PATCH /measurement/:id/confirm ────────────────────────
+    const confirmMeasurement = async () => {
+        if (!extractResult?.id || confirming) return;
+        setConfirming(true);
+        try {
+            // Save edits first if there are pending changes (best-effort).
+            const aiOriginal = extractResult.raw_ai_response?.extracted ?? extractResult.extracted_data ?? {};
+            const hasEdits = Object.keys(edits).some(
+                k => JSON.stringify(edits[k]) !== JSON.stringify(aiOriginal[k] ?? extractResult.extracted_data?.[k] ?? null),
+            );
+            if (hasEdits) {
+                await axiosInstance.patch(`/measurement/${extractResult.id}`, { extracted_data: edits });
+            }
+            const res = await axiosInstance.patch(`/measurement/${extractResult.id}/confirm`);
+            setExtractResult(res.data?.data ?? extractResult);
+            toast.success('Measurement confirmed — ready to use in an estimate');
+        } catch { /* toasted */ } finally {
+            setConfirming(false);
+        }
+    };
+
+    // ── Use in estimate ──────────────────────────────────────────────────
+    const useInEstimate = () => {
+        if (!extractResult?.id) return;
+        const params = new URLSearchParams();
+        params.set('measurement_id', extractResult.id);
+        if (extractResult.client_id) params.set('client_id', extractResult.client_id);
+        window.location.href = `/dashboard/estimation?${params.toString()}`;
+    };
+
+    // Legacy handler kept so existing inline file inputs still compile.
+    const handleFileUpload = () => {};
 
     // Photo functions
     const togglePhotoRequirement = (photoType) => {
@@ -287,9 +450,43 @@ const Page = () => {
                                     type="text"
                                     className="search-input"
                                     placeholder="Search client name, property address, or phone..."
-                                    onChange={(e) => searchClients(e.target.value)}
+                                    value={clientSearch}
+                                    onChange={(e) => setClientSearch(e.target.value)}
                                     style={{paddingLeft: '1rem'}}
                                 />
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '0.5rem', maxHeight: 280, overflowY: 'auto', marginTop: '0.5rem' }}>
+                                {clientsLoading && (
+                                    <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>Searching…</div>
+                                )}
+                                {!clientsLoading && clientList.length === 0 && (
+                                    <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>
+                                        No clients found. Switch to <strong>New Client</strong> to add one.
+                                    </div>
+                                )}
+                                {clientList.map(c => (
+                                    <div
+                                        key={c.id}
+                                        className="client-option"
+                                        onClick={() => selectClient(c)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: 6 }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#1f2937' }}>{c.full_name || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                                                    {[c.address, c.city, c.state].filter(Boolean).join(', ')}
+                                                </div>
+                                            </div>
+                                            <button
+                                                className="btn btn-outline"
+                                                style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem' }}
+                                                onClick={(e) => { e.stopPropagation(); selectClient(c); }}
+                                            >Use Client</button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
 
                             {/*<div style={{display: 'grid', gap: '0.5rem'}}>
@@ -322,40 +519,66 @@ const Page = () => {
                     {/* New Client Tab */}
                     {activeClientTab === 'new' && (
                         <div className="tab-content active">
-                            <form className="form-grid">
+                            <form className="form-grid" onSubmit={(e) => { e.preventDefault(); createClient(); }}>
                                 <div className="form-group">
-                                    <label className="form-label required">Full Name</label>
-                                    <input type="text" className="form-input" placeholder="John Smith"/>
+                                    <label className="form-label required">First Name</label>
+                                    <input type="text" className="form-input" placeholder="John"
+                                        value={newClientForm.first_name}
+                                        onChange={(e) => handleNewClientField('first_name', e.target.value)} />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Phone</label>
-                                    <input type="tel" className="form-input" placeholder="(555) 123-4567"/>
+                                    <label className="form-label required">Last Name</label>
+                                    <input type="text" className="form-input" placeholder="Smith"
+                                        value={newClientForm.last_name}
+                                        onChange={(e) => handleNewClientField('last_name', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">Email</label>
+                                    <input type="email" className="form-input" placeholder="john@example.com"
+                                        value={newClientForm.email}
+                                        onChange={(e) => handleNewClientField('email', e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label required">Phone</label>
+                                    <input type="tel" className="form-input" placeholder="(555) 123-4567"
+                                        value={newClientForm.phone}
+                                        onChange={(e) => handleNewClientField('phone', e.target.value)} />
                                 </div>
                                 <div className="form-group full-width">
-                                    <label className="form-label required">Property Address</label>
-                                    <input type="text" className="form-input"
-                                           placeholder="123 Main Street, Dallas, TX 75201"/>
+                                    <label className="form-label required">Address</label>
+                                    <input type="text" className="form-input" placeholder="123 Main Street"
+                                        value={newClientForm.address}
+                                        onChange={(e) => handleNewClientField('address', e.target.value)} />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Property Type</label>
-                                    <select className="form-select">
-                                        <option>Residential</option>
-                                        <option>Commercial</option>
-                                    </select>
+                                    <label className="form-label required">City</label>
+                                    <input type="text" className="form-input" placeholder="Dallas"
+                                        value={newClientForm.city}
+                                        onChange={(e) => handleNewClientField('city', e.target.value)} />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Stories</label>
-                                    <select className="form-select">
-                                        <option>1</option>
-                                        <option>1.5</option>
-                                        <option>2</option>
-                                        <option>2.5</option>
-                                        <option>3+</option>
-                                    </select>
+                                    <label className="form-label required">State</label>
+                                    <input type="text" className="form-input" maxLength={2} placeholder="TX"
+                                        value={newClientForm.state}
+                                        onChange={(e) => handleNewClientField('state', e.target.value)} />
                                 </div>
+                                <div className="form-group">
+                                    <label className="form-label required">ZIP Code</label>
+                                    <input type="text" className="form-input" placeholder="75201"
+                                        value={newClientForm.zip_code}
+                                        onChange={(e) => handleNewClientField('zip_code', e.target.value)} />
+                                </div>
+                                {clientFormError && (
+                                    <div className="form-group full-width" role="alert" style={{
+                                        background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #dc2626',
+                                        color: '#7f1d1d', padding: '10px 12px', borderRadius: 6, fontSize: 13,
+                                    }}>
+                                        {clientFormError}
+                                    </div>
+                                )}
                                 <div className="form-group full-width">
-                                    <button type="button" className="btn btn-primary" onClick={createClient}>Create
-                                        Client & Continue
+                                    <button type="submit" className="btn btn-primary" disabled={creatingClient}>
+                                        {creatingClient ? 'Creating…' : 'Create Client & Continue'}
                                     </button>
                                 </div>
                             </form>
@@ -381,11 +604,9 @@ const Page = () => {
                     </div>
                 )}
 
-                {/* Three Column Analysis Interface */}
-                <div className="analysis-interface">
-                    {/* Left Column - Input Sources */}
-                    <div className="column-card">
-                        <h3 className="column-header">Input Sources</h3>
+                {/* Single-column upload + extraction flow */}
+                <div className="column-card" style={{ maxWidth: 880, margin: '0 auto' }}>
+                    <h3 className="column-header">Upload Measurement Report</h3>
 
                         <div className="input-tabs">
                             <button
@@ -429,7 +650,14 @@ const Page = () => {
                                     />
                                 </div>*/}
 
-                                <FileUploader label={'Drag & drop measurement reports here'} files={measurementReportsFiles} setFiles={setMeasurementReportsFiles} allowedExtensions={['.pdf', '.xml', '.esx', '.jpg', '.png']} maxFiles={2} />
+                                <LocalFileUploader
+                                    label="Drop measurement report here (PDF or image)"
+                                    files={measurementReportsFiles}
+                                    setFiles={setMeasurementReportsFiles}
+                                    allowedExtensions={['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']}
+                                    maxFiles={1}
+                                    maxSizeMB={20}
+                                />
 
                                 <div className="provider-badges">
                                     <div className="provider-badge">EagleView</div>
@@ -438,6 +666,39 @@ const Page = () => {
                                     <div className="provider-badge">Pictometry</div>
                                     <div className="provider-badge">Xactimate</div>
                                 </div>
+
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}
+                                    onClick={runExtraction}
+                                    disabled={extracting || measurementReportsFiles.length === 0}
+                                >
+                                    {extracting ? 'Extracting…' : 'Extract Measurements'}
+                                </button>
+
+                                {extractError && (
+                                    <div role="alert" style={{
+                                        marginTop: 10, padding: '10px 12px', borderRadius: 6, fontSize: 13,
+                                        background: '#fef2f2', border: '1px solid #fecaca',
+                                        borderLeft: '4px solid #dc2626', color: '#7f1d1d'
+                                    }}>
+                                        {extractError}
+                                    </div>
+                                )}
+
+                                {extractResult && (
+                                    <ExtractedPanel
+                                        row={extractResult}
+                                        edits={edits}
+                                        onChange={updateField}
+                                        onSave={saveEdits}
+                                        onConfirm={confirmMeasurement}
+                                        onUseInEstimate={useInEstimate}
+                                        savingEdits={savingEdits}
+                                        confirming={confirming}
+                                    />
+                                )}
                             </div>
                         )}
 
@@ -552,345 +813,7 @@ const Page = () => {
                         */}
                     </div>
 
-                    {/* Middle Column - Measurement Configuration */}
-                    <div className="column-card">
-                        <h3 className="column-header">Measurement Configuration</h3>
 
-                        {/* Quick Presets */}
-                        <div className="quick-presets">
-                            <button className="preset-btn active">Full Exterior</button>
-                            <button className="preset-btn">Roof Only</button>
-                            <button className="preset-btn">Insurance Standard</button>
-                            <button className="preset-btn">Siding Package</button>
-                            <button className="preset-btn">Complete Replacement</button>
-                        </div>
-
-                        {/* Roofing Measurements */}
-                        <div className="measurement-section">
-                            <div
-                                className={`section-header ${expandedSections.includes('roofing') ? 'expanded' : ''}`}
-                                onClick={() => toggleSection('roofing')}
-                            >
-                                <div className="section-title">
-                                    Roofing Measurements
-                                </div>
-                                <div className="master-toggle">
-                                    <span>All</span>
-                                    <label className="toggle-switch">
-                                        <input type="checkbox" defaultChecked/>
-                                        <span className="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            {expandedSections.includes('roofing') && (
-                                <div className="section-content active">
-                                    <div className="measurement-options">
-                                        {[
-                                            'Total Roof Area (squares)',
-                                            'Area by Pitch',
-                                            'Ridge Length (linear feet)',
-                                            'Hip Length',
-                                            'Valley Length',
-                                            'Eave/Drip Edge Length',
-                                            'Waste Factor Calculation (10%)'
-                                        ].map((option, index) => (
-                                            <div key={index} className="measurement-option">
-                                                <input
-                                                    type="checkbox"
-                                                    className="measurement-checkbox"
-                                                    defaultChecked={index < 6}
-                                                />
-                                                <span>{option}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Siding Measurements */}
-                        <div className="measurement-section">
-                            <div
-                                className={`section-header ${expandedSections.includes('siding') ? 'expanded' : ''}`}
-                                onClick={() => toggleSection('siding')}
-                            >
-                                <div className="section-title">
-                                    Siding Measurements
-                                </div>
-                                <div className="master-toggle">
-                                    <span>All</span>
-                                    <label className="toggle-switch">
-                                        <input type="checkbox"/>
-                                        <span className="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            {expandedSections.includes('siding') && (
-                                <div className="section-content">
-                                    <div className="measurement-options">
-                                        {[
-                                            'Front Elevation (sq ft)',
-                                            'Rear Elevation (sq ft)',
-                                            'Left Side (sq ft)',
-                                            'Right Side (sq ft)'
-                                        ].map((option, index) => (
-                                            <div key={index} className="measurement-option">
-                                                <input type="checkbox" className="measurement-checkbox"/>
-                                                <span>{option}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Gutter System */}
-                        <div className="measurement-section">
-                            <div
-                                className={`section-header ${expandedSections.includes('gutter') ? 'expanded' : ''}`}
-                                onClick={() => toggleSection('gutter')}
-                            >
-                                <div className="section-title">
-                                    Gutter System
-                                </div>
-                                <div className="master-toggle">
-                                    <span>All</span>
-                                    <label className="toggle-switch">
-                                        <input type="checkbox"/>
-                                        <span className="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            {expandedSections.includes('gutter') && (
-                                <div className="section-content">
-                                    <div className="measurement-options">
-                                        {[
-                                            'Gutter Linear Feet',
-                                            'Downspout Count & Total Length',
-                                            'Inside/Outside Corners Count'
-                                        ].map((option, index) => (
-                                            <div key={index} className="measurement-option">
-                                                <input type="checkbox" className="measurement-checkbox"/>
-                                                <span>{option}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* AI Analysis Settings */}
-                        <h4 style={{
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            margin: '1.5rem 0 1rem'
-                        }}>AI Analysis Settings</h4>
-                        <div className="accuracy-modes">
-                            {[
-                                {id: 'quick', title: 'Quick Estimate', time: '1-2 minutes', accuracy: '85%'},
-                                {id: 'standard', title: 'Standard', time: '2-5 minutes', accuracy: '92%'},
-                                {id: 'precision', title: 'Precision', time: '5-10 minutes', accuracy: '98%'},
-                                {id: 'maximum', title: 'Maximum with Drone', time: '10-15 minutes', accuracy: '99.5%'}
-                            ].map(mode => (
-                                <div
-                                    key={mode.id}
-                                    className={`accuracy-mode ${selectedAccuracy === mode.id ? 'selected' : ''}`}
-                                    onClick={() => selectAccuracyMode(mode.id)}
-                                >
-                                    <div className="accuracy-title">{mode.title}</div>
-                                    <div className="accuracy-details">
-                                        <span>{mode.time}</span>
-                                        <span>{mode.accuracy}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right Column - Live Results & Preview */}
-                    <div className="column-card">
-                        <h3 className="column-header">Live Results & Preview</h3>
-
-                        {/* Analysis Status Panel */}
-                        <div className="status-panel">
-                            <div className="status-title">Analysis Status</div>
-                            <div className="status-steps">
-                                <div className="status-step completed">
-                                    Client selected
-                                </div>
-                                <div className="status-step completed">
-                                    Photos uploaded (12)
-                                </div>
-                                <div className="status-step active">
-                                    AI analyzing structure...
-                                </div>
-                                <div className="status-step">
-                                    Generating measurements
-                                </div>
-                                <div className="status-step">
-                                    Creating report
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Processing Log */}
-                        <div className="processing-log">
-                            {processingLog.map((entry, index) => (
-                                <div key={index} className={`log-entry ${entry.status}`}>
-                                    {entry.message}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* 3D Model Preview */}
-                        <div className="model-preview">
-                            <div className="model-placeholder">
-                                <p style={{fontSize: '0.875rem', color: '#6b7280'}}>3D Model Generating...</p>
-                            </div>
-                            <div className="model-controls">
-                                <button className="model-control-btn">Rotate</button>
-                                <button className="model-control-btn">Zoom</button>
-                                <button className="model-control-btn">Layers</button>
-                            </div>
-                        </div>
-
-                        {/* Preliminary Results */}
-                        <div className="results-section">
-                            <div className="results-category">
-                                <div className="results-title">Roofing</div>
-                                <div className="result-item">
-                                    <span className="result-label">Total Area:</span>
-                                    <span className="result-value">~32.5 squares</span>
-                                </div>
-                                <div className="result-item">
-                                    <span className="result-label">Main Roof:</span>
-                                    <span className="result-value">~28 sq @ 6/12</span>
-                                </div>
-                                <div className="result-item">
-                                    <span className="result-label">Total Ridge:</span>
-                                    <span className="result-value">~125 LF</span>
-                                </div>
-                                <div className="result-item">
-                                    <span className="result-label">Total Eave:</span>
-                                    <span className="result-value">~180 LF</span>
-                                </div>
-                            </div>
-
-                            <div className="results-category">
-                                <div className="results-title">Siding</div>
-                                <div className="result-item">
-                                    <span className="result-label">Total Area:</span>
-                                    <span className="result-value">~2,850 sq ft</span>
-                                </div>
-                                <div className="result-item">
-                                    <span className="result-label">Front:</span>
-                                    <span className="result-value">~750 sq ft</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Confidence Scores */}
-                        <div className="confidence-section">
-                            {[
-                                {label: 'Roof Area', percentage: 96},
-                                {label: 'Siding', percentage: 94},
-                                {label: 'Linear Measurements', percentage: 92}
-                            ].map((item, index) => (
-                                <div key={index} className="confidence-item">
-                                    <div className="confidence-header">
-                                        <span className="confidence-label">{item.label}</span>
-                                        <span className="confidence-percentage">{item.percentage}%</span>
-                                    </div>
-                                    <div className="confidence-bar">
-                                        <div className="confidence-fill high"
-                                             style={{width: `${item.percentage}%`}}></div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Report Actions */}
-                        <div className="report-actions">
-                            <button className="btn btn-primary" onClick={generateReport}>Generate Full Report</button>
-                            <button className="btn btn-secondary" onClick={saveMeasurements}>Save Measurements</button>
-                            <button className="btn btn-outline" onClick={requestVerify}>Request Professional Verify
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Generated Report Section */}
-                {showReport && (
-                    <div className="report-section" id="generatedReport">
-                        <div className="report-header">
-                            <div className="report-company">
-                                <div className="crown-logo">
-                                    <svg viewBox="0 0 24 24" fill="#1a1f3a" width="24" height="24">
-                                        <path
-                                            d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div style={{fontWeight: '600', color: '#1f2937'}}>ClaimKing.AI</div>
-                                    <div style={{fontSize: '0.75rem', color: '#6b7280'}}>Measurement Report</div>
-                                </div>
-                            </div>
-                            <div className="report-details">
-                                <div className="report-id">Report #MR-2024-0892</div>
-                                <div className="report-date">Generated: October 19, 2025</div>
-                                <div className="report-date">Data Source: AI Analysis</div>
-                            </div>
-                        </div>
-
-                        <table className="measurement-table">
-                            <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Description</th>
-                                <th>Quantity</th>
-                                <th>Unit</th>
-                                <th>Notes</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {[
-                                {code: 'RFG', desc: 'Roof Area', qty: '32.5', unit: 'SQ', notes: '@ 6/12 pitch'},
-                                {code: 'RDG', desc: 'Ridge Cap', qty: '125.0', unit: 'LF', notes: 'Standard profile'},
-                                {code: 'HIP', desc: 'Hip Ridge', qty: '45.0', unit: 'LF', notes: '-'},
-                                {code: 'VAL', desc: 'Valley', qty: '45.0', unit: 'LF', notes: 'W-type valley'},
-                                {code: 'DRP', desc: 'Drip Edge', qty: '180.0', unit: 'LF', notes: 'Type C'}
-                            ].map((row, index) => (
-                                <tr key={index}>
-                                    <td className="xactimate-code">{row.code}</td>
-                                    <td>{row.desc}</td>
-                                    <td><strong>{row.qty}</strong></td>
-                                    <td>{row.unit}</td>
-                                    <td>{row.notes}</td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-
-                        <div className="export-options">
-                            <button className="export-btn" onClick={downloadPDF}>
-                                Download PDF Report
-                            </button>
-                            <button className="export-btn" onClick={exportXactimate}>
-                                Export to Xactimate (ESX)
-                            </button>
-                            <button className="export-btn" onClick={exportExcel}>
-                                Export to Excel
-                            </button>
-                            <button className="export-btn" onClick={sendToPortal}>
-                                Send to Client Portal
-                            </button>
-                            <button className="export-btn" onClick={emailAdjuster}>
-                                Email to Adjuster
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {
@@ -1361,3 +1284,114 @@ const Page = () => {
 };
 
 export default Page;
+
+// ──────────────────────────────────────────────────────────────────────────
+//   ExtractedPanel — show the AI-extracted measurements + editable inputs
+//   + Save / Confirm / Use-in-Estimate actions. Defined in this file (not a
+//   separate component file) because it's used in exactly one place.
+// ──────────────────────────────────────────────────────────────────────────
+const FIELD_GRID = [
+    { key: 'squares',          label: 'Squares',            unit: 'sq',  step: '0.1' },
+    { key: 'total_sq_ft',      label: 'Total Area',         unit: 'ft²', step: '1'   },
+    { key: 'pitch',            label: 'Pitch',              unit: 'x/12', step: null,  type: 'text' },
+    { key: 'ridge_lf',         label: 'Ridge',              unit: 'LF',  step: '1'   },
+    { key: 'hip_lf',           label: 'Hip',                unit: 'LF',  step: '1'   },
+    { key: 'valley_lf',        label: 'Valley',             unit: 'LF',  step: '1'   },
+    { key: 'eave_lf',          label: 'Eave',               unit: 'LF',  step: '1'   },
+    { key: 'rake_lf',          label: 'Rake',               unit: 'LF',  step: '1'   },
+    { key: 'step_flashing_lf', label: 'Step Flashing',      unit: 'LF',  step: '1'   },
+    { key: 'facets',           label: 'Facets',             unit: '#',   step: '1'   },
+    { key: 'waste_factor',     label: 'Waste Factor',       unit: '%',   step: '1'   },
+    { key: 'penetrations',     label: 'Penetrations',       unit: '#',   step: '1'   },
+];
+
+function ExtractedPanel({
+    row, edits, onChange, onSave, onConfirm, onUseInEstimate,
+    savingEdits, confirming,
+}) {
+    const isConfirmed = row?.status === 'confirmed';
+    const conf = Math.round((row?.confidence_score ?? 0) * 100);
+    const provider =
+        row?.source_provider && row.source_provider !== 'unknown'
+            ? row.source_provider
+            : null;
+
+    return (
+        <div style={{
+            marginTop: 14, padding: 14, borderRadius: 10,
+            background: '#fffbe7', border: '1px solid #FDB813',
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <div>
+                    <div style={{ fontWeight: 700, color: '#1a1f3a', fontSize: 14 }}>
+                        {isConfirmed ? '✓ Confirmed measurements' : 'Review & confirm extracted measurements'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                        {provider ? `Detected: ${provider} • ` : ''}
+                        Confidence: {conf}%
+                        {conf < 70 && ' — please double-check the numbers below'}
+                    </div>
+                </div>
+                {isConfirmed && (
+                    <span style={{
+                        background: '#10b981', color: 'white', fontSize: 11, fontWeight: 600,
+                        padding: '3px 10px', borderRadius: 12,
+                    }}>CONFIRMED</span>
+                )}
+            </div>
+
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                gap: 10, marginBottom: 12,
+            }}>
+                {FIELD_GRID.map(f => (
+                    <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                            {f.label} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({f.unit})</span>
+                        </label>
+                        <input
+                            type={f.type ?? 'number'}
+                            step={f.step ?? undefined}
+                            value={edits?.[f.key] ?? ''}
+                            placeholder={row?.extracted_data?.[f.key] === null || row?.extracted_data?.[f.key] === undefined ? '—' : ''}
+                            onChange={(e) => onChange(f.key, e.target.value)}
+                            disabled={isConfirmed}
+                            style={{
+                                padding: '7px 9px', border: '1px solid #e5e7eb', borderRadius: 6,
+                                fontSize: 13, background: isConfirmed ? '#f3f4f6' : '#fff',
+                            }}
+                        />
+                    </div>
+                ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {!isConfirmed && (
+                    <>
+                        <button
+                            type="button" className="btn btn-outline"
+                            onClick={onSave} disabled={savingEdits || confirming}
+                            style={{ padding: '8px 14px', fontSize: 13 }}
+                        >
+                            {savingEdits ? 'Saving…' : 'Save Edits'}
+                        </button>
+                        <button
+                            type="button" className="btn btn-primary"
+                            onClick={onConfirm} disabled={savingEdits || confirming}
+                            style={{ padding: '8px 14px', fontSize: 13 }}
+                        >
+                            {confirming ? 'Confirming…' : 'Confirm Measurements'}
+                        </button>
+                    </>
+                )}
+                <button
+                    type="button" className="btn btn-secondary"
+                    onClick={onUseInEstimate}
+                    style={{ padding: '8px 14px', fontSize: 13 }}
+                >
+                    Use in Estimate →
+                </button>
+            </div>
+        </div>
+    );
+}

@@ -1,10 +1,63 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast as sonner } from "sonner";
 import "./estimation.css";
 
 // ====================== STATIC DATA ======================
+/**
+ * Build estimate line items from an extracted measurement.
+ * The mapping is intentionally simple — quantities come straight from the
+ * extracted JSONB, prices are pulled from `INITIAL_ITEM_LIBRARY` defaults so
+ * the user gets a realistic starting estimate they can adjust.
+ *
+ * Skips any line where the measurement value is null/0 — no point adding a
+ * "Valley Metal — 0 LF" row.
+ */
+function buildItemsFromMeasurement(extracted) {
+    if (!extracted) return [];
+    const out = [];
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const wasteMul = 1 + num(extracted.waste_factor) / 100;
+
+    const sq = num(extracted.squares);
+    const eave = num(extracted.eave_lf);
+    const rake = num(extracted.rake_lf);
+    const ridge = num(extracted.ridge_lf);
+    const valley = num(extracted.valley_lf);
+    const stepFlash = num(extracted.step_flashing_lf);
+    const pens = num(extracted.penetrations);
+
+    if (sq > 0) {
+        out.push(
+            { name: "Tear Off - 1 Layer",         qty: +sq.toFixed(1),                unit: "SQ", price: 65 },
+            { name: "30yr Architectural Shingles", qty: +(sq * wasteMul).toFixed(1),  unit: "SQ", price: 125 },
+            { name: "Synthetic Underlayment",      qty: +sq.toFixed(1),                unit: "SQ", price: 45 },
+        );
+    }
+    if (eave > 0) {
+        out.push({ name: "Ice & Water Shield (eaves)", qty: eave, unit: "LF", price: 4.0 });
+        out.push({ name: "Starter Strip",              qty: eave, unit: "LF", price: 2.5 });
+    }
+    if (eave + rake > 0) {
+        out.push({ name: "Drip Edge", qty: eave + rake, unit: "LF", price: 3.75 });
+    }
+    if (ridge > 0) {
+        out.push({ name: "Ridge Cap", qty: ridge, unit: "LF", price: 4.5 });
+    }
+    if (valley > 0) {
+        out.push({ name: "Valley Metal", qty: valley, unit: "LF", price: 12.5 });
+    }
+    if (stepFlash > 0) {
+        out.push({ name: "Step Flashing", qty: stepFlash, unit: "LF", price: 8.5 });
+    }
+    if (pens > 0) {
+        out.push({ name: "Pipe Boot Flashings", qty: pens, unit: "EA", price: 45 });
+    }
+    return out;
+}
+
 const INITIAL_ITEM_LIBRARY = {
     roofing: [
         { name: "Tear Off - 1 Layer", price: 65, unit: "SQ" },
@@ -205,6 +258,13 @@ const IconSprite = () => (
 
 // ====================== MAIN COMPONENT ======================
 const Estimation = () => {
+    // ── Query params (Measurement → Estimate handoff) ─────────────────────
+    const searchParams = useSearchParams();
+
+    // ── Loaded measurement (set when ?measurement_id is present) ──────────
+    const [linkedMeasurement, setLinkedMeasurement] = useState(null);
+    const [measurementLoading, setMeasurementLoading] = useState(false);
+
     // ── Core state ───────────────────────────────────────────────────────
     const [client, setClient] = useState(null);
     const [mode, setMode] = useState("insurance");
@@ -357,6 +417,75 @@ const Estimation = () => {
         const t = setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
         return () => { clearTimeout(t); document.removeEventListener("click", handler); };
     }, [moveMenu]);
+
+    // ── Measurement → Estimate handoff (?measurement_id=...&client_id=...)
+    //
+    // When the user clicks "Use in Estimate" on the Measurement page they
+    // land here with the measurement id in the URL. We:
+    //   1. Pull the measurement row.
+    //   2. Pull the linked client (if any) and pre-select it.
+    //   3. Auto-create a "Dwelling Roof" section with quantity-pre-filled
+    //      line items derived from extracted_data.
+    //   4. Jump straight to the builder stage.
+    useEffect(() => {
+        const measurementId = searchParams?.get("measurement_id");
+        const clientIdParam = searchParams?.get("client_id");
+        if (!measurementId) return;
+        let cancelled = false;
+        setMeasurementLoading(true);
+
+        (async () => {
+            try {
+                // 1. Measurement
+                const mRes = await axiosInstance.get(`/measurement/${measurementId}`);
+                const measurement = mRes.data?.data;
+                if (cancelled || !measurement) return;
+                setLinkedMeasurement(measurement);
+
+                // 2. Client — prefer measurement.client_id, fall back to URL param
+                const cid = measurement.client_id || clientIdParam || null;
+                if (cid && !client) {
+                    try {
+                        const cRes = await axiosInstance.get(`/client-portal/${cid}`, { suppressErrorToast: true });
+                        const raw = cRes.data?.data;
+                        if (raw) setClient(toClientShape(raw));
+                    } catch { /* non-fatal — user can still pick a client */ }
+                }
+
+                // 3. Build line items from extracted_data
+                const itemsFromMeasurement = buildItemsFromMeasurement(measurement.extracted_data);
+                if (itemsFromMeasurement.length) {
+                    setSections((prev) => {
+                        // If a Dwelling Roof section already exists, append; else create one.
+                        const existing = prev.find((s) => s.id === "dwelling-roof");
+                        if (existing) {
+                            return prev.map((s) =>
+                                s.id === "dwelling-roof"
+                                    ? { ...s, items: [...s.items, ...itemsFromMeasurement] }
+                                    : s,
+                            );
+                        }
+                        return [
+                            ...prev,
+                            { id: "dwelling-roof", name: "Dwelling Roof", items: itemsFromMeasurement },
+                        ];
+                    });
+                    setActiveSection("dwelling-roof");
+                }
+
+                // 4. Jump to the builder
+                setHasStarted(true);
+                sonner.success(`Loaded measurement — ${itemsFromMeasurement.length} line items pre-filled`);
+            } catch {
+                /* axiosInstance toasts the failure */
+            } finally {
+                if (!cancelled) setMeasurementLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     // ====================== UTIL ======================
     const toast = useCallback((msg, type = "") => {
@@ -1200,6 +1329,44 @@ const Estimation = () => {
                             <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>View Previous Estimates</a>
                             <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>Client Preferences</a>
                         </div>
+                    </div>
+                )}
+
+                {/* ─────────────── Measurement source banner ─────────────── */}
+                {linkedMeasurement && (
+                    <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        flexWrap: "wrap", gap: 8,
+                        padding: "10px 14px", margin: "0 auto 1rem", maxWidth: 1600,
+                        background: "linear-gradient(135deg,#eff6ff,#fff)", border: "1px solid #93c5fd",
+                        borderRadius: 8, fontSize: 13,
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                            <span style={{
+                                background: "#1d4ed8", color: "white", fontSize: 11, fontWeight: 600,
+                                padding: "2px 8px", borderRadius: 10, letterSpacing: 0.3, textTransform: "uppercase",
+                            }}>From measurement</span>
+                            <span style={{ color: "#1e3a8a" }}>
+                                {linkedMeasurement.extracted_data?.squares ?? "—"} squares
+                                {linkedMeasurement.source_provider && linkedMeasurement.source_provider !== "unknown"
+                                    ? ` • ${linkedMeasurement.source_provider}`
+                                    : ""}
+                                {linkedMeasurement.confidence_score != null
+                                    ? ` • ${Math.round(linkedMeasurement.confidence_score * 100)}% confident`
+                                    : ""}
+                            </span>
+                        </div>
+                        <a
+                            href="#"
+                            style={{ color: "#1d4ed8", fontSize: 12, fontWeight: 500 }}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setLinkedMeasurement(null);
+                                if (typeof window !== "undefined") {
+                                    window.history.replaceState({}, "", window.location.pathname);
+                                }
+                            }}
+                        >Detach measurement</a>
                     </div>
                 )}
 
