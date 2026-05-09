@@ -1004,11 +1004,11 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
     if (!client) return null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Edit Client</h2>
-                    <button className="modal-close" onClick={onClose}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-800">Edit Client</h2>
+                    <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 transition-all duration-200 hover:bg-gray-100" onClick={onClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1016,7 +1016,7 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
                     </button>
                 </div>
 
-                <div className="modal-body">
+                <div className="p-6">
                     <form onSubmit={handleSubmit}>
                         <div className="form-section">
                             <h3 className="section-title">Client Information</h3>
@@ -1144,7 +1144,7 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
                     </form>
                 </div>
 
-                <div className="modal-footer">
+                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose} disabled={submitting}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
                         {submitting ? 'Saving...' : 'Update Client'}
@@ -1159,18 +1159,18 @@ const TrashModal = ({ isOpen, clients, onClose, onRestore, onPermanentDelete }) 
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Trash ({clients.length})</h2>
-                    <button className="modal-close" onClick={onClose}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-[800px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-800">Trash ({clients.length})</h2>
+                    <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 transition-all duration-200 hover:bg-gray-100" onClick={onClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
-                <div className="modal-body">
+                <div className="p-6">
                     {clients.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>Trash is empty</p>
                     ) : (
@@ -1203,7 +1203,7 @@ const TrashModal = ({ isOpen, clients, onClose, onRestore, onPermanentDelete }) 
                         </div>
                     )}
                 </div>
-                <div className="modal-footer">
+                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Close</button>
                 </div>
             </div>
@@ -1238,18 +1238,18 @@ const BulkImportModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Bulk Import Clients</h2>
-                    <button className="modal-close" onClick={onClose}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-800">Bulk Import Clients</h2>
+                    <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 transition-all duration-200 hover:bg-gray-100" onClick={onClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
-                <div className="modal-body">
+                <div className="p-6">
                     <div className="form-section">
                         <h3 className="section-title">Upload CSV File</h3>
                         <FileUploader label='Click to upload or drag and drop' files={files} setFiles={setFiles} allowedExtensions={['.csv']} maxSizeMB={10} />
@@ -1283,7 +1283,7 @@ const BulkImportModal = ({ isOpen, onClose }) => {
                         ))}
                     </div>
                 </div>
-                <div className="modal-footer">
+                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Cancel</button>
                     <button className="btn btn-primary" onClick={() => { toast.info('Bulk import coming soon'); onClose(); }}>
                         Start Import
@@ -1329,18 +1329,18 @@ const PortalSettingsModal = ({ isOpen, onClose }) => {
     const tabs = ['general', 'branding', 'permissions', 'notifications'];
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Portal Settings</h2>
-                    <button className="modal-close" onClick={onClose}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-800">Portal Settings</h2>
+                    <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 transition-all duration-200 hover:bg-gray-100" onClick={onClose}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
-                <div className="modal-body">
+                <div className="p-6">
                     <div className="settings-tabs">
                         {tabs.map(tab => (
                             <button key={tab} className={`settings-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
@@ -1441,7 +1441,7 @@ const PortalSettingsModal = ({ isOpen, onClose }) => {
                         </div>
                     )}
                 </div>
-                <div className="modal-footer">
+                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Cancel</button>
                     <button className="btn btn-primary" onClick={() => { toast.success('Settings saved!'); onClose(); }}>
                         Save Settings
