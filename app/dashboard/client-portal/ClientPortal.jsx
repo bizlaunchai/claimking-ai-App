@@ -728,63 +728,98 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
 
     if (!isOpen) return null;
 
+    // ── Tailwind class presets (kept here so each input doesn't repeat the
+    //    20-char focus / transition strings). Mirrors the look of the old
+    //    .modal-* / .form-* CSS exactly. ─────────────────────────────────
+    const inputBase =
+        "px-3.5 py-2.5 border rounded-md text-sm text-gray-700 bg-white transition-all " +
+        "focus:outline-none focus:border-[#FDB813] focus:ring-2 focus:ring-[#FDB813]/10";
+    const inputErr = "border-red-500 ring-2 ring-red-500/15";
+    const inputOk = "border-gray-200";
+    const inputCls = (hasErr) => `${inputBase} ${hasErr ? inputErr : inputOk}`;
+
+    const selectBase =
+        "px-3.5 py-2.5 border rounded-md text-sm bg-white cursor-pointer transition-all " +
+        "focus:outline-none focus:border-[#FDB813] focus:ring-2 focus:ring-[#FDB813]/10";
+    const selectCls = (hasErr) => `${selectBase} ${hasErr ? inputErr : inputOk}`;
+
+    const labelBase = "text-sm font-medium text-gray-700";
+    const labelReq = `${labelBase} after:content-['*'] after:ml-0.5 after:text-red-600`;
+    const fieldErrCls = "block text-red-500 text-xs mt-1";
+    const fieldGroup = "flex flex-col gap-1.5";
+    const sectionTitle = "text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wider";
+
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Add New Client</h2>
-                    <button className="modal-close" onClick={onClose}>
+        <div
+            className="fixed inset-0 w-full h-full bg-black/50 z-[9999] flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white rounded-xl max-w-[600px] w-full max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="px-6 py-6 border-b border-gray-200 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-800">Add New Client</h2>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center transition-all hover:bg-gray-100"
+                    >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
 
-                <div className="modal-body">
+                {/* Body */}
+                <div className="p-6">
                     <form onSubmit={handleSubmit}>
-                        <div className="form-section">
-                            <h3 className="section-title">Client Information</h3>
-                            <div className="form-grid">
-                                <div className="form-group">
-                                    <label className="form-label required">First Name</label>
-                                    <input type="text" className={`form-input ${errors.first_name ? 'input-error' : ''}`} placeholder="John" name="first_name" value={formData.first_name} onChange={handleInputChange} />
-                                    {errors.first_name && <span className="field-error">{errors.first_name}</span>}
+                        {/* Client Information */}
+                        <div className="mb-6">
+                            <h3 className={sectionTitle}>Client Information</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>First Name</label>
+                                    <input type="text" className={inputCls(errors.first_name)} placeholder="John" name="first_name" value={formData.first_name} onChange={handleInputChange} />
+                                    {errors.first_name && <span className={fieldErrCls}>{errors.first_name}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Last Name</label>
-                                    <input type="text" className={`form-input ${errors.last_name ? 'input-error' : ''}`} placeholder="Smith" name="last_name" value={formData.last_name} onChange={handleInputChange} />
-                                    {errors.last_name && <span className="field-error">{errors.last_name}</span>}
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>Last Name</label>
+                                    <input type="text" className={inputCls(errors.last_name)} placeholder="Smith" name="last_name" value={formData.last_name} onChange={handleInputChange} />
+                                    {errors.last_name && <span className={fieldErrCls}>{errors.last_name}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Phone Number</label>
-                                    <input type="tel" className={`form-input ${errors.phone ? 'input-error' : ''}`} placeholder="(555) 123-4567" name="phone" value={formData.phone} onChange={handleInputChange} />
-                                    {errors.phone && <span className="field-error">{errors.phone}</span>}
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>Phone Number</label>
+                                    <input type="tel" className={inputCls(errors.phone)} placeholder="(555) 123-4567" name="phone" value={formData.phone} onChange={handleInputChange} />
+                                    {errors.phone && <span className={fieldErrCls}>{errors.phone}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Email Address</label>
-                                    <input type="email" className={`form-input ${errors.email ? 'input-error' : ''}`} placeholder="john.smith@email.com" name="email" value={formData.email} onChange={handleInputChange} />
-                                    {errors.email && <span className="field-error">{errors.email}</span>}
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>Email Address</label>
+                                    <input type="email" className={inputCls(errors.email)} placeholder="john.smith@email.com" name="email" value={formData.email} onChange={handleInputChange} />
+                                    {errors.email && <span className={fieldErrCls}>{errors.email}</span>}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="form-section">
-                            <h3 className="section-title">Property Information</h3>
-                            <div className="form-grid">
-                                <div className="form-group full-width">
-                                    <label className="form-label required">Property Address</label>
-                                    <input type="text" className={`form-input ${errors.address ? 'input-error' : ''}`} placeholder="123 Main Street" name="address" value={formData.address} onChange={handleInputChange} />
-                                    {errors.address && <span className="field-error">{errors.address}</span>}
+                        {/* Property Information */}
+                        <div className="mb-6">
+                            <h3 className={sectionTitle}>Property Information</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className={`${fieldGroup} col-span-2`}>
+                                    <label className={labelReq}>Property Address</label>
+                                    <input type="text" className={inputCls(errors.address)} placeholder="123 Main Street" name="address" value={formData.address} onChange={handleInputChange} />
+                                    {errors.address && <span className={fieldErrCls}>{errors.address}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">City</label>
-                                    <input type="text" className={`form-input ${errors.city ? 'input-error' : ''}`} placeholder="Dallas" name="city" value={formData.city} onChange={handleInputChange} />
-                                    {errors.city && <span className="field-error">{errors.city}</span>}
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>City</label>
+                                    <input type="text" className={inputCls(errors.city)} placeholder="Dallas" name="city" value={formData.city} onChange={handleInputChange} />
+                                    {errors.city && <span className={fieldErrCls}>{errors.city}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">State</label>
-                                    <select className={`form-select ${errors.state ? 'input-error' : ''}`} name="state" value={formData.state} onChange={handleInputChange}>
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>State</label>
+                                    <select className={selectCls(errors.state)} name="state" value={formData.state} onChange={handleInputChange}>
                                         <option value="">Select State</option>
                                         <option value="TX">Texas</option>
                                         <option value="OK">Oklahoma</option>
@@ -797,16 +832,16 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                                         <option value="GA">Georgia</option>
                                         <option value="NC">North Carolina</option>
                                     </select>
-                                    {errors.state && <span className="field-error">{errors.state}</span>}
+                                    {errors.state && <span className={fieldErrCls}>{errors.state}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">ZIP Code</label>
-                                    <input type="text" className={`form-input ${errors.zip_code ? 'input-error' : ''}`} placeholder="75201" name="zip_code" value={formData.zip_code} onChange={handleInputChange} />
-                                    {errors.zip_code && <span className="field-error">{errors.zip_code}</span>}
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>ZIP Code</label>
+                                    <input type="text" className={inputCls(errors.zip_code)} placeholder="75201" name="zip_code" value={formData.zip_code} onChange={handleInputChange} />
+                                    {errors.zip_code && <span className={fieldErrCls}>{errors.zip_code}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Property Type</label>
-                                    <select className="form-select" name="property_type" value={formData.property_type} onChange={handleInputChange}>
+                                <div className={fieldGroup}>
+                                    <label className={labelBase}>Property Type</label>
+                                    <select className={selectCls(false)} name="property_type" value={formData.property_type} onChange={handleInputChange}>
                                         <option value="single-family">Single Family Home</option>
                                         <option value="multi-family">Multi-Family</option>
                                         <option value="commercial">Commercial</option>
@@ -816,12 +851,13 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                             </div>
                         </div>
 
-                        <div className="form-section">
-                            <h3 className="section-title">Insurance Information</h3>
-                            <div className="form-grid">
-                                <div className="form-group">
-                                    <label className="form-label required">Insurance Company</label>
-                                    <select className={`form-select ${errors.insurance_company ? 'input-error' : ''}`} name="insurance_company" value={formData.insurance_company} onChange={handleInputChange}>
+                        {/* Insurance Information */}
+                        <div className="mb-0">
+                            <h3 className={sectionTitle}>Insurance Information</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>Insurance Company</label>
+                                    <select className={selectCls(errors.insurance_company)} name="insurance_company" value={formData.insurance_company} onChange={handleInputChange}>
                                         <option value="">Select Insurance</option>
                                         <option value="state-farm">State Farm</option>
                                         <option value="allstate">Allstate</option>
@@ -830,19 +866,19 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                                         <option value="usaa">USAA</option>
                                         <option value="other">Other</option>
                                     </select>
-                                    {errors.insurance_company && <span className="field-error">{errors.insurance_company}</span>}
+                                    {errors.insurance_company && <span className={fieldErrCls}>{errors.insurance_company}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Policy Number</label>
-                                    <input type="text" className="form-input" placeholder="POL-123456" name="policy_number" value={formData.policy_number} onChange={handleInputChange} />
+                                <div className={fieldGroup}>
+                                    <label className={labelBase}>Policy Number</label>
+                                    <input type="text" className={inputCls(false)} placeholder="POL-123456" name="policy_number" value={formData.policy_number} onChange={handleInputChange} />
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Claim Number</label>
-                                    <input type="text" className="form-input" placeholder="CLM-2024-0001" name="claim_number" value={formData.claim_number} onChange={handleInputChange} />
+                                <div className={fieldGroup}>
+                                    <label className={labelBase}>Claim Number</label>
+                                    <input type="text" className={inputCls(false)} placeholder="CLM-2024-0001" name="claim_number" value={formData.claim_number} onChange={handleInputChange} />
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Claim Status</label>
-                                    <select className={`form-select ${errors.claim_status ? 'input-error' : ''}`} name="claim_status" value={formData.claim_status} onChange={handleInputChange}>
+                                <div className={fieldGroup}>
+                                    <label className={labelReq}>Claim Status</label>
+                                    <select className={selectCls(errors.claim_status)} name="claim_status" value={formData.claim_status} onChange={handleInputChange}>
                                         <option value="">Select Status</option>
                                         <option value="1">1. Need Claim #</option>
                                         <option value="2">2. Scheduled Inspection</option>
@@ -854,28 +890,47 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                                         <option value="8">8. Declined</option>
                                         <option value="9">9. Cold Claims</option>
                                     </select>
-                                    {errors.claim_status && <span className="field-error">{errors.claim_status}</span>}
+                                    {errors.claim_status && <span className={fieldErrCls}>{errors.claim_status}</span>}
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Claim Value ($)</label>
-                                    <input type="number" className="form-input" placeholder="50000" name="claim_value" value={formData.claim_value} onChange={handleInputChange} min="0" />
+                                <div className={fieldGroup}>
+                                    <label className={labelBase}>Claim Value ($)</label>
+                                    <input type="number" className={inputCls(false)} placeholder="50000" name="claim_value" value={formData.claim_value} onChange={handleInputChange} min="0" />
                                 </div>
-                                <div className="form-group full-width">
-                                    <label className="form-label">Notes</label>
-                                    <textarea className="form-textarea" placeholder="Add any additional notes about this client..." name="notes" value={formData.notes} onChange={handleInputChange}></textarea>
+                                <div className={`${fieldGroup} col-span-2`}>
+                                    <label className={labelBase}>Notes</label>
+                                    <textarea
+                                        className="px-3.5 py-2.5 border border-gray-200 rounded-md text-sm resize-y min-h-[100px] font-[inherit] focus:outline-none focus:border-[#FDB813] focus:ring-2 focus:ring-[#FDB813]/10"
+                                        placeholder="Add any additional notes about this client..."
+                                        name="notes"
+                                        value={formData.notes}
+                                        onChange={handleInputChange}
+                                    />
                                 </div>
                             </div>
                         </div>
                     </form>
                 </div>
 
-                <div className="modal-footer">
-                    <button className="btn btn-outline" onClick={onClose} disabled={submitting}>Cancel</button>
-                    <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+                {/* Footer */}
+                <div className="px-6 py-6 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={submitting}
+                        className="px-5 py-2.5 rounded-md text-sm font-semibold cursor-pointer transition-all inline-flex items-center gap-2 bg-white text-[#1a1f3a] border border-gray-200 hover:bg-gray-50 hover:border-[#FDB813] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="px-5 py-2.5 rounded-md text-sm font-semibold cursor-pointer transition-all border-0 inline-flex items-center gap-2 bg-gradient-to-br from-[#FDB813] to-[#d4a000] text-[#1a1f3a] shadow-[0_2px_8px_rgba(253,184,19,0.3)] hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(253,184,19,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                    >
                         {submitting ? 'Saving...' : (
                             <>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                    <polyline points="20 6 9 17 4 12" />
                                 </svg>
                                 Save Client
                             </>

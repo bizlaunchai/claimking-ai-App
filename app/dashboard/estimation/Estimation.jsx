@@ -7,58 +7,6 @@ import "./estimation.css";
 import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
 
 // ====================== STATIC DATA ======================
-/**
- * Build estimate line items from an extracted measurement.
- * The mapping is intentionally simple — quantities come straight from the
- * extracted JSONB, prices are pulled from `INITIAL_ITEM_LIBRARY` defaults so
- * the user gets a realistic starting estimate they can adjust.
- *
- * Skips any line where the measurement value is null/0 — no point adding a
- * "Valley Metal — 0 LF" row.
- */
-function buildItemsFromMeasurement(extracted) {
-    if (!extracted) return [];
-    const out = [];
-    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-    const wasteMul = 1 + num(extracted.waste_factor) / 100;
-
-    const sq = num(extracted.squares);
-    const eave = num(extracted.eave_lf);
-    const rake = num(extracted.rake_lf);
-    const ridge = num(extracted.ridge_lf);
-    const valley = num(extracted.valley_lf);
-    const stepFlash = num(extracted.step_flashing_lf);
-    const pens = num(extracted.penetrations);
-
-    if (sq > 0) {
-        out.push(
-            { name: "Tear Off - 1 Layer",         qty: +sq.toFixed(1),                unit: "SQ", price: 65 },
-            { name: "30yr Architectural Shingles", qty: +(sq * wasteMul).toFixed(1),  unit: "SQ", price: 125 },
-            { name: "Synthetic Underlayment",      qty: +sq.toFixed(1),                unit: "SQ", price: 45 },
-        );
-    }
-    if (eave > 0) {
-        out.push({ name: "Ice & Water Shield (eaves)", qty: eave, unit: "LF", price: 4.0 });
-        out.push({ name: "Starter Strip",              qty: eave, unit: "LF", price: 2.5 });
-    }
-    if (eave + rake > 0) {
-        out.push({ name: "Drip Edge", qty: eave + rake, unit: "LF", price: 3.75 });
-    }
-    if (ridge > 0) {
-        out.push({ name: "Ridge Cap", qty: ridge, unit: "LF", price: 4.5 });
-    }
-    if (valley > 0) {
-        out.push({ name: "Valley Metal", qty: valley, unit: "LF", price: 12.5 });
-    }
-    if (stepFlash > 0) {
-        out.push({ name: "Step Flashing", qty: stepFlash, unit: "LF", price: 8.5 });
-    }
-    if (pens > 0) {
-        out.push({ name: "Pipe Boot Flashings", qty: pens, unit: "EA", price: 45 });
-    }
-    return out;
-}
-
 const INITIAL_ITEM_LIBRARY = {
     roofing: [
         { name: "Tear Off - 1 Layer", price: 65, unit: "SQ" },
@@ -284,6 +232,15 @@ const Estimation = () => {
     const [aiUploads, setAiUploads] = useState({ measurement: [], photos: [], estimate1: [], estimate2: [] });
     const [selectedChips, setSelectedChips] = useState([]);
     const [aiMessage, setAiMessage] = useState("");
+    // Brief Section 8 inputs that were missing — now wired into the Auto-Build modal.
+    const [aiDamageType, setAiDamageType] = useState("");
+    const [aiStormDate, setAiStormDate] = useState("");
+    const [aiGenerating, setAiGenerating] = useState(false);
+    const [aiError, setAiError] = useState(null); // sticky inline error in the modal
+    // Saved measurements the user can attach inside the Auto-Build modal,
+    // even when they didn't enter via the Measurement → "Use in Estimate" handoff.
+    const [savedMeasurements, setSavedMeasurements] = useState([]);
+    const [savedMeasurementsLoading, setSavedMeasurementsLoading] = useState(false);
 
     // ── Add section / custom item modals ─────────────────────────────────
     const [addSectionModal, setAddSectionModal] = useState(false);
@@ -343,6 +300,17 @@ const Estimation = () => {
     const [loading, setLoading] = useState({ active: false, text: "", sub: "" });
     const [toasts, setToasts] = useState([]);
     const [saveIndicator, setSaveIndicator] = useState({ saving: false, text: "Saved" });
+
+    // ── Persistence (M4): track the saved estimate's id + last-save state ─
+    const [currentEstimateId, setCurrentEstimateId] = useState(null);
+    const [estimateLoading, setEstimateLoading] = useState(false);
+    const skipNextAutoSave = useRef(false); // set true right after a load so
+                                            // the freshly-loaded state doesn't
+                                            // immediately trigger a save back.
+    const autoOpenAiAfterClient = useRef(false); // measurement handoff arrived
+                                                 // without a client — open the
+                                                 // Auto-Build modal once the
+                                                 // user picks one.
 
     // ── Move-menu (line item move-to-section dropdown) ───────────────────
     const [moveMenu, setMoveMenu] = useState(null); // { secId, idx, top, left } | null
@@ -421,6 +389,19 @@ const Estimation = () => {
         return () => { cancelled = true; clearTimeout(timer); };
     }, [clientTab, clientSearch, client]);
 
+    // ── Auto-open the Auto-Build modal once a client is picked, but only
+    //    if the measurement handoff arrived without one. The flag is set
+    //    by the measurement-handoff useEffect above and consumed here so
+    //    we never re-open the modal on subsequent client changes.
+    useEffect(() => {
+        if (!client?.id) return;
+        if (!autoOpenAiAfterClient.current) return;
+        if (!linkedMeasurement) return;
+        autoOpenAiAfterClient.current = false;
+        setAiModal(true);
+        sonner.success("Client linked — pick damage type and click Generate");
+    }, [client?.id, linkedMeasurement]);
+
     // ── Close move-menu on outside click ─────────────────────────────────
     useEffect(() => {
         if (!moveMenu) return;
@@ -453,6 +434,30 @@ const Estimation = () => {
         })();
     }, []);
 
+    // ── Saved measurements list (powers the Auto-Build modal picker) ─────
+    // Fetch the user's FULL measurement library — not filtered by client —
+    // so measurements without a client_id, or attached to a different client,
+    // are still pickable. The dropdown labels the linked client per row so
+    // users can spot a mismatch easily.
+    useEffect(() => {
+        if (!aiModal) return;
+        let cancelled = false;
+        setSavedMeasurementsLoading(true);
+        axiosInstance
+            .get("/measurement", { suppressErrorToast: true })
+            .then((res) => {
+                if (cancelled) return;
+                setSavedMeasurements(res.data?.data ?? []);
+            })
+            .catch(() => {
+                if (!cancelled) setSavedMeasurements([]);
+            })
+            .finally(() => {
+                if (!cancelled) setSavedMeasurementsLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [aiModal]);
+
     // ── Saved estimates list (TODO: wire to /estimates endpoint when built) ─
     const refreshSavedEstimates = useCallback(async () => {
         setSavedEstimatesLoading(true);
@@ -469,15 +474,102 @@ const Estimation = () => {
 
     useEffect(() => { refreshSavedEstimates(); }, [refreshSavedEstimates]);
 
+    // ── Load existing estimate (?estimate_id=...) ────────────────────────
+    useEffect(() => {
+        const estimateId = searchParams?.get("estimate_id");
+        if (!estimateId) return;
+        let cancelled = false;
+        setEstimateLoading(true);
+
+        (async () => {
+            try {
+                const res = await axiosInstance.get(`/estimates/${estimateId}`);
+                if (cancelled) return;
+                const e = res.data?.data;
+                if (!e) return;
+
+                // Block the immediate auto-save that would otherwise fire as
+                // we hydrate the React state below.
+                skipNextAutoSave.current = true;
+
+                setCurrentEstimateId(e.id);
+                setMode(e.mode ?? "insurance");
+                setEstimateTitle(e.estimate_title ?? "INSURANCE ESTIMATE");
+                setOverheadOn(!!e.overhead_on);
+                setTaxOn(!!e.tax_on);
+                setTaxName(e.tax_name ?? "Sales Tax");
+                setTaxPercent(String(e.tax_pct ?? 8));
+                if (e.terms_html) {
+                    setTermsState((prev) => ({ ...(prev ?? {}), full_terms: e.terms_html }));
+                }
+                if (e.measurement_id) {
+                    try {
+                        const m = await axiosInstance.get(`/measurement/${e.measurement_id}`, { suppressErrorToast: true });
+                        if (m.data?.data) setLinkedMeasurement(m.data.data);
+                    } catch { /* non-fatal */ }
+                }
+
+                // Map server sections/items back to the frontend shape.
+                const restoredSections = (e.sections ?? []).map((s) => ({
+                    id: s.section_key,
+                    name: s.name,
+                    items: (s.items ?? []).map((it) => ({
+                        name: it.name,
+                        qty: Number(it.qty) || 0,
+                        unit: it.unit ?? "EA",
+                        price: Number(it.price) || 0,
+                        reason: it.reason ?? undefined,
+                        source_field: it.source_field ?? undefined,
+                        code_ref: it.code_ref ?? undefined,
+                    })),
+                }));
+                setSections(restoredSections);
+                if (restoredSections.length) setActiveSection(restoredSections[0].id);
+
+                // Hydrate client. Prefer the embedded `client` object the
+                // backend sends; fall back to a separate fetch by id so this
+                // also works against older builds that didn't include it.
+                if (e.client) {
+                    setClient(toClientShape(e.client));
+                } else if (e.client_id) {
+                    try {
+                        const cRes = await axiosInstance.get(
+                            `/client-portal/${e.client_id}`,
+                            { suppressErrorToast: true },
+                        );
+                        const raw = cRes.data?.data;
+                        if (raw) setClient(toClientShape(raw));
+                    } catch { /* non-fatal */ }
+                }
+
+                setHasStarted(true);
+                setSaveIndicator({ saving: false, text: "Saved" });
+                sonner.success(`Loaded estimate — ${restoredSections.length} section${restoredSections.length === 1 ? "" : "s"}`);
+            } catch {
+                /* axiosInstance toasts the failure */
+            } finally {
+                if (!cancelled) setEstimateLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
     // ── Measurement → Estimate handoff (?measurement_id=...&client_id=...)
     //
-    // When the user clicks "Use in Estimate" on the Measurement page they
-    // land here with the measurement id in the URL. We:
+    // Single source of truth: every estimate goes through the AI Auto-Build
+    // pipeline (Brief Sec 8 + 10 — Claude with reasoning per item). The old
+    // deterministic JS handoff (`buildItemsFromMeasurement`) is intentionally
+    // not used here — it produced different results than Auto-Build for the
+    // same input and confused users.
+    //
+    // When the user clicks "Use in Estimate" on the Measurement page we:
     //   1. Pull the measurement row.
-    //   2. Pull the linked client (if any) and pre-select it.
-    //   3. Auto-create a "Dwelling Roof" section with quantity-pre-filled
-    //      line items derived from extracted_data.
-    //   4. Jump straight to the builder stage.
+    //   2. Pre-select the linked client.
+    //   3. Set `linkedMeasurement` so the Auto-Build modal picks it up.
+    //   4. Auto-open the Auto-Build modal — user fills damage type / storm
+    //      date / instructions and clicks Generate to run Claude.
     useEffect(() => {
         const measurementId = searchParams?.get("measurement_id");
         const clientIdParam = searchParams?.get("client_id");
@@ -487,46 +579,39 @@ const Estimation = () => {
 
         (async () => {
             try {
-                // 1. Measurement
                 const mRes = await axiosInstance.get(`/measurement/${measurementId}`);
                 const measurement = mRes.data?.data;
                 if (cancelled || !measurement) return;
                 setLinkedMeasurement(measurement);
 
-                // 2. Client — prefer measurement.client_id, fall back to URL param
+                // Pre-select the client (prefer measurement.client_id).
                 const cid = measurement.client_id || clientIdParam || null;
+                let clientResolved = !!client;
                 if (cid && !client) {
                     try {
                         const cRes = await axiosInstance.get(`/client-portal/${cid}`, { suppressErrorToast: true });
                         const raw = cRes.data?.data;
-                        if (raw) setClient(toClientShape(raw));
-                    } catch { /* non-fatal — user can still pick a client */ }
-                }
-
-                // 3. Build line items from extracted_data
-                const itemsFromMeasurement = buildItemsFromMeasurement(measurement.extracted_data);
-                if (itemsFromMeasurement.length) {
-                    setSections((prev) => {
-                        // If a Dwelling Roof section already exists, append; else create one.
-                        const existing = prev.find((s) => s.id === "dwelling-roof");
-                        if (existing) {
-                            return prev.map((s) =>
-                                s.id === "dwelling-roof"
-                                    ? { ...s, items: [...s.items, ...itemsFromMeasurement] }
-                                    : s,
-                            );
+                        if (raw) {
+                            setClient(toClientShape(raw));
+                            clientResolved = true;
                         }
-                        return [
-                            ...prev,
-                            { id: "dwelling-roof", name: "Dwelling Roof", items: itemsFromMeasurement },
-                        ];
-                    });
-                    setActiveSection("dwelling-roof");
+                    } catch { /* non-fatal */ }
                 }
 
-                // 4. Jump to the builder
-                setHasStarted(true);
-                sonner.success(`Loaded measurement — ${itemsFromMeasurement.length} line items pre-filled`);
+                if (clientResolved) {
+                    // Client ready — jump straight into the Auto-Build modal.
+                    setAiModal(true);
+                    sonner.success("Measurement linked — pick damage type and click Generate");
+                } else {
+                    // No client yet — show the inline picker first; the modal
+                    // will auto-open as soon as a client gets selected.
+                    autoOpenAiAfterClient.current = true;
+                    sonner.info("Measurement linked. Pick a client below to continue.");
+                    setTimeout(() => {
+                        document.getElementById("estClientSection")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 50);
+                }
             } catch {
                 /* axiosInstance toasts the failure */
             } finally {
@@ -548,13 +633,97 @@ const Estimation = () => {
     const showLoading = (text, sub = "") => setLoading({ active: true, text, sub });
     const hideLoading = () => setLoading({ active: false, text: "", sub: "" });
 
+    /**
+     * Build the SaveEstimateDto payload from current React state. Returns
+     * `null` if the estimate isn't ready to save yet (no client selected).
+     */
+    const buildSavePayload = useCallback(() => {
+        if (!client?.id) return null;
+        return {
+            client_id: client.id,
+            measurement_id: linkedMeasurement?.id ?? undefined,
+            title: client?.name ? `${client.name} — Estimate` : undefined,
+            estimate_title: estimateTitle,
+            mode,
+            damage_type: undefined,        // (M7 will pipe damage type in)
+            storm_date: undefined,         // (M7 will pipe storm date in)
+            insurance_carrier: undefined,  // (M7 will resolve from client)
+            overhead_on: overheadOn,
+            overhead_pct: 20,
+            tax_on: taxOn,
+            tax_name: taxName,
+            tax_pct: parseFloat(taxPercent) || 0,
+            terms_html: termsState?.full_terms ?? undefined,
+            sections: sections.map((s, idx) => ({
+                section_key: s.id,                              // "dwelling-roof"
+                name: s.name,
+                sort_order: idx,
+                items: (s.items ?? []).map((it, j) => ({
+                    name: it.name,
+                    qty: Number(it.qty) || 0,
+                    unit: it.unit ?? "EA",
+                    price: Number(it.price) || 0,
+                    reason: it.reason ?? undefined,
+                    source_field: it.source_field ?? undefined,
+                    code_ref: it.code_ref ?? undefined,
+                    sort_order: j,
+                })),
+            })),
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        client, linkedMeasurement, estimateTitle, mode, overheadOn,
+        taxOn, taxName, taxPercent, termsState, sections,
+    ]);
+
+    /**
+     * Persist current state to the backend. Creates on first save, then
+     * patches afterwards. Called by the debounced `triggerSave` wrapper.
+     */
+    const saveEstimateNow = useCallback(async () => {
+        const payload = buildSavePayload();
+        if (!payload) {
+            setSaveIndicator({ saving: false, text: "Saved" });
+            return;
+        }
+        setSaveIndicator({ saving: true, text: "Saving..." });
+        try {
+            if (currentEstimateId) {
+                await axiosInstance.patch(
+                    `/estimates/${currentEstimateId}`,
+                    payload,
+                    { suppressErrorToast: true },
+                );
+            } else {
+                const res = await axiosInstance.post(
+                    "/estimates",
+                    payload,
+                    { suppressErrorToast: true },
+                );
+                const newId = res.data?.data?.id;
+                if (newId) setCurrentEstimateId(newId);
+            }
+            setSaveIndicator({ saving: false, text: "Saved" });
+        } catch {
+            setSaveIndicator({ saving: false, text: "Save failed" });
+        }
+    }, [buildSavePayload, currentEstimateId]);
+
+    /**
+     * Debounced save trigger — every state mutation calls this; the actual
+     * network round-trip happens 1.2s after the last edit.
+     */
     const triggerSave = useCallback(() => {
+        if (skipNextAutoSave.current) {
+            skipNextAutoSave.current = false;
+            return;
+        }
         setSaveIndicator({ saving: true, text: "Saving..." });
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            setSaveIndicator({ saving: false, text: "Saved" });
-        }, 600);
-    }, []);
+            saveEstimateNow();
+        }, 1200);
+    }, [saveEstimateNow]);
 
     // ====================== CLIENT ======================
     const ensureClient = () => {
@@ -642,6 +811,7 @@ const Estimation = () => {
     // ====================== AI GENERATOR ======================
     const openAIGenerator = () => {
         if (!ensureClient()) return;
+        setAiError(null); // clear stale errors when (re)opening
         setAiModal(true);
     };
 
@@ -668,32 +838,76 @@ const Estimation = () => {
 
     const removeSelectedChip = (s) => setSelectedChips((prev) => prev.filter((c) => c !== s));
 
-    const generateAIEstimate = () => {
-        setAiModal(false);
-        showLoading("Analyzing your uploads...", "Reading measurements, photos, and matching to your rates");
-        setTimeout(() => {
-            hideLoading();
-            showBuilder();
-            setSections((prev) => {
-                let next = prev;
-                if (next.length === 0) {
-                    next = [{ id: "dwelling-roof", name: "Dwelling Roof", items: [] }];
-                    setActiveSection("dwelling-roof");
-                }
-                return next.map((s, idx) => idx === 0 ? {
-                    ...s,
-                    items: [
-                        { name: "Tear Off - 1 Layer", qty: 24, unit: "SQ", price: 65 },
-                        { name: "30yr Architectural Shingles", qty: 26, unit: "SQ", price: 125 },
-                        { name: "Synthetic Underlayment", qty: 26, unit: "SQ", price: 45 },
-                        { name: "Ridge Cap", qty: 45, unit: "LF", price: 4.5 },
-                        { name: "Drip Edge", qty: 180, unit: "LF", price: 3.75 },
-                    ],
-                } : s);
+    /**
+     * Real Auto-Build flow — calls Claude via the backend.
+     * Brief Section 8 + 10: structured + explainable estimate from
+     * measurement + damage + storm + carrier + codes + user inputs.
+     *
+     * On failure we keep the modal open and show an inline error so the
+     * user can read it (toasts auto-dismiss too quickly for a credit gate).
+     */
+    const generateAIEstimate = async () => {
+        if (!ensureClient()) return;
+        setAiError(null);
+        setAiGenerating(true);
+        try {
+            const payload = {
+                client_id: client.id,
+                measurement_id: linkedMeasurement?.id ?? undefined,
+                damage_type: aiDamageType || undefined,
+                storm_date: aiStormDate || undefined,
+                mode,
+                instructions: aiMessage?.trim() || undefined,
+                scope_hints: selectedChips.length ? selectedChips : undefined,
+            };
+            const res = await axiosInstance.post(
+                "/estimates/generate",
+                payload,
+                { suppressErrorToast: true }, // we render our own inline error
+            );
+            const e = res.data?.data;
+            if (e?.id) {
+                setAiModal(false);
+                window.location.href = `/dashboard/estimation?estimate_id=${e.id}`;
+                return;
+            }
+            setAiError({
+                title: "Generation finished but no estimate returned",
+                detail: "Please try again or check Saved Estimates.",
             });
-            triggerSave();
-            toast("AI estimate generated based on your saved rates", "success");
-        }, 1800);
+        } catch (err) {
+            const status = err?.response?.status;
+            const data = err?.response?.data ?? {};
+
+            if (status === 402 && typeof data.required === "number") {
+                setAiError({
+                    title: "Insufficient credits",
+                    detail: `This estimate needs ${data.required} credits — you have ${data.available}. Top up in Billing or upgrade your plan.`,
+                });
+            } else if (status === 402) {
+                setAiError({
+                    title: "Payment required",
+                    detail: data.message || err?.userMessage || "A required setting or quota is missing.",
+                });
+            } else if (status === 403) {
+                setAiError({
+                    title: "Not allowed",
+                    detail: data.message || err?.userMessage || "Your subscription doesn't permit this action.",
+                });
+            } else if (status === 422) {
+                setAiError({
+                    title: "Setup needed",
+                    detail: data.message || err?.userMessage || "A required AI setting (API key) is missing.",
+                });
+            } else {
+                setAiError({
+                    title: "Could not generate estimate",
+                    detail: err?.userMessage || data.message || "Please try again in a minute.",
+                });
+            }
+        } finally {
+            setAiGenerating(false);
+        }
     };
 
     const askAIToReview = () => {
@@ -1332,6 +1546,31 @@ const Estimation = () => {
                 {/* ─────────────── Client selection ─────────────── */}
                 {!client && (
                     <div className="cs-card" id="estClientSection">
+                        {/* Measurement-waiting banner — appears when the user
+                            arrived from "Use in Estimate" without a client. */}
+                        {linkedMeasurement && (
+                            <div style={{
+                                display: "flex", alignItems: "center", gap: 10,
+                                padding: "10px 14px", marginBottom: 14,
+                                background: "linear-gradient(135deg,#eff6ff,#fff)",
+                                border: "1px solid #93c5fd", borderRadius: 8,
+                                fontSize: 13, color: "#1e3a8a",
+                            }}>
+                                <span style={{
+                                    background: "#1d4ed8", color: "white",
+                                    fontSize: 11, fontWeight: 600,
+                                    padding: "2px 8px", borderRadius: 10,
+                                    textTransform: "uppercase", letterSpacing: 0.3,
+                                    whiteSpace: "nowrap",
+                                }}>Measurement linked</span>
+                                <span style={{ flex: 1 }}>
+                                    {linkedMeasurement.extracted_data?.squares ?? "—"} sq
+                                    {linkedMeasurement.source_provider && linkedMeasurement.source_provider !== "unknown"
+                                        ? ` · ${linkedMeasurement.source_provider}` : ""}
+                                    {" — "}<strong>pick a client below</strong> to start the AI estimate.
+                                </span>
+                            </div>
+                        )}
                         <div className="cs-tabs">
                             <button
                                 className={`cs-tab-btn ${clientTab === "existing" ? "active" : ""}`}
@@ -1695,7 +1934,48 @@ const Estimation = () => {
                                                         onDragOver={(e) => handleDragOver(e, s.id)}
                                                         onDrop={(e) => handleDrop(e, s.id, idx)}>
                                                         <td><span className="drag-handle" title="Drag to reorder"><svg className="icon icon-sm"><use href="#i-grip" /></svg></span></td>
-                                                        <td>{it.name}</td>
+                                                        <td>
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                                {it.name}
+                                                                {/* Brief Sec 8: "user should see WHY each line item is included
+                                                                    and where the data came from." */}
+                                                                {it.reason && (
+                                                                    <span
+                                                                        title={[
+                                                                            it.reason,
+                                                                            it.source_field ? `Source: ${it.source_field}` : null,
+                                                                            it.code_ref ? `Code: ${it.code_ref}` : null,
+                                                                        ].filter(Boolean).join("\n\n")}
+                                                                        style={{
+                                                                            display: "inline-flex",
+                                                                            alignItems: "center",
+                                                                            justifyContent: "center",
+                                                                            width: 16, height: 16,
+                                                                            borderRadius: "50%",
+                                                                            background: "#fef3c7",
+                                                                            color: "#92400e",
+                                                                            fontSize: 10,
+                                                                            fontWeight: 700,
+                                                                            cursor: "help",
+                                                                            border: "1px solid #fde68a",
+                                                                        }}
+                                                                    >?</span>
+                                                                )}
+                                                                {it.code_ref && (
+                                                                    <span
+                                                                        title={`Required by ${it.code_ref}`}
+                                                                        style={{
+                                                                            fontSize: 10, fontWeight: 600,
+                                                                            padding: "1px 6px",
+                                                                            borderRadius: 4,
+                                                                            background: "#dbeafe",
+                                                                            color: "#1e40af",
+                                                                            cursor: "help",
+                                                                        }}
+                                                                    >CODE</span>
+                                                                )}
+                                                            </span>
+                                                        </td>
                                                         <td><input type="number" className="qty-input" value={it.qty} min="0" step="0.01" onChange={(e) => updateItemQty(s.id, idx, e.target.value)} /></td>
                                                         <td>{it.unit}</td>
                                                         <td>${it.price.toFixed(2)}</td>
@@ -1917,6 +2197,119 @@ const Estimation = () => {
                             <button className="modal-close" onClick={() => setAiModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
                         <div className="modal-body">
+                            {/* Linked measurement banner — appears when user came from
+                                the Measurement page or has selected one in the picker below. */}
+                            {linkedMeasurement ? (
+                                <div style={{
+                                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                                    padding: "10px 14px", marginBottom: 14,
+                                    background: "linear-gradient(135deg,#eff6ff,#fff)",
+                                    border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13,
+                                }}>
+                                    <span style={{ color: "#1e3a8a" }}>
+                                        <strong>Using measurement:</strong>{" "}
+                                        {linkedMeasurement.extracted_data?.squares ?? "—"} sq
+                                        {linkedMeasurement.source_provider && linkedMeasurement.source_provider !== "unknown"
+                                            ? ` · ${linkedMeasurement.source_provider}` : ""}
+                                    </span>
+                                    <a href="#" style={{ color: "#1d4ed8", fontSize: 12 }}
+                                       onClick={(e) => { e.preventDefault(); setLinkedMeasurement(null); }}>
+                                        Remove
+                                    </a>
+                                </div>
+                            ) : (
+                                <div className="field" style={{ marginBottom: 14 }}>
+                                    <label>
+                                        Measurement{" "}
+                                        <span style={{ color: "#9ca3af", fontWeight: 400, fontSize: 11 }}>
+                                            — strongly recommended for accurate quantities
+                                        </span>
+                                    </label>
+                                    {savedMeasurementsLoading ? (
+                                        <div style={{ fontSize: 12, color: "#6b7280", padding: "6px 0" }}>
+                                            Loading saved measurements…
+                                        </div>
+                                    ) : savedMeasurements.length === 0 ? (
+                                        <div style={{
+                                            fontSize: 12, color: "#92400e",
+                                            background: "#fffbeb", border: "1px solid #fde68a",
+                                            borderRadius: 6, padding: "8px 10px",
+                                        }}>
+                                            ⚠ No saved measurements yet. Without one, AI will produce a generic placeholder scope.
+                                            <a href="/dashboard/measurement"
+                                               style={{ color: "#b45309", marginLeft: 6, fontWeight: 600 }}>
+                                                Extract one first →
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value=""
+                                            onChange={(e) => {
+                                                const id = e.target.value;
+                                                if (!id) return;
+                                                const picked = savedMeasurements.find((m) => m.id === id);
+                                                if (picked) setLinkedMeasurement(picked);
+                                            }}
+                                            style={{
+                                                width: "100%", padding: "9px 12px",
+                                                border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 13,
+                                                background: "white",
+                                            }}
+                                        >
+                                            <option value="">Select a saved measurement…</option>
+                                            {savedMeasurements.map((m) => {
+                                                const sq = m.extracted_data?.squares;
+                                                const provider = m.source_provider && m.source_provider !== "unknown" ? m.source_provider : null;
+                                                const conf = m.confidence_score != null ? Math.round(m.confidence_score * 100) : null;
+                                                const isThisClient = client?.id && m.client_id === client.id;
+                                                const isOrphan = !m.client_id;
+                                                return (
+                                                    <option key={m.id} value={m.id}>
+                                                        {isThisClient ? "★ " : ""}
+                                                        {(m.title || m.source_file_name || "Untitled")}
+                                                        {sq != null ? ` — ${sq} sq` : ""}
+                                                        {provider ? ` · ${provider}` : ""}
+                                                        {conf != null ? ` · ${conf}%` : ""}
+                                                        {isOrphan ? " · (no client)" : ""}
+                                                        {!isThisClient && !isOrphan && client?.id ? " · other client" : ""}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Brief Section 8: damage type + storm date — required inputs. */}
+                            <div className="field" style={{ marginBottom: 14 }}>
+                                <label>Damage type</label>
+                                <div className="chip-row" style={{ marginTop: 4 }}>
+                                    {[
+                                        ["hail", "Hail"], ["wind", "Wind"], ["wind_hail", "Wind+Hail"],
+                                        ["tree", "Tree"], ["fire", "Fire"], ["water", "Water"], ["other", "Other"],
+                                    ].map(([key, label]) => (
+                                        <button
+                                            type="button"
+                                            key={key}
+                                            className={`chip ${aiDamageType === key ? "active" : ""}`}
+                                            onClick={() => setAiDamageType(aiDamageType === key ? "" : key)}
+                                        >{label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="field" style={{ marginBottom: 14 }}>
+                                <label>Storm date <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span></label>
+                                <input
+                                    type="date"
+                                    value={aiStormDate}
+                                    onChange={(e) => setAiStormDate(e.target.value)}
+                                    style={{
+                                        padding: "9px 12px", border: "1.5px solid #e5e7eb",
+                                        borderRadius: 8, fontSize: 13, width: "100%",
+                                    }}
+                                />
+                            </div>
+
                             <div className="upload-grid">
                                 <UploadBox label="Measurement Reports" hint="EagleView, HOVER, or PDF — multiple OK" icon="i-doc" type="measurement" files={aiUploads.measurement} onUpload={uploadFile} onRemove={removeUpload} />
                                 <UploadBox label="Damage Photos" hint="Multiple photos OK" icon="i-camera" type="photos" files={aiUploads.photos} onUpload={uploadFile} onRemove={removeUpload} />
@@ -1947,12 +2340,39 @@ const Estimation = () => {
                                 <label>Additional notes (optional)</label>
                                 <textarea value={aiMessage} onChange={(e) => setAiMessage(e.target.value)} placeholder="Anything specific. e.g. Steep roof, two layers, brittle test failed on north slope..." />
                             </div>
+
+                            {/* Sticky inline error — shows the credit gate / API
+                                key issues without bouncing the user out. */}
+                            {aiError && (
+                                <div role="alert" style={{
+                                    marginTop: 14, padding: "12px 14px", borderRadius: 8,
+                                    background: "#fef2f2", border: "1px solid #fecaca",
+                                    borderLeft: "4px solid #dc2626", color: "#7f1d1d",
+                                    fontSize: 13, lineHeight: 1.5, position: "relative",
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiError(null)}
+                                        aria-label="Dismiss"
+                                        style={{
+                                            position: "absolute", top: 6, right: 8,
+                                            background: "transparent", border: "none",
+                                            color: "#7f1d1d", fontSize: 18, cursor: "pointer",
+                                            lineHeight: 1, padding: 4,
+                                        }}
+                                    >×</button>
+                                    <div style={{ fontWeight: 700, marginBottom: 4, paddingRight: 20 }}>
+                                        {aiError.title}
+                                    </div>
+                                    <div>{aiError.detail}</div>
+                                </div>
+                            )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setAiModal(false)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={generateAIEstimate}>
+                            <button className="btn btn-secondary" onClick={() => setAiModal(false)} disabled={aiGenerating}>Cancel</button>
+                            <button className="btn btn-primary" onClick={generateAIEstimate} disabled={aiGenerating}>
                                 <svg className="icon icon-sm"><use href="#i-sparkle" /></svg>
-                                Generate Estimate
+                                {aiGenerating ? "Generating…" : "Generate Estimate"}
                             </button>
                         </div>
                     </div>
@@ -2253,40 +2673,61 @@ const Estimation = () => {
                                         No saved estimates yet
                                     </div>
                                     <div style={{ fontSize: 12.5, color: "#6b7280", maxWidth: 380, margin: "0 auto", lineHeight: 1.5 }}>
-                                        Estimate save / load wires up once the backend module ships. For now, build estimates here and finalize them per session.
+                                        Build your first estimate above and it will appear here.
                                     </div>
                                 </div>
                             ) : (
                                 <div style={{ display: "grid", gap: 10, maxHeight: 480, overflowY: "auto" }}>
-                                    {savedEstimates.map((e) => (
-                                        <div
-                                            key={e.id}
-                                            style={{
-                                                padding: 14, border: "1px solid #e5e7eb", borderRadius: 10,
-                                                background: "white", cursor: "pointer", transition: "all 0.15s ease",
-                                            }}
-                                            onMouseEnter={(el) => { el.currentTarget.style.borderColor = "#FDB813"; }}
-                                            onMouseLeave={(el) => { el.currentTarget.style.borderColor = "#e5e7eb"; }}
-                                        >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontWeight: 600, color: "#1a1f3a", fontSize: 14 }}>
-                                                        {e.title || "Untitled estimate"}
+                                    {savedEstimates.map((e) => {
+                                        const clientName =
+                                            e.client?.full_name ||
+                                            `${e.client?.first_name ?? ""} ${e.client?.last_name ?? ""}`.trim() ||
+                                            "No client";
+                                        const status = e.status ?? "draft";
+                                        const statusColors = {
+                                            draft:    { bg: "#fef9c3", fg: "#854d0e" },
+                                            approved: { bg: "#dcfce7", fg: "#166534" },
+                                            sent:     { bg: "#dbeafe", fg: "#1e40af" },
+                                            signed:   { bg: "#dcfce7", fg: "#166534" },
+                                            archived: { bg: "#f3f4f6", fg: "#374151" },
+                                            failed:   { bg: "#fee2e2", fg: "#991b1b" },
+                                        };
+                                        const sc = statusColors[status] || statusColors.draft;
+
+                                        return (
+                                            <div
+                                                key={e.id}
+                                                style={{
+                                                    padding: 14, border: "1px solid #e5e7eb", borderRadius: 10,
+                                                    background: "white", cursor: "pointer", transition: "all 0.15s ease",
+                                                }}
+                                                onMouseEnter={(el) => { el.currentTarget.style.borderColor = "#FDB813"; }}
+                                                onMouseLeave={(el) => { el.currentTarget.style.borderColor = "#e5e7eb"; }}
+                                                onClick={() => {
+                                                    setSavedEstimatesModal(false);
+                                                    window.location.href = `/dashboard/estimation?estimate_id=${e.id}`;
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 600, color: "#1a1f3a", fontSize: 14 }}>
+                                                            {e.title || "Untitled estimate"}
+                                                        </div>
+                                                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                                                            {clientName} · {e.updated_at ? new Date(e.updated_at).toLocaleDateString() : "—"}
+                                                            {e.total_rcv ? ` · $${Number(e.total_rcv).toLocaleString()}` : ""}
+                                                            {e.mode ? ` · ${e.mode}` : ""}
+                                                        </div>
                                                     </div>
-                                                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
-                                                        {e.client?.name ?? "No client"} · {e.created_at ? new Date(e.created_at).toLocaleDateString() : "—"}
-                                                        {e.total_rcv ? ` · $${Number(e.total_rcv).toLocaleString()}` : ""}
-                                                    </div>
+                                                    <span style={{
+                                                        background: sc.bg, color: sc.fg,
+                                                        fontSize: 10.5, fontWeight: 600, padding: "3px 9px",
+                                                        borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.3,
+                                                    }}>{status}</span>
                                                 </div>
-                                                <span style={{
-                                                    background: e.status === "approved" ? "#dcfce7" : "#fef9c3",
-                                                    color: e.status === "approved" ? "#166534" : "#854d0e",
-                                                    fontSize: 10.5, fontWeight: 600, padding: "3px 9px",
-                                                    borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.3,
-                                                }}>{e.status ?? "draft"}</span>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

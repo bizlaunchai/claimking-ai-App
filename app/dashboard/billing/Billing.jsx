@@ -230,11 +230,43 @@ export default function Billing() {
     const changePlan = async (planId) => {
         setActionLoading(`change-${planId}`);
         try {
-            const { data } = await axiosInstance.post('/subscriptions/change-plan', { planId });
-            toast.success(data.message || 'Plan updated');
+            const { data } = await axiosInstance.post(
+                '/subscriptions/change-plan',
+                { planId },
+                { suppressErrorToast: true },
+            );
+            // Backend tells us whether this was an upgrade (paid now) or a
+            // scheduled downgrade — surface the right tone either way.
+            if (data?.scheduled) {
+                toast.success(data.message || 'Downgrade scheduled', {
+                    description: 'No charge today — your plan switches at the end of the current billing period.',
+                });
+            } else {
+                toast.success(data.message || 'Plan upgraded', {
+                    description: 'Prorated payment successful — new features unlocked.',
+                });
+            }
             await refresh();
         } catch (e) {
-            toast.error(e?.response?.data?.message || 'Failed to change plan');
+            const status = e?.response?.status;
+            const data = e?.response?.data ?? {};
+
+            // 402 with `decline: true` = card was declined for the prorated charge.
+            if (status === 402 && data.decline) {
+                toast.error('Card declined', {
+                    description:
+                        data.message ||
+                        'Your card could not be charged for the upgrade. Update your payment method in the Customer Portal and try again.',
+                    duration: 8000,
+                });
+            } else if (status === 400 && /trial/i.test(data?.message ?? '')) {
+                toast.error('Plan locked during trial', {
+                    description: data.message,
+                    duration: 6000,
+                });
+            } else {
+                toast.error(data.message || 'Failed to change plan');
+            }
         } finally {
             setActionLoading(null);
         }
