@@ -2190,13 +2190,13 @@ const Estimation = () => {
 
             {/* ============ AI GENERATOR MODAL ============ */}
             {aiModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setAiModal(false); }}>
-                    <div className="modal-content" style={{ maxWidth: 680 }}>
-                        <div className="modal-header">
-                            <div className="modal-title"><svg className="icon" style={{ color: "#FDB813", verticalAlign: "middle" }}><use href="#i-sparkle" /></svg> AI Estimate Generator</div>
-                            <button className="modal-close" onClick={() => setAiModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[680px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold"><svg className="icon" style={{ color: "#FDB813", verticalAlign: "middle" }}><use href="#i-sparkle" /></svg> AI Estimate Generator</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setAiModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             {/* Linked measurement banner — appears when user came from
                                 the Measurement page or has selected one in the picker below. */}
                             {linkedMeasurement ? (
@@ -2368,7 +2368,7 @@ const Estimation = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-secondary" onClick={() => setAiModal(false)} disabled={aiGenerating}>Cancel</button>
                             <button className="btn btn-primary" onClick={generateAIEstimate} disabled={aiGenerating}>
                                 <svg className="icon icon-sm"><use href="#i-sparkle" /></svg>
@@ -2381,13 +2381,13 @@ const Estimation = () => {
 
             {/* ============ RATE LEARNING MODAL ============ */}
             {rateLearningModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setRateLearningModal(false); }}>
-                    <div className="modal-content" style={{ maxWidth: 720 }}>
-                        <div className="modal-header">
-                            <div className="modal-title"><svg className="icon" style={{ color: "#FDB813", verticalAlign: "middle" }}><use href="#i-brain" /></svg> Train AI on Your Rates</div>
-                            <button className="modal-close" onClick={() => setRateLearningModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[720px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold"><svg className="icon" style={{ color: "#FDB813", verticalAlign: "middle" }}><use href="#i-brain" /></svg> Train AI on Your Rates</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setRateLearningModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             <div className="rate-learning-intro">
                                 <h4><svg className="icon icon-sm"><use href="#i-trending" /></svg> Why this matters</h4>
                                 <p>Upload past estimates so the AI learns <strong>your prices</strong>, <strong>your line-item style</strong>, and <strong>what insurers accepted</strong>. The more you upload, the closer auto-generated estimates match what you'd write by hand.</p>
@@ -2424,7 +2424,7 @@ const Estimation = () => {
                                 <strong>Privacy:</strong> Your estimates are used only to train your account's AI. Other ClaimKing users never see your rates or files.
                             </div>
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-secondary" onClick={() => setRateLearningModal(false)}>Close</button>
                             <button className="btn btn-primary" onClick={retrainAI}>
                                 <svg className="icon icon-sm"><use href="#i-refresh" /></svg>
@@ -2437,13 +2437,13 @@ const Estimation = () => {
 
             {/* ============ ADD SECTION MODAL ============ */}
             {addSectionModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setAddSectionModal(false); }}>
-                    <div className="modal-content">
-                        <div className="modal-header">
-                            <div className="modal-title">Add a section</div>
-                            <button className="modal-close" onClick={() => setAddSectionModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold">Add a section</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setAddSectionModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             <div>
                                 {availableTemplates.length === 0 ? (
                                     <p style={{ color: "#6b7280", fontSize: 13 }}>All templates already added. Use custom name below.</p>
@@ -2462,7 +2462,7 @@ const Estimation = () => {
                                 <input type="text" value={customSectionName} onChange={(e) => setCustomSectionName(e.target.value)} placeholder="e.g. Detached Garage Roof" />
                             </div>
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-secondary" onClick={() => setAddSectionModal(false)}>Cancel</button>
                             <button className="btn btn-primary" onClick={addCustomSection}>Add Section</button>
                         </div>
@@ -2472,13 +2472,13 @@ const Estimation = () => {
 
             {/* ============ CUSTOM ITEM MODAL ============ */}
             {customItemModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setCustomItemModal(false); }}>
-                    <div className="modal-content">
-                        <div className="modal-header">
-                            <div className="modal-title">Add new item</div>
-                            <button className="modal-close" onClick={() => setCustomItemModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold">Add new item</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setCustomItemModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             <div className="field">
                                 <label>Description <span style={{ color: "#dc2626" }}>*</span></label>
                                 <input type="text" value={customItem.name} onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })} placeholder="e.g. Custom soffit detail with cedar trim" autoFocus />
@@ -2527,7 +2527,7 @@ const Estimation = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-secondary" onClick={() => setCustomItemModal(false)}>Cancel</button>
                             <button className="btn btn-primary" onClick={saveCustomItem}>
                                 <svg className="icon icon-sm"><use href="#i-plus" /></svg>
@@ -2540,13 +2540,13 @@ const Estimation = () => {
 
             {/* ============ TERMS EDITOR MODAL ============ */}
             {termsEditorModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setTermsEditorModal(false); }}>
-                    <div className="modal-content" style={{ maxWidth: 760 }}>
-                        <div className="modal-header">
-                            <div className="modal-title">Edit Terms &amp; Conditions</div>
-                            <button className="modal-close" onClick={() => setTermsEditorModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[760px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold">Edit Terms &amp; Conditions</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setTermsEditorModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 12.5, color: "#0c4a6e", lineHeight: 1.5 }}>
                                 These terms appear on every estimate PDF you send. Edit company info and terms text below. Changes apply to all future estimates immediately.
                             </div>
@@ -2590,7 +2590,7 @@ const Estimation = () => {
                                 <textarea value={termsEditFields.fullTerms} onChange={(e) => setTermsEditFields({ ...termsEditFields, fullTerms: e.target.value })} style={{ minHeight: 300, fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11 }} />
                             </div>
                         </div>
-                        <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+                        <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-between gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-danger" onClick={resetTermsToDefault}>Reset to Default</button>
                             <div style={{ display: "flex", gap: 8 }}>
                                 <button className="btn btn-secondary" onClick={() => setTermsEditorModal(false)}>Cancel</button>
@@ -2606,13 +2606,13 @@ const Estimation = () => {
 
             {/* ============ FINALIZE MODAL ============ */}
             {finalizeModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setFinalizeModal(false); }}>
-                    <div className="modal-content">
-                        <div className="modal-header">
-                            <div className="modal-title">Finalize estimate</div>
-                            <button className="modal-close" onClick={() => setFinalizeModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold">Finalize estimate</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setFinalizeModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Choose how to deliver this estimate.</p>
                             <div style={{ display: "grid", gap: 8 }}>
                                 {[
@@ -2650,15 +2650,15 @@ const Estimation = () => {
 
             {/* ============ SAVED ESTIMATES MODAL ============ */}
             {savedEstimatesModal && (
-                <div className="modal active" onClick={(e) => { if (e.target.classList.contains("modal")) setSavedEstimatesModal(false); }}>
-                    <div className="modal-content" style={{ maxWidth: 720 }}>
-                        <div className="modal-header">
-                            <div className="modal-title">Saved Estimates</div>
-                            <button className="modal-close" onClick={() => setSavedEstimatesModal(false)}>
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[720px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold">Saved Estimates</div>
+                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setSavedEstimatesModal(false)}>
                                 <svg className="icon"><use href="#i-x" /></svg>
                             </button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-[22px]">
                             {savedEstimatesLoading ? (
                                 <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280", fontSize: 13 }}>
                                     Loading…

@@ -585,19 +585,6 @@ const ThreeDMockup = () => {
         document.body.style.overflow = '';
     };
 
-    useEffect(() => {
-        const handler = (e) => {
-            if (e.target.classList?.contains('modal-overlay')) {
-                if (e.target.id === 'galleryModal') setShowGallery(false);
-                if (e.target.id === 'recentModal') setShowRecent(false);
-                if (e.target.id === 'templatesModal') setShowTemplates(false);
-                if (e.target.id === 'tutorialModal') setShowTutorial(false);
-                document.body.style.overflow = '';
-            }
-        };
-        document.addEventListener('click', handler);
-        return () => document.removeEventListener('click', handler);
-    }, []);
 
     // ────────────────────────────────────────────────────────────────────────
     //   Render
@@ -1361,13 +1348,13 @@ const ThreeDMockup = () => {
 
             {/* ─────────────── Modals ─────────────── */}
             {showGallery && (
-                <div className="modal-overlay active" id="galleryModal">
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Mockup Gallery</h2>
-                            <button className="modal-close" onClick={() => closeModal('gallery')}>×</button>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">Mockup Gallery</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('gallery')}>×</button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             <div className="gallery-grid">
                                 {galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>No mockups yet.</div>}
                                 {galleryItems.map(m => (
@@ -1391,13 +1378,13 @@ const ThreeDMockup = () => {
             )}
 
             {showRecent && (
-                <div className="modal-overlay active" id="recentModal">
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Recent Projects</h2>
-                            <button className="modal-close" onClick={() => closeModal('recent')}>×</button>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">Recent Projects</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('recent')}>×</button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             {recentItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>Nothing recent yet.</div>}
                             {recentItems.map(m => (
                                 <div key={m.id} className="recent-item">
@@ -1422,13 +1409,13 @@ const ThreeDMockup = () => {
             )}
 
             {showTemplates && (
-                <div className="modal-overlay active" id="templatesModal">
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Mockup Templates</h2>
-                            <button className="modal-close" onClick={() => closeModal('templates')}>×</button>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">Mockup Templates</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('templates')}>×</button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             <div style={{ color: '#6b7280', fontSize: 14 }}>Templates feature is coming soon.</div>
                         </div>
                     </div>
@@ -1436,13 +1423,13 @@ const ThreeDMockup = () => {
             )}
 
             {showTutorial && (
-                <div className="modal-overlay active" id="tutorialModal">
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">3D Mockup Studio Tutorial</h2>
-                            <button className="modal-close" onClick={() => closeModal('tutorial')}>×</button>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">3D Mockup Studio Tutorial</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('tutorial')}>×</button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             <div className="tutorial-steps">
                                 <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Quick Start Guide</h3>
                                 {[
