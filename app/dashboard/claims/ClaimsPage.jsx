@@ -895,18 +895,18 @@ const ClaimsManagement = () => {
 
             {/* Claim Details Modal */}
             {showClaimModal && selectedClaim && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Claim Details</h2>
-                            <button className="modal-close" onClick={closeModal}>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">Claim Details</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all" onClick={closeModal}>
                                 <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                     <path
                                         d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
                                 </svg>
                             </button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             <div className="claim-details-grid">
                                 <div className="detail-group">
                                     <label>Claim ID</label>
@@ -956,7 +956,7 @@ const ClaimsManagement = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
                             <button className="modal-btn secondary" onClick={closeModal}>
                                 Close
                             </button>
@@ -973,18 +973,18 @@ const ClaimsManagement = () => {
 
             {/* Move Stage Menu */}
             {showMoveMenu && (
-                <div className="modal-overlay" onClick={closeMoveMenu}>
-                    <div className="modal-content move-stage-menu" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Move Claim to Stage</h2>
-                            <button className="modal-close" onClick={closeMoveMenu}>
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-gray-800">Move Claim to Stage</h2>
+                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all" onClick={closeMoveMenu}>
                                 <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                     <path
                                         d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
                                 </svg>
                             </button>
                         </div>
-                        <div className="modal-body">
+                        <div className="p-6">
                             <p>Select a new stage for claim <strong>{moveMenuClaimId}</strong>:</p>
                             <div className="stage-options">
                                 {Array.from({length: 9}, (_, i) => i + 1).map(stageNum => (
@@ -999,7 +999,7 @@ const ClaimsManagement = () => {
                                 ))}
                             </div>
                         </div>
-                        <div className="modal-footer">
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
                             <button className="modal-btn secondary" onClick={closeMoveMenu}>
                                 Cancel
                             </button>

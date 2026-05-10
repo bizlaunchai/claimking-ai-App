@@ -752,11 +752,9 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
     return (
         <div
             className="fixed inset-0 w-full h-full bg-black/50 z-[9999] flex items-center justify-center p-4"
-            onClick={onClose}
         >
             <div
                 className="bg-white rounded-xl max-w-[600px] w-full max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]"
-                onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="px-6 py-6 border-b border-gray-200 flex items-center justify-between">

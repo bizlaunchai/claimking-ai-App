@@ -435,17 +435,6 @@ const Page = () => {
         alert('Loading more reports...');
     };
 
-    // Close modal when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (activeModal && event.target.classList.contains('modal-overlay')) {
-                closeModal();
-            }
-        };
-
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
-    }, [activeModal]);
 
     // ── Derived view-state for the header ────────────────────────────────
     const aiReady = !!providerStatus.gemini;
@@ -932,13 +921,13 @@ const Page = () => {
 
             {
                 activeModal === 'allReports' && (
-                    <div className="modal-overlay" id="allReportsModal">
-                        <div className="modal" style={{ maxWidth: 920 }}>
-                            <div className="modal-header">
-                                <h2 className="modal-title">Saved Measurement Reports</h2>
-                                <button className="modal-close" onClick={closeModal}>×</button>
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+                        <div className="bg-white rounded-xl w-full max-w-[920px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                            <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                                <h2 className="text-xl font-bold text-gray-800">Saved Measurement Reports</h2>
+                                <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md" onClick={closeModal}>×</button>
                             </div>
-                            <div className="modal-body">
+                            <div className="p-6">
                                 <SavedReportsList
                                     reports={reportList}
                                     loading={reportListLoading}
