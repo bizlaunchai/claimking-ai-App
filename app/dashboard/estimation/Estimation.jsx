@@ -166,6 +166,138 @@ const toClientShape = (raw) => ({
     claim: raw.claim_number || raw.claim || null,
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PolicyAnalysisSupplementPanel
+//
+// Renders when the estimation page is opened from the Policy Analysis "Build
+// Supplement Estimate" button. Shows the AI's findings as READ-ONLY context
+// and offers a single CTA that loads them into the Auto-Build modal as
+// scope hints + instructions.
+//
+// Why findings are NOT one-click line items: titles like "No Explicit
+// Matching Coverage" or "O&P is Included in Replacement Cost" are arguments,
+// not billable scope items. Brief Section 10 says Claude should generate the
+// actual line items "comparing carrier scope vs contractor scope" using the
+// policy info as context — that's the right level of abstraction.
+// ─────────────────────────────────────────────────────────────────────────────
+const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
+    const claimArgs = analysis.claim_arguments?.items ?? [];
+    const matching = analysis.matching_issues?.items ?? [];
+    const codeUp = analysis.code_upgrade_potential;
+    const codeUpEligible = !!(codeUp && codeUp.available);
+
+    const totalSuggestions =
+        claimArgs.length + matching.length + (codeUpEligible ? 1 : 0);
+
+    if (totalSuggestions === 0) {
+        return (
+            <div style={{
+                margin: "0 0 14px", padding: "12px 16px",
+                background: "#f9fafb", border: "1px solid #e5e7eb",
+                borderRadius: 8, fontSize: 13, color: "#4b5563",
+            }}>
+                <strong>Policy analysis linked</strong> — but the AI did not flag
+                any supplement-ready items. Score:
+                <strong> {analysis.coverage_score ?? "—"}/100</strong>.
+                <a href="#" onClick={(e) => { e.preventDefault(); onDismiss(); }}
+                   style={{ color: "#1d4ed8", marginLeft: 10, fontSize: 12 }}>
+                    Dismiss
+                </a>
+            </div>
+        );
+    }
+
+    const FindingRow = ({ accent, icon, title, subtitle }) => (
+        <div style={{
+            padding: "8px 12px",
+            border: `1px solid ${accent.border}`,
+            background: accent.bg,
+            borderRadius: 6,
+            fontSize: 12.5,
+            lineHeight: 1.4,
+        }}>
+            <div style={{ color: accent.text, fontWeight: 600 }}>
+                {icon} {title}
+            </div>
+            {subtitle && (
+                <div style={{ marginTop: 3, color: "#4b5563" }}>{subtitle}</div>
+            )}
+        </div>
+    );
+
+    return (
+        <div style={{
+            margin: "0 0 14px",
+            padding: 14,
+            background: "linear-gradient(135deg,#eff6ff,#fff)",
+            border: "1px solid #93c5fd",
+            borderRadius: 10,
+        }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 12 }}>
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>
+                        Policy analysis linked · {totalSuggestions} scope finding{totalSuggestions === 1 ? "" : "s"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#1e3a8a", opacity: 0.85, marginTop: 2 }}>
+                        Findings below are AI arguments — not line items. Click <strong>Use as AI scope hints</strong> to feed them into the Auto-Build, where Claude generates real line items with measurements + rates.
+                        {analysis.op_potential?.applicable && (
+                            <> O&amp;P auto-enabled (AI flagged {analysis.op_potential.trades_count ?? "multiple"} trades).</>
+                        )}
+                    </div>
+                </div>
+                <a href="#" onClick={(e) => { e.preventDefault(); onDismiss(); }}
+                   style={{ color: "#1d4ed8", fontSize: 12, whiteSpace: "nowrap" }}>
+                    Dismiss
+                </a>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 6, marginBottom: 12 }}>
+                {claimArgs.map((it, i) => (
+                    <FindingRow
+                        key={`ca-${i}`}
+                        icon="⚖"
+                        title={it.title}
+                        subtitle={it.argument}
+                        accent={{ border: "#bfdbfe", bg: "#fff", text: "#1d4ed8" }}
+                    />
+                ))}
+                {matching.map((it, i) => (
+                    <FindingRow
+                        key={`mi-${i}`}
+                        icon="⤢"
+                        title={it.title}
+                        subtitle={it.detail}
+                        accent={{ border: "#fed7aa", bg: "#fff", text: "#c2410c" }}
+                    />
+                ))}
+                {codeUpEligible && (
+                    <FindingRow
+                        icon="🛠"
+                        title={`Code upgrade${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ""}`}
+                        subtitle={codeUp.detail}
+                        accent={{ border: "#bbf7d0", bg: "#fff", text: "#15803d" }}
+                    />
+                )}
+            </div>
+
+            <button
+                type="button"
+                onClick={onApply}
+                style={{
+                    background: "#1d4ed8", color: "white", border: "none",
+                    padding: "9px 16px", borderRadius: 6, fontWeight: 600,
+                    fontSize: 13, cursor: "pointer",
+                }}
+            >
+                Use as AI scope hints →
+            </button>
+            <span style={{ fontSize: 11.5, color: "#6b7280", marginLeft: 10 }}>
+                Opens Auto-Build with these findings pre-loaded.
+            </span>
+        </div>
+    );
+};
+
 // ====================== ICON SPRITE ======================
 const IconSprite = () => (
     <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
@@ -213,6 +345,15 @@ const Estimation = () => {
     // ── Loaded measurement (set when ?measurement_id is present) ──────────
     const [linkedMeasurement, setLinkedMeasurement] = useState(null);
     const [measurementLoading, setMeasurementLoading] = useState(false);
+
+    // ── Loaded policy analysis (set when ?policy_analysis_id is present).
+    //    Per Brief Section 08, estimates pull from "uploaded claim documents"
+    //    and Section 10 says Claude should compare carrier vs contractor scope.
+    //    The supplement panel surfaces AI-identified missing items so the
+    //    contractor can click-add them as line items with full provenance
+    //    (reason / source_field / code_ref — Brief Section 8 audit trail).
+    const [linkedPolicyAnalysis, setLinkedPolicyAnalysis] = useState(null);
+    const [policyAnalysisLoading, setPolicyAnalysisLoading] = useState(false);
 
     // ── Core state ───────────────────────────────────────────────────────
     const [client, setClient] = useState(null);
@@ -623,6 +764,58 @@ const Estimation = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
+    // ── Policy Analysis → Estimate handoff (?policy_analysis_id=...&client_id=...)
+    //
+    // Brief Section 08 lists "Uploaded claim documents" as an estimate data
+    // source. Section 09 requires document generation to "auto-populate from
+    // policy analysis results — nothing should require the user to type
+    // information that already exists." This effect implements that for the
+    // estimation surface: pull the analysis, pre-select its client, and
+    // surface findings as one-click supplement line items.
+    //
+    // We intentionally do NOT auto-create line items — the contractor stays
+    // in control. O&P toggle IS auto-checked when the AI says op_potential
+    // applies, because that's a per-estimate setting (not a per-item one)
+    // and forcing the user to re-tick it every time is hostile UX.
+    useEffect(() => {
+        const analysisId = searchParams?.get('policy_analysis_id');
+        if (!analysisId) return;
+        let cancelled = false;
+        setPolicyAnalysisLoading(true);
+
+        (async () => {
+            try {
+                const res = await axiosInstance.get(`/policy-analyses/${analysisId}`);
+                const analysis = res.data?.data;
+                if (cancelled || !analysis) return;
+                setLinkedPolicyAnalysis(analysis);
+
+                // Auto-tick O&P if AI flagged it.
+                if (analysis.op_potential?.applicable === true) {
+                    setOverheadOn(true);
+                }
+
+                // Pre-select client (prefer analysis.client_id, fall back to URL).
+                const clientIdParam = searchParams?.get('client_id');
+                const cid = analysis.client_id || clientIdParam || null;
+                if (cid && !client) {
+                    try {
+                        const cRes = await axiosInstance.get(`/client-portal/${cid}`, { suppressErrorToast: true });
+                        const raw = cRes.data?.data;
+                        if (raw && !cancelled) setClient(toClientShape(raw));
+                    } catch { /* non-fatal */ }
+                }
+            } catch {
+                /* axiosInstance toasts the failure */
+            } finally {
+                if (!cancelled) setPolicyAnalysisLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
     // ====================== UTIL ======================
     const toast = useCallback((msg, type = "") => {
         const id = Date.now() + Math.random();
@@ -1003,6 +1196,90 @@ const Estimation = () => {
         });
         triggerSave();
         toast(`Added ${name}`, "success");
+    };
+
+    /**
+     * Send the AI findings into the Auto-Build modal as scope hints +
+     * free-form instructions, then open the modal. This is the brief-correct
+     * handoff (Section 10: "Claude should be a core part of the estimation
+     * flow — comparing carrier vs contractor scope, detailed reasoning per
+     * line item"). The chips become `scope_hints` and the long-form
+     * arguments are appended to the `instructions` textarea so Claude can
+     * cite them in each generated line's `reason` field.
+     *
+     * We intentionally do NOT inject literal line items — AI finding titles
+     * like "No Explicit Matching Coverage" or "O&P is Included in Replacement
+     * Cost" are arguments, not billable scope items. Claude turns them into
+     * real roofing/siding line items with proper qty/unit/price derived from
+     * the linked measurement + rate card.
+     */
+    const applyPolicyHintsToAi = () => {
+        if (!ensureClient()) return;
+        const a = linkedPolicyAnalysis;
+        if (!a) return;
+
+        const claimArgs = a.claim_arguments?.items ?? [];
+        const matching = a.matching_issues?.items ?? [];
+        const codeUp = a.code_upgrade_potential;
+        const codeUpEligible = !!(codeUp && codeUp.available);
+
+        // Build short, action-oriented hint chips. Claude has been prompted
+        // (in the estimate-generator) to read these as scope-shaping rules,
+        // not as line item titles.
+        const newChips = [];
+        for (const it of claimArgs) {
+            if (it.title) newChips.push(`Supplement: ${it.title}`);
+        }
+        for (const it of matching) {
+            if (it.title) newChips.push(`Matching: ${it.title}`);
+        }
+        if (codeUpEligible) {
+            newChips.push(
+                `Code upgrades${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ''}`,
+            );
+        }
+        // Merge with whatever the user had already selected — never overwrite.
+        setSelectedChips((prev) => Array.from(new Set([...prev, ...newChips])));
+
+        // Compose a longer-form instructions block with the AI's full
+        // reasoning, so Claude can quote the supporting clauses in each
+        // generated line item's `reason` field (Brief Section 8 audit trail).
+        const lines = [];
+        lines.push(
+            `Use the linked policy analysis (ID ${a.id}, doc type "${a.document_type}", score ${a.coverage_score ?? '—'}/100) as scope-shaping context.`,
+        );
+        if (claimArgs.length) {
+            lines.push('', 'Claim arguments to address as supplements:');
+            for (const it of claimArgs) {
+                lines.push(`- ${it.title}: ${it.argument || ''}${it.supporting_clause ? ` [clause: "${it.supporting_clause}"]` : ''}`);
+            }
+        }
+        if (matching.length) {
+            lines.push('', 'Matching issues that require full-area scope:');
+            for (const it of matching) {
+                lines.push(`- ${it.title}: ${it.detail || ''}${it.line_of_argument ? ` (argument: ${it.line_of_argument})` : ''}`);
+            }
+        }
+        if (codeUpEligible) {
+            lines.push('', `Code upgrades available${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ''}: ${codeUp.detail || ''}`);
+        }
+        if (a.op_potential?.applicable) {
+            lines.push('', `Apply O&P (AI flagged ${a.op_potential.trades_count ?? 'multiple'} trades).`);
+        }
+        lines.push(
+            '',
+            'For every line item you generate, set `source_field` referencing the matching policy analysis finding and cite the supporting clause in `reason`.',
+        );
+
+        // Append to whatever the user already typed; don't clobber.
+        setAiMessage((prev) =>
+            prev?.trim()
+                ? `${prev}\n\n${lines.join('\n')}`
+                : lines.join('\n'),
+        );
+
+        setAiModal(true);
+        toast('Policy findings loaded into AI builder. Add damage type + click Generate.', 'success');
     };
 
     const updateItemQty = (secId, idx, val) => {
@@ -1788,6 +2065,17 @@ const Estimation = () => {
                 )}
 
                 {/* STAGE 2: AI bar */}
+                {/* Policy Analysis supplement panel — visible whenever the user
+                    landed here via ?policy_analysis_id. Renders before the
+                    AI bar so the suggestions are the first thing they see. */}
+                {linkedPolicyAnalysis && (
+                    <PolicyAnalysisSupplementPanel
+                        analysis={linkedPolicyAnalysis}
+                        onApply={applyPolicyHintsToAi}
+                        onDismiss={() => setLinkedPolicyAnalysis(null)}
+                    />
+                )}
+
                 {hasStarted && (
                     <div className="ai-bar" style={{ display: "flex" }}>
                         <div className="ai-bar-icon"><svg className="icon"><use href="#i-sparkle" /></svg></div>

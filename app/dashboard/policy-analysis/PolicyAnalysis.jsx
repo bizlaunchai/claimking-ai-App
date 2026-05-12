@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import "./policy-analysis.css"
+import "../measurement/measurement-hero.css"  // reuse hero + stat-chip styles
+
 import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import {
@@ -409,9 +411,9 @@ const ResultsView = ({ result, client, openAccordions, toggleAccordion, onGenera
                                     ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                                     : 'bg-white border border-gray-300 text-gray-400 cursor-not-allowed'
                             }`}
-                            title={result.status !== 'completed' ? 'Available after a successful analysis' : 'Open the estimation builder pre-filled with this client'}
+                            title={result.status !== 'completed' ? 'Available after a successful analysis' : 'Open the estimate builder with this analysis as supplement source'}
                         >
-                            Create Estimate
+                            Build Supplement Estimate →
                         </button>
                         <button
                             type="button"
@@ -476,6 +478,41 @@ const PolicyAnalysis = () => {
     // plus status, score, and metadata. Step 18 reads from this for rendering.
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analyzeError, setAnalyzeError] = useState(null);
+
+    // Header stat-chip data — mirrors the 3D-Mockup / Estimation pattern so the
+    // user can see AI readiness, credit balance, and feature cost at a glance.
+    const [featureCost, setFeatureCost] = useState(null);
+    const [creditBalance, setCreditBalance] = useState(null);
+    const [historyCount, setHistoryCount] = useState(0);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const [costRes, balanceRes] = await Promise.all([
+                    axiosInstance.get('/credits/feature-costs/policy_analysis', { suppressErrorToast: true }),
+                    axiosInstance.get('/credits/me', { suppressErrorToast: true }),
+                ]);
+                setFeatureCost(costRes.data ?? null);
+                setCreditBalance(balanceRes.data ?? null);
+            } catch {
+                /* Pre-credit-system installs return 404 — leave both null. */
+            }
+            try {
+                const histRes = await axiosInstance.get('/policy-analyses', {
+                    params: { limit: 1 }, suppressErrorToast: true,
+                });
+                setHistoryCount(histRes.data?.meta?.total ?? 0);
+            } catch { /* ignore */ }
+        })();
+    }, []);
+
+    // Derived for header stat-chips. Mirrors Estimation.jsx logic.
+    const totalCredits = (creditBalance?.monthly_credits ?? 0) + (creditBalance?.bonus_credits ?? 0);
+    const requiredCredits = featureCost?.credits_cost ?? 0;
+    const featureDisabledByAdmin = featureCost && featureCost.is_active === false;
+    const insufficientCredits = featureCost && !featureDisabledByAdmin && totalCredits < requiredCredits;
+    const creditsKnown = featureCost !== null && creditBalance !== null;
+    const aiReady = !featureDisabledByAdmin && !insufficientCredits;
     const [openAccordions, setOpenAccordions] = useState({
         claim_arguments: true,
         next_steps: true,
@@ -771,22 +808,62 @@ const PolicyAnalysis = () => {
 
     return (
         <div className="policy-analysis bg-gray-50 min-h-screen">
-            {/* Header Section */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-semibold text-gray-900">
-                            AI Policy Analysis
+            {/* HEADER (mr-hero pattern — matches Estimation + Measurement pages) */}
+            <div className="mr-hero">
+                <div className="mr-hero-inner">
+                    <div className="mr-hero-left">
+                        <div className="mr-hero-eyebrow">
+                            <span className="mr-hero-dot" />
+                            Policy Analysis
+                        </div>
+                        <h1 className="mr-hero-title">
+                            Decode policies <span className="mr-hero-title-accent">in one read</span>
                         </h1>
-                        <p className="text-sm text-gray-600 mt-1">AI-powered insurance document review</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <Link
-                            href="/dashboard/policy-analysis/history"
-                            className="text-sm text-blue-600 hover:underline"
-                        >
-                            View History →
-                        </Link>
+                        <p className="mr-hero-subtitle">
+                            Upload a policy, denial, estimate, scope, or carrier email — AI extracts coverage issues, exclusions, deductibles, matching arguments, code upgrades, O&amp;P, RCV vs ACV, and supplement-ready arguments with full reasoning.
+                        </p>
+
+                        <div className="mr-hero-stats">
+                            <div className={`mr-stat ${aiReady ? "mr-stat-ok" : "mr-stat-warn"}`}>
+                                <div className="mr-stat-icon">{aiReady ? "✓" : "!"}</div>
+                                <div>
+                                    <div className="mr-stat-label">AI Status</div>
+                                    <div className="mr-stat-value">
+                                        {featureDisabledByAdmin ? "Disabled" : insufficientCredits ? "Low credits" : "Ready"}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {creditsKnown && (
+                                <div className={`mr-stat ${insufficientCredits ? "mr-stat-warn" : "mr-stat-ok"}`}>
+                                    <div className="mr-stat-icon">⚡</div>
+                                    <div>
+                                        <div className="mr-stat-label">Credits</div>
+                                        <div className="mr-stat-value">
+                                            {totalCredits.toLocaleString()}
+                                            {requiredCredits > 0 && (
+                                                <span className="mr-stat-sub"> · {requiredCredits}/run</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <Link
+                                href="/dashboard/policy-analysis/history"
+                                className="mr-stat mr-stat-link"
+                                title="View past analyses"
+                            >
+                                <div className="mr-stat-icon">📋</div>
+                                <div style={{ textAlign: "left" }}>
+                                    <div className="mr-stat-label">History</div>
+                                    <div className="mr-stat-value">
+                                        {historyCount}
+                                        <span className="mr-stat-sub"> analyses</span>
+                                    </div>
+                                </div>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
