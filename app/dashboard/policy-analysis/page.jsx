@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import PolicyAnalysis from "@/app/dashboard/policy-analysis/PolicyAnalysis.jsx";
 
 export const metadata = {
@@ -7,7 +8,11 @@ export const metadata = {
 
 
 const Page = () => {
-    return <PolicyAnalysis/>;
+    return (
+        <Suspense fallback={null}>
+            <PolicyAnalysis/>
+        </Suspense>
+    );
 };
 
 export default Page;
