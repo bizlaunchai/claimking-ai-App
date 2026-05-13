@@ -171,7 +171,7 @@ const AnalysisCard = ({ a }) => {
     );
 };
 
-const PortalPolicyAnalyses = ({ clientId, analysisId }) => {
+const PortalPolicyAnalyses = ({ clientId, analysisId, embedded = false }) => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -204,6 +204,47 @@ const PortalPolicyAnalyses = ({ clientId, analysisId }) => {
         return () => { cancelled = true; };
     }, [clientId, analysisId]);
 
+    const body = (
+        <>
+            {loading && <p className="text-gray-500 text-sm">Loading analyses…</p>}
+            {!loading && error && (
+                <p className="text-gray-700 bg-white border border-gray-200 rounded p-6 text-center">
+                    {error === 'Not found'
+                        ? 'This analysis is not available.'
+                        : error}
+                </p>
+            )}
+            {!loading && !error && rows.length === 0 && (
+                <p className="text-gray-700 bg-white border border-gray-200 rounded p-6 text-center text-sm">
+                    Your contractor hasn’t shared any analyses yet.
+                </p>
+            )}
+            {!loading && !error && rows.map((a) => (
+                <AnalysisCard key={a.id} a={a} />
+            ))}
+        </>
+    );
+
+    if (embedded) {
+        return (
+            <>
+                {/* Disclaimer travels with the analyses block when embedded. */}
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex gap-3 mb-4">
+                    <div className="text-amber-600 text-xl leading-none">⚠</div>
+                    <div>
+                        <p className="font-semibold text-amber-900 text-sm">
+                            {LEGAL_DISCLAIMER_HEADLINE}
+                        </p>
+                        <p className="text-amber-900 text-xs mt-1">
+                            {LEGAL_DISCLAIMER_BODY}
+                        </p>
+                    </div>
+                </div>
+                {body}
+            </>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50">
             <header className="bg-white border-b border-gray-200 px-6 py-5">
@@ -217,7 +258,6 @@ const PortalPolicyAnalyses = ({ clientId, analysisId }) => {
                 </div>
             </header>
 
-            {/* Full disclaimer banner — non-dismissible, top of page. */}
             <div className="max-w-3xl mx-auto px-6 pt-4">
                 <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex gap-3">
                     <div className="text-amber-600 text-xl leading-none">⚠</div>
@@ -232,24 +272,7 @@ const PortalPolicyAnalyses = ({ clientId, analysisId }) => {
                 </div>
             </div>
 
-            <main className="max-w-3xl mx-auto px-6 py-6">
-                {loading && <p className="text-gray-500">Loading…</p>}
-                {!loading && error && (
-                    <p className="text-gray-700 bg-white border border-gray-200 rounded p-6 text-center">
-                        {error === 'Not found'
-                            ? 'This analysis is not available.'
-                            : error}
-                    </p>
-                )}
-                {!loading && !error && rows.length === 0 && (
-                    <p className="text-gray-700 bg-white border border-gray-200 rounded p-6 text-center">
-                        Your contractor hasn’t shared any analyses yet.
-                    </p>
-                )}
-                {!loading && !error && rows.map((a) => (
-                    <AnalysisCard key={a.id} a={a} />
-                ))}
-            </main>
+            <main className="max-w-3xl mx-auto px-6 py-6">{body}</main>
         </div>
     );
 };

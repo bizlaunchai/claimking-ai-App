@@ -5,6 +5,7 @@ import {hasEnvVars} from "@/lib/utils";
 import {EnvVarWarning} from "@/components/env-var-warning";
 import {AuthButton} from "@/components/auth-button";
 import Link from "next/link";
+import Image from "next/image";
 import {usePathname} from "next/navigation";
 import DashboardHeader from "@/components/layout/DashboardHeader";
 
@@ -93,11 +94,9 @@ const AppHeader = () => {
             <nav className="navbar">
                 <div className="nav-container">
                     <Link href="/">
-                        <div className="logo">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z" />
-                            </svg>
-                            <span className="logo-text">ClaimKing.AI</span>
+                        <div className="logo flex items-center">
+                            <Image src="/claimking_logo.png" alt="ClaimKing" width={50} height={50} priority style={{ height: 50, width: 'auto' }} />
+                            <span className="text-black uppercase">ClaimKing</span>
                         </div>
                     </Link>
 
@@ -153,9 +152,7 @@ const AppHeader = () => {
                 <div className="mobile-menu-content">
                     <div className="mobile-menu-header">
                         <div className="mobile-menu-logo">
-                            <svg viewBox="0 0 24 24" fill="#FDB813">
-                                <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm2.86-2h8.28l.5-2.02l-2.87-1.73L12 13l-1.77-2.75l-2.87 1.73L7.86 14z" />
-                            </svg>
+                            <Image src="/claimking_logo.png" alt="ClaimKing.AI" width={32} height={32} style={{ height: 32, width: 'auto' }} />
                             <span className="mobile-menu-logo-text">ClaimKing.AI</span>
                         </div>
                         <div className="mobile-menu-tagline">
