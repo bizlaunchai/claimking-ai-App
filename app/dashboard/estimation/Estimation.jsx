@@ -1726,7 +1726,30 @@ const Estimation = () => {
             hideLoading();
         }
     };
-    const saveToPortal = () => { setFinalizeModal(false); toast("Saved to client portal", "success"); };
+    const saveToPortal = async () => {
+        showLoading("Sharing to client portal...", "Publishing your estimate");
+        try {
+            clearTimeout(saveTimerRef.current);
+            const id = await saveEstimateNow();
+            if (!id) {
+                toast("Save the estimate before sharing", "error");
+                return;
+            }
+            await axiosInstance.patch(
+                `/estimates/${id}/status`,
+                { status: "sent" },
+                { suppressErrorToast: true },
+            );
+            const portalUrl = `${window.location.origin}/portal/${client.id}?estimate=${id}`;
+            try { await navigator.clipboard?.writeText(portalUrl); } catch { /* clipboard not available */ }
+            setFinalizeModal(false);
+            toast("Shared to client portal — link copied", "success");
+        } catch (err) {
+            toast(err?.userMessage || "Failed to share estimate", "error");
+        } finally {
+            hideLoading();
+        }
+    };
     const sendToCRM = () => { setFinalizeModal(false); toast("Synced to CRM", "success"); };
 
     // ====================== AVAILABLE SECTION TEMPLATES (for add-section modal) ======================

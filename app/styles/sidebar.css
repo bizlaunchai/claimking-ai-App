@@ -146,9 +146,9 @@
 .crown-logo {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, #FDB813, #d4a000);
-    fill: white;
-    filter: drop-shadow(0 2px 4px rgba(253, 184, 19, 0.3));
+    /*background: linear-gradient(135deg, #FDB813, #d4a000);*/
+    /*fill: white;*/
+    /*filter: drop-shadow(0 2px 4px rgba(253, 184, 19, 0.3));*/
     display: flex;
     align-items: center;
     justify-content: center;

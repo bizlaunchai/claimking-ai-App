@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import "../../app/styles/sidebar.css"
 import {LogoutButton} from "@/components/logout-button";
 import Link from "next/link";
+import Image from "next/image";
 import {usePathname} from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,6 +16,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
     const [isResizing, setIsResizing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [userInfo, setUserInfo] = useState({ name: '', email: '' });
 
     const pathname = usePathname();
 
@@ -27,8 +29,14 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user || cancelled) return;
                 const { data: profile } = await supabase
-                    .from('profiles').select('role').eq('id', user.id).single();
-                if (!cancelled) setIsAdmin(profile?.role === 'admin');
+                    .from('profiles').select('role, full_name').eq('id', user.id).single();
+                if (!cancelled) {
+                    setIsAdmin(profile?.role === 'admin');
+                    setUserInfo({
+                        name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
+                        email: user.email || '',
+                    });
+                }
             } catch { /* ignore */ }
         })();
         return () => { cancelled = true; };
@@ -146,16 +154,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                            <Link href="/">
                            <div className={`logo-container mr-2 ${isCollapsed ? '' : 'gap-2'}`} onClick={expandSidebarIfCollapsed}>
                                <div className="logo-icon">
-                                   {/* ClaimKing Crown Logo */}
-                                   <svg viewBox="0 0 32 32" className="crown-logo">
-                                       <path d="M16 4L11 10L6 8L8 16L10 14L13 18L16 14L19 18L22 14L24 16L26 8L21 10L16 4Z" />
-                                       <rect x="8" y="20" width="16" height="4" rx="1" />
-                                       <circle cx="12" cy="8" r="1.5" />
-                                       <circle cx="16" cy="6" r="1.5" />
-                                       <circle cx="20" cy="8" r="1.5" />
-                                   </svg>
+                                   <Image src="/claimking_logo.png" alt="ClaimKing.AI" width={32} height={32} priority className="crown-logo" />
                                </div>
-                               <span className="logo-text">ClaimKing.AI</span>
+                               <span className="logo-text uppercase">ClaimKing</span>
                            </div>
                            </Link>
                            <button className="collapse-toggle" onClick={toggleSidebar}>
@@ -164,6 +165,22 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                </svg>
                            </button>
                        </div>
+
+                    {/* Logged-in user info */}
+                    {!isCollapsed && (userInfo.name || userInfo.email) && (
+                        <div className="sidebar-user-info" style={{ padding: '8px 12px 4px', lineHeight: 1.2 }}>
+                            {userInfo.name && (
+                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #1f2937)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {userInfo.name}
+                                </div>
+                            )}
+                            {userInfo.email && (
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary, #6b7280)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {userInfo.email}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
 
