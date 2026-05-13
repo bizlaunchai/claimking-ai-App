@@ -877,7 +877,7 @@ const Estimation = () => {
         const payload = buildSavePayload();
         if (!payload) {
             setSaveIndicator({ saving: false, text: "Saved" });
-            return;
+            return null;
         }
         setSaveIndicator({ saving: true, text: "Saving..." });
         try {
@@ -887,18 +887,21 @@ const Estimation = () => {
                     payload,
                     { suppressErrorToast: true },
                 );
-            } else {
-                const res = await axiosInstance.post(
-                    "/estimates",
-                    payload,
-                    { suppressErrorToast: true },
-                );
-                const newId = res.data?.data?.id;
-                if (newId) setCurrentEstimateId(newId);
+                setSaveIndicator({ saving: false, text: "Saved" });
+                return currentEstimateId;
             }
+            const res = await axiosInstance.post(
+                "/estimates",
+                payload,
+                { suppressErrorToast: true },
+            );
+            const newId = res.data?.data?.id ?? null;
+            if (newId) setCurrentEstimateId(newId);
             setSaveIndicator({ saving: false, text: "Saved" });
+            return newId;
         } catch {
             setSaveIndicator({ saving: false, text: "Save failed" });
+            return null;
         }
     }, [buildSavePayload, currentEstimateId]);
 
@@ -1681,7 +1684,48 @@ const Estimation = () => {
         const e = window.prompt("Email address");
         if (e) toast(`Sent to ${e}`, "success");
     };
-    const downloadPDF = () => { setFinalizeModal(false); window.print(); };
+    const downloadPDF = async () => {
+        showLoading("Generating PDF...", "Building your estimate document");
+        try {
+            // Flush any pending edits so the server renders the latest scope.
+            clearTimeout(saveTimerRef.current);
+            const id = await saveEstimateNow();
+            if (!id) {
+                toast("Save the estimate before downloading", "error");
+                return;
+            }
+            const clientPayload = client
+                ? {
+                    full_name: client.name ?? null,
+                    address: client.address ?? null,
+                    claim_number: client.claim ?? null,
+                }
+                : null;
+            const res = await axiosInstance.post(
+                `/estimates/${id}/pdf`,
+                { company: companyState, terms: termsState, client: clientPayload },
+                { responseType: "blob" },
+            );
+            const blob = new Blob([res.data], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            const disposition = res.headers?.["content-disposition"] || "";
+            const match = /filename="?([^"]+)"?/.exec(disposition);
+            const filename = match?.[1] || `estimate_${id.slice(0, 8)}.pdf`;
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setFinalizeModal(false);
+            toast("PDF downloaded", "success");
+        } catch (err) {
+            toast(err?.userMessage || "Failed to generate PDF", "error");
+        } finally {
+            hideLoading();
+        }
+    };
     const saveToPortal = () => { setFinalizeModal(false); toast("Saved to client portal", "success"); };
     const sendToCRM = () => { setFinalizeModal(false); toast("Synced to CRM", "success"); };
 
