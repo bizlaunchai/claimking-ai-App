@@ -15,12 +15,19 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
     const resizeHandleRef = useRef(null);
     const [isResizing, setIsResizing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
+    // Multi-tenant role flags:
+    //   isSuperAdmin   — global platform owner (ClaimKing internal team).
+    //                    Sees /dashboard/admin/* (plans, coupons, feature costs, etc.)
+    //   isCompanyAdmin — company owner / admin. Sees /billing, /team, /purchase-credits.
+    //   isCompanyMember— any role with a company_id (admin/estimator/field/office/client).
+    //                    Sees the AI tools, claims, etc.
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
     const [userInfo, setUserInfo] = useState({ name: '', email: '' });
 
     const pathname = usePathname();
 
-    // Fetch role once — used to conditionally show the Admin section
+    // Fetch profile once — used to conditionally show admin / billing / team sections.
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -29,9 +36,11 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user || cancelled) return;
                 const { data: profile } = await supabase
-                    .from('profiles').select('role, full_name').eq('id', user.id).single();
+                    .from('profiles').select('role, full_name, company_id').eq('id', user.id).single();
                 if (!cancelled) {
-                    setIsAdmin(profile?.role === 'admin');
+                    setIsSuperAdmin(profile?.role === 'superadmin');
+                    // Company admin = role 'admin' AND attached to a company.
+                    setIsCompanyAdmin(profile?.role === 'admin' && !!profile?.company_id);
                     setUserInfo({
                         name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
                         email: user.email || '',
@@ -242,17 +251,20 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>
 
-                        <div className="nav-item">
-                            <Link href="/dashboard/billing" className={`nav-link ${pathname.startsWith('/dashboard/billing') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Billing & Plans">
-                                <span className="nav-icon">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-                                    </svg>
-                                </span>
-                                <span className="nav-text">Billing & Plans</span>
-                                <span className="nav-badge storm">$</span>
-                            </Link>
-                        </div>
+                        {/* Billing — company admin/owner only (not visible to estimator/field/office/client) */}
+                        {isCompanyAdmin && (
+                            <div className="nav-item">
+                                <Link href="/dashboard/billing" className={`nav-link ${pathname.startsWith('/dashboard/billing') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Billing & Plans">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Billing & Plans</span>
+                                    <span className="nav-badge storm">$</span>
+                                </Link>
+                            </div>
+                        )}
                     </div>
 
                     {/* AI TOOLS */}
@@ -466,16 +478,19 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>
 
-                        <div className="nav-item">
-                            <Link href="/dashboard/team" className={`nav-link ${pathname === '/dashboard/team' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Team Management">
-                                <span className="nav-icon">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                                    </svg>
-                                </span>
-                                <span className="nav-text">Team</span>
-                            </Link>
-                        </div>
+                        {/* Team — company admin/owner only */}
+                        {isCompanyAdmin && (
+                            <div className="nav-item">
+                                <Link href="/dashboard/team" className={`nav-link ${pathname === '/dashboard/team' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Team Management">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Team</span>
+                                </Link>
+                            </div>
+                        )}
 
                     </div>
 
@@ -495,8 +510,10 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                         </div>
                     </div>
 
-                    {/* ADMIN — visible only to admins */}
-                    {isAdmin && (
+                    {/* SUPERADMIN — visible only to ClaimKing platform owners.
+                        Manages global plans, coupons, feature costs, provider API keys.
+                        Company admins do NOT see this section. */}
+                    {isSuperAdmin && (
                         <div className="nav-category">
                             <div className="nav-category-header">🔒 Admin</div>
 

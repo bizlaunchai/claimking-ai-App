@@ -4,14 +4,39 @@ import React, { useEffect, useState } from "react";
 import AppSidebar from "@/components/layout/AppSidebar";
 import DashboardHeader from "@/components/layout/DashboardHeader";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+
+// Friendly messages shown when middleware bounces the user back to the
+// dashboard for an access-denied URL (e.g. typing /dashboard/admin/plans as
+// a company admin). Middleware appends ?error=<code> on the redirect.
+const ACCESS_DENIED_MESSAGES = {
+    superadmin_only: "That page is restricted to ClaimKing platform admins.",
+    admin_only: "Only the company admin can access that page.",
+    account_suspended: "Your account is suspended — contact your admin.",
+};
 
 const DashboardLayout = ({ children }) => {
     const [user, setUser] = useState(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+
+    // Show toast + strip ?error= from the URL if middleware bounced the user here.
+    useEffect(() => {
+        const code = searchParams?.get("error");
+        if (!code) return;
+        const msg = ACCESS_DENIED_MESSAGES[code];
+        if (msg) toast.error("Access denied", { description: msg });
+        // Clean the URL so a refresh doesn't re-toast.
+        if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("error");
+            window.history.replaceState({}, "", url.toString());
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const handleResize = () => {

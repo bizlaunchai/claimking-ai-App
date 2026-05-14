@@ -240,6 +240,102 @@
 .team-page .perms-table td:first-child { text-align: left; }
 .team-page .perm-check { color: #16a34a; font-weight: 700; }
 .team-page .perm-cross { color: #d1d5db; }
+.team-page .perm-cell {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s ease;
+    border-radius: 4px;
+}
+.team-page .perm-cell:hover { background: #fef9e6 !important; }
+.team-page .perm-scope {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.team-page .perms-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.875rem;
+    border-bottom: 1px dashed #e5e7eb;
+}
+.team-page .perms-toolbar-label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-weight: 600;
+}
+.team-page .perms-dirty-badge {
+    margin-left: auto;
+    padding: 0.25rem 0.625rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* User Permissions modal: large */
+.team-page .modal.modal-lg { max-width: 760px; }
+.team-page .user-perm-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed #f3f4f6;
+}
+.team-page .user-perm-row:last-child { border-bottom: none; }
+.team-page .user-perm-label { font-size: 0.85rem; color: #1f2937; }
+.team-page .user-perm-group-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+    margin: 1rem 0 0.25rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+.team-page .user-perm-group-title:first-child {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+}
+.team-page .seg {
+    display: inline-flex;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f9fafb;
+}
+.team-page .seg-btn {
+    padding: 0.3rem 0.625rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #6b7280;
+    transition: all 0.12s ease;
+}
+.team-page .seg-btn:hover { background: white; color: #1a1f3a; }
+.team-page .seg-btn.active.grant { background: #16a34a; color: white; }
+.team-page .seg-btn.active.deny  { background: #dc2626; color: white; }
+.team-page .seg-btn.active.role  { background: #1a1f3a; color: white; }
+.team-page .perm-source {
+    font-size: 0.68rem;
+    color: #6b7280;
+    min-width: 70px;
+    text-align: right;
+}
+.team-page .perm-source.override { color: #92400e; font-weight: 600; }
 .team-page .perms-section-row td {
     background: #f9fafb;
     font-weight: 700;
@@ -250,7 +346,181 @@
     padding: 0.5rem 0.75rem;
 }
 
+/* Invite Modal */
+.team-page .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 1rem;
+    animation: tm-fadeIn 0.15s ease;
+}
+@keyframes tm-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tm-slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.team-page .modal {
+    background: white;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: tm-slideUp 0.2s ease;
+}
+.team-page .modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.team-page .modal-title { font-size: 1.125rem; font-weight: 700; color: #1a1f3a; }
+.team-page .modal-subtitle { font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem; }
+.team-page .modal-close {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+.team-page .modal-close:hover { background: #f3f4f6; color: #1a1f3a; }
+
+.team-page .modal-body { padding: 1.5rem; }
+.team-page .form-group { margin-bottom: 1.25rem; }
+.team-page .form-group:last-child { margin-bottom: 0; }
+.team-page .form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1a1f3a;
+    margin-bottom: 0.4rem;
+}
+.team-page .form-label .required { color: #dc2626; margin-left: 2px; }
+.team-page .form-input,
+.team-page .form-select,
+.team-page .form-textarea {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    color: #1a1f3a;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    font-family: inherit;
+}
+.team-page .form-input:focus,
+.team-page .form-select:focus,
+.team-page .form-textarea:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.15);
+}
+.team-page .form-textarea { resize: vertical; min-height: 80px; }
+.team-page .form-hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.35rem; }
+.team-page .form-error { font-size: 0.75rem; color: #dc2626; margin-top: 0.35rem; }
+
+.team-page .role-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+.team-page .role-option {
+    position: relative;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.75rem 2.25rem 0.75rem 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: white;
+}
+.team-page .role-option:hover { border-color: #FDB813; background: #fffaeb; }
+.team-page .role-option.selected {
+    border-color: #FDB813;
+    border-width: 2.5px;
+    background: linear-gradient(135deg, #fef9e6 0%, #fef3c7 100%);
+    box-shadow: 0 0 0 4px rgba(253, 184, 19, 0.2), 0 4px 12px rgba(253, 184, 19, 0.25);
+    transform: translateY(-1px);
+}
+.team-page .role-option.selected .role-option-name { color: #92400e; }
+.team-page .role-option-check {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid #d1d5db;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+.team-page .role-option.selected .role-option-check {
+    background: #FDB813;
+    border-color: #FDB813;
+    box-shadow: 0 2px 6px rgba(253, 184, 19, 0.5);
+}
+.team-page .role-option-check svg {
+    width: 14px;
+    height: 14px;
+    color: #1a1f3a;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    stroke-width: 3.5;
+}
+.team-page .role-option.selected .role-option-check svg { opacity: 1; }
+.team-page .role-option-name { font-size: 0.85rem; font-weight: 600; color: #1a1f3a; }
+.team-page .role-option-desc { font-size: 0.72rem; color: #6b7280; margin-top: 0.2rem; line-height: 1.4; }
+
+.team-page .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    background: #f9fafb;
+    border-radius: 0 0 12px 12px;
+}
+
+.team-page .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: #1a1f3a;
+    color: white;
+    padding: 0.875rem 1.25rem;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    z-index: 10001;
+    animation: tm-slideUp 0.25s ease;
+}
+.team-page .toast.success { background: #16a34a; }
+.team-page .toast-icon {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700;
+}
+
 @media (max-width: 768px) {
+    .team-page .role-picker { grid-template-columns: 1fr; }
     .team-page .table-toolbar { flex-direction: column; align-items: stretch; }
     .team-page .search-input { width: 100%; }
     .team-page th:nth-child(3), .team-page td:nth-child(3),
