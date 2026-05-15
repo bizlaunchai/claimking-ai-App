@@ -121,12 +121,16 @@ export default function AdminUsers() {
                                             <div style={{ fontSize: 12, color: '#6b7280' }}>{u.email}</div>
                                         </td>
                                         <td style={td}>
-                                            {u.role === 'admin' ? (
+                                            {u.role === 'superadmin' ? (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#dc2626' }}>
+                                                    <ShieldCheck size={12} /> Superadmin
+                                                </span>
+                                            ) : u.role === 'admin' ? (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#4f46e5' }}>
                                                     <ShieldCheck size={12} /> Admin
                                                 </span>
                                             ) : (
-                                                <span style={{ fontSize: 12, color: '#6b7280' }}>User</span>
+                                                <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{u.role ?? 'user'}</span>
                                             )}
                                         </td>
                                         <td style={td}>

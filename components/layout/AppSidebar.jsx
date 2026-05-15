@@ -16,16 +16,27 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
     const [isResizing, setIsResizing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     // Multi-tenant role flags:
-    //   isSuperAdmin   — global platform owner (ClaimKing internal team).
-    //                    Sees /dashboard/admin/* (plans, coupons, feature costs, etc.)
-    //   isCompanyAdmin — company owner / admin. Sees /billing, /team, /purchase-credits.
-    //   isCompanyMember— any role with a company_id (admin/estimator/field/office/client).
-    //                    Sees the AI tools, claims, etc.
+    //   isSuperAdmin     — full platform owner. Sees ALL /dashboard/admin/* links.
+    //   isPlatformStaff  — sub-admin with granular permissions. Sees only the
+    //                      admin links matching their permission grants.
+    //   isCompanyAdmin   — company owner / admin. Sees /billing, /team, /purchase-credits.
+    //   isCompanyMember  — any role with a company_id. Sees AI tools, claims, etc.
+    //   staffPerms       — JSONB of granted platform permissions (for platform_staff)
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [isPlatformStaff, setIsPlatformStaff] = useState(false);
     const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
+    const [staffPerms, setStaffPerms] = useState({});
     const [userInfo, setUserInfo] = useState({ name: '', email: '' });
 
     const pathname = usePathname();
+
+    // Helper: does the current user have access to a given admin sub-link?
+    // Superadmin → wildcard yes; platform_staff → check their granted perms.
+    const canAccess = (permKey) => isSuperAdmin || (isPlatformStaff && !!staffPerms[permKey]);
+
+    // Show the entire 🔒 Admin sidebar section if user is platform-level
+    // (superadmin OR staff with any granted permission)
+    const showAdminSection = isSuperAdmin || (isPlatformStaff && Object.keys(staffPerms).length > 0);
 
     // Fetch profile once — used to conditionally show admin / billing / team sections.
     useEffect(() => {
@@ -37,14 +48,26 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                 if (!user || cancelled) return;
                 const { data: profile } = await supabase
                     .from('profiles').select('role, full_name, company_id').eq('id', user.id).single();
-                if (!cancelled) {
-                    setIsSuperAdmin(profile?.role === 'superadmin');
-                    // Company admin = role 'admin' AND attached to a company.
-                    setIsCompanyAdmin(profile?.role === 'admin' && !!profile?.company_id);
-                    setUserInfo({
-                        name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
-                        email: user.email || '',
-                    });
+                if (cancelled) return;
+
+                const role = profile?.role;
+                setIsSuperAdmin(role === 'superadmin');
+                setIsPlatformStaff(role === 'platform_staff');
+                setIsCompanyAdmin(role === 'admin' && !!profile?.company_id);
+                setUserInfo({
+                    name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
+                    email: user.email || '',
+                });
+
+                // If platform_staff, also load their granted permissions from
+                // user_permission_overrides — RLS allows them to read own row.
+                if (role === 'platform_staff') {
+                    const { data: ov } = await supabase
+                        .from('user_permission_overrides')
+                        .select('allow')
+                        .eq('user_id', user.id)
+                        .maybeSingle();
+                    if (!cancelled) setStaffPerms((ov?.allow) ?? {});
                 }
             } catch { /* ignore */ }
         })();
@@ -214,6 +237,35 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                     {/* CLAIMS MANAGEMENT */}
                     <div className="nav-category">
                         <div className="nav-category-header">Claims Management</div>
+
+                        <div className="nav-item">
+                            <Link href="/dashboard/new-leads" className={`nav-link ${pathname === '/dashboard/new-leads' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
+                                <span className="nav-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="9" cy="7" r="4"/>
+                                        <line x1="19" y1="8" x2="19" y2="14"/>
+                                        <line x1="16" y1="11" x2="22" y2="11"/>
+                                    </svg>
+                                </span>
+                                <span className="nav-text">New Leads</span>
+                            </Link>
+                        </div>
+
+                        {/* Jobs Ready — pre-claim staging */}
+                        <div className="nav-item">
+                            <Link href="/dashboard/jobs-ready" className={`nav-link ${pathname === '/dashboard/jobs-ready' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
+                                <span className="nav-icon">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M20 7h-4V3H8v4H4l8 9z"/>
+                                        <line x1="4" y1="20" x2="20" y2="20"/>
+                                    </svg>
+                                </span>
+                                <span className="nav-text">Jobs Ready</span>
+                            </Link>
+                        </div>
+
+
 
                         {/* Active Claims - No Dropdown */}
                         <div className="nav-item">
@@ -510,78 +562,103 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                         </div>
                     </div>
 
-                    {/* SUPERADMIN — visible only to ClaimKing platform owners.
-                        Manages global plans, coupons, feature costs, provider API keys.
-                        Company admins do NOT see this section. */}
-                    {isSuperAdmin && (
+                    {/* PLATFORM ADMIN — visible to superadmin (all links) OR
+                        platform_staff (only the links their permissions allow). */}
+                    {showAdminSection && (
                         <div className="nav-category">
                             <div className="nav-category-header">🔒 Admin</div>
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/plans" className={`nav-link ${pathname.startsWith('/dashboard/admin/plans') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Manage Plans">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Plans</span>
-                                </Link>
-                            </div>
+                            {canAccess('manage_plans') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/plans" className={`nav-link ${pathname.startsWith('/dashboard/admin/plans') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Manage Plans">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Plans</span>
+                                    </Link>
+                                </div>
+                            )}
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/orders" className={`nav-link ${pathname.startsWith('/dashboard/admin/orders') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Orders & Subscriptions">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Orders</span>
-                                </Link>
-                            </div>
+                            {canAccess('view_orders') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/orders" className={`nav-link ${pathname.startsWith('/dashboard/admin/orders') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Orders & Subscriptions">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Orders</span>
+                                    </Link>
+                                </div>
+                            )}
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/users" className={`nav-link ${pathname.startsWith('/dashboard/admin/users') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Users & Credits">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Users & Credits</span>
-                                </Link>
-                            </div>
+                            {canAccess('view_users') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/users" className={`nav-link ${pathname.startsWith('/dashboard/admin/users') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Users & Credits">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Users & Credits</span>
+                                    </Link>
+                                </div>
+                            )}
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/coupons" className={`nav-link ${pathname.startsWith('/dashboard/admin/coupons') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Discount Coupons">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Coupons</span>
-                                </Link>
-                            </div>
+                            {canAccess('manage_coupons') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/coupons" className={`nav-link ${pathname.startsWith('/dashboard/admin/coupons') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Discount Coupons">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Coupons</span>
+                                    </Link>
+                                </div>
+                            )}
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/feature-costs" className={`nav-link ${pathname.startsWith('/dashboard/admin/feature-costs') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Feature Credit Costs">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18h-2v1.93A8.001 8.001 0 014.07 13H6v-2H4.07A8.001 8.001 0 0111 4.07V6h2V4.07A8.001 8.001 0 0119.93 11H18v2h1.93A8.001 8.001 0 0113 19.93zM12 7a5 5 0 100 10 5 5 0 000-10zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Feature Costs</span>
-                                </Link>
-                            </div>
+                            {canAccess('manage_feature_costs') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/feature-costs" className={`nav-link ${pathname.startsWith('/dashboard/admin/feature-costs') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Feature Credit Costs">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18h-2v1.93A8.001 8.001 0 014.07 13H6v-2H4.07A8.001 8.001 0 0111 4.07V6h2V4.07A8.001 8.001 0 0119.93 11H18v2h1.93A8.001 8.001 0 0113 19.93zM12 7a5 5 0 100 10 5 5 0 000-10zm0 8a3 3 0 110-6 3 3 0 010 6z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Feature Costs</span>
+                                    </Link>
+                                </div>
+                            )}
 
-                            <div className="nav-item">
-                                <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname.startsWith('/dashboard/admin/api-settings') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M12.65 10A6 6 0 1 0 7 16h5v3a1 1 0 0 0 1 1h2v2h4v-4h-3.35A6 6 0 0 0 12.65 10zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">API Settings</span>
-                                </Link>
-                            </div>
+                            {canAccess('manage_api_keys') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname.startsWith('/dashboard/admin/api-settings') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M12.65 10A6 6 0 1 0 7 16h5v3a1 1 0 0 0 1 1h2v2h4v-4h-3.35A6 6 0 0 0 12.65 10zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">API Settings</span>
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* Staff management — superadmin-only (NOT delegable to staff) */}
+                            {isSuperAdmin && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/staff" className={`nav-link ${pathname.startsWith('/dashboard/admin/staff') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Platform Staff Manager">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">Staff</span>
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -6,10 +6,18 @@ import { Loader2, ShieldAlert } from 'lucide-react';
 
 /**
  * Client-side guard for /dashboard/admin/* routes.
- * Verifies the logged-in user has role = 'admin' in profiles, otherwise redirects.
  *
- * Backend RBAC (RolesGuard + @Roles('admin')) is the real enforcement —
- * this is just for UX (hide the UI from non-admins).
+ * Allowed roles:
+ *   - 'superadmin'      → full platform owner
+ *   - 'platform_staff'  → sub-admin with granular permissions
+ *                         (individual page access still gated by permissions)
+ *
+ * COMPANY 'admin' role is BLOCKED here — they manage their team only,
+ * not the platform.
+ *
+ * Backend RBAC (PlatformPermissionGuard + @PlatformPermission(...)) is the
+ * real enforcement — this layout is just UX (hide the entire admin tree
+ * from non-platform users).
  */
 export default function AdminLayout({ children }) {
     const router = useRouter();
@@ -31,8 +39,11 @@ export default function AdminLayout({ children }) {
                     .eq('id', user.id)
                     .single();
                 if (cancelled) return;
-                if (profile?.role === 'admin') setState('allowed');
-                else setState('denied');
+                if (profile?.role === 'superadmin' || profile?.role === 'platform_staff') {
+                    setState('allowed');
+                } else {
+                    setState('denied');
+                }
             } catch {
                 if (!cancelled) setState('denied');
             }

@@ -140,7 +140,10 @@ const EmailAssistant = () => {
                     .select('role')
                     .eq('id', user.id)
                     .single();
-                setIsAdmin(profile?.role === 'admin');
+                // email_settings is a GLOBAL singleton managed by the platform owner
+                // (ClaimKing internal team). Company admins do NOT manage it — only
+                // role='superadmin' can edit. Backend RolesGuard enforces the same.
+                setIsAdmin(profile?.role === 'superadmin');
             } catch {/* non-admin by default */}
             finally { setRoleLoading(false); }
         })();
