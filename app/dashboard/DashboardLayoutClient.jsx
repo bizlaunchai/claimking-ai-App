@@ -6,14 +6,14 @@ import DashboardHeader from "@/components/layout/DashboardHeader";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { PermissionsProvider } from "@/lib/permissions/PermissionsContext";
+import PermissionsGate from "@/components/layout/PermissionsGate";
 
-// Friendly messages shown when middleware bounces the user back to the
-// dashboard for an access-denied URL (e.g. typing /dashboard/admin/plans as
-// a company admin). Middleware appends ?error=<code> on the redirect.
 const ACCESS_DENIED_MESSAGES = {
     superadmin_only: "That page is restricted to ClaimKing platform admins.",
     admin_only: "Only the company admin can access that page.",
     account_suspended: "Your account is suspended — contact your admin.",
+    missing_permission: "You don't have permission to access that page.",
 };
 
 const DashboardLayout = ({ children }) => {
@@ -85,6 +85,7 @@ const DashboardLayout = ({ children }) => {
     const mainMargin = isMobile ? 0 : isCollapsed ? 70 : 250;
 
     return (
+        <PermissionsProvider>
         <div className="dashboard-shell bg-gray-50 text-gray-900 font-sans min-h-screen">
             <AppSidebar
                 isCollapsed={isCollapsed}
@@ -121,10 +122,13 @@ const DashboardLayout = ({ children }) => {
                     </button>
                 )}
                 <main className="dashboard-content-wrapper">
-                    {children}
+                    <PermissionsGate>
+                        {children}
+                    </PermissionsGate>
                 </main>
             </div>
         </div>
+        </PermissionsProvider>
     );
 };
 

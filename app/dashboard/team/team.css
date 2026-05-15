@@ -526,3 +526,119 @@
     .team-page th:nth-child(3), .team-page td:nth-child(3),
     .team-page th:nth-child(5), .team-page td:nth-child(5) { display: none; }
 }
+
+/* ===== User Permissions Modal — grouped/collapsible UI ===== */
+
+.team-page .user-perm-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.team-page .user-perm-search {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+}
+
+.team-page .user-perm-search:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.15);
+}
+
+.team-page .user-perm-toolbar-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.team-page .btn-xs {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 5px;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.12s ease;
+}
+.team-page .btn-xs:hover { background: #f3f4f6; border-color: #9ca3af; }
+.team-page .btn-xs.grant { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.team-page .btn-xs.grant:hover { background: #d1fae5; }
+.team-page .btn-xs.deny { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.team-page .btn-xs.deny:hover { background: #fee2e2; }
+
+.team-page .user-perm-group {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: white;
+    overflow: hidden;
+}
+
+.team-page .user-perm-group-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s ease;
+}
+
+.team-page .user-perm-group-header:hover {
+    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.team-page .user-perm-chevron {
+    display: inline-block;
+    width: 14px;
+    color: #6b7280;
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+.team-page .user-perm-chevron.collapsed { transform: rotate(-90deg); }
+
+.team-page .user-perm-group-header .user-perm-group-title {
+    font-weight: 600;
+    color: #1a1f3a;
+    font-size: 0.95rem;
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-shrink: 0;
+}
+
+.team-page .user-perm-group-count {
+    flex: 1;
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.team-page .user-perm-group-overrides { color: #92400e; font-weight: 600; }
+
+.team-page .user-perm-group-bulk {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.team-page .user-perm-group .user-perm-row {
+    padding-left: 28px;
+}
+
+/* Collapsing margin between groups when stacked */
+.team-page .user-perm-group + .user-perm-group { margin-top: 0; }
+

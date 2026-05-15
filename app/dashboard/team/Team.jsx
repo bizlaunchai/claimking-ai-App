@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '@/lib/axiosInstance';
+import { createClient } from '@/lib/supabase/client';
 import './team.css';
 
 // Map a role slug to the badge label rendered in the table.
@@ -60,81 +61,135 @@ const ROLE_OPTIONS = [
 ];
 
 // Permission catalog — keys mirror what the backend permission middleware checks.
+// Groups are fine-grained (one feature area each) so admins can bulk-toggle
+// access to just the surface they care about (e.g. "Client Portal" only).
 const PERMISSION_CATALOG = [
     { group: 'Dashboard', items: [
         { key: 'view_dashboard', label: 'View Overview / Dashboard' },
     ]},
-    { group: 'Claims Management', items: [
+
+    // ── Pipeline (lead → job → claim) ─────────────────────────────────
+    { group: 'New Leads', items: [
         { key: 'view_leads', label: 'View New Leads' },
         { key: 'convert_lead', label: 'Convert Lead to Job' },
+    ]},
+    { group: 'Jobs Ready', items: [
         { key: 'view_jobs', label: 'View Jobs Ready' },
         { key: 'convert_job', label: 'Convert Job to Claim' },
+    ]},
+    { group: 'Active Claims', items: [
         { key: 'view_claims', label: 'View Active Claims' },
         { key: 'create_claim', label: 'Create Active Claim' },
         { key: 'edit_claim', label: 'Edit Active Claim' },
         { key: 'delete_claim', label: 'Delete / Archive Claim' },
         { key: 'move_claim_stage', label: 'Move Claim Between Stages' },
+    ]},
+    { group: 'Supplements', items: [
         { key: 'create_supplement', label: 'Create Supplements' },
         { key: 'send_supplement', label: 'Send Supplement to Adjuster' },
+    ]},
+    { group: 'Client Portal', items: [
         { key: 'manage_portal_links', label: 'Manage Client Portal Links' },
         { key: 'revoke_portal_access', label: 'Revoke Portal Access' },
-        { key: 'view_billing', label: 'View Billing & Plans' },
-        { key: 'change_plan', label: 'Change Subscription Plan' },
-        { key: 'purchase_credits', label: 'Purchase Credits' },
     ]},
-    { group: 'AI Tools', items: [
+
+    // ── AI Tools ──────────────────────────────────────────────────────
+    { group: 'Measurement Reports', items: [
         { key: 'use_measurements', label: 'Use Measurement Reports' },
+    ]},
+    { group: 'Estimation', items: [
         { key: 'generate_estimates', label: 'Generate Estimates' },
         { key: 'edit_estimates', label: 'Edit / Approve Estimates' },
+    ]},
+    { group: '3D Mockups', items: [
         { key: 'generate_mockups', label: 'Generate 3D Mockups' },
+    ]},
+    { group: 'Policy Analysis', items: [
         { key: 'run_policy_analysis', label: 'Run Policy Analysis' },
+    ]},
+    { group: 'Document Generator', items: [
         { key: 'use_doc_generator', label: 'Use Document Generator (SOP)' },
+    ]},
+    { group: 'Email Assistant', items: [
         { key: 'use_email_assistant', label: 'Use Email Assistant (AI replies)' },
+    ]},
+    { group: 'AI Call Center', items: [
         { key: 'use_call_center', label: 'Use AI Call Center (PRO)' },
         { key: 'configure_call_center', label: 'Configure AI Call Center' },
+    ]},
+    { group: 'Storm Tracking', items: [
         { key: 'view_storm_tracking', label: 'View Storm Tracking (LIVE)' },
         { key: 'configure_storm_zones', label: 'Configure Storm Alert Zones' },
     ]},
-    { group: 'Integrations', items: [
+
+    // ── Integrations ──────────────────────────────────────────────────
+    { group: 'CRM Sync', items: [
         { key: 'view_crm_sync', label: 'View CRM Sync Status' },
         { key: 'manage_crm', label: 'Connect / Disconnect CRMs' },
         { key: 'configure_crm_mapping', label: 'Configure CRM Field Mapping' },
+    ]},
+    { group: 'Email & SMS', items: [
         { key: 'view_email_sms', label: 'View Email & SMS Activity' },
         { key: 'send_email', label: 'Send Emails (Resend)' },
         { key: 'send_sms', label: 'Send SMS (Twilio)' },
         { key: 'connect_email_oauth', label: 'Connect Email Accounts (OAuth)' },
         { key: 'provision_twilio', label: 'Provision Twilio Numbers' },
         { key: 'configure_campaigns', label: 'Configure Email Campaigns' },
+    ]},
+    { group: 'Google My Business', items: [
         { key: 'view_gmb', label: 'View Google My Business' },
         { key: 'reply_gmb', label: 'Reply to GMB Reviews' },
         { key: 'post_gmb', label: 'Post to GMB' },
         { key: 'configure_gmb_auto', label: 'Configure GMB Auto-Posting' },
+    ]},
+    { group: 'Social Media', items: [
         { key: 'manage_social', label: 'Manage Social Media' },
+    ]},
+    { group: 'API Settings', items: [
         { key: 'manage_api_settings', label: 'View / Edit API Settings' },
     ]},
-    { group: 'Reports', items: [
+
+    // ── Reports ───────────────────────────────────────────────────────
+    { group: 'Analytics', items: [
         { key: 'view_analytics', label: 'View Analytics Dashboard' },
         { key: 'export_analytics', label: 'Export Analytics Data' },
+    ]},
+    { group: 'Payments', items: [
         { key: 'view_payments', label: 'View Payments' },
         { key: 'record_payments', label: 'Record Payments' },
         { key: 'issue_refunds', label: 'Issue Refunds' },
     ]},
-    { group: 'Settings', items: [
+
+    // ── Billing ───────────────────────────────────────────────────────
+    { group: 'Billing & Credits', items: [
+        { key: 'view_billing', label: 'View Billing & Plans' },
+        { key: 'change_plan', label: 'Change Subscription Plan' },
+        { key: 'purchase_credits', label: 'Purchase Credits' },
+    ]},
+
+    // ── Settings & Team ───────────────────────────────────────────────
+    { group: 'General Settings', items: [
         { key: 'view_settings', label: 'View General Settings' },
         { key: 'edit_company', label: 'Edit Company Settings' },
         { key: 'edit_own_account', label: 'Edit Own Account' },
+    ]},
+    { group: 'Team Management', items: [
         { key: 'view_team', label: 'View Team' },
         { key: 'invite_members', label: 'Invite Team Members' },
         { key: 'change_roles', label: 'Change Team Member Roles' },
         { key: 'suspend_members', label: 'Suspend / Remove Members' },
         { key: 'edit_permissions', label: 'Edit Role Permissions' },
     ]},
+
+    // ── Referrals ─────────────────────────────────────────────────────
     { group: 'Referrals', items: [
         { key: 'view_referrals', label: 'View Referral Program' },
         { key: 'send_referrals', label: 'Send Referral Invites' },
         { key: 'withdraw_earnings', label: 'View / Withdraw Earnings' },
     ]},
-    { group: 'Admin-Only', items: [
+
+    // ── Admin / Compliance ────────────────────────────────────────────
+    { group: 'Audit & Compliance', items: [
         { key: 'insurance_monitoring', label: 'Insurance Monitoring Settings' },
         { key: 'view_audit_log', label: 'View Audit Log' },
         { key: 'export_audit_log', label: 'Export Audit Log' },
@@ -195,6 +250,17 @@ const Team = () => {
     const [companyMeta, setCompanyMeta] = useState({ seatLimit: null, ownerId: null });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [currentUserId, setCurrentUserId] = useState(null);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                setCurrentUserId(user?.id ?? null);
+            } catch { /* ignore */ }
+        })();
+    }, []);
 
     const showToast = (message) => {
         setToast(message);
@@ -478,13 +544,27 @@ const Team = () => {
                                                     </>
                                                 ) : m.status === 'suspended' ? (
                                                     <>
-                                                        <button className="btn-secondary" onClick={() => setEditingMember(m.raw)}>Edit</button>
-                                                        <button className="btn-secondary" onClick={() => handleReactivate(m.id, m.email)}>Reactivate</button>
+                                                        {m.id !== currentUserId && (
+                                                            <button className="btn-secondary" onClick={() => setEditingMember(m.raw)}>Edit</button>
+                                                        )}
+                                                        {m.id !== currentUserId && (
+                                                            <button className="btn-secondary" onClick={() => handleReactivate(m.id, m.email)}>Reactivate</button>
+                                                        )}
+                                                        {m.id === currentUserId && (
+                                                            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>You</span>
+                                                        )}
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <button className="btn-secondary" onClick={() => setEditingMember(m.raw)}>Edit</button>
-                                                        {!m.isOwner && <button className="btn-danger" onClick={() => handleSuspend(m.id, m.email)}>Suspend</button>}
+                                                        {m.id !== currentUserId && (
+                                                            <button className="btn-secondary" onClick={() => setEditingMember(m.raw)}>Edit</button>
+                                                        )}
+                                                        {!m.isOwner && m.id !== currentUserId && (
+                                                            <button className="btn-danger" onClick={() => handleSuspend(m.id, m.email)}>Suspend</button>
+                                                        )}
+                                                        {m.id === currentUserId && (
+                                                            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>You</span>
+                                                        )}
                                                     </>
                                                 )}
                                             </div>
@@ -920,6 +1000,18 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [search, setSearch] = useState('');
+    // Track which permission groups are collapsed. With many fine-grained
+    // groups, default to collapsed so the admin scans an index first and
+    // expands only the feature areas they care about.
+    const [collapsed, setCollapsed] = useState(() =>
+        Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])),
+    );
+
+    const toggleGroup = (g) => setCollapsed((p) => ({ ...p, [g]: !p[g] }));
+    const collapseAll = () =>
+        setCollapsed(Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])));
+    const expandAll = () => setCollapsed({});
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -977,6 +1069,36 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
         return roleDefaults[key] ? 'grant' : 'deny';
     };
 
+    // Bulk-apply Grant or Deny to every item in a group. Items whose target
+    // value matches the role default get their override cleared (so we never
+    // store redundant overrides).
+    const applyGroup = (group, target) => {
+        setOverrides((prev) => {
+            const next = { ...prev };
+            for (const item of group.items) {
+                const roleVal = !!roleDefaults[item.key];
+                const matchesDefault =
+                    (target === 'grant' && roleVal) ||
+                    (target === 'deny' && !roleVal);
+                if (matchesDefault) delete next[item.key];
+                else next[item.key] = target;
+            }
+            return next;
+        });
+    };
+
+    // Stats for a group header: how many are effectively granted vs total,
+    // plus how many have explicit overrides in this group.
+    const groupStats = (group) => {
+        let granted = 0;
+        let overridden = 0;
+        for (const item of group.items) {
+            if (effective(item.key) === 'grant') granted++;
+            if (overrides[item.key]) overridden++;
+        }
+        return { granted, overridden, total: group.items.length };
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -1019,6 +1141,21 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                 </div>
 
                 <form onSubmit={handleSubmit}>
+                    {!loading && (
+                        <div className="user-perm-toolbar">
+                            <input
+                                type="text"
+                                className="user-perm-search"
+                                placeholder="Search permissions…"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                            <div className="user-perm-toolbar-actions">
+                                <button type="button" className="btn-secondary btn-xs" onClick={expandAll}>Expand all</button>
+                                <button type="button" className="btn-secondary btn-xs" onClick={collapseAll}>Collapse all</button>
+                            </div>
+                        </div>
+                    )}
                     <div className="modal-body">
                         {loading && (
                             <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
@@ -1028,44 +1165,93 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                         {error && (
                             <div className="form-error" style={{ marginBottom: '1rem' }}>{error}</div>
                         )}
-                        {!loading && PERMISSION_CATALOG.map((group) => (
-                            <div key={group.group}>
-                                <div className="user-perm-group-title">{group.group}</div>
-                                {group.items.map((item) => {
-                                    const roleVal = roleDefaults[item.key];
-                                    const ovr = overrides[item.key];
-                                    const eff = effective(item.key);
-                                    return (
-                                        <div key={item.key} className="user-perm-row">
-                                            <div className="user-perm-label">{item.label}</div>
-                                            <span className="perm-source">
-                                                Role: {roleVal === true ? '✓' : roleVal ? roleVal : '—'}
-                                            </span>
-                                            <span className={`perm-source ${ovr ? 'override' : ''}`}>
-                                                {ovr ? 'Override' : 'Inherits'}
-                                            </span>
-                                            <div className="seg">
-                                                <button
-                                                    type="button"
-                                                    className={`seg-btn ${!ovr ? 'active role' : ''}`}
-                                                    onClick={() => setOverride(item.key, 'role')}
-                                                >Role default</button>
-                                                <button
-                                                    type="button"
-                                                    className={`seg-btn ${ovr === 'grant' ? 'active grant' : ''}`}
-                                                    onClick={() => setOverride(item.key, 'grant')}
-                                                >Grant</button>
-                                                <button
-                                                    type="button"
-                                                    className={`seg-btn ${ovr === 'deny' ? 'active deny' : ''}`}
-                                                    onClick={() => setOverride(item.key, 'deny')}
-                                                >Deny</button>
+                        {!loading && PERMISSION_CATALOG.map((group) => {
+                            const q = search.trim().toLowerCase();
+                            const visibleItems = q
+                                ? group.items.filter(
+                                      (i) =>
+                                          i.label.toLowerCase().includes(q) ||
+                                          i.key.toLowerCase().includes(q),
+                                  )
+                                : group.items;
+                            if (visibleItems.length === 0) return null;
+                            // If user is searching, force-expand so they see matches.
+                            const isCollapsed = q ? false : !!collapsed[group.group];
+                            const { granted, overridden, total } = groupStats(group);
+
+                            return (
+                                <div key={group.group} className="user-perm-group">
+                                    <div
+                                        className="user-perm-group-header"
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => !q && toggleGroup(group.group)}
+                                        onKeyDown={(e) => {
+                                            if ((e.key === 'Enter' || e.key === ' ') && !q) {
+                                                e.preventDefault();
+                                                toggleGroup(group.group);
+                                            }
+                                        }}
+                                    >
+                                        <span className={`user-perm-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
+                                        <span className="user-perm-group-title">{group.group}</span>
+                                        <span className="user-perm-group-count">
+                                            {granted}/{total} granted
+                                            {overridden > 0 && (
+                                                <span className="user-perm-group-overrides"> · {overridden} override{overridden > 1 ? 's' : ''}</span>
+                                            )}
+                                        </span>
+                                        <span className="user-perm-group-bulk" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                                type="button"
+                                                className="btn-xs grant"
+                                                onClick={() => applyGroup(group, 'grant')}
+                                                title="Grant all in this group"
+                                            >Grant all</button>
+                                            <button
+                                                type="button"
+                                                className="btn-xs deny"
+                                                onClick={() => applyGroup(group, 'deny')}
+                                                title="Deny all in this group"
+                                            >Deny all</button>
+                                        </span>
+                                    </div>
+
+                                    {!isCollapsed && visibleItems.map((item) => {
+                                        const roleVal = roleDefaults[item.key];
+                                        const ovr = overrides[item.key];
+                                        const eff = effective(item.key);
+                                        const roleDefaultIsGrant = !!roleVal;
+                                        const handleClick = (target) => {
+                                            const matchesDefault =
+                                                (target === 'grant' && roleDefaultIsGrant) ||
+                                                (target === 'deny' && !roleDefaultIsGrant);
+                                            setOverride(item.key, matchesDefault ? 'role' : target);
+                                        };
+                                        return (
+                                            <div key={item.key} className="user-perm-row">
+                                                <div className="user-perm-label">{item.label}</div>
+                                                <span className={`perm-source ${ovr ? 'override' : ''}`}>
+                                                    {ovr ? 'Override' : 'Role default'}
+                                                </span>
+                                                <div className="seg">
+                                                    <button
+                                                        type="button"
+                                                        className={`seg-btn ${eff === 'grant' ? 'active grant' : ''}`}
+                                                        onClick={() => handleClick('grant')}
+                                                    >Grant</button>
+                                                    <button
+                                                        type="button"
+                                                        className={`seg-btn ${eff === 'deny' ? 'active deny' : ''}`}
+                                                        onClick={() => handleClick('deny')}
+                                                    >Deny</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ))}
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
                     </div>
                     <div className="modal-footer">
                         <div style={{ marginRight: 'auto', fontSize: '0.8rem', color: '#6b7280' }}>

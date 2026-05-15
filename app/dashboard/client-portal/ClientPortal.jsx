@@ -4,6 +4,7 @@ import "./clientPortal.css"
 import dynamic from "next/dynamic.js";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
+import Can from "@/lib/permissions/Can";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -340,6 +341,7 @@ const ClientPortal = () => {
                         <p className="cp-page-subtitle">Manage and share secure client access links</p>
                     </div>
                     <div className="cp-header-actions">
+                        <Can permission="manage_portal_links">
                         <button className="btn btn-primary" onClick={() => setShowAddClient(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -347,6 +349,8 @@ const ClientPortal = () => {
                             </svg>
                             Add New Client
                         </button>
+                        </Can>
+                        <Can permission="manage_portal_links">
                         <button className="btn btn-secondary" onClick={() => setShowBulkImport(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -355,6 +359,7 @@ const ClientPortal = () => {
                             </svg>
                             Bulk Import
                         </button>
+                        </Can>
                        {/* <button className="btn btn-outline" onClick={() => { setShowTrash(true); fetchTrashed(); }}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
