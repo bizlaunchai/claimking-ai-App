@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import PolicyAnalysisHistory from "./PolicyAnalysisHistory.jsx";
 
 export const metadata = {
@@ -5,6 +6,10 @@ export const metadata = {
     description: "",
 };
 
-const Page = () => <PolicyAnalysisHistory />;
+const Page = () => (
+    <Suspense fallback={<div>Loading...</div>}>
+        <PolicyAnalysisHistory />
+    </Suspense>
+);
 
 export default Page;
