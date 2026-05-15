@@ -765,3 +765,115 @@
         padding: 1rem;
     }
 }
+
+/* ===== Permissions loading state ===== */
+
+@keyframes ck-shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+@keyframes ck-spin {
+    to { transform: rotate(360deg); }
+}
+
+.sidebar-skeleton {
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.sidebar-skeleton .sk-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-skeleton .sk-heading,
+.sidebar-skeleton .sk-row {
+    position: relative;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.sidebar-skeleton .sk-heading::after,
+.sidebar-skeleton .sk-row::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(253, 184, 19, 0.18) 50%,
+        transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: ck-shimmer 1.6s ease-in-out infinite;
+}
+
+.sidebar-skeleton .sk-heading {
+    height: 10px;
+    width: 45%;
+    border-radius: 4px;
+    opacity: 0.55;
+}
+
+.sidebar-skeleton .sk-row {
+    height: 34px;
+    width: 100%;
+}
+
+.sidebar-skeleton .sk-row:nth-child(3) { width: 88%; }
+.sidebar-skeleton .sk-row:nth-child(5) { width: 75%; }
+
+.sidebar.collapsed .sidebar-skeleton {
+    padding: 14px 6px;
+    align-items: center;
+}
+
+.sidebar.collapsed .sidebar-skeleton .sk-heading {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-skeleton .sk-row {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+}
+
+.permissions-loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(249, 250, 251, 0.7);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 40;
+    pointer-events: all;
+}
+
+.permissions-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: ck-spin 0.8s linear infinite;
+}
+
+.permissions-loading-text {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.dashboard-content-wrapper {
+    position: relative;
+    min-height: 100vh;
+}

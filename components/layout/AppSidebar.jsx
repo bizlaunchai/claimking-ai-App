@@ -9,6 +9,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usePermissions } from "@/lib/permissions/PermissionsContext";
 
 function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile = () => {}}) {
     const sidebarRef = useRef(null);
@@ -29,6 +30,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
     const [userInfo, setUserInfo] = useState({ name: '', email: '' });
 
     const pathname = usePathname();
+    const { has, loading: permsLoading } = usePermissions();
 
     // Helper: does the current user have access to a given admin sub-link?
     // Superadmin → wildcard yes; platform_staff → check their granted perms.
@@ -218,6 +220,40 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
 
                 {/* Navigation */}
                 <nav className="sidebar-nav">
+                    {permsLoading && (
+                        <div className="sidebar-skeleton" aria-hidden="true">
+                            <div className="sk-group">
+                                <div className="sk-heading" />
+                                <div className="sk-row" />
+                            </div>
+                            <div className="sk-group">
+                                <div className="sk-heading" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                            </div>
+                            <div className="sk-group">
+                                <div className="sk-heading" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                            </div>
+                            <div className="sk-group">
+                                <div className="sk-heading" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                            </div>
+                            <div className="sk-group">
+                                <div className="sk-heading" />
+                                <div className="sk-row" />
+                                <div className="sk-row" />
+                            </div>
+                        </div>
+                    )}
+                    {!permsLoading && (<>
                     {/* DASHBOARD */}
                     <div className="nav-category">
                         <div className="nav-category-header">Dashboard</div>
@@ -238,7 +274,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                     <div className="nav-category">
                         <div className="nav-category-header">Claims Management</div>
 
-                        <div className="nav-item">
+                        {has('view_leads') && (<div className="nav-item">
                             <Link href="/dashboard/new-leads" className={`nav-link ${pathname === '/dashboard/new-leads' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -250,10 +286,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">New Leads</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        {/* Jobs Ready — pre-claim staging */}
-                        <div className="nav-item">
+                        {has('view_jobs') && (<div className="nav-item">
                             <Link href="/dashboard/jobs-ready" className={`nav-link ${pathname === '/dashboard/jobs-ready' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -263,12 +298,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Jobs Ready</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-
-
-                        {/* Active Claims - No Dropdown */}
-                        <div className="nav-item">
+                        {has('view_claims') && (<div className="nav-item">
                             <Link href="/dashboard/claims" className={`nav-link ${pathname === '/dashboard/claims' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Active Claims">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -276,11 +308,10 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                     </svg>
                                 </span>
                                 <span className="nav-text">Active Claims</span>
-                                {/*<span className="nav-badge count">127</span>*/}
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('create_supplement') && (<div className="nav-item">
                             <Link href="/dashboard/supplements" className={`nav-link ${pathname === '/dashboard/supplements' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Supplements">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -288,11 +319,10 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                     </svg>
                                 </span>
                                 <span className="nav-text">Supplements</span>
-                                {/*<span className="nav-badge count">18</span>*/}
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('manage_portal_links') && (<div className="nav-item">
                             <Link href="/dashboard/client-portal" className={`nav-link ${pathname === '/dashboard/client-portal' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Client Portal">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -301,7 +331,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Client Portal</span>
                             </Link>
-                        </div>
+                        </div>)}
 
                         {/* Billing — company admin/owner only (not visible to estimator/field/office/client) */}
                         {isCompanyAdmin && (
@@ -320,10 +350,11 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                     </div>
 
                     {/* AI TOOLS */}
+                    {(has('use_measurements') || has('generate_estimates') || has('generate_mockups') || has('run_policy_analysis') || has('use_doc_generator') || has('use_email_assistant') || has('use_call_center') || has('view_storm_tracking')) && (
                     <div className="nav-category">
                         <div className="nav-category-header">AI Tools</div>
 
-                        <div className="nav-item">
+                        {has('use_measurements') && (<div className="nav-item">
                             <Link href="/dashboard/measurement" className={`nav-link ${pathname === '/dashboard/measurement' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Measurement Reports">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -332,10 +363,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Measurement Reports</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        {/* Estimation - No Dropdown */}
-                        <div className="nav-item">
+                        {has('generate_estimates') && (<div className="nav-item">
                             <Link href="/dashboard/estimation" className={`nav-link ${pathname === '/dashboard/estimation' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Estimation">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -344,9 +374,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Estimation</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('generate_mockups') && (<div className="nav-item">
                             <Link href="/dashboard/3d-mockup" className={`nav-link ${pathname === '/dashboard/3d-mockup' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="3D Mockups">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -355,9 +385,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">3D Mockups</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('run_policy_analysis') && (<div className="nav-item">
                             <Link href="/dashboard/policy-analysis" className={`nav-link ${pathname === '/dashboard/policy-analysis' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Policy Analysis">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -366,9 +396,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Policy Analysis</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('use_doc_generator') && (<div className="nav-item">
                             <Link href="/dashboard/document-generator" className={`nav-link ${pathname === '/dashboard/document-generator' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Document Generator">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -378,9 +408,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 <span className="nav-text">Document Generator</span>
                                 <span className="nav-badge count">SOP</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('use_email_assistant') && (<div className="nav-item">
                             <Link href="/dashboard/emails" className={`nav-link ${pathname === '/dashboard/emails' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Email Assistant">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -389,9 +419,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Email Assistant</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('use_call_center') && (<div className="nav-item">
                             <Link href="/dashboard/ai-call-center" className={`nav-link ${pathname === '/dashboard/ai-call-center' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Call Center AI">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -401,9 +431,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 <span className="nav-text">Call Center AI</span>
                                 <span className="nav-badge pro">PRO</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('view_storm_tracking') && (<div className="nav-item">
                             <Link href="/dashboard/storm-tracking" className={`nav-link ${pathname === '/dashboard/storm-tracking' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Storm Tracking">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -413,14 +443,16 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 <span className="nav-text">Storm Tracking</span>
                                 <span className="nav-badge storm">LIVE</span>
                             </Link>
-                        </div>
+                        </div>)}
                     </div>
+                    )}
 
                     {/* INTEGRATIONS */}
+                    {(has('view_crm_sync') || has('view_email_sms') || has('view_gmb') || has('manage_social') || has('manage_api_settings')) && (
                     <div className="nav-category">
                         <div className="nav-category-header">Integrations</div>
 
-                        <div className="nav-item">
+                        {has('view_crm_sync') && (<div className="nav-item">
                             <Link href="/dashboard/crm-sync" className={`nav-link ${pathname === '/dashboard/crm-sync' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="CRM Sync">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -429,9 +461,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">CRM Sync</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('view_email_sms') && (<div className="nav-item">
                             <Link href="/dashboard/email-sms" className={`nav-link ${pathname === '/dashboard/email-sms' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Email & SMS">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -440,9 +472,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Email & SMS</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('view_gmb') && (<div className="nav-item">
                             <Link href="/dashboard/google-my-business" className={`nav-link ${pathname === '/dashboard/google-my-business' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Google My Business">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -451,10 +483,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Google My Business</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        {/* Social Media - Single Link (No Dropdown) */}
-                        <div className="nav-item">
+                        {has('manage_social') && (<div className="nav-item">
                             <Link href="/dashboard/social-media" className={`nav-link ${pathname === '/dashboard/social-media' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Social Media">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -463,9 +494,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Social Media</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('manage_api_settings') && (<div className="nav-item">
                             <Link href="/dashboard/api-settings" className={`nav-link ${pathname === '/dashboard/api-settings' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="API Settings">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -474,14 +505,16 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">API Settings</span>
                             </Link>
-                        </div>
+                        </div>)}
                     </div>
+                    )}
 
                     {/* REPORTS */}
+                    {(has('view_analytics') || has('view_payments')) && (
                     <div className="nav-category">
                         <div className="nav-category-header">Reports</div>
 
-                        <div className="nav-item">
+                        {has('view_analytics') && (<div className="nav-item">
                             <Link href="/dashboard/analytics" className={`nav-link ${pathname === '/dashboard/analytics' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Analytics">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -490,9 +523,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Analytics</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('view_payments') && (<div className="nav-item">
                             <Link href="/dashboard/payments" className={`nav-link ${pathname === '/dashboard/payments' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Payments">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -501,14 +534,15 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Payments</span>
                             </Link>
-                        </div>
+                        </div>)}
                     </div>
+                    )}
 
                     {/* SETTINGS */}
                     <div className="nav-category">
                         <div className="nav-category-header">Settings</div>
 
-                        <div className="nav-item">
+                        {has('view_settings') && (<div className="nav-item">
                             <Link href="/dashboard/settings" className={`nav-link ${pathname === '/dashboard/settings' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="General Settings">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -517,9 +551,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">General</span>
                             </Link>
-                        </div>
+                        </div>)}
 
-                        <div className="nav-item">
+                        {has('edit_own_account') && (<div className="nav-item">
                             <Link href="/dashboard/account" className={`nav-link ${pathname === '/dashboard/account' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Account Settings">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -528,7 +562,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Account</span>
                             </Link>
-                        </div>
+                        </div>)}
 
                         {/* Team — company admin/owner only */}
                         {isCompanyAdmin && (
@@ -547,6 +581,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                     </div>
 
                     {/* REFERRALS - Only Referral Program */}
+                    {has('view_referrals') && (
                     <div className="nav-category">
                         <div className="nav-category-header">Referrals</div>
 
@@ -561,6 +596,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>
                     </div>
+                    )}
 
                     {/* PLATFORM ADMIN — visible to superadmin (all links) OR
                         platform_staff (only the links their permissions allow). */}
@@ -686,6 +722,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             <span className="support-text">(888) 533-8394</span>
                         </a>
                     </div>
+                    </>)}
                 </nav>
 
             </div>
