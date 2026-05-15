@@ -846,6 +846,42 @@ const RolesPermissionsEditor = ({ onSave }) => {
     const [loading, setLoading] = useState(true);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [search, setSearch] = useState('');
+    // With many fine-grained groups, default to all collapsed — admin scans
+    // the index and expands only the feature areas they need to tune.
+    const [collapsed, setCollapsed] = useState(() =>
+        Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])),
+    );
+
+    const toggleGroup = (g) => setCollapsed((p) => ({ ...p, [g]: !p[g] }));
+    const expandAll = () => setCollapsed({});
+    const collapseAll = () =>
+        setCollapsed(Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])));
+
+    // Bulk-apply a value to every item in this group, for one role.
+    // Admin row is locked (always full access) so we skip it.
+    const applyGroupForRole = (group, role, value) => {
+        if (role === 'admin') return;
+        setMatrix((prev) => {
+            const next = { ...prev, [role]: { ...prev[role] } };
+            for (const item of group.items) {
+                if (value) next[role][item.key] = true;
+                else delete next[role][item.key];
+            }
+            return next;
+        });
+        setDirty(true);
+    };
+
+    // Count how many items in a group are granted for a role.
+    const groupCount = (group, role) => {
+        if (!matrix) return 0;
+        let n = 0;
+        for (const item of group.items) {
+            if (matrix[role]?.[item.key]) n++;
+        }
+        return n;
+    };
 
     useEffect(() => {
         (async () => {
@@ -931,6 +967,8 @@ const RolesPermissionsEditor = ({ onSave }) => {
         );
     }
 
+    const q = search.trim().toLowerCase();
+
     return (
         <div className="perms-card">
             <div className="perms-header">
@@ -946,6 +984,22 @@ const RolesPermissionsEditor = ({ onSave }) => {
                     </button>
                 </div>
             </div>
+
+            <div className="perms-toolbar">
+                <input
+                    type="text"
+                    className="perms-search"
+                    placeholder="Search permissions…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <div className="perms-toolbar-actions">
+                    <button type="button" className="btn-xs" onClick={expandAll}>Expand all</button>
+                    <button type="button" className="btn-xs" onClick={collapseAll}>Collapse all</button>
+                </div>
+            </div>
+
+            <div className="perms-table-scroll">
             <table className="perms-table">
                 <thead>
                     <tr>
@@ -954,23 +1008,85 @@ const RolesPermissionsEditor = ({ onSave }) => {
                     </tr>
                 </thead>
                 <tbody>
-                    {PERMISSION_CATALOG.map((group) => (
-                        <React.Fragment key={group.group}>
-                            <tr className="perms-section-row">
-                                <td colSpan={ROLES.length + 1}>{group.group}</td>
-                            </tr>
-                            {group.items.map((item) => (
-                                <tr key={item.key}>
-                                    <td>{item.label}</td>
-                                    {ROLES.map((r) => (
-                                        <React.Fragment key={r}>{renderCell(r, item.key)}</React.Fragment>
-                                    ))}
+                    {PERMISSION_CATALOG.map((group) => {
+                        const visibleItems = q
+                            ? group.items.filter(
+                                (i) =>
+                                    i.label.toLowerCase().includes(q) ||
+                                    i.key.toLowerCase().includes(q),
+                            )
+                            : group.items;
+                        if (visibleItems.length === 0) return null;
+                        // Force-expand while searching so matches are visible.
+                        const isCollapsed = q ? false : !!collapsed[group.group];
+
+                        return (
+                            <React.Fragment key={group.group}>
+                                <tr className="perms-section-row">
+                                    <td
+                                        className="perms-section-name"
+                                        onClick={() => !q && toggleGroup(group.group)}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if ((e.key === 'Enter' || e.key === ' ') && !q) {
+                                                e.preventDefault();
+                                                toggleGroup(group.group);
+                                            }
+                                        }}
+                                    >
+                                        <span className={`perms-section-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
+                                        <span className="perms-section-label">{group.group}</span>
+                                        <span className="perms-section-meta">{group.items.length} permission{group.items.length > 1 ? 's' : ''}</span>
+                                    </td>
+                                    {ROLES.map((r) => {
+                                        const granted = groupCount(group, r);
+                                        const total = group.items.length;
+                                        const allOn = granted === total;
+                                        const allOff = granted === 0;
+                                        return (
+                                            <td key={r} className="perms-section-rolecell" onClick={(e) => e.stopPropagation()}>
+                                                {r === 'admin' ? (
+                                                    <span className="perms-section-count locked" title="Admin always has full access">{total}/{total}</span>
+                                                ) : (
+                                                    <div className="perms-section-bulk">
+                                                        <span className={`perms-section-count ${allOff ? 'none' : allOn ? 'all' : 'partial'}`}>
+                                                            {granted}/{total}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="bulk-btn grant"
+                                                            title={`Grant all ${group.group} permissions to ${ROLE_LABELS[r]}`}
+                                                            onClick={() => applyGroupForRole(group, r, true)}
+                                                            disabled={allOn}
+                                                        >✓</button>
+                                                        <button
+                                                            type="button"
+                                                            className="bulk-btn deny"
+                                                            title={`Deny all ${group.group} permissions for ${ROLE_LABELS[r]}`}
+                                                            onClick={() => applyGroupForRole(group, r, false)}
+                                                            disabled={allOff}
+                                                        >×</button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
                                 </tr>
-                            ))}
-                        </React.Fragment>
-                    ))}
+                                {!isCollapsed && visibleItems.map((item) => (
+                                    <tr key={item.key}>
+                                        <td className="perms-item-label">{item.label}</td>
+                                        {ROLES.map((r) => (
+                                            <React.Fragment key={r}>{renderCell(r, item.key)}</React.Fragment>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </React.Fragment>
+                        );
+                    })}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 };
