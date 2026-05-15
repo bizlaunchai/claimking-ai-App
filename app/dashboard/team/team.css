@@ -233,9 +233,10 @@
 }
 .team-page .perms-title { font-size: 1.125rem; font-weight: 700; color: #1a1f3a; }
 .team-page .perms-subtitle { font-size: 0.875rem; color: #6b7280; }
-.team-page .perms-table { width: 100%; }
+.team-page .perms-table { width: 100%; font-size: 0.95rem; }
 .team-page .perms-table th,
-.team-page .perms-table td { text-align: center; padding: 0.75rem; }
+.team-page .perms-table td { text-align: center; padding: 0.85rem 0.75rem; }
+.team-page .perms-table th { font-size: 0.95rem; font-weight: 700; }
 .team-page .perms-table th:first-child,
 .team-page .perms-table td:first-child { text-align: left; }
 .team-page .perm-check { color: #16a34a; font-weight: 700; }
@@ -641,4 +642,186 @@
 
 /* Collapsing margin between groups when stacked */
 .team-page .user-perm-group + .user-perm-group { margin-top: 0; }
+
+
+/* ===== Role Permissions Editor — grouped/collapsible matrix ===== */
+
+.team-page .perms-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.team-page .perms-search {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+}
+
+.team-page .perms-search:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.15);
+}
+
+.team-page .perms-toolbar-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.team-page .perms-section-row {
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+}
+.team-page .perms-section-row:hover { background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%); }
+
+.team-page .perms-section-name {
+    cursor: pointer;
+    user-select: none;
+    padding: 10px 14px !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #1a1f3a;
+}
+
+.team-page .perms-section-chevron {
+    display: inline-block;
+    width: 14px;
+    color: #6b7280;
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+.team-page .perms-section-chevron.collapsed { transform: rotate(-90deg); }
+
+.team-page .perms-section-label {
+    font-weight: 700;
+    color: #1a1f3a;
+    font-size: 1rem;
+}
+
+.team-page .perms-section-meta {
+    font-size: 0.85rem;
+    color: #6b7280;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.team-page .perms-section-rolecell {
+    text-align: center;
+    padding: 6px 4px !important;
+    vertical-align: middle;
+}
+
+.team-page .perms-section-bulk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.team-page .perms-section-count {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+.team-page .perms-section-count.none    { background: #fee2e2; color: #b91c1c; }
+.team-page .perms-section-count.partial { background: #fef3c7; color: #92400e; }
+.team-page .perms-section-count.all     { background: #d1fae5; color: #047857; }
+.team-page .perms-section-count.locked  { background: #e5e7eb; color: #374151; }
+
+.team-page .bulk-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s ease;
+}
+.team-page .bulk-btn.grant { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.team-page .bulk-btn.grant:hover:not(:disabled) { background: #d1fae5; }
+.team-page .bulk-btn.deny  { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.team-page .bulk-btn.deny:hover:not(:disabled)  { background: #fee2e2; }
+.team-page .bulk-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.team-page .perms-item-label { padding-left: 36px !important; color: #374151; font-size: 0.95rem; }
+
+.team-page .perm-check, .team-page .perm-cross { font-size: 1.05rem; }
+.team-page .perm-scope { font-size: 0.85rem; }
+
+
+/* ===== Role Permissions matrix — sticky header + scroll ===== */
+
+.team-page .perms-table-scroll {
+    max-height: calc(100vh - 320px);
+    min-height: 320px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+}
+
+.team-page .perms-table-scroll .perms-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.team-page .perms-table-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 0 0 #e5e7eb;
+}
+
+/* First column (Permission name) — sticky left so role columns can scroll
+   horizontally on narrow screens without losing context. */
+.team-page .perms-table-scroll thead th:first-child {
+    left: 0;
+    z-index: 6;
+}
+
+.team-page .perms-table-scroll tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background: white;
+    z-index: 1;
+}
+
+.team-page .perms-table-scroll .perms-section-row td:first-child {
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+    z-index: 2;
+}
+
+.team-page .perms-table-scroll .perms-section-row:hover td:first-child {
+    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+/* Custom scrollbar polish */
+.team-page .perms-table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.team-page .perms-table-scroll::-webkit-scrollbar-track { background: #f3f4f6; }
+.team-page .perms-table-scroll::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 5px;
+    border: 2px solid #f3f4f6;
+}
+.team-page .perms-table-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
