@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Payments from "@/app/dashboard/payments/Payments.jsx";
 
 export const metadata = {
@@ -5,9 +6,12 @@ export const metadata = {
     description: ""
 };
 
-
 const Page = () => {
-    return <Payments />;
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <Payments />
+        </Suspense>
+    );
 };
 
 export default Page;
