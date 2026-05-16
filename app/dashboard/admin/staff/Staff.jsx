@@ -16,6 +16,7 @@ const PERMISSION_CATALOG = [
     { key: 'view_orders', label: 'View Orders', desc: 'See all subscriptions across the platform' },
     { key: 'view_audit_log', label: 'View Audit Log', desc: 'Read platform-level admin action history' },
     { key: 'manage_email_settings', label: 'Manage Email Settings', desc: 'Edit globally monitored insurance email domains' },
+    { key: 'manage_companies', label: 'Manage Companies', desc: 'View all tenants, inspect team/billing/credits, suspend or unsuspend accounts' },
 ];
 
 export default function Staff() {
