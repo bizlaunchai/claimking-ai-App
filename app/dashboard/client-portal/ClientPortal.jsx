@@ -11,29 +11,39 @@ const FileUploader = dynamic(
     { ssr: false }
 );
 
+// 12-stage pipeline — kept in sync with sql/30_client_portals.sql
+// (CHECK (claim_status BETWEEN 1 AND 12)) and backend STATUS_MAP.
+// Patch _patch_client_portals_12_stages.sql remaps legacy 9-stage data.
 const STATUS_MAP = {
-    1: '1. Need Claim #',
-    2: '2. Scheduled Inspection',
-    3: '3. In Progress',
-    4: '4. Partial Approval',
-    5: '5. Supplementing',
-    6: '6. Final Check Processing',
-    7: '7. Completed',
-    8: '8. Declined',
-    9: '9. Cold Claims',
+    1:  '1. Need Claim Number',
+    2:  '2. Awaiting Initial Inspection',
+    3:  '3. Scheduled Inspection',
+    4:  '4. In Progress',
+    5:  '5. Tile Sample Required',
+    6:  '6. Reinspection Requested',
+    7:  '7. Partial Approval',
+    8:  '8. Supplementing',
+    9:  '9. Final Check Processing',
+    10: '10. Completed',
+    11: '11. Declined',
+    12: '12. Cold Claims / Lost',
 };
 
+// Shorter labels for filter chips (where horizontal space is tight)
 const statusOptions = [
     { value: 'all', label: 'All' },
-    { value: '1', label: '1. Need Claim #' },
-    { value: '2', label: '2. Scheduled' },
-    { value: '3', label: '3. In Progress' },
-    { value: '4', label: '4. Partial' },
-    { value: '5', label: '5. Supplementing' },
-    { value: '6', label: '6. Final Check' },
-    { value: '7', label: '7. Completed' },
-    { value: '8', label: '8. Declined' },
-    { value: '9', label: '9. Cold Claims' },
+    { value: '1',  label: '1. Need Claim #' },
+    { value: '2',  label: '2. Awaiting Initial' },
+    { value: '3',  label: '3. Scheduled' },
+    { value: '4',  label: '4. In Progress' },
+    { value: '5',  label: '5. Tile Sample' },
+    { value: '6',  label: '6. Reinspection' },
+    { value: '7',  label: '7. Partial' },
+    { value: '8',  label: '8. Supplementing' },
+    { value: '9',  label: '9. Final Check' },
+    { value: '10', label: '10. Completed' },
+    { value: '11', label: '11. Declined' },
+    { value: '12', label: '12. Cold / Lost' },
 ];
 
 const sortOptions = [
@@ -43,17 +53,24 @@ const sortOptions = [
     { value: 'value', label: 'Claim Value' },
 ];
 
+// CSS class for the colored status pill — reuses existing classes from
+// clientPortal.css. New stages (Awaiting Initial / Tile Sample /
+// Reinspection) get fresh visual buckets that don't collide with the
+// terminal-state styling of Completed/Declined/Cold.
 const getStatusClass = (statusNum) => {
     const map = {
-        1: 'status-need-claim',
-        2: 'status-scheduled',
-        3: 'status-in-progress',
-        4: 'status-partial',
-        5: 'status-supplementing',
-        6: 'status-final-check',
-        7: 'status-completed',
-        8: 'status-declined',
-        9: 'status-cold',
+        1:  'status-need-claim',
+        2:  'status-scheduled',         // awaiting initial = scheduled-ish
+        3:  'status-scheduled',
+        4:  'status-in-progress',
+        5:  'status-in-progress',       // tile sample = mid-pipeline
+        6:  'status-in-progress',       // reinspection  = mid-pipeline
+        7:  'status-partial',
+        8:  'status-supplementing',
+        9:  'status-final-check',
+        10: 'status-completed',
+        11: 'status-declined',
+        12: 'status-cold',
     };
     return map[statusNum] ?? 'status-active';
 };
@@ -77,6 +94,10 @@ const ClientPortal = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('recent');
     const [editingClient, setEditingClient] = useState(null);
+    // Client whose portal share/manage modal is currently open. Null = no modal.
+    const [shareTarget, setShareTarget] = useState(null);
+    // Client whose two-way message thread is open in the messages modal.
+    const [messagesTarget, setMessagesTarget] = useState(null);
 
     const gridItemsPerPage = 9;
 
@@ -178,11 +199,14 @@ const ClientPortal = () => {
         }
     };
 
-    const copyPortalLink = (clientId) => {
-        const portalUrl = `https://claimking.ai/portal/${clientId}`;
-        navigator.clipboard.writeText(portalUrl);
-        toast.success('Portal link copied to clipboard!');
-    };
+    // Open the share/manage modal for a client. The modal itself talks to
+    // /client-portal/:id/tokens to fetch (or create) the active token and
+    // exposes copy / rotate / revoke actions.
+    //
+    // We deliberately DO NOT build a URL like `${origin}/portal/${client.id}`
+    // anymore — that was the legacy "client_id IS the token" model which is
+    // guessable. The real token comes from the backend and is unguessable.
+    const openShareModal = (client) => setShareTarget(client);
 
     const toggleView = (view) => {
         setCurrentView(view);
@@ -305,12 +329,18 @@ const ClientPortal = () => {
                 </div>
 
                 <div className="card-actions">
-                    <button className="action-btn primary" onClick={() => copyPortalLink(client.id)}>
+                    <button className="action-btn primary" onClick={() => openShareModal(client)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                         </svg>
-                        Copy Portal Link
+                        Share Link
+                    </button>
+                    <button className="action-btn" onClick={() => setMessagesTarget(client)} title="Open message thread with this client">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        Messages
                     </button>
                     <button className="action-btn" onClick={() => setEditingClient(client)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -582,7 +612,8 @@ const ClientPortal = () => {
                                             <td>${((client.claim_value ?? 0) / 1000).toFixed(0)}k</td>
                                             <td>{client.progress ?? 0}%</td>
                                             <td style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button className="action-btn" onClick={() => copyPortalLink(client.id)}>Copy Link</button>
+                                                <button className="action-btn" onClick={() => openShareModal(client)}>Share Link</button>
+                                                <button className="action-btn" onClick={() => setMessagesTarget(client)}>Messages</button>
                                                 <button className="action-btn" onClick={() => setEditingClient(client)}>Edit</button>
                                                 {/*<button className="action-btn" style={{ color: '#ef4444' }} onClick={() => handleSoftDelete(client.id)}>Delete</button>*/}
                                             </td>
@@ -611,6 +642,16 @@ const ClientPortal = () => {
                 client={editingClient}
                 onClose={() => setEditingClient(null)}
                 onSaved={() => { setEditingClient(null); fetchClients(currentFilter, searchQuery); }}
+            />
+
+            <SharePortalModal
+                client={shareTarget}
+                onClose={() => setShareTarget(null)}
+            />
+
+            <ClientMessagesModal
+                client={messagesTarget}
+                onClose={() => setMessagesTarget(null)}
             />
 
             <BulkImportModal
@@ -1449,6 +1490,684 @@ const PortalSettingsModal = ({ isOpen, onClose }) => {
                     <button className="btn btn-primary" onClick={() => { toast.success('Settings saved!'); onClose(); }}>
                         Save Settings
                     </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SharePortalModal — issue / view / copy / rotate / revoke a portal token
+// for a specific client. Opens from the Share Link button on each card.
+//
+// Flow on open:
+//   1. GET /client-portal/:id/tokens/active — fast path, returns existing
+//      active token if one was created at client-creation time.
+//   2. If null (legacy clients without a token yet) the contractor clicks
+//      "Generate Link" → POST /client-portal/:id/tokens which ensures one.
+//
+// Rotate: POST .../tokens/rotate. Old token invalidated atomically.
+// Revoke: DELETE /client-portal/tokens/:tokenId. URL goes 404 immediately.
+// ─────────────────────────────────────────────────────────────────────────────
+const SharePortalModal = ({ client, onClose }) => {
+    const [token, setToken] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    React.useEffect(() => {
+        if (!client) { setToken(null); return; }
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const { data } = await axiosInstance.get(
+                    `/client-portal/${client.id}/tokens/active`,
+                    { suppressErrorToast: true },
+                );
+                if (!cancelled) setToken(data ?? null);
+            } catch {
+                if (!cancelled) setToken(null);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [client]);
+
+    if (!client) return null;
+
+    // Build the public URL. In dev this resolves against the current origin
+    // so the contractor can test the link locally before going live.
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const portalUrl = token?.token ? `${origin}/portal/${token.token}` : '';
+
+    const generate = async () => {
+        setBusy(true);
+        try {
+            const { data } = await axiosInstance.post(
+                `/client-portal/${client.id}/tokens`,
+            );
+            setToken(data);
+            toast.success('Portal link generated');
+        } catch {
+            // axiosInstance shows toast
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const rotate = async () => {
+        if (!confirm('Rotate this link? The old link will stop working immediately.')) return;
+        setBusy(true);
+        try {
+            const { data } = await axiosInstance.post(
+                `/client-portal/${client.id}/tokens/rotate`,
+            );
+            setToken(data);
+            toast.success('New link issued. Old link is now invalid.');
+        } catch {
+            // handled
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const revoke = async () => {
+        if (!token) return;
+        if (!confirm('Revoke this link? It will return 404 and you will need to generate a new one to share again.')) return;
+        setBusy(true);
+        try {
+            await axiosInstance.delete(`/client-portal/tokens/${token.id}`);
+            setToken(null);
+            toast.success('Portal link revoked');
+        } catch {
+            // handled
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const copy = async () => {
+        if (!portalUrl) return;
+        try {
+            await navigator.clipboard.writeText(portalUrl);
+            toast.success('Portal link copied to clipboard!');
+        } catch {
+            toast.error('Could not copy to clipboard');
+        }
+    };
+
+    // Inline-style overlay + panel so we don't depend on .modal-overlay /
+    // .modal CSS classes which behave inconsistently in this codebase
+    // (they rendered inline at the bottom instead of as a centered overlay).
+    // Pattern lifted from app/dashboard/admin/users/AdminUsers.jsx.
+    return (
+        <div
+            onClick={onClose}
+            style={{
+                position: 'fixed', inset: 0,
+                background: 'rgba(17,24,39,0.5)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1000, padding: 20,
+            }}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    background: '#fff', borderRadius: 14,
+                    maxWidth: 560, width: '100%', maxHeight: '90vh',
+                    display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                }}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '18px 22px', borderBottom: '1px solid #f3f4f6',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                    <span style={{ fontWeight: 700, fontSize: 16, flex: 1, color: '#1a1f3a' }}>
+                        Share Portal — {client.full_name}
+                    </span>
+                    <button
+                        onClick={onClose}
+                        aria-label="Close"
+                        style={{
+                            background: '#f3f4f6', border: 'none',
+                            width: 32, height: 32, borderRadius: '50%',
+                            cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            color: '#6b7280',
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div style={{
+                    padding: 22, overflowY: 'auto',
+                    display: 'flex', flexDirection: 'column', gap: 16,
+                }}>
+                    {loading ? (
+                        <div style={{ padding: '2rem 0', textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
+                            Loading link…
+                        </div>
+                    ) : !token ? (
+                        <>
+                            <div style={{
+                                background: '#fef9e6', border: '1px solid #FDB813',
+                                padding: '0.875rem 1rem', borderRadius: 8,
+                                fontSize: 13, color: '#92400e',
+                            }}>
+                                No portal link has been generated for this client yet. Click below to issue one.
+                            </div>
+                            <button
+                                onClick={generate}
+                                disabled={busy}
+                                style={primaryBtn}
+                            >
+                                {busy ? 'Generating…' : 'Generate Portal Link'}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <div>
+                                <label style={fieldLabel}>Portal URL</label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        readOnly
+                                        value={portalUrl}
+                                        onClick={(e) => e.currentTarget.select()}
+                                        style={{
+                                            flex: 1, padding: '0.625rem 0.75rem',
+                                            border: '1px solid #e5e7eb', borderRadius: 6,
+                                            fontSize: 13, fontFamily: 'monospace',
+                                            background: '#f9fafb', minWidth: 0,
+                                        }}
+                                    />
+                                    <button onClick={copy} style={primaryBtn}>Copy</button>
+                                </div>
+                                <p style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
+                                    Share this with the homeowner via email or SMS. They open it directly — no login required.
+                                </p>
+                            </div>
+
+                            <div style={{
+                                background: '#f9fafb', border: '1px solid #e5e7eb',
+                                borderRadius: 8, padding: '0.75rem 1rem',
+                                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12,
+                            }}>
+                                <Stat label="Views" value={(token.view_count ?? 0).toLocaleString()} />
+                                <Stat label="Last viewed" value={token.last_viewed_at ? new Date(token.last_viewed_at).toLocaleDateString() : '—'} />
+                                <Stat label="Issued" value={token.created_at ? new Date(token.created_at).toLocaleDateString() : '—'} />
+                            </div>
+
+                            {/* Send-link section: Email + SMS buttons that
+                                hit POST /client-portal/:id/tokens/send. */}
+                            <SendLinkRow client={client} disabled={busy} />
+
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={rotate}
+                                    disabled={busy}
+                                    style={outlineBtn}
+                                >
+                                    Rotate (new link)
+                                </button>
+                                <button
+                                    onClick={revoke}
+                                    disabled={busy}
+                                    style={{ ...outlineBtn, color: '#dc2626', borderColor: '#fecaca' }}
+                                >
+                                    Revoke access
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                    padding: '14px 22px', borderTop: '1px solid #f3f4f6',
+                    display: 'flex', justifyContent: 'flex-end', gap: 8,
+                }}>
+                    <button onClick={onClose} style={outlineBtn}>Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Shared style snippets so the modal stays visually consistent without
+// depending on global .btn / .form-label classes.
+const fieldLabel = {
+    display: 'block', fontSize: 11, fontWeight: 700,
+    color: '#6b7280', textTransform: 'uppercase',
+    letterSpacing: 0.5, marginBottom: 6,
+};
+const primaryBtn = {
+    padding: '10px 16px',
+    background: 'linear-gradient(135deg, #FDB813, #d4a000)',
+    color: '#1a1f3a', border: 'none', borderRadius: 8,
+    fontWeight: 700, fontSize: 13, cursor: 'pointer',
+    whiteSpace: 'nowrap',
+};
+const outlineBtn = {
+    flex: 1,
+    padding: '10px 16px',
+    background: '#fff', color: '#1a1f3a',
+    border: '1px solid #e5e7eb', borderRadius: 8,
+    fontWeight: 600, fontSize: 13, cursor: 'pointer',
+    textAlign: 'center',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SendLinkRow — small row of Send Email / Send SMS buttons inside the
+// SharePortalModal. Hits POST /client-portal/:id/tokens/send. Each button
+// shows the destination it'll actually use (the client's on-file address)
+// and surfaces backend ServiceUnavailable errors as a friendly toast (e.g.
+// "SMS not configured" when Twilio env vars aren't set).
+// ─────────────────────────────────────────────────────────────────────────────
+const SendLinkRow = ({ client, disabled }) => {
+    const [sending, setSending] = useState(null); // 'email' | 'sms' | null
+    // Inline result banner inside the modal. Toast disappears in 4s and
+    // sits in the page corner — easy to miss. The banner stays visible
+    // until the user clicks Send again or closes the modal.
+    //   { kind: 'success' | 'error', text: string } | null
+    const [result, setResult] = useState(null);
+
+    const send = async (channel) => {
+        if (sending) return;
+        setSending(channel);
+        setResult(null);
+        try {
+            const { data } = await axiosInstance.post(
+                `/client-portal/${client.id}/tokens/send`,
+                { channel },
+                { suppressErrorToast: true },
+            );
+            const dest = data?.to || (channel === 'email' ? client.email : client.phone);
+            const msg = channel === 'email'
+                ? `Email sent successfully to ${dest}`
+                : `SMS sent successfully to ${dest}`;
+            toast.success(msg);
+            setResult({ kind: 'success', text: msg });
+        } catch (e) {
+            const status = e?.response?.status;
+            const msg = e?.response?.data?.message || e?.userMessage;
+            let friendly;
+            if (status === 503) {
+                friendly = msg || `${channel.toUpperCase()} channel not configured yet`;
+            } else if (status === 400) {
+                friendly = msg || 'Missing contact info on this client';
+            } else {
+                friendly = msg || `Failed to send ${channel}. Please try again.`;
+            }
+            toast.error(friendly);
+            setResult({ kind: 'error', text: friendly });
+        } finally {
+            setSending(null);
+        }
+    };
+
+    return (
+        <div>
+            <div style={{
+                fontSize: 11, fontWeight: 700, color: '#6b7280',
+                textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
+            }}>
+                Send to client
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                    onClick={() => send('email')}
+                    disabled={disabled || sending !== null || !client.email}
+                    title={client.email || 'No email on file'}
+                    style={{
+                        flex: 1, padding: '10px 14px',
+                        background: 'linear-gradient(135deg, #FDB813, #d4a000)',
+                        color: '#1a1f3a', border: 'none', borderRadius: 8,
+                        fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                        opacity: (disabled || sending !== null || !client.email) ? 0.5 : 1,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}
+                >
+                    {sending === 'email' ? 'Sending…' : `Email${client.email ? ` → ${client.email}` : ''}`}
+                </button>
+                <button
+                    onClick={() => send('sms')}
+                    disabled={disabled || sending !== null || !client.phone}
+                    title={client.phone || 'No phone on file'}
+                    style={{
+                        flex: 1, padding: '10px 14px',
+                        background: '#fff', color: '#1a1f3a',
+                        border: '1px solid #e5e7eb', borderRadius: 8,
+                        fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                        opacity: (disabled || sending !== null || !client.phone) ? 0.5 : 1,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}
+                >
+                    {sending === 'sms' ? 'Sending…' : `SMS${client.phone ? ` → ${client.phone}` : ''}`}
+                </button>
+            </div>
+
+            {/* Inline result banner — stays until next send or modal close.
+                More discoverable than a toast that auto-dismisses in 4s. */}
+            {result && (
+                <div
+                    role="status"
+                    style={{
+                        marginTop: 10,
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                        background: result.kind === 'success' ? '#ecfdf5' : '#fef2f2',
+                        color:      result.kind === 'success' ? '#065f46' : '#991b1b',
+                        border:     `1px solid ${result.kind === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                    }}
+                >
+                    <span style={{ fontWeight: 700, flexShrink: 0 }}>
+                        {result.kind === 'success' ? '✓' : '✕'}
+                    </span>
+                    <span style={{ flex: 1 }}>{result.text}</span>
+                    <button
+                        onClick={() => setResult(null)}
+                        aria-label="Dismiss"
+                        style={{
+                            background: 'transparent', border: 'none',
+                            color: 'inherit', cursor: 'pointer',
+                            fontSize: 16, lineHeight: 1, padding: 0, opacity: 0.6,
+                        }}
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const Stat = ({ label, value }) => (
+    <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
+            {label}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', marginTop: 2 }}>
+            {value}
+        </div>
+    </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ClientMessagesModal — contractor side of the two-way portal thread.
+//
+// Mirror of /portal/[token]/PortalMessages.jsx but with reversed bubble
+// alignment (contractor msgs right/navy, client msgs left/white) and
+// authenticated endpoints (/client-portal/:id/messages — not the public
+// /portal-public/:token/messages used by homeowners).
+//
+// On open we:
+//   1. GET /client-portal/:id/messages  → load the thread
+//   2. POST /client-portal/:id/messages/mark-read → flip read_at on client msgs
+//   3. Poll every 30s while modal is open so new homeowner replies appear live
+// ─────────────────────────────────────────────────────────────────────────────
+const POLL_MS = 30_000;
+
+const fmtMsgTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString([], {
+        month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+    });
+};
+
+const ClientMessagesModal = ({ client, onClose }) => {
+    const [messages, setMessages] = useState([]);
+    const [draft, setDraft] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [error, setError] = useState(null);
+    const scrollRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (!client) { setMessages([]); return; }
+
+        let cancelled = false;
+        const fetchThread = async ({ silent = false } = {}) => {
+            if (!silent) setLoading(true);
+            try {
+                const { data } = await axiosInstance.get(
+                    `/client-portal/${client.id}/messages`,
+                    { suppressErrorToast: true },
+                );
+                if (cancelled) return;
+                setMessages(Array.isArray(data) ? data : []);
+                setError(null);
+            } catch (e) {
+                if (cancelled) return;
+                if (!silent) setError(e?.response?.data?.message || 'Could not load messages.');
+            } finally {
+                if (!cancelled && !silent) setLoading(false);
+            }
+        };
+
+        const markRead = async () => {
+            try {
+                await axiosInstance.post(
+                    `/client-portal/${client.id}/messages/mark-read`,
+                    {},
+                    { suppressErrorToast: true },
+                );
+            } catch { /* best-effort */ }
+        };
+
+        fetchThread();
+        markRead();
+
+        // Poll for homeowner replies while modal is open.
+        const id = setInterval(() => fetchThread({ silent: true }), POLL_MS);
+        return () => { cancelled = true; clearInterval(id); };
+    }, [client]);
+
+    React.useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages.length]);
+
+    if (!client) return null;
+
+    const send = async () => {
+        const text = draft.trim();
+        if (!text || sending) return;
+        setSending(true);
+        setError(null);
+        try {
+            const { data } = await axiosInstance.post(
+                `/client-portal/${client.id}/messages`,
+                { message: text },
+                { suppressErrorToast: true },
+            );
+            setMessages((prev) => [...prev, data]);
+            setDraft('');
+        } catch (e) {
+            setError(e?.response?.data?.message || 'Could not send. Try again.');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return (
+        <div
+            onClick={onClose}
+            style={{
+                position: 'fixed', inset: 0,
+                background: 'rgba(17,24,39,0.5)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1000, padding: 20,
+            }}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    background: '#fff', borderRadius: 14,
+                    maxWidth: 600, width: '100%', maxHeight: '85vh',
+                    display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                }}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '16px 20px', borderBottom: '1px solid #f3f4f6',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                    <div style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #FDB813, #d4a000)',
+                        color: '#1a1f3a', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 13,
+                    }}>
+                        {(client.first_name?.[0] || '') + (client.last_name?.[0] || '')}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1f3a' }}>
+                            Messages — {client.full_name}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>
+                            {client.claim_number ? `Claim #${client.claim_number}` : 'No claim number'}
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        aria-label="Close"
+                        style={{
+                            background: '#f3f4f6', border: 'none',
+                            width: 32, height: 32, borderRadius: '50%',
+                            cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            color: '#6b7280',
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                {/* Thread */}
+                <div ref={scrollRef} style={{
+                    flex: 1, minHeight: 280, maxHeight: '50vh',
+                    overflowY: 'auto', padding: '16px 20px',
+                    background: '#fafafa',
+                }}>
+                    {loading ? (
+                        <div style={{ textAlign: 'center', color: '#6b7280', fontSize: 13, padding: '2rem 0' }}>
+                            Loading thread…
+                        </div>
+                    ) : messages.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: '#6b7280', fontSize: 13, padding: '2rem 1rem' }}>
+                            No messages yet. When the homeowner posts on their portal you'll see it here — and you can reply from below.
+                        </div>
+                    ) : (
+                        messages.map((m) => {
+                            // Reversed alignment from the homeowner side: the
+                            // contractor (us) is on the right; the client is
+                            // on the left so it visually feels like an inbox.
+                            const fromContractor = m.sender_type === 'contractor';
+                            return (
+                                <div
+                                    key={m.id}
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: fromContractor ? 'flex-end' : 'flex-start',
+                                        marginBottom: '0.75rem',
+                                    }}
+                                >
+                                    <div style={{
+                                        maxWidth: '78%',
+                                        background: fromContractor ? '#1a1f3a' : '#fff',
+                                        color:      fromContractor ? '#fff'    : '#1a1f3a',
+                                        border: fromContractor ? 'none' : '1px solid #e5e7eb',
+                                        borderRadius: 12,
+                                        padding: '0.625rem 0.875rem',
+                                        fontSize: 14, lineHeight: 1.5,
+                                        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                    }}>
+                                        <div>{m.message_text}</div>
+                                        <div style={{
+                                            marginTop: 4, fontSize: 10,
+                                            color: fromContractor ? 'rgba(255,255,255,0.6)' : '#9ca3af',
+                                        }}>
+                                            {fromContractor ? 'You' : client.first_name || 'Client'} · {fmtMsgTime(m.created_at)}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+
+                {error && (
+                    <div style={{
+                        padding: '0.5rem 1.25rem',
+                        background: '#fef2f2', color: '#b91c1c',
+                        fontSize: 12, borderTop: '1px solid #fecaca',
+                    }}>
+                        {error}
+                    </div>
+                )}
+
+                {/* Reply box */}
+                <div style={{
+                    padding: '12px 20px 16px',
+                    borderTop: '1px solid #e5e7eb', background: '#fff',
+                }}>
+                    <textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                send();
+                            }
+                        }}
+                        placeholder={`Reply to ${client.first_name || 'client'}…`}
+                        rows={2}
+                        maxLength={5000}
+                        style={{
+                            width: '100%', padding: '0.5rem 0.75rem',
+                            border: '1px solid #e5e7eb', borderRadius: 8,
+                            fontSize: 14, resize: 'vertical', minHeight: 60,
+                            fontFamily: 'inherit',
+                        }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                        <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                            {draft.length > 0 ? `${draft.length} / 5000` : 'Press ⌘/Ctrl + Enter to send'}
+                        </span>
+                        <button
+                            onClick={send}
+                            disabled={sending || !draft.trim()}
+                            style={{
+                                padding: '0.5rem 1.125rem',
+                                background: 'linear-gradient(135deg, #FDB813, #d4a000)',
+                                color: '#1a1f3a', border: 'none',
+                                borderRadius: 8, fontWeight: 700, fontSize: 13,
+                                cursor: sending || !draft.trim() ? 'not-allowed' : 'pointer',
+                                opacity: sending || !draft.trim() ? 0.6 : 1,
+                            }}
+                        >
+                            {sending ? 'Sending…' : 'Send reply'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
