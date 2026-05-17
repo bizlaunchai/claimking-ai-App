@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import LocalFileUploader from "../../../utiles/LocalFileUploader.jsx";
-import Image from "next/image";
 
 const FileUploader = dynamic(() => import("@/utiles/FileUploader.jsx"), { ssr: false });
 
@@ -40,7 +39,7 @@ const ROOFING_COLORS = [
     ]},
 ];
 
-const SIDING_MATERIALS = ['Vinyl Lap', 'Fiber Cement', 'Wood', 'Board & Batten', 'Brick', 'Stone'];
+const SIDING_MATERIALS = ['Vinyl Lap', 'Fiber Cement', 'Wood', 'Board & Batten', 'Brick', 'Stone', 'Other'];
 
 const SIDING_COLORS = [
     { name: 'Arctic White', value: '#ffffff' },
@@ -49,6 +48,7 @@ const SIDING_COLORS = [
     { name: 'Iron Gray',     value: '#4b5563' },
     { name: 'Cape Cod Blue', value: '#5b8fa3' },
     { name: 'Sandstone',     value: '#d4a574' },
+    { name: 'Other',        value: '__other__' },
 ];
 
 const TRIM_COLORS = [
@@ -58,7 +58,30 @@ const TRIM_COLORS = [
     { name: 'Black',  value: '#2f2f2f' },
     { name: 'Gray',   value: '#808080' },
     { name: 'Copper', value: '#b87333' },
+    { name: 'Other',  value: '__other__' },
 ];
+
+const ACCENT_COLORS = [
+    { name: 'Black',           value: '#1a1a1a' },
+    { name: 'White',           value: '#ffffff' },
+    { name: 'Hunter Green',    value: '#2f4538' },
+    { name: 'Navy',            value: '#1e3a5f' },
+    { name: 'Burgundy',        value: '#7c1d2e' },
+    { name: 'Bronze',          value: '#8b6f47' },
+    { name: 'Other',           value: '__other__' },
+];
+
+const DOOR_COLORS = [
+    { name: 'Classic Red',     value: '#a23737' },
+    { name: 'Deep Black',      value: '#1a1a1a' },
+    { name: 'Navy Blue',       value: '#1e3a5f' },
+    { name: 'Forest Green',    value: '#2f4538' },
+    { name: 'Natural Wood',    value: '#8b6f47' },
+    { name: 'Crisp White',     value: '#ffffff' },
+    { name: 'Other',           value: '__other__' },
+];
+
+const ROOFING_TYPES = [...SHINGLE_TYPES, 'Other'];
 
 const QUALITY_OPTIONS = [
     { id: 'fast',     label: 'Fast',     time: '~30 seconds — Draft' },
@@ -76,11 +99,14 @@ const authedImageCache = new Map();    // src -> blobUrl
 const authedImageInflight = new Map(); // src -> Promise<blobUrl>
 
 const AuthedImage = ({ src, alt = '', style, className }) => {
-    const [blobUrl, setBlobUrl] = useState(() => (src ? authedImageCache.get(src) ?? null : null));
+    // Local blob/data URLs don't need auth — render them straight via <img>
+    const isLocalUrl = typeof src === 'string' && (src.startsWith('blob:') || src.startsWith('data:'));
+
+    const [blobUrl, setBlobUrl] = useState(() => (src && !isLocalUrl ? authedImageCache.get(src) ?? null : null));
     const [errored, setErrored] = useState(false);
 
     useEffect(() => {
-        if (!src) { setBlobUrl(null); return; }
+        if (!src || isLocalUrl) { setBlobUrl(null); return; }
 
         const cached = authedImageCache.get(src);
         if (cached) {
@@ -114,8 +140,9 @@ const AuthedImage = ({ src, alt = '', style, className }) => {
             .catch(() => { if (active) setErrored(true); });
 
         return () => { active = false; };
-    }, [src]);
+    }, [src, isLocalUrl]);
 
+    if (isLocalUrl) return <img src={src} alt={alt} style={style} className={className} />;
     if (errored) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Image unavailable</div>;
     if (!blobUrl) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Loading…</div>;
     return <img src={blobUrl} alt={alt} style={style} className={className} />;
@@ -145,8 +172,19 @@ const ThreeDMockup = () => {
     const [selectedShingleType, setSelectedShingleType] = useState('Architectural');
     const [selectedSidingMaterial, setSelectedSidingMaterial] = useState('Vinyl Lap');
     const [selectedColors, setSelectedColors] = useState({
-        roofing: null, siding: null, trim: null, windows: null,
+        roofing: null, siding: null, trim: null, accents: null, windows: null, doors: null,
     });
+    // "Other" custom text per category (free-form material/color)
+    const [otherMaterialText, setOtherMaterialText] = useState({
+        roofing: '', siding: '', trim: '', accents: '', windows: '', doors: '',
+    });
+    const [otherColorText, setOtherColorText] = useState({
+        roofing: '', siding: '', trim: '', accents: '', windows: '', doors: '',
+    });
+    // User-added custom categories (Garage Door, Stone Veneer, etc)
+    const [customCategories, setCustomCategories] = useState([]);
+    const [showAddCustomCat, setShowAddCustomCat] = useState(false);
+    const [newCustomCat, setNewCustomCat] = useState({ name: '', material: '', color: '' });
     const [advanced, setAdvanced] = useState({
         keepRoof: false, ridgeVent: false, shadows: false, wetEffect: false,
     });
@@ -171,9 +209,18 @@ const ThreeDMockup = () => {
     // ── Provider availability  ──────────────────────────────────────────────
     const [providerStatus, setProviderStatus] = useState({});
 
+    // ── Company branding (for watermark + PDF logo) ─────────────────────────
+    const [branding, setBranding] = useState({ name: null, logo_url: null, website: null });
+
+    // ── Download progress state per type ────────────────────────────────────
+    const [downloading, setDownloading] = useState({ png: false, watermark: false, pdf: false });
+
     // ── Credits (cost per generation + user's current balance) ─────────────
     const [mockupCost, setMockupCost] = useState(null);     // { credits_cost, is_active, label } | null
     const [creditBalance, setCreditBalance] = useState(null); // { monthly_credits, bonus_credits, ... } | null
+
+    // ── Per-gallery-item split slider position (id -> 0..100) ──────────────
+    const [gallerySplitPos, setGallerySplitPos] = useState({});
 
     // ── Modals + sharing ─────────────────────────────────────────────────────
     const [showGallery, setShowGallery] = useState(false);
@@ -183,6 +230,13 @@ const ThreeDMockup = () => {
     const [showSharing, setShowSharing] = useState(false);
     const [galleryItems, setGalleryItems] = useState([]);
     const [recentItems, setRecentItems] = useState([]);
+    const [galleryLoading, setGalleryLoading] = useState(false);
+    const [reopening, setReopening] = useState(false);
+    // Fullscreen viewer for a single gallery item (Original/Result/Split)
+    const [galleryFullscreenItem, setGalleryFullscreenItem] = useState(null);
+    const [galleryFsMode, setGalleryFsMode] = useState('split'); // original | result | split
+    const [galleryFsSplitPos, setGalleryFsSplitPos] = useState(50);
+    const galleryFsSplitRef = useRef(null);
 
     // ── Derived view-state ──────────────────────────────────────────────────
     const activeVersion = useMemo(
@@ -224,6 +278,16 @@ const ThreeDMockup = () => {
         })();
     }, []);
 
+    // ── Effects: company branding (for watermark + PDF) ─────────────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/mockup/branding', { suppressErrorToast: true });
+                if (res.data?.data) setBranding(res.data.data);
+            } catch { /* fall back to defaults if endpoint not available */ }
+        })();
+    }, []);
+
     // ── Effects: mockup credit cost + user's balance (refresh after generate) ─
     const refreshCreditsState = useCallback(async () => {
         try {
@@ -251,15 +315,45 @@ const ThreeDMockup = () => {
     // ── Effects: gallery / recent (lazy when modal opens) ──────────────────
     useEffect(() => {
         if (!showGallery && !showRecent) return;
+        let cancelled = false;
+        setGalleryLoading(true);
         (async () => {
             try {
                 const res = await axiosInstance.get('/mockup');
+                if (cancelled) return;
                 const items = res.data?.data ?? [];
                 setGalleryItems(items);
                 setRecentItems(items.slice(0, 10));
-            } catch { /* ignore */ }
+            } catch { /* axios already toasted */ }
+            finally {
+                if (!cancelled) setGalleryLoading(false);
+            }
         })();
+        return () => { cancelled = true; };
     }, [showGallery, showRecent]);
+
+    // ── Gallery fullscreen split drag handler ────────────────────────────────
+    const startGalleryFsSplitDrag = useCallback((e) => {
+        e.preventDefault();
+        const updateFrom = (clientX) => {
+            const el = galleryFsSplitRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const pct = ((clientX - rect.left) / rect.width) * 100;
+            setGalleryFsSplitPos(Math.max(0, Math.min(100, pct)));
+        };
+        const move = (ev) => updateFrom(ev.touches ? ev.touches[0].clientX : ev.clientX);
+        const stop = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', stop);
+            window.removeEventListener('touchmove', move);
+            window.removeEventListener('touchend', stop);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', stop);
+        window.addEventListener('touchmove', move, { passive: false });
+        window.addEventListener('touchend', stop);
+    }, []);
 
     // ────────────────────────────────────────────────────────────────────────
     //   Client handlers
@@ -368,6 +462,28 @@ const ThreeDMockup = () => {
         window.addEventListener('touchend', stop);
     }, [updateSplitFromEvent]);
 
+    // ── Gallery-card split drag (per-item, identified by item id) ──────────
+    const startGallerySplitDrag = useCallback((e, itemId, containerEl) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const updateFrom = (clientX) => {
+            const rect = containerEl.getBoundingClientRect();
+            const pct = ((clientX - rect.left) / rect.width) * 100;
+            setGallerySplitPos(prev => ({ ...prev, [itemId]: Math.max(0, Math.min(100, pct)) }));
+        };
+        const move = (ev) => updateFrom(ev.touches ? ev.touches[0].clientX : ev.clientX);
+        const stop = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', stop);
+            window.removeEventListener('touchmove', move);
+            window.removeEventListener('touchend', stop);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', stop);
+        window.addEventListener('touchmove', move, { passive: false });
+        window.addEventListener('touchend', stop);
+    }, []);
+
     // ────────────────────────────────────────────────────────────────────────
     //   Build the material_settings JSON the backend expects
     // ────────────────────────────────────────────────────────────────────────
@@ -375,20 +491,71 @@ const ThreeDMockup = () => {
         const toPick = (cat) => {
             const c = selectedColors[cat];
             if (!c) return null;
+            // If user picked "Other" swatch, use the free-text color they typed
+            if (c.value === '__other__') {
+                return { color: otherColorText[cat] || 'custom', hex: null, is_other: true };
+            }
             return { color: c.name, hex: c.value };
         };
         const roofingPick = toPick('roofing');
+        const shingleType = selectedShingleType === 'Other'
+            ? (otherMaterialText.roofing || 'custom shingle')
+            : selectedShingleType;
+        const sidingMat = selectedSidingMaterial === 'Other'
+            ? (otherMaterialText.siding || 'custom siding')
+            : selectedSidingMaterial;
+
         return {
-            shingleType: selectedShingleType,
+            shingleType,
+            shingleType_is_other: selectedShingleType === 'Other',
             roofing: roofingPick ? { ...roofingPick, brand: selectedColors.roofing?.brand ?? null } : null,
             siding: selectedColors.siding
-                ? { color: selectedColors.siding.name, hex: selectedColors.siding.value, material: selectedSidingMaterial }
+                ? {
+                    color: selectedColors.siding.value === '__other__' ? (otherColorText.siding || 'custom') : selectedColors.siding.name,
+                    hex: selectedColors.siding.value === '__other__' ? null : selectedColors.siding.value,
+                    material: sidingMat,
+                    is_other: selectedColors.siding.value === '__other__' || selectedSidingMaterial === 'Other',
+                  }
                 : null,
-            trim: toPick('trim'),
+            trim:    toPick('trim'),
+            accents: toPick('accents'),
             windows: toPick('windows'),
+            doors:   toPick('doors'),
+            customCategories: customCategories.map(c => ({
+                category_name: c.name,
+                is_custom: true,
+                material: c.material || null,
+                color: c.color || null,
+            })),
             advanced,
         };
-    }, [selectedColors, selectedShingleType, selectedSidingMaterial, advanced]);
+    }, [selectedColors, selectedShingleType, selectedSidingMaterial, advanced, otherMaterialText, otherColorText, customCategories]);
+
+    // Build a verbatim "changes to apply" block to append to AI instructions —
+    // ensures the "Other" + custom-category free text reaches Gemini exactly as typed.
+    const buildOtherInstructionsBlock = useCallback(() => {
+        const lines = [];
+        if (selectedShingleType === 'Other' && otherMaterialText.roofing) {
+            lines.push(`- Roofing material: ${otherMaterialText.roofing}`);
+        }
+        if (selectedSidingMaterial === 'Other' && otherMaterialText.siding) {
+            lines.push(`- Siding material: ${otherMaterialText.siding}`);
+        }
+        ['roofing', 'siding', 'trim', 'accents', 'windows', 'doors'].forEach(cat => {
+            const c = selectedColors[cat];
+            if (c && c.value === '__other__' && otherColorText[cat]) {
+                lines.push(`- ${cat.charAt(0).toUpperCase() + cat.slice(1)} color: ${otherColorText[cat]}`);
+            }
+        });
+        customCategories.forEach(c => {
+            if (!c.name) return;
+            const parts = [];
+            if (c.material) parts.push(c.material);
+            if (c.color) parts.push(`in ${c.color}`);
+            lines.push(`- ${c.name}: ${parts.join(' ') || '(see notes)'}`);
+        });
+        return lines.length ? `\n\nAdditional custom changes:\n${lines.join('\n')}` : '';
+    }, [selectedShingleType, selectedSidingMaterial, otherMaterialText, otherColorText, selectedColors, customCategories]);
 
     // ────────────────────────────────────────────────────────────────────────
     //   Map a backend / network error to an inline panel message.
@@ -475,6 +642,15 @@ const ThreeDMockup = () => {
         if (!localFile) { toast.error('Upload a property photo first'); return; }
         if (isGenerating) return;
 
+        // Low-balance confirm gate (spec: warn when < 25 credits remaining)
+        if (creditsKnown && requiredCredits > 0 && totalCredits >= requiredCredits && totalCredits < 25) {
+            const remaining = (totalCredits - requiredCredits).toFixed(2).replace(/\.?0+$/, '');
+            const ok = window.confirm(
+                `Low credit balance.\n\nThis will use ${requiredCredits} credits.\nYou'll have ${remaining} credits remaining.\n\nContinue?`,
+            );
+            if (!ok) return;
+        }
+
         setIsGenerating(true);
         setGenerationError(null);
         try {
@@ -483,7 +659,8 @@ const ThreeDMockup = () => {
             if (currentMockup?.id) formData.append('mockup_id', currentMockup.id);
             if (selectedClient?.id) formData.append('client_id', selectedClient.id);
             formData.append('material_settings', JSON.stringify(buildMaterialSettings()));
-            if (aiInstructions) formData.append('ai_instructions', aiInstructions);
+            const fullInstructions = `${aiInstructions || ''}${buildOtherInstructionsBlock()}`.trim();
+            if (fullInstructions) formData.append('ai_instructions', fullInstructions);
             formData.append('quality', selectedQuality);
             if (selectedClient) formData.append('title', `${selectedClient.name} — Mockup`);
 
@@ -595,7 +772,368 @@ const ThreeDMockup = () => {
 
     const saveTemplate = () => toast.info('Templates: coming soon.');
     const shareViaSMS   = () => toast.info('SMS sharing: coming soon.');
-    const shareViaEmail = () => toast.info('Email sharing: coming soon.');
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Share with client via email — pushes to portal + emails homeowner
+    // ────────────────────────────────────────────────────────────────────────
+    const shareViaEmail = async () => {
+        if (!currentMockup) { toast.error('Generate a mockup first'); return; }
+        if (!selectedClient) { toast.error('Pick a client first'); return; }
+        try {
+            await axiosInstance.post(`/mockup/${currentMockup.id}/share-email`, {
+                client_id: selectedClient.id,
+            });
+            // Auto-make portal-visible since we just emailed the client
+            if (!currentMockup.is_visible_in_portal) {
+                await axiosInstance.patch(`/mockup/${currentMockup.id}/visibility`, { visible: true });
+                setCurrentMockup(m => m ? { ...m, is_visible_in_portal: true } : m);
+            }
+            toast.success(`Mockup emailed to ${selectedClient.name}`);
+        } catch (err) {
+            // Fall back if backend endpoint not yet wired
+            if (err?.response?.status === 404) {
+                toast.info('Email sharing endpoint not yet available — share the portal link manually for now.');
+            }
+        }
+    };
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Download options: PNG / Watermarked PNG / PDF with logo
+    // ────────────────────────────────────────────────────────────────────────
+    const fetchImageBlob = async (src) => {
+        const res = await axiosInstance.get(src, { responseType: 'blob' });
+        return res.data;
+    };
+
+    const triggerDownload = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    const downloadFilename = (suffix, ext) => {
+        const safe = (selectedClient?.name || 'mockup').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+        const ver = activeVersion?.version_number ? `_v${activeVersion.version_number}` : '';
+        return `${safe}${ver}_${suffix}.${ext}`;
+    };
+
+    const downloadHighRes = async () => {
+        if (!generatedImageSrc) { toast.error('Generate a mockup first'); return; }
+        if (downloading.png) return;
+        setDownloading(d => ({ ...d, png: true }));
+        const toastId = toast.loading('Preparing high-res PNG…');
+        try {
+            const blob = await fetchImageBlob(generatedImageSrc);
+            triggerDownload(blob, downloadFilename('mockup', 'png'));
+            toast.success('PNG downloaded', { id: toastId });
+        } catch {
+            toast.error('Download failed', { id: toastId });
+        } finally {
+            setDownloading(d => ({ ...d, png: false }));
+        }
+    };
+
+    // Load an image source as an HTMLImageElement for canvas operations.
+    // Used for both the mockup image and the contractor's logo overlay.
+    const loadImageElement = (src) => new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload  = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+
+    // Fetch the contractor logo as a blob URL (their S3 url often needs the
+    // authed proxy, plus crossOrigin works more reliably on a same-origin blob).
+    const loadBrandingLogo = async () => {
+        if (!branding.logo_url) return null;
+        try {
+            // Logos may be public S3 or proxied — try axios first, fall back to direct
+            try {
+                const blob = await fetchImageBlob(branding.logo_url);
+                return await loadImageElement(URL.createObjectURL(blob));
+            } catch {
+                return await loadImageElement(branding.logo_url);
+            }
+        } catch {
+            return null;
+        }
+    };
+
+    const drawImageToCanvas = (src) => new Promise((resolve, reject) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve({ canvas, ctx, img });
+        };
+        img.onerror = reject;
+        img.src = src;
+    });
+
+    const downloadWatermarked = async () => {
+        if (!generatedImageSrc) { toast.error('Generate a mockup first'); return; }
+        if (downloading.watermark) return;
+        setDownloading(d => ({ ...d, watermark: true }));
+        const toastId = toast.loading('Adding watermark…');
+        try {
+            const blob = await fetchImageBlob(generatedImageSrc);
+            const blobUrl = URL.createObjectURL(blob);
+            const { canvas, ctx } = await drawImageToCanvas(blobUrl);
+            URL.revokeObjectURL(blobUrl);
+
+            const companyName = branding.name || 'Mockup Preview';
+            const logoImg = await loadBrandingLogo();
+
+            // Subtle diagonal watermark of the contractor's company name
+            const w = canvas.width, h = canvas.height;
+            ctx.save();
+            ctx.globalAlpha = 0.16;
+            ctx.fillStyle = '#1a1f3a';
+            ctx.font = `bold ${Math.floor(w / 24)}px Inter, Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.translate(w / 2, h / 2);
+            ctx.rotate(-Math.PI / 6);
+            const text = `${companyName} · Preview`;
+            const tile = Math.floor(w / 3.5);
+            for (let y = -h; y < h; y += tile) {
+                for (let x = -w; x < w; x += tile * 1.6) {
+                    ctx.fillText(text, x, y);
+                }
+            }
+            ctx.restore();
+
+            // Bottom branded bar — contractor logo + name
+            ctx.save();
+            const bh = Math.max(40, Math.floor(h / 16));
+            ctx.fillStyle = 'rgba(26, 31, 58, 0.9)';
+            ctx.fillRect(0, h - bh, w, bh);
+
+            const pad = Math.floor(bh * 0.2);
+            let textX = pad;
+            if (logoImg) {
+                const logoH = bh - pad * 2;
+                const logoW = (logoImg.width / logoImg.height) * logoH;
+                ctx.drawImage(logoImg, pad, h - bh + pad, logoW, logoH);
+                textX = pad + logoW + pad;
+            }
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `600 ${Math.floor(bh * 0.42)}px Inter, Arial, sans-serif`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${companyName} — AI Mockup Preview`, textX, h - bh / 2);
+            ctx.restore();
+
+            await new Promise((resolve) => {
+                canvas.toBlob((wmBlob) => {
+                    if (wmBlob) {
+                        triggerDownload(wmBlob, downloadFilename('mockup_watermarked', 'png'));
+                        toast.success('Watermarked PNG downloaded', { id: toastId });
+                    } else {
+                        toast.error('Watermark generation failed', { id: toastId });
+                    }
+                    resolve();
+                }, 'image/png');
+            });
+        } catch {
+            toast.error('Watermark download failed', { id: toastId });
+        } finally {
+            setDownloading(d => ({ ...d, watermark: false }));
+        }
+    };
+
+    const downloadPDF = async () => {
+        if (!generatedImageSrc) { toast.error('Generate a mockup first'); return; }
+        if (downloading.pdf) return;
+        setDownloading(d => ({ ...d, pdf: true }));
+        const toastId = toast.loading('Building PDF…');
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const blob = await fetchImageBlob(generatedImageSrc);
+            const blobUrl = URL.createObjectURL(blob);
+            const { canvas } = await drawImageToCanvas(blobUrl);
+            URL.revokeObjectURL(blobUrl);
+
+            const companyName = branding.name || 'Mockup';
+            const logoImg = await loadBrandingLogo();
+
+            // Letter-size landscape PDF with header band + footer
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+
+            // Header band — contractor branded
+            const headerH = 64;
+            pdf.setFillColor(26, 31, 58);
+            pdf.rect(0, 0, pageW, headerH, 'F');
+
+            let titleX = 24;
+            if (logoImg) {
+                // Render the contractor logo to a temp canvas → dataURL for jsPDF
+                const logoH = headerH - 16;
+                const logoW = (logoImg.width / logoImg.height) * logoH;
+                const lc = document.createElement('canvas');
+                lc.width = logoImg.naturalWidth;
+                lc.height = logoImg.naturalHeight;
+                lc.getContext('2d').drawImage(logoImg, 0, 0);
+                try {
+                    const logoData = lc.toDataURL('image/png');
+                    pdf.addImage(logoData, 'PNG', 16, 8, logoW, logoH);
+                    titleX = 16 + logoW + 12;
+                } catch { /* tainted canvas — fall back to text-only */ }
+            }
+
+            pdf.setTextColor(253, 184, 19);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(16);
+            pdf.text(`${companyName} — 3D Mockup`, titleX, 36);
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(10);
+            pdf.text(new Date().toLocaleDateString(), pageW - 24, 36, { align: 'right' });
+
+            // Client meta
+            pdf.setTextColor(31, 41, 55);
+            pdf.setFontSize(11);
+            let y = headerH + 22;
+            if (selectedClient?.name) {
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Client: ', 24, y);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(selectedClient.name, 70, y);
+                y += 16;
+            }
+            if (selectedClient?.address) {
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Address: ', 24, y);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(selectedClient.address, 80, y);
+                y += 16;
+            }
+
+            // Image (fit inside remaining page area)
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            const availH = pageH - y - 40;
+            const availW = pageW - 48;
+            const ratio = canvas.width / canvas.height;
+            let drawW = availW, drawH = availW / ratio;
+            if (drawH > availH) { drawH = availH; drawW = availH * ratio; }
+            const drawX = (pageW - drawW) / 2;
+            pdf.addImage(imgData, 'JPEG', drawX, y + 4, drawW, drawH);
+
+            // Footer — contractor + ClaimKing attribution
+            pdf.setFontSize(9);
+            pdf.setTextColor(107, 114, 128);
+            const footerLeft = `Prepared by ${companyName}${branding.website ? ' · ' + branding.website : ''}`;
+            pdf.text(footerLeft, 24, pageH - 14);
+            pdf.text('Powered by ClaimKing.AI', pageW - 24, pageH - 14, { align: 'right' });
+
+            pdf.save(downloadFilename('mockup', 'pdf'));
+            toast.success('PDF downloaded', { id: toastId });
+        } catch (err) {
+            console.error(err);
+            toast.error('PDF download failed', { id: toastId });
+        } finally {
+            setDownloading(d => ({ ...d, pdf: false }));
+        }
+    };
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Custom category handlers
+    // ────────────────────────────────────────────────────────────────────────
+    const addCustomCategory = () => {
+        const name = newCustomCat.name.trim();
+        if (!name) { toast.error('Category name is required'); return; }
+        setCustomCategories(prev => [
+            ...prev,
+            { id: `cc_${Date.now()}`, name, material: newCustomCat.material.trim(), color: newCustomCat.color.trim() },
+        ]);
+        setNewCustomCat({ name: '', material: '', color: '' });
+        setShowAddCustomCat(false);
+        toast.success(`Added "${name}"`);
+    };
+
+    const removeCustomCategory = (id) =>
+        setCustomCategories(prev => prev.filter(c => c.id !== id));
+
+    const updateCustomCategory = (id, field, value) =>
+        setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+
+    // ────────────────────────────────────────────────────────────────────────
+    //   Reopen a mockup from gallery — load state for regenerate-from-existing
+    // ────────────────────────────────────────────────────────────────────────
+    const reopenMockup = async (m) => {
+        if (reopening) return;
+        setReopening(true);
+        try {
+            const res = await axiosInstance.get(`/mockup/${m.id}`);
+            const full = res.data?.data ?? m;
+            setCurrentMockup(full);
+            setVersions(full.versions || (full.current_version ? [full.current_version] : []));
+            setActiveVersionId(full.current_version?.id || null);
+
+            // Restore selected client from the mockup record if we have it
+            if (full.client_id && full.client) {
+                setSelectedClient({
+                    id: full.client.id,
+                    name: full.client.full_name || `${full.client.first_name ?? ''} ${full.client.last_name ?? ''}`.trim(),
+                    address: [full.client.address, full.client.city, full.client.state, full.client.zip_code].filter(Boolean).join(', '),
+                });
+            }
+
+            // Restore material selections from saved snapshot
+            const ms = full.material_settings || {};
+            if (ms.shingleType) setSelectedShingleType(ms.shingleType);
+            if (ms.siding?.material) setSelectedSidingMaterial(ms.siding.material);
+            setSelectedColors({
+                roofing: ms.roofing ? { name: ms.roofing.color, value: ms.roofing.hex, brand: ms.roofing.brand } : null,
+                siding:  ms.siding  ? { name: ms.siding.color,  value: ms.siding.hex }  : null,
+                trim:    ms.trim    ? { name: ms.trim.color,    value: ms.trim.hex }    : null,
+                accents: ms.accents ? { name: ms.accents.color, value: ms.accents.hex } : null,
+                windows: ms.windows ? { name: ms.windows.color, value: ms.windows.hex } : null,
+                doors:   ms.doors   ? { name: ms.doors.color,   value: ms.doors.hex }   : null,
+            });
+            if (Array.isArray(ms.customCategories)) {
+                setCustomCategories(ms.customCategories.map((c, i) => ({
+                    id: `cc_loaded_${i}`,
+                    name: c.category_name || '',
+                    material: c.material || '',
+                    color: c.color || '',
+                })));
+            }
+            if (ms.advanced) setAdvanced(ms.advanced);
+            if (full.ai_instructions) setAiInstructions(full.ai_instructions);
+
+            // Load source photo as a pseudo-file entry so the preview shows it
+            if (full.source_photo_url) {
+                setFiles([{
+                    id: `reopened-${full.id}`,
+                    name: 'source-photo.jpg',
+                    preview: full.source_photo_url,
+                    file: null,
+                    serverResponse: { payload: { key: full.source_photo_key } },
+                }]);
+            }
+            setPreviewMode('split');
+            setShowGallery(false);
+            setShowRecent(false);
+            toast.success(`Reopened: ${full.title || 'mockup'}`);
+        } catch {
+            toast.error('Could not reopen mockup');
+        } finally {
+            setReopening(false);
+        }
+    };
 
     // ────────────────────────────────────────────────────────────────────────
     //   Modal close
@@ -856,9 +1394,7 @@ const ThreeDMockup = () => {
                             <>
                                 <div className="photo-display active" style={{ marginTop: 12 }}>
                                     <div className="photo-preview" style={{ aspectRatio: '4/3', overflow: 'hidden', borderRadius: 8, background: '#f3f4f6' }}>
-                                        {/*<AuthedImage src={sourcePhotoKey} alt="Source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />*/}
-                                        <Image src={sourcePhotoKey} alt={'photo'} width={300} height={300} />
-                                        {/*{sourcePhotoKey}*/}
+                                        <AuthedImage src={sourcePhotoKey} alt="Source" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     </div>
                                 </div>
                                 <div className="analysis-box">
@@ -906,8 +1442,11 @@ const ThreeDMockup = () => {
                             {[
                                 ['roofing', 'Roofing'],
                                 ['siding', 'Siding'],
-                                ['trim', 'Trim & Accents'],
-                                ['windows', 'Windows & Doors'],
+                                ['trim', 'Trim'],
+                                ['accents', 'Accents'],
+                                ['windows', 'Windows'],
+                                ['doors', 'Doors'],
+                                ['custom', `Custom${customCategories.length ? ` (${customCategories.length})` : ''}`],
                             ].map(([id, label]) => (
                                 <button key={id}
                                         className={`material-tab ${materialTab === id ? 'active' : ''}`}
@@ -920,12 +1459,22 @@ const ThreeDMockup = () => {
                                 <div style={{ marginBottom: '1rem' }}>
                                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>Shingle Type</div>
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                                        {SHINGLE_TYPES.map(type => (
+                                        {ROOFING_TYPES.map(type => (
                                             <button key={type}
                                                     className={`shingle-type-btn ${selectedShingleType === type ? 'selected' : ''}`}
                                                     onClick={() => setSelectedShingleType(type)}>{type}</button>
                                         ))}
                                     </div>
+                                    {selectedShingleType === 'Other' && (
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder='e.g. "Cedar Shake - Natural" or "Standing Seam Metal - Galvalume"'
+                                            value={otherMaterialText.roofing}
+                                            onChange={e => setOtherMaterialText(p => ({ ...p, roofing: e.target.value }))}
+                                            style={{ width: '100%', marginBottom: '1rem' }}
+                                        />
+                                    )}
                                 </div>
 
                                 {ROOFING_COLORS.map(brand => (
@@ -943,6 +1492,29 @@ const ThreeDMockup = () => {
                                         </div>
                                     </div>
                                 ))}
+
+                                <div className="color-section">
+                                    <div className="color-brand">Other Color</div>
+                                    <div className="color-grid">
+                                        <div
+                                            className={`color-swatch ${selectedColors.roofing?.value === '__other__' ? 'selected' : ''}`}
+                                            onClick={() => selectColor('roofing', { name: 'Other', value: '__other__' })}
+                                        >
+                                            <div className="swatch-color" style={{ background: 'repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 5px,#f9fafb 5px,#f9fafb 10px)' }} />
+                                            <div className="swatch-name">Other</div>
+                                        </div>
+                                    </div>
+                                    {selectedColors.roofing?.value === '__other__' && (
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder='e.g. "Custom slate gray with copper undertone"'
+                                            value={otherColorText.roofing}
+                                            onChange={e => setOtherColorText(p => ({ ...p, roofing: e.target.value }))}
+                                            style={{ width: '100%' }}
+                                        />
+                                    )}
+                                </div>
 
                                 <div className="advanced-section">
                                     <div className="advanced-title">Advanced Options</div>
@@ -978,6 +1550,16 @@ const ThreeDMockup = () => {
                                             </div>
                                         ))}
                                     </div>
+                                    {selectedSidingMaterial === 'Other' && (
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder='e.g. "James Hardie Lap Siding" or "Reclaimed Barnwood"'
+                                            value={otherMaterialText.siding}
+                                            onChange={e => setOtherMaterialText(p => ({ ...p, siding: e.target.value }))}
+                                            style={{ width: '100%', marginTop: '0.75rem' }}
+                                        />
+                                    )}
                                 </div>
 
                                 <div className="color-section">
@@ -987,48 +1569,141 @@ const ThreeDMockup = () => {
                                             <div key={color.name}
                                                  className={`color-swatch ${selectedColors.siding?.name === color.name ? 'selected' : ''}`}
                                                  onClick={() => selectColor('siding', color)}>
-                                                <div className="swatch-color" style={{ background: color.value }} />
+                                                <div className="swatch-color" style={{ background: color.value === '__other__' ? 'repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 5px,#f9fafb 5px,#f9fafb 10px)' : color.value }} />
                                                 <div className="swatch-name">{color.name}</div>
                                             </div>
                                         ))}
                                     </div>
+                                    {selectedColors.siding?.value === '__other__' && (
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder='e.g. "Iron Gray" or "Sage with cream trim"'
+                                            value={otherColorText.siding}
+                                            onChange={e => setOtherColorText(p => ({ ...p, siding: e.target.value }))}
+                                            style={{ width: '100%', marginTop: '0.5rem' }}
+                                        />
+                                    )}
                                 </div>
                             </div>
                         )}
 
-                        {materialTab === 'trim' && (
-                            <div className="material-content active">
-                                <div className="color-section">
-                                    <div className="color-brand">Trim & Gutter Color</div>
-                                    <div className="color-grid">
-                                        {TRIM_COLORS.map(color => (
-                                            <div key={color.name}
-                                                 className={`color-swatch ${selectedColors.trim?.name === color.name ? 'selected' : ''}`}
-                                                 onClick={() => selectColor('trim', color)}>
-                                                <div className="swatch-color" style={{ background: color.value }} />
-                                                <div className="swatch-name">{color.name}</div>
-                                            </div>
-                                        ))}
+                        {['trim', 'accents', 'windows', 'doors'].includes(materialTab) && (() => {
+                            const palette = {
+                                trim:    { label: 'Trim & Gutter Color',  list: TRIM_COLORS,   ph: 'e.g. "Aged copper" or "Bright White"' },
+                                accents: { label: 'Shutters & Fascia Color', list: ACCENT_COLORS, ph: 'e.g. "Custom maroon shutters"' },
+                                windows: { label: 'Window Frame Color',   list: TRIM_COLORS,   ph: 'e.g. "Anodized bronze"' },
+                                doors:   { label: 'Front Door Color',     list: DOOR_COLORS,   ph: 'e.g. "Sherwin-Williams Tricorn Black"' },
+                            }[materialTab];
+                            const cat = materialTab;
+                            return (
+                                <div className="material-content active">
+                                    <div className="color-section">
+                                        <div className="color-brand">{palette.label}</div>
+                                        <div className="color-grid">
+                                            {palette.list.map(color => (
+                                                <div key={color.name}
+                                                     className={`color-swatch ${selectedColors[cat]?.name === color.name ? 'selected' : ''}`}
+                                                     onClick={() => selectColor(cat, color)}>
+                                                    <div className="swatch-color" style={{ background: color.value === '__other__' ? 'repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 5px,#f9fafb 5px,#f9fafb 10px)' : color.value }} />
+                                                    <div className="swatch-name">{color.name}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {selectedColors[cat]?.value === '__other__' && (
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder={palette.ph}
+                                                value={otherColorText[cat]}
+                                                onChange={e => setOtherColorText(p => ({ ...p, [cat]: e.target.value }))}
+                                                style={{ width: '100%', marginTop: '0.5rem' }}
+                                            />
+                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
-                        {materialTab === 'windows' && (
+                        {materialTab === 'custom' && (
                             <div className="material-content active">
-                                <div className="color-section">
-                                    <div className="color-brand">Window Frame & Door Color</div>
-                                    <div className="color-grid">
-                                        {TRIM_COLORS.map(color => (
-                                            <div key={color.name}
-                                                 className={`color-swatch ${selectedColors.windows?.name === color.name ? 'selected' : ''}`}
-                                                 onClick={() => selectColor('windows', color)}>
-                                                <div className="swatch-color" style={{ background: color.value }} />
-                                                <div className="swatch-name">{color.name}</div>
+                                <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>
+                                    Add categories that aren't in the standard list — Garage Door, Stone Veneer, Porch Railing, etc.
+                                    Each one is passed verbatim to the AI prompt.
+                                </div>
+
+                                {customCategories.length > 0 && (
+                                    <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
+                                        {customCategories.map(c => (
+                                            <div key={c.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem', background: '#f9fafb' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                    <strong style={{ color: '#1f2937', fontSize: '0.95rem' }}>{c.name}</strong>
+                                                    <button
+                                                        onClick={() => removeCustomCategory(c.id)}
+                                                        style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+                                                    >Remove</button>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        placeholder="Material (e.g. natural stone)"
+                                                        value={c.material}
+                                                        onChange={e => updateCustomCategory(c.id, 'material', e.target.value)}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        placeholder="Color (e.g. warm tan)"
+                                                        value={c.color}
+                                                        onChange={e => updateCustomCategory(c.id, 'color', e.target.value)}
+                                                    />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
+                                )}
+
+                                {showAddCustomCat ? (
+                                    <div style={{ border: '2px dashed #FDB813', borderRadius: 8, padding: '1rem', background: '#fffbeb' }}>
+                                        <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="Category name (e.g. Garage Door, Stone Veneer)"
+                                                value={newCustomCat.name}
+                                                onChange={e => setNewCustomCat(p => ({ ...p, name: e.target.value }))}
+                                                autoFocus
+                                            />
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="Material (optional, e.g. carriage-house steel)"
+                                                value={newCustomCat.material}
+                                                onChange={e => setNewCustomCat(p => ({ ...p, material: e.target.value }))}
+                                            />
+                                            <input
+                                                type="text"
+                                                className="form-input"
+                                                placeholder="Color (optional, e.g. matte black)"
+                                                value={newCustomCat.color}
+                                                onChange={e => setNewCustomCat(p => ({ ...p, color: e.target.value }))}
+                                            />
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                                <button className="btn btn-primary" onClick={addCustomCategory}>Add</button>
+                                                <button className="btn btn-outline" onClick={() => { setShowAddCustomCat(false); setNewCustomCat({ name: '', material: '', color: '' }); }}>Cancel</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className="btn btn-outline"
+                                        onClick={() => setShowAddCustomCat(true)}
+                                        style={{ width: '100%', padding: '0.875rem', borderStyle: 'dashed', borderWidth: 2, fontSize: '0.95rem', fontWeight: 600 }}
+                                    >
+                                        + Add Custom Category
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -1083,7 +1758,7 @@ const ThreeDMockup = () => {
                             )}*/}
 
                             {sourcePhotoKey && previewMode === 'original' && (
-                                <img src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                <AuthedImage src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                             )}
 
                             {sourcePhotoKey && previewMode === 'result' && (
@@ -1101,7 +1776,7 @@ const ThreeDMockup = () => {
                                     >
                                         {/*<AuthedImage src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />*/}
 
-                                        <img src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                                        <AuthedImage src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
 
                                         <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
                                             <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
@@ -1335,6 +2010,43 @@ const ThreeDMockup = () => {
                             <button className="btn btn-outline" onClick={startOver}>Start Over</button>
                             <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
                         </div>
+
+                        {generatedImageSrc && (
+                            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>Download</div>
+                                    {branding.name && (
+                                        <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>Branded: <strong style={{ color: '#1a1f3a' }}>{branding.name}</strong></div>
+                                    )}
+                                </div>
+                                <div className="download-options">
+                                    <button
+                                        className="download-btn"
+                                        onClick={downloadHighRes}
+                                        disabled={downloading.png}
+                                        style={{ opacity: downloading.png ? 0.7 : 1, cursor: downloading.png ? 'wait' : 'pointer' }}
+                                    >
+                                        {downloading.png ? (<><span className="dl-spinner" /> Downloading…</>) : 'High-Res PNG'}
+                                    </button>
+                                    <button
+                                        className="download-btn"
+                                        onClick={downloadWatermarked}
+                                        disabled={downloading.watermark}
+                                        style={{ opacity: downloading.watermark ? 0.7 : 1, cursor: downloading.watermark ? 'wait' : 'pointer' }}
+                                    >
+                                        {downloading.watermark ? (<><span className="dl-spinner" /> Watermarking…</>) : 'Watermarked PNG'}
+                                    </button>
+                                    <button
+                                        className="download-btn"
+                                        onClick={downloadPDF}
+                                        disabled={downloading.pdf}
+                                        style={{ gridColumn: 'span 2', opacity: downloading.pdf ? 0.7 : 1, cursor: downloading.pdf ? 'wait' : 'pointer' }}
+                                    >
+                                        {downloading.pdf ? (<><span className="dl-spinner" /> Building PDF…</>) : 'PDF with Logo'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1359,7 +2071,7 @@ const ThreeDMockup = () => {
                         </div>
                         <div onClick={(e) => e.stopPropagation()} style={{ width: '90vw', height: '80vh', position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
                             {previewMode === 'original' && (
-                                <img src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                <AuthedImage src={sourcePhotoKey} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             )}
                             {previewMode === 'result' && (
                                 generatedImageSrc
@@ -1371,7 +2083,7 @@ const ThreeDMockup = () => {
                                     ref={splitRef}
                                     style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
                                 >
-                                    <img src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <AuthedImage src={sourcePhotoKey} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
                                     <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
                                         <AuthedImage src={generatedImageSrc} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
                                     </div>
@@ -1412,6 +2124,79 @@ const ThreeDMockup = () => {
                 )}
             </div>
 
+            {/* Reopen-in-progress full-screen loader */}
+            {reopening && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ width: 56, height: 56, border: '5px solid rgba(255,255,255,0.25)', borderTopColor: '#FDB813', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+                    <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>Reopening mockup…</div>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>Loading materials, versions and source photo</div>
+                </div>
+            )}
+
+            {/* Gallery item fullscreen viewer (Original / Result / Split) */}
+            {galleryFullscreenItem && (() => {
+                const m = galleryFullscreenItem;
+                const src = m.source_photo_url || null;
+                const gen = m.current_version?.generated_image_url || null;
+                const hasBoth = !!src && !!gen;
+                return (
+                    <div
+                        onClick={() => setGalleryFullscreenItem(null)}
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.94)', zIndex: 10000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+                    >
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setGalleryFullscreenItem(null); }}
+                            style={{ position: 'absolute', top: 16, right: 20, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
+                        >✕ Close</button>
+
+                        <div style={{ position: 'absolute', top: 18, left: 24, color: '#fff', fontSize: 14, fontWeight: 600, opacity: 0.85 }}>
+                            {m.title || 'Untitled mockup'}
+                        </div>
+
+                        {hasBoth && (
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                                <button onClick={(e) => { e.stopPropagation(); setGalleryFsMode('original'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: galleryFsMode === 'original' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: galleryFsMode === 'original' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Original</button>
+                                <button onClick={(e) => { e.stopPropagation(); setGalleryFsMode('result'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: galleryFsMode === 'result' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: galleryFsMode === 'result' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Result</button>
+                                <button onClick={(e) => { e.stopPropagation(); setGalleryFsMode('split'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: galleryFsMode === 'split' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: galleryFsMode === 'split' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Split View</button>
+                            </div>
+                        )}
+
+                        <div onClick={(e) => e.stopPropagation()} style={{ width: '92vw', height: '82vh', position: 'relative', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
+                            {galleryFsMode === 'original' && src && (
+                                <AuthedImage src={src} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            )}
+                            {galleryFsMode === 'result' && gen && (
+                                <AuthedImage src={gen} alt="Generated" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            )}
+                            {galleryFsMode === 'split' && hasBoth && (
+                                <div
+                                    ref={galleryFsSplitRef}
+                                    style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}
+                                >
+                                    <AuthedImage src={src} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${galleryFsSplitPos}%)` }}>
+                                        <AuthedImage src={gen} alt="Generated" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    </div>
+                                    <div style={{ position: 'absolute', top: 12, left: 12, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 12, padding: '4px 10px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>BEFORE</div>
+                                    <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(253,184,19,0.95)', color: '#1a1f3a', fontSize: 12, padding: '4px 10px', borderRadius: 4, fontWeight: 600, pointerEvents: 'none' }}>AFTER</div>
+                                    <div
+                                        onMouseDown={startGalleryFsSplitDrag}
+                                        onTouchStart={startGalleryFsSplitDrag}
+                                        style={{ position: 'absolute', top: 0, bottom: 0, left: `${galleryFsSplitPos}%`, width: 4, background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.6)', cursor: 'ew-resize', transform: 'translateX(-50%)' }}
+                                    >
+                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 44, height: 44, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1f3a', fontSize: 16, fontWeight: 700 }}>⇆</div>
+                                    </div>
+                                </div>
+                            )}
+                            {/* Fallbacks when only one image exists */}
+                            {!hasBoth && galleryFsMode !== 'original' && !gen && (
+                                <div style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 14 }}>No generated image</div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* ─────────────── Modals ─────────────── */}
             {showGallery && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
@@ -1421,22 +2206,86 @@ const ThreeDMockup = () => {
                             <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('gallery')}>×</button>
                         </div>
                         <div className="p-6">
+                            {galleryLoading && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem', gap: '0.75rem' }}>
+                                    <div style={{ width: 44, height: 44, border: '4px solid #e5e7eb', borderTopColor: '#FDB813', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+                                    <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 500 }}>Loading mockups…</div>
+                                </div>
+                            )}
                             <div className="gallery-grid">
-                                {galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>No mockups yet.</div>}
-                                {galleryItems.map(m => (
-                                    <div key={m.id} className="gallery-item">
-                                        <div className="gallery-image" style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, aspectRatio: '4/3', background: '#f3f4f6' }}>
-                                            {m.current_version?.generated_image_url
-                                                ? <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 12 }}>Pending</div>}
+                                {!galleryLoading && galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>No mockups yet.</div>}
+                                {!galleryLoading && galleryItems.map(m => {
+                                    const hasBoth = !!m.current_version?.generated_image_url && !!m.source_photo_url;
+                                    const pos = gallerySplitPos[m.id] ?? 50;
+                                    return (
+                                        <div key={m.id} className="gallery-item" title="Use slider to compare · click info to reopen">
+                                            <div
+                                                className="gallery-image"
+                                                style={{ position: 'relative', overflow: 'hidden', borderRadius: 8, aspectRatio: '4/3', background: '#f3f4f6', userSelect: 'none', touchAction: 'none' }}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {/* Base layer: original (always full width when present) */}
+                                                {m.source_photo_url && (
+                                                    <AuthedImage src={m.source_photo_url} alt="Original" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                )}
+
+                                                {/* Top layer: generated, clipped by split position */}
+                                                {hasBoth && (
+                                                    <div style={{ position: 'absolute', inset: 0, clipPath: `inset(0 0 0 ${pos}%)` }}>
+                                                        <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    </div>
+                                                )}
+
+                                                {/* If only generated exists (no source), just show generated */}
+                                                {!m.source_photo_url && m.current_version?.generated_image_url && (
+                                                    <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                )}
+
+                                                {/* Pending placeholder */}
+                                                {!m.source_photo_url && !m.current_version?.generated_image_url && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 12 }}>Pending</div>
+                                                )}
+
+                                                {/* Split-slider handle + badges (only when both images present) */}
+                                                {hasBoth && (
+                                                    <>
+                                                        <span style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, pointerEvents: 'none' }}>BEFORE</span>
+                                                        <span style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(253,184,19,0.95)', color: '#1a1f3a', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, pointerEvents: 'none' }}>AFTER</span>
+                                                        <div
+                                                            onMouseDown={(e) => startGallerySplitDrag(e, m.id, e.currentTarget.parentElement)}
+                                                            onTouchStart={(e) => startGallerySplitDrag(e, m.id, e.currentTarget.parentElement)}
+                                                            style={{ position: 'absolute', top: 0, bottom: 0, left: `${pos}%`, width: 3, background: '#fff', boxShadow: '0 0 6px rgba(0,0,0,0.6)', cursor: 'ew-resize', transform: 'translateX(-50%)', zIndex: 2 }}
+                                                        >
+                                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 26, height: 26, borderRadius: '50%', background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a1f3a', fontSize: 12, fontWeight: 700 }}>⇆</div>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {/* Fullscreen view button — top-center, only when at least one image is present */}
+                                                {(m.source_photo_url || m.current_version?.generated_image_url) && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setGalleryFullscreenItem(m);
+                                                            setGalleryFsMode(hasBoth ? 'split' : (m.current_version?.generated_image_url ? 'result' : 'original'));
+                                                            setGalleryFsSplitPos(50);
+                                                        }}
+                                                        title="View fullscreen"
+                                                        style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontWeight: 600, zIndex: 3, display: 'flex', alignItems: 'center', gap: 4 }}
+                                                    >
+                                                        ⛶ Fullscreen
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="gallery-info" onClick={() => reopenMockup(m)} style={{ cursor: 'pointer' }} title="Click to reopen">
+                                                <div className="gallery-client">{m.title || 'Untitled mockup'}</div>
+                                                <div className="gallery-date">{new Date(m.updated_at).toLocaleDateString()}</div>
+                                                <div className="gallery-type">Status: {m.status}</div>
+                                                <div style={{ fontSize: 11, color: '#FDB813', marginTop: 4, fontWeight: 600 }}>Click to reopen ›</div>
+                                            </div>
                                         </div>
-                                        <div className="gallery-info">
-                                            <div className="gallery-client">{m.title || 'Untitled mockup'}</div>
-                                            <div className="gallery-date">{new Date(m.updated_at).toLocaleDateString()}</div>
-                                            <div className="gallery-type">Status: {m.status}</div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -1451,13 +2300,21 @@ const ThreeDMockup = () => {
                             <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('recent')}>×</button>
                         </div>
                         <div className="p-6">
-                            {recentItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>Nothing recent yet.</div>}
-                            {recentItems.map(m => (
-                                <div key={m.id} className="recent-item">
+                            {galleryLoading && (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem', gap: '0.75rem' }}>
+                                    <div style={{ width: 44, height: 44, border: '4px solid #e5e7eb', borderTopColor: '#FDB813', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+                                    <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 500 }}>Loading recent projects…</div>
+                                </div>
+                            )}
+                            {!galleryLoading && recentItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>Nothing recent yet.</div>}
+                            {!galleryLoading && recentItems.map(m => (
+                                <div key={m.id} className="recent-item" style={{ cursor: 'pointer' }} onClick={() => reopenMockup(m)} title="Click to reopen">
                                     <div className="recent-preview" style={{ overflow: 'hidden', borderRadius: 8 }}>
                                         {m.current_version?.generated_image_url
                                             ? <AuthedImage src={m.current_version.generated_image_url} alt={m.title || 'Mockup'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            : null}
+                                            : m.source_photo_url
+                                                ? <AuthedImage src={m.source_photo_url} alt="Original" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                : null}
                                     </div>
                                     <div className="recent-details">
                                         <div className="recent-title">{m.title || 'Untitled mockup'}</div>
@@ -1466,6 +2323,7 @@ const ThreeDMockup = () => {
                                             {' • '}
                                             <span className={m.status === 'approved' ? 'status-approved' : 'status-pending'}>{m.status}</span>
                                         </div>
+                                        <div style={{ fontSize: 12, color: '#FDB813', marginTop: 4, fontWeight: 600 }}>Click to reopen ›</div>
                                     </div>
                                 </div>
                             ))}

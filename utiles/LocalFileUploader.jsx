@@ -87,16 +87,22 @@ export default function LocalFileUploader({
                 </div>
             )}
 
-            {files.map((file) => (
-                <FileMosaic
-                    key={file.id}
-                    {...file}
-                    onDelete={() => removeFile(file.id)}
-                    info
-                    preview
-                    smartImgFit="cover"
-                />
-            ))}
+            {files.map((file, idx) => {
+                // Fall back to a stable composite key when the upstream caller
+                // injects a file entry without an `id` (e.g. when prefilling
+                // from a server-side mockup, like the 3D-mockup "Reopen" flow).
+                const key = file.id || file.preview || file.name || `file-${idx}`;
+                return (
+                    <FileMosaic
+                        key={key}
+                        {...file}
+                        onDelete={() => removeFile(file.id)}
+                        info
+                        preview
+                        smartImgFit="cover"
+                    />
+                );
+            })}
         </Dropzone>
     );
 }
