@@ -3,7 +3,9 @@ import {usePathname} from "next/navigation";
 
 const AppFooter = () => {
     const pathname = usePathname();
-    if (pathname.startsWith("/dashboard")){
+    // Hide marketing footer on app routes + the homeowner portal. The
+    // portal has its own slim footer with contractor branding only.
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/portal")){
         return null
     }
     return (

@@ -550,6 +550,30 @@ const ThreeDMockup = () => {
         } catch { /* toasted */ }
     };
 
+    // Flip mockup.is_visible_in_portal. Backend keeps the timeline event
+    // in sync, so the homeowner's portal updates atomically. Mockups
+    // default to HIDDEN — the contractor opts in per spec, so they can
+    // generate multiple drafts without leaking any to the homeowner.
+    const togglePortalVisibility = async () => {
+        if (!currentMockup) { toast.error('Generate a mockup first'); return; }
+        const next = !(currentMockup.is_visible_in_portal === true);
+        // Optimistic update so the button label changes instantly.
+        setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: next } : m));
+        try {
+            await axiosInstance.patch(
+                `/mockup/${currentMockup.id}/visibility`,
+                { visible: next },
+            );
+            toast.success(next
+                ? 'Mockup is now visible on the client portal'
+                : 'Mockup hidden from the client portal',
+            );
+        } catch {
+            // Roll back optimistic change on failure
+            setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: !next } : m));
+        }
+    };
+
     const refineMore = () => {
         toast.info('Tweak materials or AI instructions, then click Generate Mockup again.');
     };
@@ -1265,6 +1289,48 @@ const ThreeDMockup = () => {
 
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
                             <button className="btn btn-primary" onClick={confirmMockup} disabled={!currentMockup}>Confirm This Mockup</button>
+
+                            {/* Share with client — explicit opt-in. Spec
+                                wants the contractor to review + curate
+                                before the homeowner sees anything, so the
+                                default is hidden (badge: red dot off) and
+                                this button flips to "Hide from Client"
+                                when toggled on (badge: green dot live). */}
+                            <button
+                                onClick={togglePortalVisibility}
+                                disabled={!currentMockup}
+                                style={{
+                                    padding: '0.625rem 1rem',
+                                    background: currentMockup?.is_visible_in_portal
+                                        ? '#16a34a'
+                                        : '#1a1f3a',
+                                    color: currentMockup?.is_visible_in_portal
+                                        ? '#fff'
+                                        : '#FDB813',
+                                    border: 'none',
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                    fontSize: 14,
+                                    cursor: currentMockup ? 'pointer' : 'not-allowed',
+                                    opacity: currentMockup ? 1 : 0.5,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 8,
+                                }}
+                            >
+                                <span style={{
+                                    width: 8, height: 8, borderRadius: '50%',
+                                    background: currentMockup?.is_visible_in_portal
+                                        ? '#a7f3d0' : '#9ca3af',
+                                    boxShadow: currentMockup?.is_visible_in_portal
+                                        ? '0 0 0 3px rgba(167,243,208,0.3)' : 'none',
+                                }} />
+                                {currentMockup?.is_visible_in_portal
+                                    ? 'Shared with Client · Click to Hide'
+                                    : 'Share with Client'}
+                            </button>
+
                             <button className="btn btn-secondary" onClick={refineMore} disabled={!currentMockup}>Refine Further</button>
                             <button className="btn btn-outline" onClick={startOver}>Start Over</button>
                             <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>

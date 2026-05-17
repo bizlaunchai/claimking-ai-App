@@ -93,6 +93,7 @@ export default function PortalMessages({ contractorName = 'Your contractor' }) {
         const text = draft.trim();
         if (!text || sending) return;
         setSending(true);
+        setError(null);
         try {
             const { data } = await axiosInstance.post(
                 `/portal-public/${token}/messages`,
@@ -101,8 +102,19 @@ export default function PortalMessages({ contractorName = 'Your contractor' }) {
             );
             setMessages((prev) => [...prev, data]);
             setDraft('');
-        } catch {
-            setError('Could not send your message. Please try again.');
+        } catch (e) {
+            // 429 = rate-limit / duplicate / min-interval — surface the
+            // backend's friendly message verbatim so the homeowner knows
+            // exactly what happened ("wait a moment", "duplicate", etc).
+            const status = e?.response?.status;
+            const msg = e?.response?.data?.message;
+            if (status === 429) {
+                setError(msg || 'You are sending messages too quickly. Please slow down.');
+            } else if (status === 400) {
+                setError(msg || 'Message could not be sent.');
+            } else {
+                setError(msg || 'Could not send your message. Please try again.');
+            }
         } finally {
             setSending(false);
         }
@@ -187,7 +199,7 @@ export default function PortalMessages({ contractorName = 'Your contractor' }) {
                     }}
                     placeholder={`Message ${contractorName}…`}
                     rows={2}
-                    maxLength={5000}
+                    maxLength={2000}
                     style={{
                         width: '100%', padding: '0.5rem 0.75rem',
                         border: '1px solid #e5e7eb', borderRadius: 8,
@@ -197,7 +209,7 @@ export default function PortalMessages({ contractorName = 'Your contractor' }) {
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
                     <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                        {draft.length > 0 ? `${draft.length} / 5000` : 'Press ⌘/Ctrl + Enter to send'}
+                        {draft.length > 0 ? `${draft.length} / 2000` : 'Press ⌘/Ctrl + Enter to send'}
                     </span>
                     <button
                         onClick={send}
