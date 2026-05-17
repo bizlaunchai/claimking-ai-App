@@ -74,7 +74,11 @@ const AppHeader = () => {
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [menuActive]);
 
-    if (pathname.startsWith("/dashboard")){
+    // Skip the marketing-site header on app + public-portal routes — those
+    // pages render their own chrome. /portal/* is the homeowner-facing
+    // token portal which must look standalone (white-labelled to the
+    // contractor, not co-branded with ClaimKing).
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/portal")){
         return null
     }
 
