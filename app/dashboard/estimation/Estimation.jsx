@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast as sonner } from "sonner";
 import SignaturePad from "@/components/signature/SignaturePad";
@@ -14,7 +14,7 @@ import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
 // a blob URL. Module-level cache avoids re-fetching on rerender.
 // ──────────────────────────────────────────────────────────────────────────────
 const _photoBlobCache = new Map();
-function AuthedPhotoThumb({ src }) {
+function AuthedPhotoThumb({ src, imgStyle }) {
     const [url, setUrl] = useState(() => (src ? _photoBlobCache.get(src) ?? null : null));
     useEffect(() => {
         if (!src) { setUrl(null); return; }
@@ -32,7 +32,8 @@ function AuthedPhotoThumb({ src }) {
     if (!url) {
         return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 11 }}>Loading…</div>;
     }
-    return <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
+    const style = imgStyle ?? { width: '100%', height: '100%', objectFit: 'cover', display: 'block' };
+    return <img src={url} alt="" style={style} />;
 }
 
 // ====================== STATIC DATA ======================
@@ -370,6 +371,7 @@ const IconSprite = () => (
 const Estimation = () => {
     // ── Query params (Measurement → Estimate handoff) ─────────────────────
     const searchParams = useSearchParams();
+    const router = useRouter();
 
     // ── Loaded measurement (set when ?measurement_id is present) ──────────
     const [linkedMeasurement, setLinkedMeasurement] = useState(null);
@@ -584,6 +586,50 @@ const Estimation = () => {
         const t = setTimeout(() => document.addEventListener("click", handler, { once: true }), 0);
         return () => { clearTimeout(t); document.removeEventListener("click", handler); };
     }, [moveMenu]);
+
+    // ── Contractor company (for the page header + PDF brand) ──────────
+    // We pull from /profile/:userId which returns business_name + business_logo
+    // (S3 key) joined from the companies row. AuthedPhotoThumb handles the
+    // bearer-token blob fetch for the logo image.
+    const [contractorCompany, setContractorCompany] = useState(null);
+    useEffect(() => {
+        let cancelled = false;
+        let createdBlobUrl = null;
+        (async () => {
+            try {
+                const sup = (await import('@/lib/supabase/client')).createClient();
+                const { data: claimsData } = await sup.auth.getClaims();
+                const uid = claimsData?.claims?.sub;
+                if (!uid) return;
+                const res = await axiosInstance.get(`/profile/${uid}`, { suppressErrorToast: true });
+                if (cancelled) return;
+                const p = res.data ?? {};
+                let logo_url = null;
+                if (p.business_logo) {
+                    try {
+                        const imgRes = await axiosInstance.get(
+                            `/s3/file?key=${encodeURIComponent(p.business_logo)}`,
+                            { responseType: 'blob', suppressErrorToast: true },
+                        );
+                        if (!cancelled) {
+                            logo_url = URL.createObjectURL(imgRes.data);
+                            createdBlobUrl = logo_url;
+                        }
+                    } catch { /* missing logo — fall back to crown */ }
+                }
+                if (cancelled) return;
+                setContractorCompany({
+                    name: p.business_name || null,
+                    logo_url,
+                    address: p.address || null,
+                });
+            } catch { /* non-fatal — header falls back to neutral text */ }
+        })();
+        return () => {
+            cancelled = true;
+            if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+        };
+    }, []);
 
     // ── Credits: cost per generation + user's balance + AI provider status ─
     const refreshCreditsState = useCallback(async () => {
@@ -1134,7 +1180,8 @@ const Estimation = () => {
             const e = res.data?.data;
             if (e?.id) {
                 setAiModal(false);
-                window.location.href = `/dashboard/estimation?estimate_id=${e.id}`;
+                // Client-side nav — sidebar stays mounted, load effect re-fires.
+                router.push(`/dashboard/estimation?estimate_id=${e.id}`);
                 return;
             }
             setAiError({
@@ -2849,9 +2896,19 @@ const Estimation = () => {
                         <section className="estimate-panel">
                             <div className="estimate-header">
                                 <div className="company-info">
-                                    <svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>
+                                    {contractorCompany?.logo_url ? (
+                                        <img
+                                            src={contractorCompany.logo_url}
+                                            alt="logo"
+                                            style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }}
+                                        />
+                                    ) : (
+                                        <svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>
+                                    )}
                                     <div>
-                                        <div className="company-info-text">CLAIMKING</div>
+                                        <div className="company-info-text">
+                                            {(contractorCompany?.name || 'Your Company').toUpperCase()}
+                                        </div>
                                         <div className="company-info-sub">{mode === "insurance" ? "Insurance Restoration Estimate" : "Retail Service Proposal"}</div>
                                     </div>
                                 </div>
@@ -3315,24 +3372,77 @@ const Estimation = () => {
                                         )}
 
                                         {/* History */}
-                                        {signHistory.length > 0 && (
-                                            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
-                                                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Signature history</div>
-                                                {signHistory.map(s => (
-                                                    <div key={s.id} style={{ fontSize: 11.5, padding: 6, background: '#fafbfc', borderRadius: 5, marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                                        <div>
-                                                            <strong style={{ color: '#1a1f3a' }}>{s.signer_name}</strong> · <span style={{ color: '#6b7280' }}>{s.method.replace('_', ' ')}</span>
-                                                            <div style={{ color: '#9ca3af', fontSize: 10.5 }}>{new Date(s.signed_at ?? s.created_at).toLocaleString()}</div>
-                                                        </div>
-                                                        <span style={{
-                                                            fontSize: 10, padding: '2px 6px', borderRadius: 3, fontWeight: 700,
-                                                            background: s.esign_status === 'completed' ? '#dcfce7' : s.esign_status === 'rotated' ? '#f3f4f6' : '#fef3c7',
-                                                            color: s.esign_status === 'completed' ? '#166534' : s.esign_status === 'rotated' ? '#6b7280' : '#b45309',
-                                                        }}>{s.esign_status}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        {signHistory.length > 0 && (() => {
+                                            // The latest `completed` row is the legally-binding "current"
+                                            // signature. Older completed rows have been superseded by the
+                                            // backend — show them muted with a "Replaced" badge so the
+                                            // audit trail is visible without being confusing.
+                                            const currentId = signHistory.find(
+                                                (x) => x.esign_status === 'completed' && x.signature_image_key,
+                                            )?.id;
+                                            return (
+                                                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
+                                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Signature history</div>
+                                                    {signHistory.map((s) => {
+                                                        const isCurrent = s.id === currentId;
+                                                        const isSuperseded = s.esign_status === 'superseded';
+                                                        const muted = isSuperseded || s.esign_status === 'rotated';
+                                                        const badge = isCurrent
+                                                            ? { label: 'current', bg: '#fffaeb', fg: '#92400e', border: '#FDB813' }
+                                                            : isSuperseded
+                                                                ? { label: 'replaced', bg: '#f3f4f6', fg: '#6b7280', border: '#e5e7eb' }
+                                                                : s.esign_status === 'completed'
+                                                                    ? { label: 'completed', bg: '#dcfce7', fg: '#166534', border: '#bbf7d0' }
+                                                                    : s.esign_status === 'rotated'
+                                                                        ? { label: 'rotated', bg: '#f3f4f6', fg: '#6b7280', border: '#e5e7eb' }
+                                                                        : { label: s.esign_status, bg: '#fef3c7', fg: '#b45309', border: '#fde68a' };
+                                                        return (
+                                                            <div key={s.id} style={{
+                                                                fontSize: 11.5, padding: 8, borderRadius: 5, marginBottom: 6,
+                                                                background: isCurrent ? '#fffef7' : '#fafbfc',
+                                                                border: `1px solid ${isCurrent ? '#FDB813' : '#f3f4f6'}`,
+                                                                opacity: muted ? 0.65 : 1,
+                                                            }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                                                    <div>
+                                                                        <strong style={{ color: '#1a1f3a' }}>{s.signer_name}</strong> · <span style={{ color: '#6b7280' }}>{s.method.replace('_', ' ')}</span>
+                                                                        <div style={{ color: '#9ca3af', fontSize: 10.5 }}>{new Date(s.signed_at ?? s.created_at).toLocaleString()}</div>
+                                                                    </div>
+                                                                    <span style={{
+                                                                        fontSize: 10, padding: '2px 6px', borderRadius: 3, fontWeight: 700,
+                                                                        textTransform: 'uppercase', letterSpacing: '0.04em', alignSelf: 'flex-start',
+                                                                        background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}`,
+                                                                    }}>{badge.label}</span>
+                                                                </div>
+                                                                {s.signature_image_key ? (
+                                                                    <div style={{
+                                                                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 4,
+                                                                        padding: 4, minHeight: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                        filter: isSuperseded ? 'grayscale(1)' : 'none',
+                                                                    }}>
+                                                                        <AuthedPhotoThumb
+                                                                            src={`/s3/file?key=${encodeURIComponent(s.signature_image_key)}`}
+                                                                            imgStyle={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain', display: 'block' }}
+                                                                        />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{ color: '#9ca3af', fontSize: 10.5, fontStyle: 'italic', padding: '6px 4px' }}>
+                                                                        {s.esign_status === 'pending' || s.esign_status === 'viewed'
+                                                                            ? 'Waiting for homeowner to sign…'
+                                                                            : 'No signature image on file'}
+                                                                    </div>
+                                                                )}
+                                                                {isSuperseded && (
+                                                                    <div style={{ marginTop: 6, fontSize: 10.5, color: '#6b7280', fontStyle: 'italic' }}>
+                                                                        Replaced by a newer signature above.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                     <div className="sig-section">
                                         <div className="sig-section-title">Collect deposit</div>
@@ -4254,7 +4364,14 @@ const Estimation = () => {
                                                 onMouseLeave={(el) => { el.currentTarget.style.borderColor = "#e5e7eb"; }}
                                                 onClick={() => {
                                                     setSavedEstimatesModal(false);
-                                                    window.location.href = `/dashboard/estimation?estimate_id=${e.id}`;
+                                                    // Flip the loading flag right away so the overlay
+                                                    // appears the instant the user clicks — the load
+                                                    // effect (deps: [searchParams]) will keep it on
+                                                    // through the actual fetch and clear it when done.
+                                                    setEstimateLoading(true);
+                                                    // Client-side navigation so the dashboard sidebar
+                                                    // stays mounted — full reload would flash the chrome.
+                                                    router.push(`/dashboard/estimation?estimate_id=${e.id}`);
                                                 }}
                                             >
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -4291,6 +4408,18 @@ const Estimation = () => {
                         <div className="loader"></div>
                         <div className="loading-text">{loading.text}</div>
                         <div className="loading-sub">{loading.sub}</div>
+                    </div>
+                </div>
+            )}
+
+            {/* Saved-estimate hydration overlay — fires when ?estimate_id=
+                appears in the URL and stays until sections + client load. */}
+            {estimateLoading && !loading.active && (
+                <div className="loading-overlay active">
+                    <div className="loading-content">
+                        <div className="loader"></div>
+                        <div className="loading-text">Loading estimate…</div>
+                        <div className="loading-sub">Restoring sections, items, and client</div>
                     </div>
                 </div>
             )}
