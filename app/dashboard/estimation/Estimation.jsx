@@ -4,6 +4,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast as sonner } from "sonner";
 import SignaturePad from "@/components/signature/SignaturePad";
+import ClientSelector from "@/components/clients/ClientSelector";
+import { toClientShape } from "@/lib/clients/newClientForm";  // used to hydrate client from API rows
+
 import "./estimation.css";
 import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
 
@@ -182,19 +185,9 @@ const TERMS_DEFAULT = {
 
 const ICON_MAP = { success: "i-check-circle", warn: "i-warning", error: "i-warning" };
 
-const NEW_CLIENT_BLANK = {
-    first_name: "", last_name: "", email: "", phone: "",
-    address: "", city: "", state: "", zip_code: "",
-    preferred_contact: "both",
-};
-
-// Map a client_portals row to the lightweight shape estimation uses internally.
-const toClientShape = (raw) => ({
-    id: raw.id,
-    name: raw.full_name || `${raw.first_name ?? ""} ${raw.last_name ?? ""}`.trim() || "Unnamed",
-    address: [raw.address, raw.city, raw.state, raw.zip_code].filter(Boolean).join(", "),
-    claim: raw.claim_number || raw.claim || null,
-});
+// Client form + selector logic now lives in `components/clients/ClientSelector.jsx`
+// (with shared helpers in `lib/clients/newClientForm.js`), so the same
+// UI + shape + rules apply across Estimation, Measurement, Mockup, and Policy Analysis.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PolicyAnalysisSupplementPanel
@@ -423,14 +416,8 @@ const Estimation = () => {
         name: "", qty: "1", unit: "EA", price: "", section: "", saveToLib: true, category: "general",
     });
 
-    // ── Client selection (tabbed inline section, not a modal) ────────────
-    const [clientTab, setClientTab] = useState("existing");
-    const [clientSearch, setClientSearch] = useState("");
-    const [clientList, setClientList] = useState([]);
-    const [clientsLoading, setClientsLoading] = useState(false);
-    const [newClientForm, setNewClientForm] = useState(NEW_CLIENT_BLANK);
-    const [creatingClient, setCreatingClient] = useState(false);
-    const [clientFormError, setClientFormError] = useState(null);
+    // Client selection state lives inside <ClientSelector/>. Estimation only
+    // tracks the selected `client` shape (declared above).
 
     // ── Other modals ─────────────────────────────────────────────────────
     const [finalizeModal, setFinalizeModal] = useState(false);
@@ -544,27 +531,6 @@ const Estimation = () => {
         document.addEventListener("keydown", handler);
         return () => document.removeEventListener("keydown", handler);
     }, []);
-
-    // ── Load existing clients (debounced search) ─────────────────────────
-    useEffect(() => {
-        if (clientTab !== "existing" || client) return;
-        let cancelled = false;
-        setClientsLoading(true);
-        const timer = setTimeout(async () => {
-            try {
-                const params = {};
-                if (clientSearch.trim()) params.search = clientSearch.trim();
-                const res = await axiosInstance.get("/client-portal", { params });
-                if (cancelled) return;
-                setClientList(res.data?.data ?? []);
-            } catch {
-                /* axiosInstance toasts */
-            } finally {
-                if (!cancelled) setClientsLoading(false);
-            }
-        }, 250);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [clientTab, clientSearch, client]);
 
     // ── Auto-open the Auto-Build modal once a client is picked, but only
     //    if the measurement handoff arrived without one. The flag is set
@@ -1013,57 +979,8 @@ const Estimation = () => {
         return true;
     };
 
-    const selectExistingClient = (raw) => {
-        const shaped = toClientShape(raw);
-        setClient(shaped);
-        toast(`Client set: ${shaped.name}`, "success");
-    };
-
-    const handleNewClientField = (field, value) =>
-        setNewClientForm((prev) => ({ ...prev, [field]: value }));
-
-    const submitNewClient = async () => {
-        setClientFormError(null);
-        const required = ["first_name", "last_name", "email", "phone", "address", "city", "state", "zip_code"];
-        const missing = required.filter((k) => !newClientForm[k]?.trim());
-        if (missing.length) {
-            const msg = `Please fill in: ${missing.map((f) => f.replace("_", " ")).join(", ")}`;
-            setClientFormError(msg);
-            sonner.error(msg);
-            return;
-        }
-
-        setCreatingClient(true);
-        try {
-            const res = await axiosInstance.post("/client-portal", {
-                first_name: newClientForm.first_name,
-                last_name: newClientForm.last_name,
-                email: newClientForm.email,
-                phone: newClientForm.phone,
-                address: newClientForm.address,
-                city: newClientForm.city,
-                state: newClientForm.state.toUpperCase().slice(0, 2),
-                zip_code: newClientForm.zip_code,
-                property_type: "single-family",
-                insurance_company: "other",
-                claim_status: 1,
-            });
-            const created = res.data?.data;
-            sonner.success("Client created");
-            if (created) selectExistingClient(created);
-            setNewClientForm(NEW_CLIENT_BLANK);
-            setClientTab("existing");
-        } catch (err) {
-            setClientFormError(err?.userMessage ?? "Could not create client.");
-        } finally {
-            setCreatingClient(false);
-        }
-    };
-
-    const changeClient = () => {
-        setClient(null);
-        setClientTab("existing");
-    };
+    // ClientSelector emits the shaped client (or null to clear).
+    const handleClientChange = (shaped) => setClient(shaped);
 
     // ====================== STAGE TRANSITIONS ======================
     const showBuilder = () => setHasStarted(true);
@@ -2555,183 +2472,41 @@ const Estimation = () => {
             <main className={`main-container ${hasStarted ? '' : 'est-start-layout'}`}>
 
                 {/* ─────────────── Client selection ─────────────── */}
-                {!client && (
-                    <div className="cs-card" id="estClientSection">
-                        {/* Measurement-waiting banner — appears when the user
-                            arrived from "Use in Estimate" without a client. */}
-                        {linkedMeasurement && (
-                            <div style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                padding: "10px 14px", marginBottom: 14,
-                                background: "linear-gradient(135deg,#eff6ff,#fff)",
-                                border: "1px solid #93c5fd", borderRadius: 8,
-                                fontSize: 13, color: "#1e3a8a",
-                            }}>
-                                <span style={{
-                                    background: "#1d4ed8", color: "white",
-                                    fontSize: 11, fontWeight: 600,
-                                    padding: "2px 8px", borderRadius: 10,
-                                    textTransform: "uppercase", letterSpacing: 0.3,
-                                    whiteSpace: "nowrap",
-                                }}>Measurement linked</span>
-                                <span style={{ flex: 1 }}>
-                                    {linkedMeasurement.extracted_data?.squares ?? "—"} sq
-                                    {linkedMeasurement.source_provider && linkedMeasurement.source_provider !== "unknown"
-                                        ? ` · ${linkedMeasurement.source_provider}` : ""}
-                                    {" — "}<strong>pick a client below</strong> to start the AI estimate.
-                                </span>
-                            </div>
-                        )}
-                        <div className="cs-tabs">
-                            <button
-                                className={`cs-tab-btn ${clientTab === "existing" ? "active" : ""}`}
-                                onClick={() => setClientTab("existing")}
-                            >Existing Client</button>
-                            <button
-                                className={`cs-tab-btn ${clientTab === "new" ? "active" : ""}`}
-                                onClick={() => setClientTab("new")}
-                            >New Client</button>
+                <ClientSelector
+                    client={client}
+                    onChange={handleClientChange}
+                    scrollId="estClientSection"
+                    banner={linkedMeasurement && (
+                        <div style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "10px 14px", marginBottom: 14,
+                            background: "linear-gradient(135deg,#eff6ff,#fff)",
+                            border: "1px solid #93c5fd", borderRadius: 8,
+                            fontSize: 13, color: "#1e3a8a",
+                        }}>
+                            <span style={{
+                                background: "#1d4ed8", color: "white",
+                                fontSize: 11, fontWeight: 600,
+                                padding: "2px 8px", borderRadius: 10,
+                                textTransform: "uppercase", letterSpacing: 0.3,
+                                whiteSpace: "nowrap",
+                            }}>Measurement linked</span>
+                            <span style={{ flex: 1 }}>
+                                {linkedMeasurement.extracted_data?.squares ?? "—"} sq
+                                {linkedMeasurement.source_provider && linkedMeasurement.source_provider !== "unknown"
+                                    ? ` · ${linkedMeasurement.source_provider}` : ""}
+                                {" — "}<strong>pick a client below</strong> to start the AI estimate.
+                            </span>
                         </div>
-
-                        {clientTab === "existing" && (
-                            <div>
-                                <input
-                                    type="text"
-                                    className="cs-search-input"
-                                    placeholder="Type client name, address, email or phone…"
-                                    value={clientSearch}
-                                    onChange={(e) => setClientSearch(e.target.value)}
-                                />
-                                <div style={{ display: "grid", gap: ".5rem", maxHeight: 280, overflowY: "auto" }}>
-                                    {clientsLoading && (
-                                        <div style={{ fontSize: 13, color: "#6b7280", padding: ".5rem" }}>Searching…</div>
-                                    )}
-                                    {!clientsLoading && clientList.length === 0 && (
-                                        <div style={{ fontSize: 13, color: "#6b7280", padding: ".5rem" }}>
-                                            No clients found. Switch to <strong>New Client</strong> to add one.
-                                        </div>
-                                    )}
-                                    {clientList.map((c) => (
-                                        <div
-                                            key={c.id}
-                                            className="cs-option"
-                                            onClick={() => selectExistingClient(c)}
-                                        >
-                                            <div>
-                                                <div>
-                                                    <div style={{ fontWeight: 600, color: "#1f2937" }}>{c.full_name || `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()}</div>
-                                                    <div style={{ fontSize: ".75rem", color: "#6b7280" }}>
-                                                        {[c.address, c.city, c.state].filter(Boolean).join(", ")}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    className="cs-btn cs-btn-outline"
-                                                    style={{ padding: ".375rem .75rem", fontSize: ".75rem" }}
-                                                    onClick={(e) => { e.stopPropagation(); selectExistingClient(c); }}
-                                                >Select Client</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {clientTab === "new" && (
-                            <div>
-                                <div className="cs-form-grid">
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">First Name</label>
-                                        <input type="text" className="cs-form-input" placeholder="John"
-                                            value={newClientForm.first_name}
-                                            onChange={(e) => handleNewClientField("first_name", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">Last Name</label>
-                                        <input type="text" className="cs-form-input" placeholder="Smith"
-                                            value={newClientForm.last_name}
-                                            onChange={(e) => handleNewClientField("last_name", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">Email</label>
-                                        <input type="email" className="cs-form-input" placeholder="john@example.com"
-                                            value={newClientForm.email}
-                                            onChange={(e) => handleNewClientField("email", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">Phone</label>
-                                        <input type="tel" className="cs-form-input" placeholder="(555) 123-4567"
-                                            value={newClientForm.phone}
-                                            onChange={(e) => handleNewClientField("phone", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group full-width">
-                                        <label className="cs-form-label required">Address</label>
-                                        <input type="text" className="cs-form-input" placeholder="123 Main Street"
-                                            value={newClientForm.address}
-                                            onChange={(e) => handleNewClientField("address", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">City</label>
-                                        <input type="text" className="cs-form-input" placeholder="Dallas"
-                                            value={newClientForm.city}
-                                            onChange={(e) => handleNewClientField("city", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">State</label>
-                                        <input type="text" className="cs-form-input" maxLength={2} placeholder="TX"
-                                            value={newClientForm.state}
-                                            onChange={(e) => handleNewClientField("state", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label required">ZIP Code</label>
-                                        <input type="text" className="cs-form-input" placeholder="75201"
-                                            value={newClientForm.zip_code}
-                                            onChange={(e) => handleNewClientField("zip_code", e.target.value)} />
-                                    </div>
-                                    <div className="cs-form-group">
-                                        <label className="cs-form-label">Preferred Contact</label>
-                                        <div style={{ display: "flex", gap: "1rem", marginTop: ".5rem" }}>
-                                            {["sms", "email", "both"].map((o) => (
-                                                <label key={o} style={{ fontSize: ".875rem" }}>
-                                                    <input type="radio" name="estContact" value={o}
-                                                        checked={newClientForm.preferred_contact === o}
-                                                        onChange={() => handleNewClientField("preferred_contact", o)} />
-                                                    {" "}{o.toUpperCase()}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {clientFormError && (
-                                        <div className="cs-form-group full-width cs-error-banner" role="alert">
-                                            {clientFormError}
-                                        </div>
-                                    )}
-                                    <div className="cs-form-group full-width">
-                                        <button type="button" className="cs-btn cs-btn-primary"
-                                            onClick={submitNewClient}
-                                            disabled={creatingClient}>
-                                            {creatingClient ? "Creating…" : "Create & Continue"}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* ─────────────── Selected client bar ─────────────── */}
-                {client && (
-                    <div className="cs-selected-bar">
-                        <div className="cs-selected-info">
-                            <span className="cs-selected-name">{client.name}</span>
-                            {client.address && <span className="cs-selected-address">{client.address}</span>}
-                            <a href="#" className="cs-action-link" onClick={(e) => { e.preventDefault(); changeClient(); }}>Change</a>
-                        </div>
-                        <div className="cs-selected-actions">
+                    )}
+                    selectedExtraActions={(
+                        <>
                             <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>View Previous Estimates</a>
                             <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>Client Preferences</a>
-                        </div>
-                    </div>
-                )}
+                        </>
+                    )}
+                />
+
 
                 {/* ─────────────── Measurement source banner ─────────────── */}
                 {linkedMeasurement && (

@@ -1,0 +1,72 @@
+/* =========================================================================
+   ClientSelector — shared client pick / create UI
+   Used across: Estimation, Measurement Reports, 3D Mockup, Policy Analysis.
+   Visual language: ClaimKing navy (#1a1f3a) + gold (#FDB813).
+   ========================================================================= */
+
+.cs-card{
+    background:#fff;border-radius:12px;padding:1.5rem;
+    margin:1rem auto 1.5rem;max-width:1600px;
+    border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+
+.cs-tabs{display:flex;gap:.5rem;border-bottom:1px solid #e5e7eb;margin-bottom:1.5rem}
+.cs-tab-btn{
+    padding:.75rem 1.5rem;background:transparent;border:none;
+    border-bottom:2px solid transparent;font-size:.875rem;font-weight:500;
+    color:#6b7280;cursor:pointer;transition:all .2s ease;
+}
+.cs-tab-btn:hover{color:#374151}
+.cs-tab-btn.active{color:#FDB813;border-bottom-color:#FDB813}
+
+.cs-search-input{
+    width:100%;padding:.875rem 1rem;border:2px solid #e5e7eb;border-radius:8px;
+    font-size:.875rem;margin-bottom:1rem;box-sizing:border-box;
+}
+.cs-search-input:focus{outline:none;border-color:#FDB813;box-shadow:0 0 0 3px rgba(253,184,19,.1)}
+
+.cs-list{display:grid;gap:.5rem;max-height:320px;overflow-y:auto}
+.cs-empty{font-size:13px;color:#6b7280;padding:.5rem}
+
+.cs-btn{
+    padding:.625rem 1.25rem;border-radius:6px;font-size:.875rem;font-weight:600;
+    cursor:pointer;transition:all .2s ease;border:none;
+    display:inline-flex;align-items:center;gap:.5rem;
+}
+.cs-btn-primary{
+    background:linear-gradient(135deg,#FDB813,#d4a000);color:#1a1f3a;
+    box-shadow:0 2px 8px rgba(253,184,19,.3);
+}
+.cs-btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(253,184,19,.4)}
+.cs-btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.cs-btn-outline{background:#fff;color:#1a1f3a;border:1px solid #e5e7eb}
+.cs-btn-outline:hover{background:#f9fafb;border-color:#FDB813}
+
+.cs-option{cursor:pointer}
+.cs-option > div.cs-option-inner{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    padding:.75rem;background:#f9fafb;border-radius:6px;
+    border:1px solid transparent;transition:all .2s ease;
+}
+.cs-option:hover > div.cs-option-inner{background:#fef9e6;border-color:#FDB813}
+.cs-option-name{font-weight:600;color:#1f2937}
+.cs-option-addr{font-size:.75rem;color:#6b7280;margin-top:2px}
+.cs-option-meta{font-size:.75rem;color:#4b5563;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap}
+.cs-option-claim{font-size:.7rem;color:#9ca3af;margin-top:4px}
+
+.cs-selected-bar{
+    display:flex;padding:1rem;
+    background:linear-gradient(135deg,#fef9e6,#fffbeb);
+    border:1px solid #FDB813;border-radius:8px;
+    margin:1rem auto 1.5rem;max-width:1600px;
+    align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;
+}
+.cs-selected-info{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.cs-selected-name{font-weight:600;color:#1a1f3a}
+.cs-selected-address{color:#6b7280;font-size:.875rem}
+.cs-selected-actions{display:flex;gap:.75rem;flex-wrap:wrap}
+.cs-action-link{
+    color:#FDB813;font-size:.875rem;text-decoration:none;font-weight:500;
+    cursor:pointer;background:none;border:none;padding:0;
+}
+.cs-action-link:hover{color:#d4a000}

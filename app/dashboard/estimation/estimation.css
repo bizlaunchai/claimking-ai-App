@@ -360,6 +360,7 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
 .cs-form-label.required::after{content:' *';color:#dc2626}
 .cs-form-input{padding:.625rem .875rem;border:1px solid #e5e7eb;border-radius:6px;font-size:.875rem;transition:all .2s ease}
 .cs-form-input:focus{outline:none;border-color:#FDB813;box-shadow:0 0 0 3px rgba(253,184,19,.1)}
+.cs-input-error{border-color:#dc2626 !important;box-shadow:0 0 0 3px rgba(220,38,38,.1) !important}
 .cs-btn{padding:.625rem 1.25rem;border-radius:6px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .2s ease;border:none;display:inline-flex;align-items:center;gap:.5rem}
 .cs-btn-primary{background:linear-gradient(135deg,#FDB813,#d4a000);color:#1a1f3a;box-shadow:0 2px 8px rgba(253,184,19,.3)}
 .cs-btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(253,184,19,.4)}

@@ -5,23 +5,12 @@ import "./measurement-hero.css"
 import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
-
-const NEW_CLIENT_BLANK = {
-    first_name: '', last_name: '', email: '', phone: '',
-    address: '', city: '', state: '', zip_code: '',
-};
+import ClientSelector from "@/components/clients/ClientSelector";
 
 const Page = () => {
 
-    // ── Client selection (real API-backed, mirrors 3D mockup) ────────────
-    const [activeClientTab, setActiveClientTab] = useState('existing');
+    // Client selection — internal state lives in <ClientSelector/>.
     const [selectedClient, setSelectedClient] = useState(null);
-    const [clientSearch, setClientSearch] = useState('');
-    const [clientList, setClientList] = useState([]);
-    const [clientsLoading, setClientsLoading] = useState(false);
-    const [newClientForm, setNewClientForm] = useState(NEW_CLIENT_BLANK);
-    const [creatingClient, setCreatingClient] = useState(false);
-    const [clientFormError, setClientFormError] = useState(null);
 
     // ── Upload + extraction ──────────────────────────────────────────────
     const [activeInputTab, setActiveInputTab] = useState('report');
@@ -109,85 +98,14 @@ const Page = () => {
     // Load list on mount so the header badge shows the real count.
     useEffect(() => { refreshReportList(); }, [refreshReportList]);
 
-    // ── Load clients (debounced search) ──────────────────────────────────
-    useEffect(() => {
-        if (activeClientTab !== 'existing' || selectedClient) return;
-        let cancelled = false;
-        setClientsLoading(true);
-        const timer = setTimeout(async () => {
-            try {
-                const params = {};
-                if (clientSearch.trim()) params.search = clientSearch.trim();
-                const res = await axiosInstance.get('/client-portal', { params });
-                if (cancelled) return;
-                setClientList(res.data?.data ?? []);
-            } catch { /* axiosInstance toasts */ } finally {
-                if (!cancelled) setClientsLoading(false);
-            }
-        }, 250);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [activeClientTab, clientSearch, selectedClient]);
-
-    // ── Client handlers ──────────────────────────────────────────────────
-    const switchClientTab = (tab) => setActiveClientTab(tab);
-
-    const selectClient = (raw) => {
-        const name =
-            raw.full_name ||
-            `${raw.first_name ?? ''} ${raw.last_name ?? ''}`.trim() ||
-            'Unnamed';
-        setSelectedClient({
-            id: raw.id,
-            name,
-            address: [raw.address, raw.city, raw.state, raw.zip_code].filter(Boolean).join(', '),
-            stats: '',
-        });
-    };
-
-    const handleNewClientField = (field, value) =>
-        setNewClientForm(prev => ({ ...prev, [field]: value }));
-
-    const createClient = async () => {
-        setClientFormError(null);
-        const required = ['first_name', 'last_name', 'email', 'phone', 'address', 'city', 'state', 'zip_code'];
-        const missing = required.filter(k => !newClientForm[k]?.trim());
-        if (missing.length) {
-            const msg = `Please fill in: ${missing.map(f => f.replace('_', ' ')).join(', ')}`;
-            setClientFormError(msg);
-            toast.error(msg);
-            return;
+    // ClientSelector → emits shaped client (or null when cleared).
+    // Clearing also resets the extraction result tied to the previous client.
+    const handleClientChange = (shaped) => {
+        setSelectedClient(shaped);
+        if (!shaped) {
+            setExtractResult(null);
+            setExtractError(null);
         }
-        setCreatingClient(true);
-        try {
-            const res = await axiosInstance.post('/client-portal', {
-                first_name: newClientForm.first_name,
-                last_name: newClientForm.last_name,
-                email: newClientForm.email,
-                phone: newClientForm.phone,
-                address: newClientForm.address,
-                city: newClientForm.city,
-                state: newClientForm.state.toUpperCase().slice(0, 2),
-                zip_code: newClientForm.zip_code,
-                property_type: 'single-family',
-                insurance_company: 'other',
-                claim_status: 1,
-            });
-            const created = res.data?.data;
-            toast.success('Client created');
-            if (created) selectClient(created);
-            setNewClientForm(NEW_CLIENT_BLANK);
-            setActiveClientTab('existing');
-        } catch (err) {
-            setClientFormError(err?.userMessage ?? 'Could not create client.');
-        } finally {
-            setCreatingClient(false);
-        }
-    };
-
-    const changeClient = () => {
-        setSelectedClient(null);
-        setExtractResult(null);
-        setExtractError(null);
     };
 
     // ── Input tab + file upload ──────────────────────────────────────────
@@ -509,184 +427,13 @@ const Page = () => {
 
             {/* Main Container */}
             <div className="main-container mr-grid">
-                {/* Client Selection Card */}
-                <div className="client-selection-card">
-                    <div className="tabs">
-                        <button
-                            className={`tab-btn ${activeClientTab === 'existing' ? 'active' : ''}`}
-                            onClick={() => switchClientTab('existing')}
-                        >
-                            Existing Client
-                        </button>
-                        <button
-                            className={`tab-btn ${activeClientTab === 'new' ? 'active' : ''}`}
-                            onClick={() => switchClientTab('new')}
-                        >
-                            New Client
-                        </button>
-                    </div>
+                {/* Client Selection — shared component (same UX as Estimation). */}
+                <ClientSelector
+                    client={selectedClient}
+                    onChange={handleClientChange}
+                    scrollId="measurementClientSection"
+                />
 
-                    {/* Existing Client Tab */}
-                    {activeClientTab === 'existing' && (
-                        <div className="tab-content active">
-                            <div style={{position: 'relative'}}>
-                                <input
-                                    type="text"
-                                    className="search-input"
-                                    placeholder="Search client name, property address, or phone..."
-                                    value={clientSearch}
-                                    onChange={(e) => setClientSearch(e.target.value)}
-                                    style={{paddingLeft: '1rem'}}
-                                />
-                            </div>
-
-                            <div style={{ display: 'grid', gap: '0.5rem', maxHeight: 280, overflowY: 'auto', marginTop: '0.5rem' }}>
-                                {clientsLoading && (
-                                    <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>Searching…</div>
-                                )}
-                                {!clientsLoading && clientList.length === 0 && (
-                                    <div style={{ fontSize: 13, color: '#6b7280', padding: '0.5rem' }}>
-                                        No clients found. Switch to <strong>New Client</strong> to add one.
-                                    </div>
-                                )}
-                                {clientList.map(c => (
-                                    <div
-                                        key={c.id}
-                                        className="client-option"
-                                        onClick={() => selectClient(c)}
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: 6 }}>
-                                            <div>
-                                                <div style={{ fontWeight: 600, color: '#1f2937' }}>{c.full_name || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()}</div>
-                                                <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                                                    {[c.address, c.city, c.state].filter(Boolean).join(', ')}
-                                                </div>
-                                            </div>
-                                            <button
-                                                className="btn btn-outline"
-                                                style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem' }}
-                                                onClick={(e) => { e.stopPropagation(); selectClient(c); }}
-                                            >Use Client</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/*<div style={{display: 'grid', gap: '0.5rem'}}>
-                                <div className="client-option" onClick={() => selectClient('Johnson Property')}>
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '0.75rem',
-                                        background: '#f9fafb',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}>
-                                        <div>
-                                            <div style={{fontWeight: '600', color: '#1f2937'}}>Johnson Property</div>
-                                            <div style={{fontSize: '0.75rem', color: '#6b7280'}}>123 Main St, Dallas, TX
-                                                • 3 reports on file
-                                            </div>
-                                        </div>
-                                        <button className="btn btn-outline"
-                                                style={{padding: '0.375rem 0.75rem', fontSize: '0.75rem'}}>Use Client
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>*/}
-                        </div>
-                    )}
-
-                    {/* New Client Tab */}
-                    {activeClientTab === 'new' && (
-                        <div className="tab-content active">
-                            <form className="form-grid" onSubmit={(e) => { e.preventDefault(); createClient(); }}>
-                                <div className="form-group">
-                                    <label className="form-label required">First Name</label>
-                                    <input type="text" className="form-input" placeholder="John"
-                                        value={newClientForm.first_name}
-                                        onChange={(e) => handleNewClientField('first_name', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Last Name</label>
-                                    <input type="text" className="form-input" placeholder="Smith"
-                                        value={newClientForm.last_name}
-                                        onChange={(e) => handleNewClientField('last_name', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Email</label>
-                                    <input type="email" className="form-input" placeholder="john@example.com"
-                                        value={newClientForm.email}
-                                        onChange={(e) => handleNewClientField('email', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">Phone</label>
-                                    <input type="tel" className="form-input" placeholder="(555) 123-4567"
-                                        value={newClientForm.phone}
-                                        onChange={(e) => handleNewClientField('phone', e.target.value)} />
-                                </div>
-                                <div className="form-group full-width">
-                                    <label className="form-label required">Address</label>
-                                    <input type="text" className="form-input" placeholder="123 Main Street"
-                                        value={newClientForm.address}
-                                        onChange={(e) => handleNewClientField('address', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">City</label>
-                                    <input type="text" className="form-input" placeholder="Dallas"
-                                        value={newClientForm.city}
-                                        onChange={(e) => handleNewClientField('city', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">State</label>
-                                    <input type="text" className="form-input" maxLength={2} placeholder="TX"
-                                        value={newClientForm.state}
-                                        onChange={(e) => handleNewClientField('state', e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label required">ZIP Code</label>
-                                    <input type="text" className="form-input" placeholder="75201"
-                                        value={newClientForm.zip_code}
-                                        onChange={(e) => handleNewClientField('zip_code', e.target.value)} />
-                                </div>
-                                {clientFormError && (
-                                    <div className="form-group full-width" role="alert" style={{
-                                        background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #dc2626',
-                                        color: '#7f1d1d', padding: '10px 12px', borderRadius: 6, fontSize: 13,
-                                    }}>
-                                        {clientFormError}
-                                    </div>
-                                )}
-                                <div className="form-group full-width">
-                                    <button type="submit" className="btn btn-primary" disabled={creatingClient}>
-                                        {creatingClient ? 'Creating…' : 'Create Client & Continue'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-                </div>
-
-                {/* Selected Client Bar */}
-                {selectedClient && (
-                    <div className="selected-client-bar active">
-                        <div className="client-info">
-                            <div>
-                                <div className="client-name">{selectedClient.name}</div>
-                                <div className="client-address">{selectedClient.address}</div>
-                            </div>
-                            <div className="client-stats">
-                                {selectedClient.stats}
-                            </div>
-                        </div>
-                        <button className="btn btn-outline" style={{padding: '0.375rem 0.75rem', fontSize: '0.75rem'}}
-                                onClick={changeClient}>Change
-                        </button>
-                    </div>
-                )}
 
                 {/* Single-column upload + extraction flow */}
                 <div className="column-card">
