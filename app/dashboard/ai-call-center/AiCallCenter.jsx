@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import IntegrationSettingsModal from './IntegrationSettingsModal';
 import "./ai-call-center.css"
 
 const PAGE_SIZE = 10;
@@ -44,6 +45,7 @@ const AICallCenter = () => {
     const [selectedCall, setSelectedCall] = useState(null);
     const [sourceFilter, setSourceFilter] = useState('all');
     const [unassignedOnly, setUnassignedOnly] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     const [summary, setSummary] = useState(null);
     const [trend, setTrend] = useState([]);
@@ -274,6 +276,15 @@ const AICallCenter = () => {
                             <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none', fontSize: '1rem' }}>⟳</span>
                             {refreshing ? 'Refreshing…' : 'Refresh'}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowSettings(true)}
+                            className="refresh-btn"
+                            title="Configure RingCentral &amp; Call Tracking Metrics"
+                        >
+                            <span style={{ fontSize: '1rem' }}>⚙️</span>
+                            Settings
+                        </button>
                     </div>
                     <span className="page-subtitle">
                         Unified RingCentral + Call Tracking Metrics
@@ -309,7 +320,13 @@ const AICallCenter = () => {
                     <div className="alert-content">
                         <div className="alert-text">No calls yet</div>
                         <div className="alert-subtext">
-                            Connect RingCentral or Call Tracking Metrics in <a href="/dashboard/api-settings" style={{ textDecoration: 'underline' }}>API Settings</a> to start logging calls.
+                            Connect RingCentral or Call Tracking Metrics via the{' '}
+                            <button
+                                type="button"
+                                onClick={() => setShowSettings(true)}
+                                style={{ background: 'none', border: 0, padding: 0, color: 'inherit', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                            >Settings</button>{' '}
+                            button above to start logging calls.
                         </div>
                     </div>
                 </div>
@@ -557,6 +574,8 @@ const AICallCenter = () => {
                     </div>
                 </div>
             )}
+
+            <IntegrationSettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
             </div>
         </div>
     );
