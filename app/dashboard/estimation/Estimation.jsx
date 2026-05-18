@@ -3,8 +3,37 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast as sonner } from "sonner";
+import SignaturePad from "@/components/signature/SignaturePad";
 import "./estimation.css";
 import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AuthedPhotoThumb — minimal version of the AuthedImage pattern (see
+// app/dashboard/3d-mockup/threeDMockup.jsx). The /s3/file proxy needs the
+// auth bearer header, so we fetch as blob via axiosInstance and turn into
+// a blob URL. Module-level cache avoids re-fetching on rerender.
+// ──────────────────────────────────────────────────────────────────────────────
+const _photoBlobCache = new Map();
+function AuthedPhotoThumb({ src }) {
+    const [url, setUrl] = useState(() => (src ? _photoBlobCache.get(src) ?? null : null));
+    useEffect(() => {
+        if (!src) { setUrl(null); return; }
+        if (_photoBlobCache.has(src)) { setUrl(_photoBlobCache.get(src)); return; }
+        let active = true;
+        axiosInstance.get(src, { responseType: 'blob', suppressErrorToast: true })
+            .then((res) => {
+                const u = URL.createObjectURL(res.data);
+                _photoBlobCache.set(src, u);
+                if (active) setUrl(u);
+            })
+            .catch(() => { if (active) setUrl(null); });
+        return () => { active = false; };
+    }, [src]);
+    if (!url) {
+        return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 11 }}>Loading…</div>;
+    }
+    return <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
+}
 
 // ====================== STATIC DATA ======================
 const INITIAL_ITEM_LIBRARY = {
@@ -418,6 +447,11 @@ const Estimation = () => {
     const [taxOn, setTaxOn] = useState(true);
     const [taxName, setTaxName] = useState("Sales Tax");
     const [taxPercent, setTaxPercent] = useState("8");
+
+    // ── Photos master flag (Phase 5) — declared here because
+    //    buildSavePayload below references it. The actual Photos-tab UI
+    //    state lives further down with the rest of the Docs pane state.
+    const [includePhotosInPdf, setIncludePhotosInPdf] = useState(true);
 
     // ── Payment / signature pane ─────────────────────────────────────────
     const [paymentType, setPaymentType] = useState("percentage");
@@ -846,6 +880,7 @@ const Estimation = () => {
             tax_on: taxOn,
             tax_name: taxName,
             tax_pct: parseFloat(taxPercent) || 0,
+            include_photos_in_pdf: includePhotosInPdf,
             terms_html: termsState?.full_terms ?? undefined,
             sections: sections.map((s, idx) => ({
                 section_key: s.id,                              // "dwelling-roof"
@@ -866,7 +901,7 @@ const Estimation = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         client, linkedMeasurement, estimateTitle, mode, overheadOn,
-        taxOn, taxName, taxPercent, termsState, sections,
+        taxOn, taxName, taxPercent, termsState, sections, includePhotosInPdf,
     ]);
 
     /**
@@ -1047,9 +1082,44 @@ const Estimation = () => {
         setAiError(null);
         setAiGenerating(true);
         try {
+            // If the contractor dropped a measurement PDF into the modal but
+            // didn't pick one from the saved list, extract it now so Claude
+            // gets real quantities instead of producing PENDING placeholders.
+            // We only auto-extract the FIRST file — multi-file flows belong
+            // on the Measurement page where they can be reviewed individually.
+            let resolvedMeasurementId = linkedMeasurement?.id;
+            const pendingFile = aiUploads.measurement?.[0];
+            if (!resolvedMeasurementId && pendingFile) {
+                try {
+                    const fd = new FormData();
+                    fd.append('source_file', pendingFile);
+                    if (client?.id) fd.append('client_id', client.id);
+                    fd.append('title', pendingFile.name || 'Estimate generator upload');
+                    const mRes = await axiosInstance.post('/measurement/extract', fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                        suppressErrorToast: true,
+                    });
+                    const m = mRes.data?.data;
+                    if (m?.id) {
+                        resolvedMeasurementId = m.id;
+                        setLinkedMeasurement(m);
+                    }
+                } catch (extractErr) {
+                    setAiError({
+                        title: 'Could not read measurement file',
+                        detail:
+                            extractErr?.response?.data?.message
+                            ?? extractErr?.userMessage
+                            ?? 'The uploaded PDF could not be parsed. Try extracting it on the Measurement page first, then come back.',
+                    });
+                    setAiGenerating(false);
+                    return;
+                }
+            }
+
             const payload = {
                 client_id: client.id,
-                measurement_id: linkedMeasurement?.id ?? undefined,
+                measurement_id: resolvedMeasurementId ?? undefined,
                 damage_type: aiDamageType || undefined,
                 storm_date: aiStormDate || undefined,
                 mode,
@@ -1106,12 +1176,243 @@ const Estimation = () => {
         }
     };
 
-    const askAIToReview = () => {
-        showLoading("Reviewing estimate...", "Checking for missing code items, price gaps, and supplement opportunities");
-        setTimeout(() => {
-            hideLoading();
-            toast("AI suggests adding Ice & Water Shield and Drip Edge", "success");
-        }, 1500);
+    // ====================== AI REVIEW (Phase 6) ======================
+    // Calls Claude with the saved estimate + rate book + codes and shows
+    // a modal of structured findings. Advisory only — every finding has
+    // an "Apply" action so the contractor stays in control.
+    const [reviewModal, setReviewModal] = useState(false);
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [reviewData, setReviewData] = useState(null);
+    const [reviewError, setReviewError] = useState(null);
+
+    const askAIToReview = async () => {
+        if (!currentEstimateId) {
+            toast('Save the estimate first', 'error');
+            return;
+        }
+        // Make sure the latest edits are persisted before review runs.
+        await saveEstimateNow();
+        setReviewModal(true);
+        setReviewLoading(true);
+        setReviewError(null);
+        setReviewData(null);
+        try {
+            const res = await axiosInstance.post(`/estimates/${currentEstimateId}/ai-review`, {});
+            setReviewData(res.data?.data ?? null);
+            toast('AI review complete', 'success');
+        } catch (err) {
+            const msg = err?.userMessage ?? err?.response?.data?.message ?? 'AI review failed';
+            setReviewError(msg);
+        } finally {
+            setReviewLoading(false);
+        }
+    };
+
+    // ── Apply a single finding ────────────────────────────────────────
+    const applyMissingItem = (mi) => {
+        // Reuse the existing addToEstimate path. We don't know the exact
+        // section key Claude proposed maps to a real section, so we try to
+        // match by section_key first, then fall back to active section.
+        const target =
+            sections.find((s) => s.id === mi.suggested_section_key) ??
+            sections.find((s) => s.id === activeSection) ??
+            sections[0];
+        if (!target) {
+            toast('Add a section before applying missing items', 'error');
+            return;
+        }
+        setSections((prev) => prev.map((s) =>
+            s.id === target.id
+                ? {
+                    ...s,
+                    items: [
+                        ...(s.items ?? []),
+                        {
+                            name: mi.name,
+                            qty: Number(mi.suggested_qty) || 1,
+                            unit: mi.suggested_unit || 'EA',
+                            price: Number(mi.suggested_price) || 0,
+                            reason: mi.reason,
+                            code_ref: mi.code_ref ?? undefined,
+                            source_field: 'ai_review_suggestion',
+                        },
+                    ],
+                }
+                : s,
+        ));
+        triggerSave();
+        toast(`Added "${mi.name}" to ${target.name}`, 'success');
+    };
+
+    const applyPricingFix = (pc) => {
+        // Find the line item by name and update its price. If multiple
+        // sections have the same item name, update the first match — the
+        // contractor can repeat-click if they have duplicates.
+        let applied = false;
+        setSections((prev) => prev.map((s) => ({
+            ...s,
+            items: (s.items ?? []).map((it) => {
+                if (applied) return it;
+                if ((it.name ?? '').toLowerCase() === pc.item_name.toLowerCase()) {
+                    applied = true;
+                    return { ...it, price: Number(pc.suggested_price) || it.price };
+                }
+                return it;
+            }),
+        })));
+        if (applied) {
+            triggerSave();
+            toast(`Updated "${pc.item_name}" price`, 'success');
+        } else {
+            toast(`Could not find "${pc.item_name}" in current items`, 'error');
+        }
+    };
+
+    // ====================== TEMPLATES & BUNDLES (Phase 7) ======================
+    // Save current estimate as a reusable template, apply a saved template,
+    // or insert a bundle of items into the active section. The backend stores
+    // these per-company in JSONB — `estimate_templates` / `estimate_bundles`.
+    const [tplPickerOpen, setTplPickerOpen] = useState(false);
+    const [tplPickerKind, setTplPickerKind] = useState('template'); // 'template' | 'bundle'
+    const [tplList, setTplList] = useState([]);
+    const [tplListLoading, setTplListLoading] = useState(false);
+    const [tplApplying, setTplApplying] = useState(false);
+    const [tplStrategy, setTplStrategy] = useState('append'); // append | replace
+
+    const [saveTplOpen, setSaveTplOpen] = useState(false);
+    const [saveTplName, setSaveTplName] = useState('');
+    const [saveTplDesc, setSaveTplDesc] = useState('');
+    const [saveTplSaving, setSaveTplSaving] = useState(false);
+
+    const reloadEstimateFromServer = useCallback(async () => {
+        if (!currentEstimateId) return;
+        try {
+            const res = await axiosInstance.get(`/estimates/${currentEstimateId}`, { suppressErrorToast: true });
+            const e = res.data?.data;
+            if (!e) return;
+            skipNextAutoSave.current = true;
+            const restored = (e.sections ?? []).map((s) => ({
+                id: s.section_key,
+                name: s.name,
+                items: (s.items ?? []).map((it) => ({
+                    name: it.name,
+                    qty: Number(it.qty) || 0,
+                    unit: it.unit ?? 'EA',
+                    price: Number(it.price) || 0,
+                    reason: it.reason ?? undefined,
+                    source_field: it.source_field ?? undefined,
+                    code_ref: it.code_ref ?? undefined,
+                })),
+            }));
+            setSections(restored);
+            if (restored.length && !restored.find((s) => s.id === activeSection)) {
+                setActiveSection(restored[0].id);
+            }
+        } catch { /* toasted */ }
+    }, [currentEstimateId, activeSection]);
+
+    const openTemplatePicker = async (kind = 'template') => {
+        if (!currentEstimateId) {
+            toast('Save the estimate first', 'error');
+            return;
+        }
+        setTplPickerKind(kind);
+        setTplPickerOpen(true);
+        setTplListLoading(true);
+        setTplList([]);
+        try {
+            const url = kind === 'template' ? '/estimate-templates' : '/estimate-bundles';
+            const res = await axiosInstance.get(url, { params: { active_only: 'true' }, suppressErrorToast: true });
+            setTplList(res.data?.data ?? []);
+        } catch {
+            toast.error(`Could not load ${kind}s`);
+        } finally {
+            setTplListLoading(false);
+        }
+    };
+
+    const applyTemplate = async (tpl) => {
+        if (!currentEstimateId || !tpl?.id) return;
+        if (tplStrategy === 'replace' && !window.confirm('Replace ALL existing sections + items with this template?')) return;
+        setTplApplying(true);
+        try {
+            await saveEstimateNow();
+            await axiosInstance.post(`/estimates/${currentEstimateId}/apply-template`, {
+                template_id: tpl.id,
+                strategy: tplStrategy,
+            });
+            toast.success(`Applied "${tpl.name}"`);
+            setTplPickerOpen(false);
+            await reloadEstimateFromServer();
+        } catch (err) {
+            const msg = err?.userMessage ?? err?.response?.data?.message ?? 'Apply failed';
+            toast.error(msg);
+        } finally {
+            setTplApplying(false);
+        }
+    };
+
+    const applyBundle = async (bundle) => {
+        if (!currentEstimateId || !bundle?.id) return;
+        const target = sections.find((s) => s.id === activeSection) ?? sections[0];
+        if (!target) {
+            toast.error('Add a section first');
+            return;
+        }
+        setTplApplying(true);
+        try {
+            await saveEstimateNow();
+            await axiosInstance.post(`/estimates/${currentEstimateId}/apply-bundle`, {
+                bundle_id: bundle.id,
+                section_key: target.id,
+                section_name: target.name,
+            });
+            toast.success(`Added "${bundle.name}" to ${target.name}`);
+            setTplPickerOpen(false);
+            await reloadEstimateFromServer();
+        } catch (err) {
+            const msg = err?.userMessage ?? err?.response?.data?.message ?? 'Apply failed';
+            toast.error(msg);
+        } finally {
+            setTplApplying(false);
+        }
+    };
+
+    const openSaveAsTemplate = () => {
+        if (!currentEstimateId) {
+            toast('Save the estimate first', 'error');
+            return;
+        }
+        if (!sections.some((s) => s.items?.length)) {
+            toast.error('Add at least one item before saving as template');
+            return;
+        }
+        setSaveTplName('');
+        setSaveTplDesc('');
+        setSaveTplOpen(true);
+    };
+
+    const submitSaveAsTemplate = async () => {
+        if (!saveTplName.trim()) {
+            toast.error('Name is required');
+            return;
+        }
+        setSaveTplSaving(true);
+        try {
+            await saveEstimateNow();
+            await axiosInstance.post(`/estimates/${currentEstimateId}/save-as-template`, {
+                name: saveTplName.trim(),
+                description: saveTplDesc.trim() || null,
+                mode,
+            });
+            toast.success('Template saved');
+            setSaveTplOpen(false);
+        } catch (err) {
+            const msg = err?.userMessage ?? err?.response?.data?.message ?? 'Save failed';
+            toast.error(msg);
+        } finally {
+            setSaveTplSaving(false);
+        }
     };
 
     // ====================== SECTIONS ======================
@@ -1558,27 +1859,302 @@ const Estimation = () => {
         return showC && showM && showQ;
     });
 
-    // ====================== DOCUMENTATION ======================
+    // ====================== DOCUMENTATION (Phase 5 — Photos) ======================
+    // Photos pipeline:
+    //   1. Multi-select files → POST /estimates/:id/photos one at a time
+    //      with auto_stamp=true. Backend runs Gemini Vision to detect damage
+    //      type + write a caption, then burns metadata (claim #, address,
+    //      date, damage type) onto the photo via sharp + SVG composite.
+    //   2. After upload the row is shown in the gallery grid below — caption
+    //      and damage_type are editable; "Include in PDF" toggle decides if
+    //      the photo embeds in the rendered estimate PDF.
+    //   3. The estimate-level "Include photos in PDF" master toggle is
+    //      persisted via PATCH /estimates/:id (include_photos_in_pdf).
+    const [photos, setPhotos] = useState([]);
+    const [photosLoading, setPhotosLoading] = useState(false);
+    const [photoAutoStamp, setPhotoAutoStamp] = useState(true);
+    // includePhotosInPdf is declared earlier (next to other estimate-level flags)
+    // because buildSavePayload references it. Don't re-declare here.
+    const [uploadProgress, setUploadProgress] = useState({ active: 0, total: 0 });
+    const photoInputRef = useRef(null);
+
+    const reloadPhotos = useCallback(async () => {
+        if (!currentEstimateId) { setPhotos([]); return; }
+        setPhotosLoading(true);
+        try {
+            const res = await axiosInstance.get(`/estimates/${currentEstimateId}/photos`, { suppressErrorToast: true });
+            setPhotos(res.data?.data ?? []);
+        } catch { /* ignore */ }
+        finally { setPhotosLoading(false); }
+    }, [currentEstimateId]);
+
+    useEffect(() => { reloadPhotos(); }, [reloadPhotos]);
+
+    // Pull the include_photos_in_pdf flag from the loaded estimate so the
+    // toggle reflects DB state. The estimate fetch already lives in the
+    // existing search-params effect — we listen via a side-channel here.
+    useEffect(() => {
+        if (!currentEstimateId) return;
+        (async () => {
+            try {
+                const res = await axiosInstance.get(`/estimates/${currentEstimateId}`, { suppressErrorToast: true });
+                const e = res.data?.data;
+                if (e && typeof e.include_photos_in_pdf === 'boolean') {
+                    setIncludePhotosInPdf(e.include_photos_in_pdf);
+                }
+            } catch { /* ignore */ }
+        })();
+    }, [currentEstimateId]);
+
     const uploadBulkPhotos = () => {
-        const i = document.createElement("input");
-        i.type = "file";
-        i.accept = "image/*";
-        i.multiple = true;
-        i.onchange = (e) => {
-            if (e.target.files.length) {
-                toast(`Uploading ${e.target.files.length} photos with auto-stamp`, "success");
-            }
-        };
-        i.click();
+        if (!currentEstimateId) {
+            toast('Save the estimate first', 'error');
+            return;
+        }
+        photoInputRef.current?.click();
     };
+
+    const onPhotoFilesPicked = async (e) => {
+        const files = Array.from(e.target.files ?? []);
+        // Reset the input so picking the same file again still triggers onChange
+        e.target.value = '';
+        if (!files.length || !currentEstimateId) return;
+
+        setUploadProgress({ active: 0, total: files.length });
+        for (let i = 0; i < files.length; i++) {
+            setUploadProgress({ active: i + 1, total: files.length });
+            const fd = new FormData();
+            fd.append('file', files[i]);
+            fd.append('auto_stamp', photoAutoStamp ? 'true' : 'false');
+            try {
+                await axiosInstance.post(`/estimates/${currentEstimateId}/photos`, fd);
+            } catch (err) {
+                toast(err?.userMessage ?? `Photo ${i + 1} failed`, 'error');
+            }
+        }
+        setUploadProgress({ active: 0, total: 0 });
+        toast(`Uploaded ${files.length} photo${files.length === 1 ? '' : 's'}`, 'success');
+        reloadPhotos();
+    };
+
+    const updatePhotoField = async (photoId, patch) => {
+        setPhotos(prev => prev.map(p => p.id === photoId ? { ...p, ...patch } : p));
+        try {
+            await axiosInstance.patch(`/estimates/${currentEstimateId}/photos/${photoId}`, patch);
+        } catch {
+            // Roll back optimistic update on failure
+            reloadPhotos();
+        }
+    };
+
+    const deletePhoto = async (photoId) => {
+        if (!confirm('Delete this photo?')) return;
+        try {
+            await axiosInstance.delete(`/estimates/${currentEstimateId}/photos/${photoId}`);
+            setPhotos(prev => prev.filter(p => p.id !== photoId));
+            toast('Photo deleted', 'success');
+        } catch {
+            /* toasted */
+        }
+    };
+
+    const restampPhoto = async (photoId) => {
+        const tId = sonner.loading('Re-running AI + restamping…');
+        try {
+            const res = await axiosInstance.post(`/estimates/${currentEstimateId}/photos/${photoId}/restamp`);
+            const updated = res.data?.data;
+            if (updated) {
+                setPhotos(prev => prev.map(p => p.id === photoId ? updated : p));
+            }
+            sonner.success('Photo re-stamped', { id: tId });
+        } catch (err) {
+            sonner.error(err?.userMessage ?? 'Restamp failed', { id: tId });
+        }
+    };
+
+    const togglePhotosMasterPdf = (checked) => {
+        // Optimistic — flip local state immediately so the toggle is responsive.
+        // The next debounced save will pick it up via buildSavePayload (which
+        // reads includePhotosInPdf), so we just nudge triggerSave.
+        setIncludePhotosInPdf(checked);
+        if (currentEstimateId) triggerSave();
+    };
+
     const generateSupportingDocs = () => {
         showLoading("Building supporting docs package...", "Code citations, mfr specs, stamped photos");
         setTimeout(() => { hideLoading(); toast("Supporting docs package ready", "success"); }, 1500);
     };
 
     // ====================== SIGN / PAY ======================
-    const requestSignature = () => toast("Signature request sent to homeowner", "success");
-    const generateInvoice = () => toast(`Invoice for $${paymentAmount.toFixed(2)} generated`, "success");
+    // Phase 3 signature flow — talks to /estimates/:id/sign endpoints.
+    // Two modes:
+    //   1. In-person  — homeowner signs on the contractor's tablet (canvas pad)
+    //   2. Email link — homeowner gets a token URL, signs on their own device
+    const signPadRef = useRef(null);
+    const [signMode, setSignMode] = useState('email');           // 'in_person' | 'email'
+    const [signerName, setSignerName] = useState('');
+    const [signerEmail, setSignerEmail] = useState('');
+    const [signMessage, setSignMessage] = useState('');
+    const [signing, setSigning] = useState(false);
+    const [signHistory, setSignHistory] = useState([]);
+    const [lastSignLink, setLastSignLink] = useState(null);
+
+    const reloadSignatures = useCallback(async () => {
+        if (!currentEstimateId) return;
+        try {
+            const res = await axiosInstance.get(`/estimates/${currentEstimateId}/sign`, { suppressErrorToast: true });
+            setSignHistory(res.data?.data ?? []);
+        } catch { /* ignore */ }
+    }, [currentEstimateId]);
+
+    useEffect(() => { reloadSignatures(); }, [reloadSignatures]);
+
+    const signInPerson = async () => {
+        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
+        if (!signPadRef.current || signPadRef.current.isEmpty()) {
+            toast('Have the homeowner sign on the pad first', 'error');
+            return;
+        }
+        if (!signerName.trim()) {
+            toast('Type the homeowner\'s name first', 'error');
+            return;
+        }
+        setSigning(true);
+        try {
+            const dataUrl = signPadRef.current.toDataURL('image/png');
+            await axiosInstance.post(`/estimates/${currentEstimateId}/sign`, {
+                signer_name: signerName.trim(),
+                signer_email: signerEmail.trim() || undefined,
+                signer_role: 'homeowner',
+                signature_image: dataUrl,
+            });
+            toast('Estimate signed', 'success');
+            signPadRef.current?.clear();
+            await reloadSignatures();
+        } catch (err) {
+            toast(err?.userMessage ?? 'Could not save signature', 'error');
+        } finally {
+            setSigning(false);
+        }
+    };
+
+    const sendSignLink = async () => {
+        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
+        setSigning(true);
+        try {
+            const res = await axiosInstance.post(`/estimates/${currentEstimateId}/sign/send-link`, {
+                recipient_email: signerEmail.trim() || undefined,
+                signer_name: signerName.trim() || undefined,
+                message: signMessage.trim() || undefined,
+            });
+            const data = res.data?.data ?? {};
+            setLastSignLink(data);
+            toast(`Signing link sent to ${data.recipient_email ?? 'homeowner'}`, 'success');
+            await reloadSignatures();
+        } catch (err) {
+            toast(err?.userMessage ?? 'Could not send sign link', 'error');
+        } finally {
+            setSigning(false);
+        }
+    };
+
+    const copySignLink = () => {
+        if (!lastSignLink?.sign_url) return;
+        navigator.clipboard?.writeText(lastSignLink.sign_url);
+        toast('Link copied', 'success');
+    };
+
+    // Legacy entry point kept around so older buttons / code paths still work
+    // but redirect to the new email-link flow.
+    const requestSignature = () => {
+        setRailTab('sign');
+        toast('Open the Sign tab to send a signing link', 'success');
+    };
+
+    // ====================== DEPOSITS (Phase 4 — Stripe) ======================
+    // Two flows:
+    //   1. Stripe Checkout — backend creates the session, we redirect (new tab)
+    //   2. Record manual    — already-paid offline deposit (cheque / cash / etc.)
+    const [depositMethod, setDepositMethod] = useState('stripe');  // 'stripe' | 'manual'
+    const [depositLoading, setDepositLoading] = useState(false);
+    const [deposits, setDeposits] = useState([]);
+    const [depositTotalPaid, setDepositTotalPaid] = useState(0);
+    const [manualNote, setManualNote] = useState('');
+
+    const reloadDeposits = useCallback(async () => {
+        if (!currentEstimateId) return;
+        try {
+            const res = await axiosInstance.get(`/estimates/${currentEstimateId}/deposits`, { suppressErrorToast: true });
+            setDeposits(res.data?.data ?? []);
+            setDepositTotalPaid(Number(res.data?.meta?.total_paid ?? 0));
+        } catch { /* ignore */ }
+    }, [currentEstimateId]);
+
+    useEffect(() => { reloadDeposits(); }, [reloadDeposits]);
+
+    // Refresh deposits on focus — Stripe sends the user back to /dashboard/estimation
+    // after Checkout, so when they come back to the tab we should see the new "paid"
+    // row (assuming the webhook landed by then).
+    useEffect(() => {
+        const onFocus = () => reloadDeposits();
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, [reloadDeposits]);
+
+    const startStripeCheckout = async () => {
+        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
+        if (!(paymentAmount > 0)) { toast('Enter a deposit amount', 'error'); return; }
+        setDepositLoading(true);
+        try {
+            const res = await axiosInstance.post(`/estimates/${currentEstimateId}/deposits`, {
+                amount: Number(paymentAmount.toFixed(2)),
+                currency: 'usd',
+                payment_method: 'stripe',
+                customer_email: signerEmail?.trim() || undefined,
+                customer_name: signerName?.trim() || undefined,
+            });
+            const url = res.data?.data?.checkout_url;
+            if (url) {
+                // Open in a new tab so the contractor keeps the estimate open.
+                window.open(url, '_blank', 'noopener');
+                toast('Stripe Checkout opened in a new tab — finish payment there', 'success');
+                reloadDeposits();
+            } else {
+                toast('Stripe did not return a checkout URL', 'error');
+            }
+        } catch (err) {
+            toast(err?.userMessage ?? 'Could not start Stripe checkout', 'error');
+        } finally {
+            setDepositLoading(false);
+        }
+    };
+
+    const recordManualDeposit = async () => {
+        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
+        if (!(paymentAmount > 0)) { toast('Enter an amount', 'error'); return; }
+        if (!manualNote.trim()) { toast('Add a note (cheque #, payment ref, etc.)', 'error'); return; }
+        setDepositLoading(true);
+        try {
+            await axiosInstance.post(`/estimates/${currentEstimateId}/deposits/manual`, {
+                amount: Number(paymentAmount.toFixed(2)),
+                currency: 'usd',
+                notes: manualNote.trim(),
+            });
+            toast('Manual deposit recorded', 'success');
+            setManualNote('');
+            reloadDeposits();
+        } catch (err) {
+            toast(err?.userMessage ?? 'Could not record deposit', 'error');
+        } finally {
+            setDepositLoading(false);
+        }
+    };
+
+    // Kept the old name working so any stale handlers don't crash.
+    const generateInvoice = () => {
+        if (depositMethod === 'manual') recordManualDeposit();
+        else startStripeCheckout();
+    };
 
     // ====================== RATE LEARNING ======================
     const openRateLearning = () => setRateLearningModal(true);
@@ -1868,6 +2444,50 @@ const Estimation = () => {
                                             <svg className="icon icon-sm"><use href="#i-brain" /></svg>
                                             Train AI on My Rates
                                         </button>
+                                        <a
+                                            href="/dashboard/estimation/rate-book"
+                                            className="menu-item"
+                                            role="menuitem"
+                                            style={{ textDecoration: 'none' }}
+                                            onClick={() => setMoreOpen(false)}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-doc" /></svg>
+                                            Open Rate Book
+                                        </a>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openTemplatePicker('template'); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-doc" /></svg>
+                                            Apply Template
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openTemplatePicker('bundle'); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-plus" /></svg>
+                                            Insert Bundle
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openSaveAsTemplate(); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-copy" /></svg>
+                                            Save as Template
+                                        </button>
+                                        <a
+                                            href="/dashboard/estimation/templates"
+                                            className="menu-item"
+                                            role="menuitem"
+                                            style={{ textDecoration: 'none' }}
+                                            onClick={() => setMoreOpen(false)}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-doc" /></svg>
+                                            Manage Templates &amp; Bundles
+                                        </a>
                                         <button
                                             type="button"
                                             className="menu-item"
@@ -2480,16 +3100,123 @@ const Estimation = () => {
                                     )}
                                 </div>
 
-                                {/* DOCS PANE */}
+                                {/* DOCS PANE — Photo evidence (Phase 5) */}
                                 <div className={`rail-pane ${railTab === "docs" ? "active" : ""}`}>
-                                    <h3>Photo documentation</h3>
-                                    <p className="desc">Upload damage photos. AI auto-stamps with claim number, address, and date.</p>
-                                    <div className="doc-card">
-                                        <div className="doc-card-title"><svg className="icon icon-sm"><use href="#i-camera" /></svg> Bulk photo upload</div>
-                                        <div className="doc-card-meta">No photos uploaded yet</div>
-                                        <button className="doc-card-action" onClick={uploadBulkPhotos}>Upload Photos</button>
+                                    <h3>Photo evidence</h3>
+                                    <p className="desc">Upload damage photos. AI detects damage type and stamps claim metadata onto the image.</p>
+
+                                    {/* Master toggles */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, padding: '8px 10px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={photoAutoStamp} onChange={(e) => setPhotoAutoStamp(e.target.checked)} />
+                                            <span><strong>AI auto-stamp</strong> on upload <span style={{ color: '#9ca3af' }}>(detect damage + burn metadata onto image)</span></span>
+                                        </label>
+                                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={includePhotosInPdf} onChange={(e) => togglePhotosMasterPdf(e.target.checked)} />
+                                            <span><strong>Include photos in PDF</strong></span>
+                                        </label>
                                     </div>
-                                    <div className="doc-card">
+
+                                    {/* Upload trigger */}
+                                    <input
+                                        ref={photoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        style={{ display: 'none' }}
+                                        onChange={onPhotoFilesPicked}
+                                    />
+                                    <button
+                                        className="doc-card-action"
+                                        onClick={uploadBulkPhotos}
+                                        disabled={uploadProgress.total > 0 || !currentEstimateId}
+                                        style={{ width: '100%', padding: 10, fontSize: 13, fontWeight: 600 }}
+                                    >
+                                        <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-camera" /></svg>{' '}
+                                        {uploadProgress.total > 0
+                                            ? `Uploading ${uploadProgress.active}/${uploadProgress.total}…`
+                                            : 'Upload photos'}
+                                    </button>
+
+                                    {/* Upload progress bar */}
+                                    {uploadProgress.total > 0 && (
+                                        <div style={{ height: 4, background: '#e5e7eb', borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
+                                            <div style={{
+                                                width: `${(uploadProgress.active / uploadProgress.total) * 100}%`,
+                                                height: '100%',
+                                                background: '#FDB813',
+                                                transition: 'width 0.2s',
+                                            }} />
+                                        </div>
+                                    )}
+
+                                    {/* Photo grid */}
+                                    {photosLoading && photos.length === 0 ? (
+                                        <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>Loading photos…</div>
+                                    ) : photos.length === 0 ? (
+                                        <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 12, fontStyle: 'italic', marginTop: 10 }}>
+                                            No photos yet. Upload damage shots above.
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                                            {photos.map((p) => (
+                                                <div key={p.id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#fff', opacity: p.is_included_in_pdf ? 1 : 0.55 }}>
+                                                    <div style={{ position: 'relative', aspectRatio: '4/3', background: '#f3f4f6', overflow: 'hidden' }}>
+                                                        <AuthedPhotoThumb src={p.s3_url} />
+                                                        {p.photo_damage_type && (
+                                                            <span style={{
+                                                                position: 'absolute', top: 4, left: 4,
+                                                                background: 'rgba(26, 31, 58, 0.85)', color: '#FDB813',
+                                                                fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3, textTransform: 'uppercase',
+                                                            }}>{p.photo_damage_type}</span>
+                                                        )}
+                                                        {p.ai_extracted_data?.stamped && (
+                                                            <span style={{
+                                                                position: 'absolute', top: 4, right: 4,
+                                                                background: 'rgba(22, 163, 74, 0.92)', color: '#fff',
+                                                                fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3,
+                                                            }} title="AI-stamped">AI ✓</span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ padding: 6 }}>
+                                                        <textarea
+                                                            value={p.photo_caption ?? ''}
+                                                            onChange={(e) => setPhotos(prev => prev.map(x => x.id === p.id ? { ...x, photo_caption: e.target.value } : x))}
+                                                            onBlur={(e) => updatePhotoField(p.id, { caption: e.target.value })}
+                                                            placeholder="Caption…"
+                                                            rows={2}
+                                                            style={{ width: '100%', padding: 4, fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 4, fontFamily: 'inherit', resize: 'none' }}
+                                                        />
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 4 }}>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#374151', cursor: 'pointer' }} title="Include in PDF">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!p.is_included_in_pdf}
+                                                                    onChange={(e) => updatePhotoField(p.id, { is_included_in_pdf: e.target.checked })}
+                                                                    style={{ width: 12, height: 12 }}
+                                                                />
+                                                                PDF
+                                                            </label>
+                                                            <div style={{ display: 'flex', gap: 2 }}>
+                                                                <button
+                                                                    onClick={() => restampPhoto(p.id)}
+                                                                    title="Re-run AI + restamp"
+                                                                    style={{ background: 'transparent', border: 'none', color: '#1a1f3a', fontSize: 11, cursor: 'pointer', padding: '2px 4px' }}
+                                                                >🔄</button>
+                                                                <button
+                                                                    onClick={() => deletePhoto(p.id)}
+                                                                    title="Delete"
+                                                                    style={{ background: 'transparent', border: 'none', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: '0 4px' }}
+                                                                >×</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="doc-card" style={{ marginTop: 12 }}>
                                         <div className="doc-card-title"><svg className="icon icon-sm"><use href="#i-doc" /></svg> Supporting docs package</div>
                                         <div className="doc-card-meta">Code citations, mfr specs, photos</div>
                                         <button className="doc-card-action" onClick={generateSupportingDocs}>Generate Package</button>
@@ -2499,19 +3226,125 @@ const Estimation = () => {
                                 {/* SIGN PANE */}
                                 <div className={`rail-pane ${railTab === "sign" ? "active" : ""}`}>
                                     <h3>Signature &amp; payment</h3>
-                                    <p className="desc">Send to homeowner for digital signature and collect deposit.</p>
+                                    <p className="desc">Sign in-person on this device, or email a secure signing link to the homeowner.</p>
                                     <div className="sig-section">
                                         <div className="sig-section-title">Digital signature</div>
-                                        <div className="sig-canvas">
-                                            <div className="sig-canvas-text">Homeowner signature pending</div>
+
+                                        {/* Mode toggle */}
+                                        <div style={{ display: 'flex', gap: 6, marginBottom: 10, background: '#f3f4f6', borderRadius: 6, padding: 3 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSignMode('email')}
+                                                style={{ flex: 1, padding: '6px 10px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: signMode === 'email' ? '#fff' : 'transparent', color: signMode === 'email' ? '#1a1f3a' : '#6b7280', boxShadow: signMode === 'email' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}
+                                            >📧 Email link</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSignMode('in_person')}
+                                                style={{ flex: 1, padding: '6px 10px', fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 4, cursor: 'pointer', background: signMode === 'in_person' ? '#fff' : 'transparent', color: signMode === 'in_person' ? '#1a1f3a' : '#6b7280', boxShadow: signMode === 'in_person' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}
+                                            >✍️ In person</button>
                                         </div>
-                                        <button className="sig-action" onClick={requestSignature}>
-                                            <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-send" /></svg>
-                                            Send for Signature
-                                        </button>
+
+                                        {/* Shared signer fields */}
+                                        <input
+                                            type="text"
+                                            placeholder="Homeowner name"
+                                            value={signerName}
+                                            onChange={(e) => setSignerName(e.target.value)}
+                                            style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginBottom: 6 }}
+                                        />
+                                        {signMode === 'email' && (
+                                            <>
+                                                <input
+                                                    type="email"
+                                                    placeholder="Homeowner email"
+                                                    value={signerEmail}
+                                                    onChange={(e) => setSignerEmail(e.target.value)}
+                                                    style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginBottom: 6 }}
+                                                />
+                                                <textarea
+                                                    placeholder="Optional note (shown in the email)"
+                                                    value={signMessage}
+                                                    onChange={(e) => setSignMessage(e.target.value)}
+                                                    rows={2}
+                                                    style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginBottom: 8, fontFamily: 'inherit', resize: 'vertical' }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="sig-action"
+                                                    onClick={sendSignLink}
+                                                    disabled={signing || !currentEstimateId}
+                                                >
+                                                    <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-send" /></svg>
+                                                    {signing ? 'Sending…' : 'Send signing link'}
+                                                </button>
+                                                {lastSignLink?.sign_url && (
+                                                    <div style={{ marginTop: 8, padding: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11.5 }}>
+                                                        <div style={{ color: '#166534', fontWeight: 600, marginBottom: 4 }}>✓ Link sent · expires {new Date(lastSignLink.expires_at).toLocaleDateString()}</div>
+                                                        <div style={{ fontFamily: 'ui-monospace, monospace', color: '#374151', wordBreak: 'break-all', marginBottom: 4 }}>{lastSignLink.sign_url}</div>
+                                                        <button type="button" onClick={copySignLink} style={{ background: 'transparent', border: 'none', color: '#1a1f3a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}>Copy link</button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                        {signMode === 'in_person' && (
+                                            <>
+                                                <input
+                                                    type="email"
+                                                    placeholder="Email for receipt (optional)"
+                                                    value={signerEmail}
+                                                    onChange={(e) => setSignerEmail(e.target.value)}
+                                                    style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginBottom: 6 }}
+                                                />
+                                                <div style={{ border: '2px dashed #d1d5db', borderRadius: 8, padding: 6, background: '#fff', marginBottom: 6 }}>
+                                                    <SignaturePad ref={signPadRef} height={150} />
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                                    <button type="button" onClick={() => signPadRef.current?.clear()} style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline', fontSize: 11.5 }}>Clear</button>
+                                                    <span style={{ color: '#9ca3af', fontSize: 11 }}>Pass the device to the homeowner</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className="sig-action"
+                                                    onClick={signInPerson}
+                                                    disabled={signing || !currentEstimateId}
+                                                >
+                                                    <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-check" /></svg>
+                                                    {signing ? 'Saving…' : 'Save signature'}
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {/* History */}
+                                        {signHistory.length > 0 && (
+                                            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Signature history</div>
+                                                {signHistory.map(s => (
+                                                    <div key={s.id} style={{ fontSize: 11.5, padding: 6, background: '#fafbfc', borderRadius: 5, marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                                        <div>
+                                                            <strong style={{ color: '#1a1f3a' }}>{s.signer_name}</strong> · <span style={{ color: '#6b7280' }}>{s.method.replace('_', ' ')}</span>
+                                                            <div style={{ color: '#9ca3af', fontSize: 10.5 }}>{new Date(s.signed_at ?? s.created_at).toLocaleString()}</div>
+                                                        </div>
+                                                        <span style={{
+                                                            fontSize: 10, padding: '2px 6px', borderRadius: 3, fontWeight: 700,
+                                                            background: s.esign_status === 'completed' ? '#dcfce7' : s.esign_status === 'rotated' ? '#f3f4f6' : '#fef3c7',
+                                                            color: s.esign_status === 'completed' ? '#166534' : s.esign_status === 'rotated' ? '#6b7280' : '#b45309',
+                                                        }}>{s.esign_status}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="sig-section">
                                         <div className="sig-section-title">Collect deposit</div>
+
+                                        {/* Total paid summary */}
+                                        {depositTotalPaid > 0 && (
+                                            <div style={{ padding: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 12, marginBottom: 10, color: '#166534', fontWeight: 600 }}>
+                                                Total received: ${depositTotalPaid.toFixed(2)}
+                                            </div>
+                                        )}
+
+                                        {/* Amount input */}
                                         <div className="payment-amount-box">
                                             <label style={{ fontSize: 11.5, fontWeight: 600, display: "block", marginBottom: 6 }}>Amount</label>
                                             <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
@@ -2525,15 +3358,76 @@ const Estimation = () => {
                                             </div>
                                             <div className="payment-amount-display">Due: <span>${paymentAmount.toFixed(2)}</span></div>
                                         </div>
-                                        <div className="pay-method-row">
-                                            <label><input type="radio" name="payMethod" defaultChecked /> <svg className="icon icon-sm"><use href="#i-card" /></svg> Stripe</label>
-                                            <label><input type="radio" name="payMethod" /> <svg className="icon icon-sm"><use href="#i-card" /></svg> QuickBooks</label>
-                                            <label><input type="radio" name="payMethod" /> <svg className="icon icon-sm"><use href="#i-card" /></svg> GoHighLevel</label>
+
+                                        {/* Method picker — only Stripe + manual are wired */}
+                                        <div className="pay-method-row" style={{ marginTop: 8 }}>
+                                            <label style={{ cursor: 'pointer' }}>
+                                                <input type="radio" name="payMethod" value="stripe" checked={depositMethod === 'stripe'} onChange={() => setDepositMethod('stripe')} />{' '}
+                                                <svg className="icon icon-sm"><use href="#i-card" /></svg> Stripe
+                                            </label>
+                                            <label style={{ cursor: 'pointer' }}>
+                                                <input type="radio" name="payMethod" value="manual" checked={depositMethod === 'manual'} onChange={() => setDepositMethod('manual')} />{' '}
+                                                <svg className="icon icon-sm"><use href="#i-doc" /></svg> Manual
+                                            </label>
+                                            <label style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming soon">
+                                                <input type="radio" disabled /> QuickBooks
+                                            </label>
+                                            <label style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming soon">
+                                                <input type="radio" disabled /> GoHighLevel
+                                            </label>
                                         </div>
-                                        <button className="sig-action" style={{ background: "#10b981" }} onClick={generateInvoice}>
-                                            <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-send" /></svg>
-                                            Send Invoice
+
+                                        {depositMethod === 'manual' && (
+                                            <input
+                                                type="text"
+                                                placeholder="Payment reference (e.g. Cheque #1234)"
+                                                value={manualNote}
+                                                onChange={(e) => setManualNote(e.target.value)}
+                                                style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginTop: 8 }}
+                                            />
+                                        )}
+
+                                        <button
+                                            className="sig-action"
+                                            style={{ background: depositMethod === 'manual' ? '#1a1f3a' : '#635bff', marginTop: 8 }}
+                                            onClick={depositMethod === 'manual' ? recordManualDeposit : startStripeCheckout}
+                                            disabled={depositLoading || !currentEstimateId}
+                                        >
+                                            <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-card" /></svg>
+                                            {depositLoading
+                                                ? 'Working…'
+                                                : depositMethod === 'manual'
+                                                    ? 'Record manual deposit'
+                                                    : `Collect $${paymentAmount.toFixed(2)} via Stripe`}
                                         </button>
+
+                                        {/* Deposit history */}
+                                        {deposits.length > 0 && (
+                                            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Deposit history</div>
+                                                {deposits.map(d => (
+                                                    <div key={d.id} style={{ fontSize: 11.5, padding: 6, background: '#fafbfc', borderRadius: 5, marginBottom: 4 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                                            <strong style={{ color: '#1a1f3a' }}>${Number(d.amount).toFixed(2)} · {d.payment_method}</strong>
+                                                            <span style={{
+                                                                fontSize: 10, padding: '2px 6px', borderRadius: 3, fontWeight: 700,
+                                                                background: d.status === 'paid' ? '#dcfce7' : d.status === 'failed' ? '#fee2e2' : d.status === 'refunded' ? '#dbeafe' : '#fef3c7',
+                                                                color: d.status === 'paid' ? '#166534' : d.status === 'failed' ? '#991b1b' : d.status === 'refunded' ? '#1e40af' : '#b45309',
+                                                            }}>{d.status}</span>
+                                                        </div>
+                                                        <div style={{ color: '#6b7280', fontSize: 10.5, marginTop: 2 }}>
+                                                            {new Date(d.paid_at ?? d.created_at).toLocaleString()}
+                                                            {d.notes && <> · {d.notes}</>}
+                                                        </div>
+                                                        {d.receipt_url && (
+                                                            <a href={d.receipt_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#635bff', fontWeight: 600 }}>
+                                                                View receipt ↗
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -2542,6 +3436,306 @@ const Estimation = () => {
                     </div>
                 )}
             </main>
+
+            {/* ============ TEMPLATE / BUNDLE PICKER (Phase 7) ============ */}
+            {tplPickerOpen && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5" onClick={() => !tplApplying && setTplPickerOpen(false)}>
+                    <div className="bg-white rounded-xl w-full max-w-[640px] max-h-[88vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center px-[22px] py-[16px] border-b border-gray-200">
+                            <div className="text-base font-bold" style={{ color: '#1a1f3a' }}>
+                                {tplPickerKind === 'template' ? 'Apply template' : 'Insert bundle'}
+                            </div>
+                            <button
+                                className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100"
+                                onClick={() => setTplPickerOpen(false)}
+                                disabled={tplApplying}
+                            ><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+                        <div className="p-[20px]" style={{ color: '#1a1f3a' }}>
+                            {tplPickerKind === 'template' && (
+                                <div style={{ marginBottom: 14, padding: 10, background: '#f9fafb', borderRadius: 6, fontSize: 12 }}>
+                                    Strategy:&nbsp;
+                                    <label style={{ marginRight: 12 }}>
+                                        <input type="radio" checked={tplStrategy === 'append'} onChange={() => setTplStrategy('append')} /> Append
+                                    </label>
+                                    <label>
+                                        <input type="radio" checked={tplStrategy === 'replace'} onChange={() => setTplStrategy('replace')} /> Replace all
+                                    </label>
+                                </div>
+                            )}
+
+                            {tplListLoading && <div style={{ padding: 20, textAlign: 'center', color: '#6b7280' }}>Loading…</div>}
+
+                            {!tplListLoading && tplList.length === 0 && (
+                                <div style={{ padding: 20, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
+                                    No {tplPickerKind}s yet.{' '}
+                                    <a href="/dashboard/estimation/templates" style={{ color: '#1a1f3a', textDecoration: 'underline' }}>
+                                        Create one →
+                                    </a>
+                                </div>
+                            )}
+
+                            {!tplListLoading && tplList.map((row) => (
+                                <div key={row.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 13 }}>{row.name}</div>
+                                        {row.description && (
+                                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{row.description}</div>
+                                        )}
+                                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                                            {tplPickerKind === 'template'
+                                                ? `${Array.isArray(row.sections) ? row.sections.length : 0} sections`
+                                                : `${Array.isArray(row.items) ? row.items.length : 0} items`}
+                                            {' · '}used {row.times_used ?? 0}×
+                                            {tplPickerKind === 'template' && row.mode && <> · {row.mode}</>}
+                                        </div>
+                                    </div>
+                                    <button
+                                        disabled={tplApplying}
+                                        onClick={() => tplPickerKind === 'template' ? applyTemplate(row) : applyBundle(row)}
+                                        style={{ padding: '8px 14px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: tplApplying ? 'wait' : 'pointer', opacity: tplApplying ? 0.6 : 1 }}
+                                    >Apply</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ SAVE AS TEMPLATE MODAL (Phase 7) ============ */}
+            {saveTplOpen && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5" onClick={() => !saveTplSaving && setSaveTplOpen(false)}>
+                    <div className="bg-white rounded-xl w-full max-w-[480px] shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center px-[22px] py-[16px] border-b border-gray-200">
+                            <div className="text-base font-bold" style={{ color: '#1a1f3a' }}>Save as template</div>
+                            <button
+                                className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md"
+                                onClick={() => setSaveTplOpen(false)}
+                                disabled={saveTplSaving}
+                            ><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+                        <div className="p-[22px]" style={{ color: '#1a1f3a' }}>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Name</label>
+                            <input
+                                value={saveTplName}
+                                onChange={(e) => setSaveTplName(e.target.value)}
+                                placeholder="Standard Hail Roof Replacement"
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, marginBottom: 12 }}
+                                autoFocus
+                            />
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Description</label>
+                            <textarea
+                                value={saveTplDesc}
+                                onChange={(e) => setSaveTplDesc(e.target.value)}
+                                placeholder="When to use this template"
+                                rows={3}
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, resize: 'vertical' }}
+                            />
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>
+                                Snapshots {sections.length} section{sections.length === 1 ? '' : 's'} with mode = <strong>{mode}</strong>.
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: '1px solid #e5e7eb' }}>
+                            <button
+                                onClick={() => setSaveTplOpen(false)}
+                                disabled={saveTplSaving}
+                                style={{ padding: '8px 14px', background: '#fff', color: '#1a1f3a', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                            >Cancel</button>
+                            <button
+                                onClick={submitSaveAsTemplate}
+                                disabled={saveTplSaving}
+                                style={{ padding: '8px 14px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: saveTplSaving ? 'wait' : 'pointer', opacity: saveTplSaving ? 0.6 : 1 }}
+                            >{saveTplSaving ? 'Saving…' : 'Save template'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ AI REVIEW MODAL (Phase 6) ============ */}
+            {reviewModal && (
+                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5">
+                    <div className="bg-white rounded-xl w-full max-w-[860px] max-h-[92vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
+                            <div className="text-base font-bold" style={{ color: '#1a1f3a' }}>
+                                <svg className="icon" style={{ color: '#FDB813', verticalAlign: 'middle' }}><use href="#i-sparkle" /></svg>{' '}
+                                AI Estimate Review
+                            </div>
+                            <button
+                                className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]"
+                                onClick={() => setReviewModal(false)}
+                            >
+                                <svg className="icon"><use href="#i-x" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="p-[22px]" style={{ color: '#1a1f3a' }}>
+                            {reviewLoading && (
+                                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                                    <div style={{ width: 44, height: 44, border: '4px solid #e5e7eb', borderTopColor: '#FDB813', borderRadius: '50%', animation: 'spin 0.9s linear infinite', margin: '0 auto 12px' }} />
+                                    <div style={{ fontWeight: 600 }}>Reviewing estimate…</div>
+                                    <div style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>Cross-checking line items against your rate book + state codes</div>
+                                </div>
+                            )}
+
+                            {reviewError && (
+                                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #dc2626', color: '#7f1d1d', padding: 14, borderRadius: 8, fontSize: 13 }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Review failed</div>
+                                    {reviewError}
+                                </div>
+                            )}
+
+                            {reviewData?.findings && !reviewLoading && (() => {
+                                const f = reviewData.findings;
+                                const sevColor = (s) => s === 'critical' ? '#dc2626' : s === 'recommended' ? '#b45309' : '#6b7280';
+                                const sevBg = (s) => s === 'critical' ? '#fef2f2' : s === 'recommended' ? '#fef3c7' : '#f3f4f6';
+                                const sevBorder = (s) => s === 'critical' ? '#fecaca' : s === 'recommended' ? '#fde68a' : '#e5e7eb';
+                                const sevBadge = (s) => (
+                                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 3, color: sevColor(s), background: sevBg(s) }}>{s}</span>
+                                );
+
+                                const totalFindings =
+                                    (f.missing_items?.length ?? 0)
+                                    + (f.pricing_concerns?.length ?? 0)
+                                    + (f.code_violations?.length ?? 0)
+                                    + (f.supplement_opportunities?.length ?? 0)
+                                    + (f.other_concerns?.length ?? 0);
+
+                                return (
+                                    <>
+                                        {/* Overall assessment */}
+                                        <div style={{ padding: 14, background: '#fffef7', border: '1px solid #FDB813', borderRadius: 8, marginBottom: 16 }}>
+                                            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, color: '#1a1f3a', marginBottom: 6 }}>Overall</div>
+                                            <div style={{ fontSize: 13, lineHeight: 1.5, color: '#1a1f3a' }}>{f.overall_assessment}</div>
+                                            <div style={{ marginTop: 8, fontSize: 11, color: '#6b7280' }}>
+                                                Confidence: <strong style={{ color: '#1a1f3a' }}>{(Number(f.confidence) * 100).toFixed(0)}%</strong>
+                                                {' · '}{totalFindings} finding{totalFindings === 1 ? '' : 's'}
+                                                {reviewData.model_used && <> · {reviewData.model_used}</>}
+                                            </div>
+                                        </div>
+
+                                        {/* Code violations */}
+                                        {f.code_violations?.length > 0 && (
+                                            <section style={{ marginBottom: 18 }}>
+                                                <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>⚠️ Code violations ({f.code_violations.length})</h3>
+                                                {f.code_violations.map((v, i) => (
+                                                    <div key={i} style={{ padding: 10, background: sevBg(v.severity), border: `1px solid ${sevBorder(v.severity)}`, borderRadius: 6, marginBottom: 6 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                                                            <strong style={{ fontSize: 13 }}>{v.description}</strong>
+                                                            {sevBadge(v.severity)}
+                                                        </div>
+                                                        <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'ui-monospace, monospace', marginBottom: 4 }}>{v.code_ref}</div>
+                                                        <div style={{ fontSize: 12, color: '#374151' }}><strong>Remedy:</strong> {v.remedy}</div>
+                                                        {v.affected_items?.length > 0 && (
+                                                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>Affected: {v.affected_items.join(', ')}</div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        )}
+
+                                        {/* Missing items */}
+                                        {f.missing_items?.length > 0 && (
+                                            <section style={{ marginBottom: 18 }}>
+                                                <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>+ Missing items ({f.missing_items.length})</h3>
+                                                {f.missing_items.map((mi, i) => (
+                                                    <div key={i} style={{ padding: 10, background: sevBg(mi.severity), border: `1px solid ${sevBorder(mi.severity)}`, borderRadius: 6, marginBottom: 6 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4, alignItems: 'flex-start' }}>
+                                                            <strong style={{ fontSize: 13 }}>{mi.name}</strong>
+                                                            {sevBadge(mi.severity)}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>{mi.reason}</div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                                            <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                                Suggest: {mi.suggested_qty} {mi.suggested_unit} @ ${Number(mi.suggested_price).toFixed(2)}
+                                                                {mi.code_ref && <> · {mi.code_ref}</>}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => applyMissingItem(mi)}
+                                                                style={{ padding: '5px 10px', background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                                            >+ Add to estimate</button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        )}
+
+                                        {/* Pricing concerns */}
+                                        {f.pricing_concerns?.length > 0 && (
+                                            <section style={{ marginBottom: 18 }}>
+                                                <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>$ Pricing concerns ({f.pricing_concerns.length})</h3>
+                                                {f.pricing_concerns.map((pc, i) => (
+                                                    <div key={i} style={{ padding: 10, background: sevBg(pc.severity), border: `1px solid ${sevBorder(pc.severity)}`, borderRadius: 6, marginBottom: 6 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                                                            <strong style={{ fontSize: 13 }}>{pc.item_name}</strong>
+                                                            {sevBadge(pc.severity)}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>{pc.reason}</div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                                            <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                                ${Number(pc.current_price).toFixed(2)} → <strong style={{ color: pc.direction === 'under' ? '#16a34a' : '#dc2626' }}>${Number(pc.suggested_price).toFixed(2)}</strong>
+                                                                {' '}({pc.direction === 'under' ? '+' : ''}{Number(pc.delta_pct).toFixed(0)}%)
+                                                            </div>
+                                                            <button
+                                                                onClick={() => applyPricingFix(pc)}
+                                                                style={{ padding: '5px 10px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                                            >Update price</button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        )}
+
+                                        {/* Supplement opportunities */}
+                                        {f.supplement_opportunities?.length > 0 && (
+                                            <section style={{ marginBottom: 18 }}>
+                                                <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>💡 Supplement opportunities ({f.supplement_opportunities.length})</h3>
+                                                {f.supplement_opportunities.map((so, i) => (
+                                                    <div key={i} style={{ padding: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, marginBottom: 6 }}>
+                                                        <strong style={{ fontSize: 13, color: '#1e40af' }}>{so.title}</strong>
+                                                        {so.potential_value != null && (
+                                                            <span style={{ marginLeft: 8, fontSize: 11, color: '#1e40af', fontWeight: 600 }}>~${Number(so.potential_value).toFixed(0)}</span>
+                                                        )}
+                                                        <div style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>{so.reason}</div>
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        )}
+
+                                        {/* Other */}
+                                        {f.other_concerns?.length > 0 && (
+                                            <section style={{ marginBottom: 8 }}>
+                                                <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>Notes</h3>
+                                                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+                                                    {f.other_concerns.map((o, i) => <li key={i}>{o}</li>)}
+                                                </ul>
+                                            </section>
+                                        )}
+
+                                        {totalFindings === 0 && (
+                                            <div style={{ padding: 30, textAlign: 'center', color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
+                                                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>✓ No issues found</div>
+                                                <div style={{ fontSize: 13, color: '#166534' }}>This estimate looks complete and correctly priced.</div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: '1px solid #e5e7eb' }}>
+                            <button
+                                onClick={() => setReviewModal(false)}
+                                style={{ padding: '8px 14px', background: '#fff', color: '#1a1f3a', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                            >Close</button>
+                            <button
+                                onClick={askAIToReview}
+                                disabled={reviewLoading}
+                                style={{ padding: '8px 14px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: reviewLoading ? 'wait' : 'pointer', opacity: reviewLoading ? 0.6 : 1 }}
+                            >🔄 Re-run review</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ============ AI GENERATOR MODAL ============ */}
             {aiModal && (

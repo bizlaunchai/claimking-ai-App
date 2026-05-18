@@ -1,0 +1,279 @@
+/* =============================================================================
+   Public homeowner signing page — no dashboard chrome, mobile-first.
+   ClaimKing navy + gold visual language.
+   ============================================================================= */
+
+.sv-shell {
+    min-height: 100vh;
+    background: #f5f5f5;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    color: #1a1f3a;
+    line-height: 1.5;
+}
+
+.sv-card {
+    max-width: 800px;
+    margin: 0 auto 16px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────── */
+.sv-header {
+    max-width: 800px;
+    margin: 0 auto 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 4px;
+    flex-wrap: wrap;
+}
+.sv-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sv-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+}
+.sv-logo-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    background: #1a1f3a;
+    color: #FDB813;
+    border-color: #1a1f3a;
+    font-size: 18px;
+}
+.sv-brand-name { font-weight: 700; color: #1a1f3a; font-size: 15px; }
+.sv-brand-sub  { color: #6b7280; font-size: 12px; }
+.sv-est-meta { text-align: right; }
+.sv-est-num   { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #6b7280; font-size: 12px; }
+.sv-est-title { font-weight: 700; color: #1a1f3a; font-size: 14px; }
+
+/* ─── Headings ───────────────────────────────────────────────────────── */
+.sv-h1 { font-size: 22px; font-weight: 700; margin: 0 0 8px; }
+.sv-h2 { font-size: 18px; font-weight: 700; margin: 0 0 16px; }
+.sv-help { color: #6b7280; font-size: 14px; margin: 0 0 16px; }
+
+/* ─── Sections / table ───────────────────────────────────────────────── */
+.sv-section { margin-bottom: 20px; }
+.sv-section-head {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: #1a1f3a;
+    background: #fff9e6;
+    border-left: 3px solid #FDB813;
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 8px;
+}
+.sv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sv-table thead th {
+    text-align: left;
+    padding: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    font-weight: 700;
+    border-bottom: 1px solid #e5e7eb;
+}
+.sv-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+}
+.sv-item-reason { color: #6b7280; font-size: 11.5px; margin-top: 3px; line-height: 1.5; }
+
+/* ─── Totals ─────────────────────────────────────────────────────────── */
+.sv-totals {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    max-width: 320px;
+    margin-left: auto;
+}
+.sv-tot-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+    color: #374151;
+}
+.sv-tot-grand {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 2px solid #1a1f3a;
+    font-size: 16px;
+    font-weight: 800;
+    color: #1a1f3a;
+}
+
+/* ─── Terms ──────────────────────────────────────────────────────────── */
+.sv-terms { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+.sv-terms h3 { font-size: 14px; font-weight: 700; margin: 0 0 8px; color: #1a1f3a; }
+.sv-terms-body {
+    font-size: 12.5px;
+    color: #374151;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.6;
+}
+
+/* ─── Sign block ─────────────────────────────────────────────────────── */
+.sv-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 16px;
+}
+.sv-input {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    font-size: 15px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #1a1f3a;
+    background: #fff;
+    font-family: inherit;
+}
+.sv-input:focus { outline: none; border-color: #FDB813; box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.2); }
+
+.sv-pad-wrap {
+    border: 2px dashed #d1d5db;
+    border-radius: 10px;
+    padding: 6px;
+    background: #fff;
+    margin-bottom: 12px;
+}
+.sv-pad-tools {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 4px 0;
+    font-size: 12px;
+}
+.sv-link {
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: 12px;
+    padding: 0;
+}
+.sv-link:hover { color: #1a1f3a; }
+.sv-pad-ink { color: #16a34a; font-weight: 600; }
+
+.sv-checkbox {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 16px 0 20px;
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.5;
+}
+.sv-checkbox input { margin-top: 3px; flex-shrink: 0; width: 18px; height: 18px; cursor: pointer; }
+
+.sv-submit {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: #FDB813;
+    color: #1a1f3a;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.sv-submit:hover:not(:disabled) { background: #fcc83d; }
+.sv-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.sv-fineprint {
+    margin-top: 12px;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.6;
+}
+
+/* ─── Status pages (loading / error / done) ─────────────────────────── */
+.sv-status {
+    text-align: center;
+    padding: 56px 24px;
+    max-width: 480px;
+}
+.sv-status h2 { font-size: 20px; margin: 12px 0 8px; }
+.sv-status p { color: #374151; margin: 0 0 6px; }
+.sv-sub { color: #6b7280; font-size: 13px; }
+
+.sv-spinner {
+    width: 48px; height: 48px;
+    border: 5px solid #e5e7eb;
+    border-top-color: #FDB813;
+    border-radius: 50%;
+    animation: sv-spin 0.9s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes sv-spin { to { transform: rotate(360deg); } }
+
+.sv-success .sv-check {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: #16a34a;
+    color: #fff;
+    font-size: 32px;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 560px) {
+    .sv-header { flex-direction: column; align-items: stretch; text-align: left; }
+    .sv-est-meta { text-align: left; }
+    .sv-table thead { display: none; }
+    .sv-table tr {
+        display: block;
+        margin-bottom: 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 8px;
+    }
+    .sv-table td {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px dashed #f3f4f6;
+        padding: 6px 0;
+        font-size: 12.5px;
+    }
+    .sv-table td:last-child { border-bottom: none; }
+    .sv-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #6b7280;
+    }
+    .sv-totals { max-width: 100%; }
+}
