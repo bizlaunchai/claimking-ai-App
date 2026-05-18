@@ -14,6 +14,8 @@ import {
     LEGAL_DISCLAIMER_SHORT,
 } from "./disclaimer";
 import { openAnalysisReport } from "./report-builder";
+import ClientSelector from "@/components/clients/ClientSelector";
+import { toClientShape } from "@/lib/clients/newClientForm";
 // Local-only uploader: holds the file in memory and hands it to the analyze
 // API directly. We deliberately avoid `@/utiles/FileUploader` here because it
 // auto-uploads to /s3/upload on selection, which would (a) double-upload
@@ -465,13 +467,7 @@ const PolicyAnalysis = () => {
     const searchParams = useSearchParams();
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedClient, setSelectedClient] = useState(null);
-    const [activeTab, setActiveTab] = useState('existing');
-    const [newClientForm, setNewClientForm] = useState({
-        first_name: '', last_name: '', email: '', phone: '',
-        address: '', city: '', state: '', zip_code: '',
-        insurance_carrier: '', policy_number: '',
-    });
-    const [creatingClient, setCreatingClient] = useState(false);
+    // Client picker/create UI state lives in <ClientSelector/>.
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [showResults, setShowResults] = useState(false);
     // Full row returned by POST /policy-analyses — contains all nine AI findings
@@ -517,7 +513,6 @@ const PolicyAnalysis = () => {
         claim_arguments: true,
         next_steps: true,
     });
-    const [clientSearch, setClientSearch] = useState('');
     const [documentType, setDocumentType] = useState('policy');
     
     const [files, setFiles] = useState([])
@@ -613,7 +608,7 @@ const PolicyAnalysis = () => {
                 if (row.client_id) {
                     try {
                         const cRes = await axiosInstance.get(`/client-portal/${row.client_id}`);
-                        if (!cancelled && cRes.data?.data) setSelectedClient(cRes.data.data);
+                        if (!cancelled && cRes.data?.data) setSelectedClient(toClientShape(cRes.data.data));
                     } catch {
                         /* non-fatal — ResultsView renders without client */
                     }
@@ -626,91 +621,28 @@ const PolicyAnalysis = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Real client list (fetched from /client-portal). Search is debounced so we
-    // don't spam the API on every keystroke. The server already filters by
-    // `search`, so we render `clients` directly — no client-side filter pass.
-    const [clients, setClients] = useState([]);
-    const [clientsLoading, setClientsLoading] = useState(false);
-
-    useEffect(() => {
-        if (activeTab !== 'existing') return;
-        let cancelled = false;
-        setClientsLoading(true);
-        const timer = setTimeout(async () => {
-            try {
-                const params = {};
-                if (clientSearch.trim()) params.search = clientSearch.trim();
-                const res = await axiosInstance.get('/client-portal', { params });
-                if (cancelled) return;
-                setClients(res.data?.data ?? []);
-            } catch {
-                /* axiosInstance toasts the error */
-            } finally {
-                if (!cancelled) setClientsLoading(false);
-            }
-        }, 250);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [activeTab, clientSearch]);
-
     const updateProgress = (step) => {
         setCurrentStep(step);
     };
 
-    const handleSelectClient = (client) => {
-        // Store the full client object so the analyze API has client.id and the
-        // UI can render full_name / address / carrier without a re-fetch.
-        setSelectedClient(client);
-        updateProgress(2);
-        setTimeout(() => {
-            const uploadSection = document.getElementById('upload-section');
-            if (uploadSection) {
-                uploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 100);
-    };
-
-    const handleNewClientField = (field, value) => {
-        setNewClientForm((prev) => ({ ...prev, [field]: value }));
-    };
-
-    const handleCreateClient = async () => {
-        // The backend enforces the required fields, but we mirror the same
-        // mandatory set as the rest of the dashboard for a consistent UX.
-        const required = ['first_name', 'last_name', 'address', 'city', 'state', 'zip_code'];
-        const missing = required.filter((k) => !newClientForm[k]?.trim());
-        if (missing.length) {
-            alert(`Please fill in: ${missing.join(', ')}`);
-            return;
+    // ClientSelector emits the shaped client (or null when cleared).
+    // Picking advances the wizard; clearing rewinds it and drops dependent state.
+    const handleClientChange = (shaped) => {
+        if (shaped) {
+            setSelectedClient(shaped);
+            updateProgress(2);
+            setTimeout(() => {
+                const uploadSection = document.getElementById('upload-section');
+                if (uploadSection) uploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        } else {
+            setSelectedClient(null);
+            setFiles([]);
+            setShowResults(false);
+            setAnalysisResult(null);
+            setAnalyzeError(null);
+            updateProgress(1);
         }
-        setCreatingClient(true);
-        try {
-            const res = await axiosInstance.post('/client-portal', {
-                ...newClientForm,
-                full_name: `${newClientForm.first_name} ${newClientForm.last_name}`.trim(),
-            });
-            const created = res.data?.data;
-            if (created) {
-                handleSelectClient(created);
-                setNewClientForm({
-                    first_name: '', last_name: '', email: '', phone: '',
-                    address: '', city: '', state: '', zip_code: '',
-                    insurance_carrier: '', policy_number: '',
-                });
-            }
-        } catch {
-            /* axiosInstance toasts the error */
-        } finally {
-            setCreatingClient(false);
-        }
-    };
-
-    const handleChangeClient = () => {
-        setSelectedClient(null);
-        setFiles([]);
-        setShowResults(false);
-        setAnalysisResult(null);
-        setAnalyzeError(null);
-        updateProgress(1);
     };
 
     const handleAnalyze = async () => {
@@ -899,141 +831,12 @@ const PolicyAnalysis = () => {
 
             {/* Main Content */}
             <div className="px-6 pb-6">
-                {/* Step 1: Client Selection */}
-                <div id="client-section" className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${selectedClient ? 'hidden' : ''}`}>
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 1: Select or Create Client</h2>
-                        
-                        <div className="flex gap-4 mb-4">
-                            <button 
-                                className={`tab-button ${activeTab === 'existing' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('existing')}
-                            >
-                                Existing Client
-                            </button>
-                            <button 
-                                className={`tab-button ${activeTab === 'new' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('new')}
-                            >
-                                New Client
-                            </button>
-                        </div>
-
-                        {/* Existing Client Tab */}
-                        {activeTab === 'existing' && (
-                            <div>
-                                <div className="relative mb-4">
-                                    <input
-                                        type="text"
-                                        placeholder="Search client name, address, email or phone..."
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                                        value={clientSearch}
-                                        onChange={(e) => setClientSearch(e.target.value)}
-                                    />
-                                </div>
-                                {clientsLoading && (
-                                    <p className="text-sm text-gray-500 mb-2">Loading clients…</p>
-                                )}
-                                {!clientsLoading && clients.length === 0 && (
-                                    <p className="text-sm text-gray-500 mb-2">
-                                        No clients found. Switch to “New Client” to add one.
-                                    </p>
-                                )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {clients.map((client) => (
-                                        <div key={client.id} className="border border-gray-200 rounded-lg p-4 hover:border-yellow-400 cursor-pointer transition">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h3 className="font-semibold text-gray-900">
-                                                        {client.full_name ||
-                                                            `${client.first_name ?? ''} ${client.last_name ?? ''}`.trim() ||
-                                                            'Unnamed client'}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-600">
-                                                        {client.insurance_carrier || '—'}
-                                                    </p>
-                                                    <p className="text-sm text-gray-500">
-                                                        {[client.address, client.city, client.state].filter(Boolean).join(', ')}
-                                                    </p>
-                                                    {client.policy_number && (
-                                                        <p className="text-xs text-gray-500 mt-1">
-                                                            Policy: {client.policy_number}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => handleSelectClient(client)}
-                                                    className="px-3 py-1 bg-yellow-400 text-gray-900 rounded text-sm font-medium hover:bg-yellow-500 transition"
-                                                >
-                                                    Select
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* New Client Tab */}
-                        {activeTab === 'new' && (
-                            <div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {[
-                                        { key: 'first_name', label: 'First Name*' },
-                                        { key: 'last_name', label: 'Last Name*' },
-                                        { key: 'email', label: 'Email' },
-                                        { key: 'phone', label: 'Phone' },
-                                        { key: 'address', label: 'Address*' },
-                                        { key: 'city', label: 'City*' },
-                                        { key: 'state', label: 'State*' },
-                                        { key: 'zip_code', label: 'ZIP*' },
-                                        { key: 'insurance_carrier', label: 'Insurance Carrier' },
-                                        { key: 'policy_number', label: 'Policy #' },
-                                    ].map((f) => (
-                                        <div key={f.key}>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                                                value={newClientForm[f.key]}
-                                                onChange={(e) => handleNewClientField(f.key, e.target.value)}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={handleCreateClient}
-                                    disabled={creatingClient}
-                                    className={`mt-4 px-6 py-3 rounded-lg font-medium transition ${
-                                        creatingClient
-                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                            : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'
-                                    }`}
-                                >
-                                    {creatingClient ? 'Creating…' : 'Create Client & Continue'}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                {/* Selected Client Bar */}
-                <div id="selected-client-bar" className={`bg-green-50 border border-green-200 rounded-lg p-4 mb-6 ${selectedClient ? '' : 'hidden'}`}>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <span className="text-sm text-green-800">✓ Client Selected: </span>
-                            <span className="font-semibold text-green-900" id="selected-client-name">
-                                {selectedClient?.full_name ||
-                                    `${selectedClient?.first_name ?? ''} ${selectedClient?.last_name ?? ''}`.trim() ||
-                                    'Unnamed client'}
-                            </span>
-                        </div>
-                        <button 
-                            onClick={handleChangeClient}
-                            className="text-sm text-blue-600 hover:underline"
-                        >
-                            Change Client
-                        </button>
-                    </div>
-                </div>
+                {/* Step 1: Client Selection — shared component (same UX as Estimation). */}
+                <ClientSelector
+                    client={selectedClient}
+                    onChange={handleClientChange}
+                    scrollId="client-section"
+                />
 
                 {/* Step 2: Document Upload */}
                 <div id="upload-section" className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${selectedClient ? '' : 'disabled-section'}`}>
