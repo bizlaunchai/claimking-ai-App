@@ -7,6 +7,57 @@ import {
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
 
+// ── AuthedLogo ─────────────────────────────────────────────────────────────
+// `companies.logo_url` stores an S3 key, not a public URL — plain <img> would
+// 401. We hit the auth-gated /s3/file proxy via axiosInstance (Bearer header)
+// and turn the blob into an object URL. Module-level cache so the same logo
+// only loads once per session no matter how many rows reference it.
+const _logoCache = new Map();
+const _logoInflight = new Map();
+function AuthedLogo({ logoKey, initials, fallbackBg = '#eef2ff', fallbackFg = '#4f46e5' }) {
+    const isLocal = typeof logoKey === 'string' && (logoKey.startsWith('http://') || logoKey.startsWith('https://') || logoKey.startsWith('blob:') || logoKey.startsWith('data:'));
+    const [url, setUrl] = useState(() => {
+        if (!logoKey) return null;
+        if (isLocal) return logoKey;
+        return _logoCache.get(logoKey) ?? null;
+    });
+    const [errored, setErrored] = useState(false);
+
+    useEffect(() => {
+        if (!logoKey || isLocal) { setUrl(logoKey || null); return; }
+        const cached = _logoCache.get(logoKey);
+        if (cached) { setUrl(cached); setErrored(false); return; }
+        let active = true;
+        setErrored(false);
+        let p = _logoInflight.get(logoKey);
+        if (!p) {
+            p = axiosInstance
+                .get(`/s3/file?key=${encodeURIComponent(logoKey)}`, { responseType: 'blob', suppressErrorToast: true })
+                .then((res) => {
+                    const blobUrl = URL.createObjectURL(res.data);
+                    _logoCache.set(logoKey, blobUrl);
+                    _logoInflight.delete(logoKey);
+                    return blobUrl;
+                })
+                .catch((e) => { _logoInflight.delete(logoKey); throw e; });
+            _logoInflight.set(logoKey, p);
+        }
+        p.then((b) => { if (active) setUrl(b); }).catch(() => { if (active) setErrored(true); });
+        return () => { active = false; };
+    }, [logoKey, isLocal]);
+
+    const dim = { width: 44, height: 44, borderRadius: '50%', flexShrink: 0, border: '1px solid #e5e7eb' };
+    if (logoKey && !errored && url) {
+        // eslint-disable-next-line @next/next/no-img-element
+        return <img src={url} alt="" style={{ ...dim, objectFit: 'cover', background: '#fff' }} />;
+    }
+    return (
+        <div style={{ ...dim, background: fallbackBg, color: fallbackFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
+            {initials || '—'}
+        </div>
+    );
+}
+
 const STATUS_FILTERS = [
     { value: '',           label: 'All' },
     { value: 'active',     label: 'Active' },
@@ -136,35 +187,51 @@ export default function AdminOrders() {
                         </thead>
                         <tbody>
                             {rows.map((s) => {
-                                const u = Array.isArray(s.user) ? s.user[0] : s.user;
+                                const u = Array.isArray(s.owner) ? s.owner[0] : (s.owner ?? (Array.isArray(s.user) ? s.user[0] : s.user));
+                                const c = Array.isArray(s.company) ? s.company[0] : s.company;
                                 const p = Array.isArray(s.plan) ? s.plan[0] : s.plan;
                                 const sty = STATUS_BG[s.status] || STATUS_BG.canceled;
+                                const displayName =
+                                    u?.full_name ||
+                                    [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim() ||
+                                    '—';
+                                const initials = (displayName !== '—' ? displayName : (u?.email ?? '?'))
+                                    .split(/\s+/).map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+                                const logo = c?.logo_url || null;
                                 return (
                                     <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                         <td style={td}>
-                                            <div style={{ fontWeight: 600, color: '#111827', fontSize: 13 }}>{u?.full_name || '—'}</div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>{u?.email || '—'}</div>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                                <AuthedLogo logoKey={logo} initials={initials} />
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>{displayName}</div>
+                                                    <div style={{ fontSize: 13, color: '#6b7280' }}>{u?.email || '—'}</div>
+                                                    {c?.name && (
+                                                        <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{c.name}</div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td style={td}>
                                             {p ? (
                                                 <div>
-                                                    <div style={{ fontWeight: 500, color: '#111827', fontSize: 13 }}>{p.name}</div>
-                                                    <div style={{ fontSize: 11, color: '#6b7280' }}>{p.monthly_credits.toLocaleString()} cr/mo</div>
+                                                    <div style={{ fontWeight: 500, color: '#111827', fontSize: 15 }}>{p.name}</div>
+                                                    <div style={{ fontSize: 13, color: '#6b7280' }}>{p.monthly_credits.toLocaleString()} cr/mo</div>
                                                 </div>
-                                            ) : <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>}
+                                            ) : <span style={{ color: '#9ca3af', fontSize: 14 }}>—</span>}
                                         </td>
                                         <td style={td}>{p ? fmtMoney(p.price_cents) : '—'}</td>
                                         <td style={td}>
-                                            <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color, border: `1px solid ${sty.border}` }}>
+                                            <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color, border: `1px solid ${sty.border}` }}>
                                                 {s.status}
                                             </span>
                                             {s.cancel_at_period_end && (
-                                                <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 4 }}>
+                                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 4 }}>
                                                     cancels at period end
                                                 </div>
                                             )}
                                         </td>
-                                        <td style={{ ...td, fontSize: 12 }}>
+                                        <td style={{ ...td, fontSize: 14 }}>
                                             {s.current_period_start && s.current_period_end ? (
                                                 <>
                                                     <div>{fmtDate(s.current_period_start)}</div>
@@ -172,19 +239,25 @@ export default function AdminOrders() {
                                                 </>
                                             ) : '—'}
                                         </td>
-                                        <td style={{ ...td, fontSize: 12, color: '#6b7280' }}>{fmtDate(s.created_at)}</td>
+                                        <td style={{ ...td, fontSize: 14, color: '#6b7280' }}>{fmtDate(s.created_at)}</td>
                                         <td style={td}>
                                             {s.stripe_subscription_id ? (
                                                 <a
                                                     href={`https://dashboard.stripe.com/${process.env.NODE_ENV === 'production' ? '' : 'test/'}subscriptions/${s.stripe_subscription_id}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    style={{ fontFamily: 'monospace', fontSize: 11, color: '#4f46e5', textDecoration: 'none' }}
                                                     title={s.stripe_subscription_id}
+                                                    style={{
+                                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                        padding: '6px 12px',
+                                                        background: '#4f46e5', color: '#fff',
+                                                        borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                                        textDecoration: 'none', whiteSpace: 'nowrap',
+                                                    }}
                                                 >
-                                                    {s.stripe_subscription_id.slice(0, 14)}…
+                                                    View
                                                 </a>
-                                            ) : <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>}
+                                            ) : <span style={{ fontSize: 13, color: '#9ca3af' }}>—</span>}
                                         </td>
                                     </tr>
                                 );
@@ -211,5 +284,5 @@ function Metric({ icon: Icon, label, value, color }) {
     );
 }
 
-const th = { padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
-const td = { padding: '14px 16px', fontSize: 13, color: '#1f2937', verticalAlign: 'top' };
+const th = { padding: '14px 18px', textAlign: 'left', fontSize: 13, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
+const td = { padding: '16px 18px', fontSize: 15, color: '#1f2937', verticalAlign: 'top' };

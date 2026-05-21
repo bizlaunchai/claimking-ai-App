@@ -14,9 +14,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import GoogleAuth from "@/components/auth/GoogleAuth.jsx";
 import OutlookAuth from "@/components/auth/OutlookAuth.jsx";
+
+const SUSPENSION_MESSAGES = {
+  account_suspended:
+    "Your account has been suspended. Please contact support for assistance.",
+  company_suspended:
+    "Your company's account has been suspended. Please contact your administrator or ClaimKing support.",
+};
 
 export function LoginForm({ className, ...props }) {
   const [email, setEmail] = useState("");
@@ -25,6 +32,18 @@ export function LoginForm({ className, ...props }) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // Read the one-shot "auth_notice" flash cookie set by the middleware on a
+  // suspension redirect, show the message, then clear the cookie so it does
+  // not persist across reloads. Keeps the URL clean (no ?error=... param).
+  useEffect(() => {
+    const match = document.cookie.match(/(?:^|; )auth_notice=([^;]+)/);
+    if (match) {
+      const notice = decodeURIComponent(match[1]);
+      if (SUSPENSION_MESSAGES[notice]) setError(SUSPENSION_MESSAGES[notice]);
+      document.cookie = "auth_notice=; path=/; max-age=0";
+    }
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const supabase = createClient();
@@ -32,11 +51,43 @@ export function LoginForm({ className, ...props }) {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) throw error;
+
+      // Suspension check up-front so the message shows immediately (without a
+      // dashboard round-trip + reload). The middleware still enforces this for
+      // direct URL access / already-open sessions.
+      const userId = data?.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("status, company_id")
+          .eq("id", userId)
+          .single();
+
+        let notice = null;
+        if (profile?.status === "suspended") {
+          notice = "account_suspended";
+        } else if (profile?.company_id) {
+          const { data: company } = await supabase
+            .from("companies")
+            .select("status")
+            .eq("id", profile.company_id)
+            .maybeSingle();
+          if (company?.status === "suspended") notice = "company_suspended";
+        }
+
+        if (notice) {
+          await supabase.auth.signOut();
+          setError(SUSPENSION_MESSAGES[notice]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // Redirect to protected route
       router.push("/dashboard");
     } catch (err) {
