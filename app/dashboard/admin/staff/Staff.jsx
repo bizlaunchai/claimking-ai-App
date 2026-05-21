@@ -11,8 +11,6 @@ const PERMISSION_CATALOG = [
     { key: 'manage_coupons', label: 'Manage Coupons', desc: 'Create discount codes + view redemptions' },
     { key: 'manage_feature_costs', label: 'Manage Feature Costs', desc: 'Edit credit cost per AI feature' },
     { key: 'manage_api_keys', label: 'Manage API Keys', desc: 'Configure global provider API keys (OpenAI, Gemini, etc.)' },
-    { key: 'view_users', label: 'View Users', desc: 'See all platform users + their company balances' },
-    { key: 'adjust_credits', label: 'Adjust Credits', desc: 'Add or subtract credits from any company pool' },
     { key: 'view_orders', label: 'View Orders', desc: 'See all subscriptions across the platform' },
     { key: 'view_audit_log', label: 'View Audit Log', desc: 'Read platform-level admin action history' },
     { key: 'manage_email_settings', label: 'Manage Email Settings', desc: 'Edit globally monitored insurance email domains' },
