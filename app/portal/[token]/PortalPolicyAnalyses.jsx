@@ -23,11 +23,12 @@ import {
 
 const DOCUMENT_TYPE_LABELS = {
     policy: 'Insurance Policy',
-    claim_document: 'Claim Document',
-    denial_letter: 'Denial Letter',
-    estimate: 'Adjuster Estimate',
-    scope: 'Scope of Work',
-    carrier_email: 'Carrier Email',
+    claim_ack: 'Claim Acknowledgment',
+    denial: 'Denial Letter',
+    adjuster_estimate: 'Adjuster Estimate',
+    scope_of_work: 'Scope of Work',
+    email_thread: 'Carrier Email',
+    unknown: 'Document',
 };
 
 const fmtDate = (iso) => {
@@ -35,132 +36,118 @@ const fmtDate = (iso) => {
     try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
 };
 
-const items = (group) => (Array.isArray(group?.items) ? group.items : []);
+// Generic recursive renderer for the type-specific extracted_data object.
+const ExtractedValue = ({ value }) => {
+    if (value == null || value === '') return null;
+    if (Array.isArray(value)) {
+        if (!value.length) return null;
+        return (
+            <ul className="list-disc ml-5 space-y-1">
+                {value.map((v, i) => <li key={i}><ExtractedValue value={v} /></li>)}
+            </ul>
+        );
+    }
+    if (typeof value === 'object') {
+        const entries = Object.entries(value).filter(
+            ([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length),
+        );
+        if (!entries.length) return null;
+        return (
+            <div className="text-sm">
+                {entries.map(([k, v]) => {
+                    const label = k.replace(/_/g, ' ');
+                    if (typeof v === 'object') {
+                        return (
+                            <div key={k} className="my-1 pl-2 border-l-2 border-gray-200">
+                                <div className="font-semibold text-gray-700 capitalize">{label}</div>
+                                <ExtractedValue value={v} />
+                            </div>
+                        );
+                    }
+                    return (
+                        <div key={k} className="py-0.5 text-gray-700">
+                            <span className="text-gray-500 capitalize">{label}:</span> {String(v)}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+    return <span>{String(value)}</span>;
+};
 
-const Section = ({ title, accent, list, renderItem, emptyText }) => (
-    <section className="mb-4">
-        <h3 className="font-semibold mb-2" style={{ color: accent }}>{title}</h3>
-        {list.length === 0
-            ? <p className="text-sm text-gray-500 italic">{emptyText}</p>
-            : <ul className="space-y-3">{list.map(renderItem)}</ul>}
-    </section>
-);
+const deadlineTone = (days) => {
+    if (days == null) return 'border-gray-200 bg-gray-50 text-gray-700';
+    if (days < 0) return 'border-red-300 bg-red-100 text-red-800';
+    if (days <= 30) return 'border-red-200 bg-red-50 text-red-700';
+    if (days <= 90) return 'border-yellow-200 bg-yellow-50 text-yellow-700';
+    return 'border-green-200 bg-green-50 text-green-700';
+};
 
 const AnalysisCard = ({ a }) => {
-    const ded = a.deductible_info || {};
-    const codeUp = a.code_upgrade_potential || {};
-    const op = a.op_potential || {};
-    const rcv = a.rcv_vs_acv || {};
-    const score = typeof a.coverage_score === 'number' ? a.coverage_score : 0;
+    const ed = a.extracted_data || {};
+    const deadlines = Array.isArray(a.critical_deadlines) ? a.critical_deadlines : [];
+    const actions = Array.isArray(a.suggested_actions) ? a.suggested_actions : [];
 
     return (
         <article className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-            <header className="flex justify-between items-start mb-3 gap-4">
-                <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">
-                        {DOCUMENT_TYPE_LABELS[a.document_type] ?? a.document_type}
-                    </p>
-                    <h2 className="text-lg font-semibold text-gray-900 mt-1">
-                        {a.summary || 'Policy analysis'}
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-1">{fmtDate(a.created_at)}</p>
-                </div>
-                <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-600">{score}/100</div>
-                    <p className="text-xs text-blue-600">Coverage score</p>
-                </div>
+            <header className="mb-3">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                    {DOCUMENT_TYPE_LABELS[a.document_type] ?? a.document_type}
+                    {a.detected_carrier ? ` · ${a.detected_carrier}` : ''}
+                </p>
+                <h2 className="text-lg font-semibold text-gray-900 mt-1">
+                    {a.summary || 'Policy analysis'}
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                    {a.document_date ? `Document date: ${a.document_date} · ` : ''}{fmtDate(a.created_at)}
+                </p>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-sm">
-                <div className="border border-gray-200 rounded p-3">
-                    <p className="text-xs uppercase text-gray-500 mb-1">Deductibles</p>
-                    {ded.standard && <p>Standard: <strong>{ded.standard}</strong></p>}
-                    {ded.wind_hail && <p>Wind/Hail: <strong className="text-red-600">{ded.wind_hail}</strong></p>}
-                    {ded.hurricane && <p>Hurricane: <strong>{ded.hurricane}</strong></p>}
-                    {(ded.other || []).map((o, i) => (
-                        <p key={i}>{o.name}: <strong>{o.value}</strong></p>
-                    ))}
-                    {!ded.standard && !ded.wind_hail && !ded.hurricane && !(ded.other || []).length && (
-                        <p className="text-gray-500 italic">No deductibles detected.</p>
-                    )}
-                </div>
-                <div className="border border-gray-200 rounded p-3">
-                    <p className="text-xs uppercase text-gray-500 mb-1">RCV vs ACV</p>
-                    <p className="font-semibold">{rcv.type || 'unknown'}</p>
-                    <p className="text-gray-600">{rcv.detail || '—'}</p>
-                </div>
-                <div className="border border-gray-200 rounded p-3">
-                    <p className="text-xs uppercase text-gray-500 mb-1">Code Upgrade</p>
-                    <p className="font-semibold">{codeUp.available ? 'Available' : 'Not detected'}</p>
-                    <p className="text-gray-600">{codeUp.detail || '—'}</p>
-                </div>
-                <div className="border border-gray-200 rounded p-3">
-                    <p className="text-xs uppercase text-gray-500 mb-1">O&amp;P</p>
-                    <p className="font-semibold">{op.applicable ? 'Applicable' : 'Not applicable'}</p>
-                    <p className="text-gray-600">{op.detail || '—'}</p>
-                </div>
-            </div>
+            {deadlines.length > 0 && (
+                <section className="mb-4">
+                    <h3 className="font-semibold mb-2 text-red-700">Critical Deadlines</h3>
+                    <div className="space-y-2">
+                        {deadlines.map((d, i) => (
+                            <div key={i} className={`rounded border p-3 ${deadlineTone(d.days_remaining)}`}>
+                                <div className="flex justify-between items-center gap-3">
+                                    <p className="text-sm font-medium">{d.description}</p>
+                                    {typeof d.days_remaining === 'number' && (
+                                        <span className="text-xs font-bold whitespace-nowrap">
+                                            {d.days_remaining < 0 ? `${Math.abs(d.days_remaining)}d overdue` : `${d.days_remaining}d left`}
+                                        </span>
+                                    )}
+                                </div>
+                                {d.date && <p className="text-xs mt-0.5">Due {d.date}</p>}
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
-            <Section
-                title="Coverage Issues"
-                accent="#b91c1c"
-                list={items(a.coverage_issues)}
-                emptyText="No coverage issues identified."
-                renderItem={(it, i) => (
-                    <li key={i}>
-                        <p className="font-medium text-gray-900">{it.title}</p>
-                        <p className="text-sm text-gray-700">{it.detail}</p>
-                    </li>
-                )}
-            />
-            <Section
-                title="Exclusions"
-                accent="#374151"
-                list={items(a.exclusions)}
-                emptyText="No exclusions identified."
-                renderItem={(it, i) => (
-                    <li key={i}>
-                        <p className="font-medium text-gray-900">{it.title}</p>
-                        <p className="text-sm text-gray-700">{it.detail}</p>
-                    </li>
-                )}
-            />
-            <Section
-                title="Matching Issues"
-                accent="#c2410c"
-                list={items(a.matching_issues)}
-                emptyText="No matching issues identified."
-                renderItem={(it, i) => (
-                    <li key={i}>
-                        <p className="font-medium text-gray-900">{it.title}</p>
-                        <p className="text-sm text-gray-700">{it.detail}</p>
-                    </li>
-                )}
-            />
-            <Section
-                title="Potential Claim Arguments"
-                accent="#1d4ed8"
-                list={items(a.claim_arguments)}
-                emptyText="No claim arguments identified."
-                renderItem={(it, i) => (
-                    <li key={i}>
-                        <p className="font-medium text-gray-900">{it.title}</p>
-                        <p className="text-sm text-gray-700">{it.argument}</p>
-                    </li>
-                )}
-            />
-            <Section
-                title="Next Steps"
-                accent="#92400e"
-                list={items(a.next_steps)}
-                emptyText="No next steps identified."
-                renderItem={(it, i) => (
-                    <li key={i}>
-                        <p className="font-medium text-gray-900">{it.title}</p>
-                        <p className="text-sm text-gray-700">{it.detail}</p>
-                    </li>
-                )}
-            />
+            {actions.length > 0 && (
+                <section className="mb-4">
+                    <h3 className="font-semibold mb-2" style={{ color: '#92400e' }}>Suggested Next Steps</h3>
+                    <ul className="space-y-2">
+                        {actions.map((s, i) => (
+                            <li key={i} className="flex gap-2 items-start">
+                                <span className="text-gray-400 mt-0.5">{s.done ? '☑' : '☐'}</span>
+                                <div>
+                                    <p className="font-medium text-gray-900 text-sm">{s.title}</p>
+                                    {s.detail && <p className="text-sm text-gray-700">{s.detail}</p>}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {Object.keys(ed).length > 0 && (
+                <section className="mb-4">
+                    <h3 className="font-semibold mb-2" style={{ color: '#1d4ed8' }}>Details</h3>
+                    <ExtractedValue value={ed} />
+                </section>
+            )}
 
             {/* Per-output disclaimer (compliance: every generated analysis
                 output shown to a client must carry the disclaimer). */}

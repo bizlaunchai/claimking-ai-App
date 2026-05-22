@@ -1,5 +1,6 @@
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
 import "./globals.css";
 import AppHeader from "@/components/layout/AppHeader";
 import React from "react";
@@ -36,6 +37,7 @@ export default function RootLayout({
           <AppHeader />
           {children}
           <AppFooter />
+          <Toaster richColors closeButton position="top-right" />
         </ThemeProvider>
       </body>
     </html>
