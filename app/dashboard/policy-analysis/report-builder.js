@@ -13,11 +13,6 @@
 
 import { disclaimerHtmlFooter, escapeHtml } from './disclaimer';
 
-const fmtList = (items, render) => {
-    if (!items || !items.length) return '<p class="empty">No items identified.</p>';
-    return `<ul>${items.map(render).join('')}</ul>`;
-};
-
 const fmtSection = (title, html, accent = '#1f2937') => `
 <section class="section">
     <h2 style="color:${accent}">${escapeHtml(title)}</h2>
@@ -27,13 +22,36 @@ const fmtSection = (title, html, accent = '#1f2937') => `
 const documentTypeLabel = (key) => {
     switch (key) {
         case 'policy': return 'Insurance Policy';
-        case 'claim_document': return 'Claim Document';
-        case 'denial_letter': return 'Denial Letter';
-        case 'estimate': return 'Adjuster Estimate';
-        case 'scope': return 'Scope of Work';
-        case 'carrier_email': return 'Carrier Email';
+        case 'claim_ack': return 'Claim Acknowledgment';
+        case 'denial': return 'Denial Letter';
+        case 'adjuster_estimate': return 'Adjuster Estimate';
+        case 'scope_of_work': return 'Scope of Work';
+        case 'email_thread': return 'Carrier Email';
+        case 'unknown': return 'Unknown';
         default: return key || '—';
     }
+};
+
+// Generic recursive renderer for the type-specific extracted_data object.
+const renderExtracted = (value) => {
+    if (value == null || value === '') return '';
+    if (Array.isArray(value)) {
+        if (!value.length) return '';
+        return `<ul>${value.map((v) => `<li>${renderExtracted(v)}</li>`).join('')}</ul>`;
+    }
+    if (typeof value === 'object') {
+        const rows = Object.entries(value)
+            .filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length))
+            .map(([k, v]) => {
+                const label = escapeHtml(k.replace(/_/g, ' '));
+                if (typeof v === 'object') {
+                    return `<div class="kv-block"><div class="kv-key">${label}</div>${renderExtracted(v)}</div>`;
+                }
+                return `<div class="kv-row"><span class="kv-key">${label}:</span> <span>${escapeHtml(String(v))}</span></div>`;
+            });
+        return rows.join('');
+    }
+    return escapeHtml(String(value));
 };
 
 const buildClientLine = (client) => {
@@ -49,119 +67,51 @@ const buildClientLine = (client) => {
 
 export const buildAnalysisReportHtml = ({ analysis, client }) => {
     if (!analysis) return '';
-    const score = typeof analysis.coverage_score === 'number' ? analysis.coverage_score : 0;
 
-    const cov = analysis.coverage_issues?.items ?? [];
-    const exc = analysis.exclusions?.items ?? [];
-    const matching = analysis.matching_issues?.items ?? [];
-    const args = analysis.claim_arguments?.items ?? [];
-    const next = analysis.next_steps?.items ?? [];
+    const deadlines = Array.isArray(analysis.critical_deadlines) ? analysis.critical_deadlines : [];
+    const actions = Array.isArray(analysis.suggested_actions) ? analysis.suggested_actions : [];
+    const extracted = analysis.extracted_data || {};
 
-    const ded = analysis.deductible_info || {};
-    const codeUp = analysis.code_upgrade_potential || {};
-    const op = analysis.op_potential || {};
-    const rcv = analysis.rcv_vs_acv || {};
-
-    const dedRows = [
-        ded.standard ? ['Standard', ded.standard] : null,
-        ded.wind_hail ? ['Wind / Hail', ded.wind_hail] : null,
-        ded.hurricane ? ['Hurricane', ded.hurricane] : null,
-        ...(ded.other ?? []).map((o) => [o.name, o.value]),
-    ].filter(Boolean);
+    const metaBits = [
+        `Document type: <strong>${escapeHtml(documentTypeLabel(analysis.document_type))}</strong>`,
+        analysis.detected_carrier ? `Carrier: <strong>${escapeHtml(analysis.detected_carrier)}</strong>` : '',
+        analysis.document_date ? `Document date: ${escapeHtml(analysis.document_date)}` : '',
+        `Generated: ${escapeHtml(new Date().toLocaleString())}`,
+    ].filter(Boolean).join('&nbsp;·&nbsp;');
 
     return `
 <header class="report-header">
     <div class="title">ClaimKing.AI — Policy Analysis Report</div>
-    <div class="meta">
-        Document type: <strong>${escapeHtml(documentTypeLabel(analysis.document_type))}</strong>
-        &nbsp;·&nbsp; Generated: ${escapeHtml(new Date().toLocaleString())}
-    </div>
+    <div class="meta">${metaBits}</div>
     ${client ? `<div class="client">${buildClientLine(client)}</div>` : ''}
 </header>
 
 <section class="hero">
-    <div class="score">
-        <div class="score-num">${score}/100</div>
-        <div class="score-label">Coverage score</div>
-    </div>
     <div class="summary">
         <h2>Summary</h2>
         <p>${escapeHtml(analysis.summary || '—')}</p>
     </div>
 </section>
 
-<section class="snapshot">
-    <h2>Snapshot</h2>
-    <div class="snapshot-grid">
-        <div class="card">
-            <h3>Deductibles</h3>
-            ${dedRows.length
-                ? `<table>${dedRows.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td><strong>${escapeHtml(v)}</strong></td></tr>`).join('')}</table>`
-                : '<p class="empty">No deductibles detected.</p>'}
-        </div>
-        <div class="card">
-            <h3>RCV vs ACV</h3>
-            <p class="big">${escapeHtml(rcv.type || 'unknown')}</p>
-            <p>${escapeHtml(rcv.detail || '—')}</p>
-            ${rcv.depreciation_amount
-                ? `<p class="muted">Depreciation: ${escapeHtml(rcv.depreciation_amount)}</p>` : ''}
-        </div>
-        <div class="card">
-            <h3>Code Upgrade Potential</h3>
-            <p class="big">${codeUp.available ? 'Available' : 'Not detected'}</p>
-            ${codeUp.percent_or_amount ? `<p><strong>${escapeHtml(codeUp.percent_or_amount)}</strong></p>` : ''}
-            <p>${escapeHtml(codeUp.detail || '—')}</p>
-        </div>
-        <div class="card">
-            <h3>O&amp;P Potential</h3>
-            <p class="big">${op.applicable ? 'Applicable' : 'Not applicable'}</p>
-            ${typeof op.trades_count === 'number' ? `<p>Trades: <strong>${op.trades_count}</strong></p>` : ''}
-            <p>${escapeHtml(op.detail || '—')}</p>
-        </div>
-    </div>
-</section>
-
-${fmtSection('Coverage Issues',
-    fmtList(cov, (it) => `
+${deadlines.length ? fmtSection('Critical Deadlines',
+    `<ul>${deadlines.map((d) => `
         <li>
-            <p class="title">${escapeHtml(it.title)} <span class="badge sev-${escapeHtml(it.severity || 'low')}">${escapeHtml(it.severity || 'low')}</span></p>
-            <p>${escapeHtml(it.detail)}</p>
-        </li>`),
-    '#b91c1c')}
+            <p class="title">${escapeHtml(d.description || '—')}</p>
+            <p class="muted">${escapeHtml(d.date || 'No date')}${typeof d.days_remaining === 'number' ? ` · ${d.days_remaining} day(s) remaining` : ''}</p>
+        </li>`).join('')}</ul>`,
+    '#b91c1c') : ''}
 
-${fmtSection('Exclusions',
-    fmtList(exc, (it) => `
+${actions.length ? fmtSection('Suggested Actions',
+    `<ul>${actions.map((a) => `
         <li>
-            <p class="title">${escapeHtml(it.title)}</p>
-            <p>${escapeHtml(it.detail)}</p>
-            ${it.source_quote ? `<blockquote>“${escapeHtml(it.source_quote)}”</blockquote>` : ''}
-        </li>`))}
+            <p class="title">${a.done ? '☑' : '☐'} ${escapeHtml(a.title || '—')}</p>
+            ${a.detail ? `<p>${escapeHtml(a.detail)}</p>` : ''}
+        </li>`).join('')}</ul>`,
+    '#92400e') : ''}
 
-${fmtSection('Matching Issues',
-    fmtList(matching, (it) => `
-        <li>
-            <p class="title">${escapeHtml(it.title)}</p>
-            <p>${escapeHtml(it.detail)}</p>
-            ${it.line_of_argument ? `<p class="muted">Argument: ${escapeHtml(it.line_of_argument)}</p>` : ''}
-        </li>`),
-    '#c2410c')}
-
-${fmtSection('Potential Claim Arguments',
-    fmtList(args, (it) => `
-        <li>
-            <p class="title">${escapeHtml(it.title)}</p>
-            <p>${escapeHtml(it.argument)}</p>
-            ${it.supporting_clause ? `<blockquote>“${escapeHtml(it.supporting_clause)}”</blockquote>` : ''}
-        </li>`),
+${fmtSection('Extracted Details',
+    renderExtracted(extracted) || '<p class="empty">No structured data extracted.</p>',
     '#1d4ed8')}
-
-${fmtSection('Next Steps',
-    fmtList(next, (it) => `
-        <li>
-            <p class="title">${escapeHtml(it.title)} <span class="badge aud-${escapeHtml(it.audience || 'both')}">${escapeHtml(it.audience || 'both')}</span></p>
-            <p>${escapeHtml(it.detail)}</p>
-        </li>`),
-    '#92400e')}
 
 ${disclaimerHtmlFooter()}
 `;
@@ -216,6 +166,10 @@ body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11.5pt; line
 .section blockquote { margin: 4pt 0 0 0; padding: 4pt 8pt; border-left: 3px solid #9ca3af; font-style: italic; color: #4b5563; font-size: 10pt; }
 .section .muted { color: #6b7280; font-size: 10pt; }
 .section .empty { color: #9ca3af; font-style: italic; font-size: 10pt; }
+.kv-row { padding: 1pt 0; }
+.kv-key { color: #6b7280; text-transform: capitalize; }
+.kv-block { margin: 4pt 0; padding-left: 8pt; border-left: 2px solid #e5e7eb; }
+.kv-block > .kv-key { font-weight: 600; color: #374151; margin-bottom: 2pt; }
 .badge { display: inline-block; font-size: 8pt; padding: 1pt 6pt; border-radius: 4px; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
 .badge.sev-low { background: #f3f4f6; color: #374151; }
 .badge.sev-medium { background: #fef3c7; color: #92400e; }

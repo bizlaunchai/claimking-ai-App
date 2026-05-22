@@ -110,6 +110,10 @@ const EmailAssistant = () => {
 
     // Expand/collapse map for email rows (id -> bool)
     const [expandedRows, setExpandedRows]         = useState({});
+
+    // Draft reply handed off from Policy Analysis ("Generate Reply").
+    const [replyDraft, setReplyDraft]             = useState(null);
+    const [replyCopied, setReplyCopied]           = useState(false);
     const toggleExpand = (id) =>
         setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
 
@@ -177,6 +181,51 @@ const EmailAssistant = () => {
             router.replace('/dashboard/emails');
         }
     }, [searchParams, router, loadSummary]);
+
+    // Build a prefilled reply draft when arriving from Policy Analysis via
+    // ?draft_analysis=<id>. The Email Assistant has no compose pipeline yet,
+    // so we surface a copy-able draft composed from the analysis findings.
+    useEffect(() => {
+        const analysisId = searchParams.get('draft_analysis');
+        if (!analysisId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await axiosInstance.get(`/policy-analyses/${analysisId}`, { suppressErrorToast: true });
+                if (cancelled) return;
+                const a = res.data?.data;
+                if (!a) return;
+                const ed = a.extracted_data || {};
+                const lines = [];
+                lines.push(`Re: ${ed.claim_number ? `Claim #${ed.claim_number}` : 'Insurance claim'}${a.detected_carrier ? ` — ${a.detected_carrier}` : ''}`);
+                lines.push('');
+                lines.push('To whom it may concern,');
+                lines.push('');
+                if (a.summary) { lines.push(a.summary); lines.push(''); }
+                if (a.document_type === 'denial' && Array.isArray(ed.grounds)) {
+                    const challenges = ed.grounds.filter((g) => g.challengeable && g.challenge_note);
+                    if (challenges.length) {
+                        lines.push('We respectfully dispute the stated grounds for denial:');
+                        challenges.forEach((g) => lines.push(`• ${g.code || 'Ground'}: ${g.challenge_note}`));
+                        lines.push('');
+                    }
+                }
+                const actions = Array.isArray(a.suggested_actions) ? a.suggested_actions : [];
+                if (actions.length) {
+                    lines.push('We respectfully request the following:');
+                    actions.forEach((s) => lines.push(`• ${s.title}${s.detail ? ` — ${s.detail}` : ''}`));
+                    lines.push('');
+                }
+                lines.push('Please confirm receipt and advise on next steps.');
+                lines.push('');
+                lines.push('Sincerely,');
+                setReplyDraft({ analysisId, text: lines.join('\n') });
+                setActiveTab('activity');
+                router.replace('/dashboard/emails');
+            } catch { /* suppressed */ }
+        })();
+        return () => { cancelled = true; };
+    }, [searchParams, router]);
 
     // ── load messages whenever activity tab is open or filters change ─────
     const loadMessages = useCallback(async () => {
@@ -371,6 +420,33 @@ const EmailAssistant = () => {
             </div>
 
             <div className="container">
+                {replyDraft && (
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <strong style={{ color: '#92400e' }}>Suggested reply draft (from Policy Analysis)</strong>
+                            <button onClick={() => setReplyDraft(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontSize: 18 }}>×</button>
+                        </div>
+                        <textarea
+                            readOnly
+                            value={replyDraft.text}
+                            style={{ width: '100%', minHeight: 220, fontFamily: 'inherit', fontSize: 13, padding: 12, border: '1px solid #fde68a', borderRadius: 8, resize: 'vertical' }}
+                        />
+                        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                            <button
+                                onClick={async () => {
+                                    try { await navigator.clipboard.writeText(replyDraft.text); setReplyCopied(true); setTimeout(() => setReplyCopied(false), 2000); toast.success('Draft copied'); }
+                                    catch { toast.error('Clipboard unavailable'); }
+                                }}
+                                style={{ background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                                {replyCopied ? '✓ Copied' : 'Copy draft'}
+                            </button>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#92400e', marginTop: 8 }}>
+                            This is an AI-assisted draft from your policy analysis — review and edit before sending. Not legal advice.
+                        </p>
+                    </div>
+                )}
                 {/* Stats Grid */}
                 <div className="stats-grid">
                     <div className="stat-card">

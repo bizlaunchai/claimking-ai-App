@@ -8,11 +8,12 @@ const PAGE_SIZE = 25;
 
 const DOCUMENT_TYPE_LABELS = {
     policy: 'Insurance Policy',
-    claim_document: 'Claim Document',
-    denial_letter: 'Denial Letter',
-    estimate: 'Adjuster Estimate',
-    scope: 'Scope of Work',
-    carrier_email: 'Carrier Email',
+    claim_ack: 'Claim Acknowledgment',
+    denial: 'Denial Letter',
+    adjuster_estimate: 'Adjuster Estimate',
+    scope_of_work: 'Scope of Work',
+    email_thread: 'Carrier Email',
+    unknown: 'Unknown',
 };
 
 const STATUS_STYLES = {
@@ -143,7 +144,7 @@ const PolicyAnalysisHistory = () => {
                                     <th className="text-left px-4 py-3">Client</th>
                                     <th className="text-left px-4 py-3">Document Type</th>
                                     <th className="text-left px-4 py-3">Status</th>
-                                    <th className="text-left px-4 py-3">Score</th>
+                                    <th className="text-left px-4 py-3">Carrier</th>
                                     <th className="text-left px-4 py-3">File</th>
                                     <th className="text-right px-4 py-3"></th>
                                 </tr>
@@ -160,7 +161,7 @@ const PolicyAnalysisHistory = () => {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-gray-700">
-                                            {typeof r.coverage_score === 'number' ? `${r.coverage_score}/100` : '—'}
+                                            {r.detected_carrier || '—'}
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={r.file_name}>
                                             {r.file_name || '—'}
