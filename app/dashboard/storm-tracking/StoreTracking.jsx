@@ -36,7 +36,53 @@ const formatTime = (iso) => {
     try { return new Date(iso).toLocaleString(); } catch { return iso; }
 };
 
+// --- Web Push helpers ---
+const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+};
+
+const enablePushSubscription = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error('Push notifications are not supported in this browser');
+    }
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('Notification permission denied');
+    const { data } = await axiosInstance.get('/weather/push/vapid-key');
+    if (!data?.publicKey) throw new Error('Server is missing a VAPID public key');
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+        sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(data.publicKey),
+        });
+    }
+    const json = sub.toJSON();
+    await axiosInstance.post('/weather/push/subscribe', {
+        endpoint: sub.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+        userAgent: navigator.userAgent,
+    });
+};
+
+const disablePushSubscription = async () => {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = (await navigator.serviceWorker.getRegistration('/sw.js')) || (await navigator.serviceWorker.ready);
+    const sub = reg && (await reg.pushManager.getSubscription());
+    if (sub) {
+        try { await axiosInstance.post('/weather/push/unsubscribe', { endpoint: sub.endpoint }); } catch { /* ignore */ }
+        await sub.unsubscribe();
+    }
+};
+
 const StormTracking = () => {
+    const [mode, setMode] = useState('live'); // 'live' | 'history'
     const [mapLoaded, setMapLoaded] = useState(false);
     const [alerts, setAlerts] = useState([]);
     const [center, setCenter] = useState(null);
@@ -298,6 +344,18 @@ const StormTracking = () => {
                 </div>
             </div>
 
+            <div className="storm-tabs">
+                <button
+                    className={`storm-tab ${mode === 'live' ? 'active' : ''}`}
+                    onClick={() => setMode('live')}
+                >Live</button>
+                <button
+                    className={`storm-tab ${mode === 'history' ? 'active' : ''}`}
+                    onClick={() => setMode('history')}
+                >History</button>
+            </div>
+
+            <div style={{ display: mode === 'live' ? 'block' : 'none' }}>
             <div className="alert-banner">
                 <div className="alert-icon">
                     <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>
@@ -408,6 +466,9 @@ const StormTracking = () => {
                     )}
                 </div>
             </div>
+            </div>
+
+            {mode === 'history' && <HistoryTab />}
 
             {settingsOpen && settings && (
                 <SettingsModal
@@ -424,6 +485,310 @@ const StormTracking = () => {
                     onMarkRead={handleMarkRead}
                     onMarkAllRead={handleMarkAllRead}
                 />
+            )}
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------
+// History mode
+// ---------------------------------------------------------------
+const EVENT_LAYERS = [
+    { key: 'hail', label: 'Hail', color: '#3b82f6' },
+    { key: 'wind', label: 'Wind', color: '#f97316' },
+    { key: 'tornado', label: 'Tornado', color: '#dc2626' },
+    { key: 'flood', label: 'Rainfall / Flood', color: '#06b6d4' },
+    { key: 'snow', label: 'Snowfall', color: '#93c5fd' },
+    { key: 'lightning', label: 'Lightning', color: '#eab308' },
+];
+const TYPE_COLOR = EVENT_LAYERS.reduce((m, l) => { m[l.key] = l.color; return m; }, { other: '#6b7280', ice_storm: '#a78bfa' });
+
+const RANGE_PRESETS = [
+    { key: '7d', label: 'Last 7d', days: 7 },
+    { key: '30d', label: 'Last 30d', days: 30 },
+    { key: '90d', label: 'Last 90d', days: 90 },
+    { key: '1y', label: 'Last 1y', days: 365 },
+    { key: 'custom', label: 'Custom', days: null },
+];
+
+const isoDaysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
+
+const HistoryTab = () => {
+    const [preset, setPreset] = useState('30d');
+    const [customFrom, setCustomFrom] = useState('');
+    const [customTo, setCustomTo] = useState('');
+    const [activeTypes, setActiveTypes] = useState(['hail', 'wind', 'tornado']);
+    const [minMag, setMinMag] = useState(0);
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [selected, setSelected] = useState(null);
+    const [homes, setHomes] = useState(null);
+    const [homesLoading, setHomesLoading] = useState(false);
+
+    const mapRef = useRef(null);
+    const LRef = useRef(null);
+    const layerRef = useRef([]);
+
+    const range = useMemo(() => {
+        if (preset === 'custom') {
+            return {
+                from: customFrom ? new Date(customFrom).toISOString() : undefined,
+                to: customTo ? new Date(customTo).toISOString() : undefined,
+            };
+        }
+        const p = RANGE_PRESETS.find((r) => r.key === preset);
+        return { from: isoDaysAgo(p?.days ?? 30), to: undefined };
+    }, [preset, customFrom, customTo]);
+
+    const buildParams = useCallback(() => {
+        const params = {};
+        if (range.from) params.from = range.from;
+        if (range.to) params.to = range.to;
+        if (activeTypes.length) params.types = activeTypes.join(',');
+        if (minMag > 0) params.min_magnitude = minMag;
+        return params;
+    }, [range, activeTypes, minMag]);
+
+    const loadEvents = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data } = await axiosInstance.get('/storm-events', { params: buildParams() });
+            setEvents(Array.isArray(data?.events) ? data.events : []);
+        } catch {
+            setEvents([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [buildParams]);
+
+    useEffect(() => { loadEvents(); }, [loadEvents]);
+
+    // Map init
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            LRef.current = L;
+            const el = document.getElementById('stormHistoryMap');
+            if (!el || el._leaflet_id) return;
+            const map = L.map('stormHistoryMap').setView([39.8283, -98.5795], 4);
+            mapRef.current = map;
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors', maxZoom: 19,
+            }).addTo(map);
+        })();
+        return () => {
+            cancelled = true;
+            if (mapRef.current) { try { mapRef.current.remove(); } catch { /* noop */ } mapRef.current = null; }
+        };
+    }, []);
+
+    // Render events on map
+    useEffect(() => {
+        const L = LRef.current; const map = mapRef.current;
+        if (!L || !map) return;
+        layerRef.current.forEach((l) => l.remove());
+        layerRef.current = [];
+        events.forEach((e) => {
+            const color = TYPE_COLOR[e.event_type] || '#6b7280';
+            if (e.affected_geometry) {
+                try {
+                    const poly = L.geoJSON(e.affected_geometry, {
+                        style: { color, weight: 2, fillColor: color, fillOpacity: 0.15 },
+                    });
+                    poly.on('click', () => { setSelected(e); setHomes(null); });
+                    poly.addTo(map);
+                    layerRef.current.push(poly);
+                } catch { /* skip */ }
+            }
+            if (e.center_lat != null && e.center_lng != null) {
+                const marker = L.circleMarker([e.center_lat, e.center_lng], {
+                    radius: 7, fillColor: color, color, weight: 1, opacity: 0.9, fillOpacity: 0.55,
+                });
+                marker.on('click', () => { setSelected(e); setHomes(null); });
+                marker.addTo(map);
+                layerRef.current.push(marker);
+            }
+        });
+    }, [events]);
+
+    const toggleType = (k) =>
+        setActiveTypes((prev) => prev.includes(k) ? prev.filter((t) => t !== k) : [...prev, k]);
+
+    const findHomes = async () => {
+        if (!selected) return;
+        setHomesLoading(true);
+        try {
+            const { data } = await axiosInstance.post(`/storm-events/${selected.id}/find-homes`, { radius_miles: 25 });
+            setHomes(Array.isArray(data?.homes) ? data.homes : []);
+        } catch {
+            setHomes([]);
+        } finally {
+            setHomesLoading(false);
+        }
+    };
+
+    const exportCanvassList = (rows, ev) => {
+        if (!rows?.length) return;
+        const cols = ['first_name', 'last_name', 'phone', 'email', 'address', 'city', 'state', 'zip_code', 'distance_miles'];
+        const esc = (v) => {
+            const s = v == null ? '' : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const lines = [cols.join(',')];
+        for (const r of rows) lines.push(cols.map((c) => esc(r[c])).join(','));
+        const url = window.URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `canvass-list-${ev?.event_type || 'storm'}-${(ev?.starts_at || '').slice(0, 10)}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
+    const exportFile = async (format) => {
+        try {
+            const res = await axiosInstance.get('/storm-events/export', {
+                params: { ...buildParams(), format },
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `storm-events.${format}`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            toast.error('Export failed');
+        }
+    };
+
+    return (
+        <div className="storm-history">
+            <div className="map-section">
+                <div className="map-header" style={{ flexWrap: 'wrap', gap: 12 }}>
+                    <div className="map-title">Historical Storm Events — NOAA Storm Events DB</div>
+                    <div className="map-controls" style={{ flexWrap: 'wrap' }}>
+                        {RANGE_PRESETS.map((r) => (
+                            <button key={r.key}
+                                className={`control-btn ${preset === r.key ? 'active' : ''}`}
+                                onClick={() => setPreset(r.key)}
+                            >{r.label}</button>
+                        ))}
+                        <button className="control-btn" onClick={loadEvents} disabled={loading}>
+                            {loading ? 'Loading…' : 'Apply'}
+                        </button>
+                    </div>
+                </div>
+
+                {preset === 'custom' && (
+                    <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
+                        <label style={{ fontSize: 13 }}>From <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} /></label>
+                        <label style={{ fontSize: 13 }}>To <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} /></label>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 16, padding: '12px 16px', borderBottom: '1px solid #e5e7eb', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {EVENT_LAYERS.map((l) => (
+                        <label key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                            <input type="checkbox" checked={activeTypes.includes(l.key)} onChange={() => toggleType(l.key)} />
+                            <span className="legend-marker" style={{ background: l.color }}></span>
+                            {l.label}
+                        </label>
+                    ))}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginLeft: 'auto' }}>
+                        Min magnitude: <strong>{minMag}</strong>
+                        <input type="range" min="0" max="4" step="0.25" value={minMag} onChange={(e) => setMinMag(Number(e.target.value))} />
+                    </label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="control-btn" onClick={() => exportFile('csv')}>Export CSV</button>
+                        <button className="control-btn" onClick={() => exportFile('kml')}>Export KML</button>
+                    </div>
+                </div>
+
+                <div id="stormHistoryMap" style={{ height: 500, width: '100%' }}></div>
+            </div>
+
+            <div className="storm-list-section" style={{ marginTop: 24 }}>
+                <div className="list-header">
+                    <div className="list-title">Events in view ({events.length})</div>
+                </div>
+                <div className="storm-data-container">
+                    {loading ? (
+                        <div className="api-placeholder"><div className="loading-spinner"></div><p className="api-description">Loading historical events…</p></div>
+                    ) : events.length === 0 ? (
+                        <div className="api-placeholder">
+                            <h3 className="api-title">No events for this filter</h3>
+                            <p className="api-description">Try a wider date range or more event layers. If the archive is empty, an admin must run the NOAA backfill first.</p>
+                        </div>
+                    ) : (
+                        <div className="storm-list">
+                            {events.slice(0, 200).map((e) => (
+                                <div key={e.id} className="storm-item" onClick={() => { setSelected(e); setHomes(null); }}>
+                                    <div className="storm-severity" style={{ background: `${TYPE_COLOR[e.event_type]}22` }}>
+                                        <span className="legend-marker" style={{ background: TYPE_COLOR[e.event_type], width: 14, height: 14 }}></span>
+                                    </div>
+                                    <div className="storm-info">
+                                        <div className="storm-name">{e.event_type.toUpperCase()}{e.magnitude != null ? ` — ${e.magnitude}${e.magnitude_unit || ''}` : ''}</div>
+                                        <div className="storm-details">
+                                            <span>{e.county || '—'}, {e.state || '—'}</span>
+                                            <span>{formatTime(e.starts_at)}</span>
+                                            {e.damage_estimate_usd != null && <span>${Number(e.damage_estimate_usd).toLocaleString()}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {selected && (
+                <div style={modalBackdrop} onClick={() => { setSelected(null); setHomes(null); }}>
+                    <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <h2 style={{ margin: 0, fontSize: 20, color: '#1a1f3a' }}>
+                                {selected.event_type.toUpperCase()} event
+                            </h2>
+                            <button onClick={() => { setSelected(null); setHomes(null); }} style={closeBtn}>&times;</button>
+                        </div>
+                        <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.8 }}>
+                            <div><strong>Date:</strong> {formatTime(selected.starts_at)}</div>
+                            <div><strong>Location:</strong> {selected.county || '—'}, {selected.state || '—'}</div>
+                            {selected.magnitude != null && <div><strong>Magnitude:</strong> {selected.magnitude} {selected.magnitude_unit || ''}</div>}
+                            {selected.damage_estimate_usd != null && <div><strong>Damage estimate:</strong> ${Number(selected.damage_estimate_usd).toLocaleString()}</div>}
+                            {selected.narrative && <div style={{ marginTop: 8 }}><strong>Narrative:</strong> {selected.narrative}</div>}
+                        </div>
+
+                        <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={findHomes} disabled={homesLoading}>
+                            {homesLoading ? 'Searching…' : 'Find homes in this area'}
+                        </button>
+
+                        {homes != null && (
+                            <div style={{ marginTop: 16 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <div style={{ fontWeight: 600, color: '#1a1f3a' }}>
+                                        {homes.length} client{homes.length === 1 ? '' : 's'} within 25 miles
+                                    </div>
+                                    {homes.length > 0 && (
+                                        <button className="control-btn" onClick={() => exportCanvassList(homes, selected)}>
+                                            Export canvass list (CSV)
+                                        </button>
+                                    )}
+                                </div>
+                                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                                    {homes.map((h) => (
+                                        <div key={h.id} style={{ padding: 10, borderBottom: '1px solid #f0f0f0', fontSize: 13 }}>
+                                            <div style={{ fontWeight: 600 }}>{h.first_name} {h.last_name} · {h.distance_miles} mi</div>
+                                            <div style={{ color: '#6b7280' }}>{h.address}, {h.city} {h.zip_code} · {h.phone}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -449,6 +814,10 @@ const SettingsModal = ({ initial, onClose, onSave }) => {
     const [radius, setRadius] = useState(initial.alert_radius_miles || 50);
     const [emailEnabled, setEmailEnabled] = useState(!!initial.email_alerts_enabled);
     const [email, setEmail] = useState(initial.alert_email || '');
+    const [smsEnabled, setSmsEnabled] = useState(!!initial.notify_sms);
+    const [smsNumber, setSmsNumber] = useState(initial.alert_sms_number || '');
+    const [pushEnabled, setPushEnabled] = useState(!!initial.notify_push);
+    const [pushBusy, setPushBusy] = useState(false);
     const [events, setEvents] = useState(
         Array.isArray(initial.enabled_event_types) && initial.enabled_event_types.length
             ? initial.enabled_event_types
@@ -459,6 +828,25 @@ const SettingsModal = ({ initial, onClose, onSave }) => {
         setEvents((prev) => prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]);
     };
 
+    const togglePush = async (checked) => {
+        setPushBusy(true);
+        try {
+            if (checked) {
+                await enablePushSubscription();
+                setPushEnabled(true);
+                toast.success('Push notifications enabled on this device');
+            } else {
+                await disablePushSubscription();
+                setPushEnabled(false);
+            }
+        } catch (err) {
+            setPushEnabled(false);
+            toast.error(err?.message || 'Could not enable push notifications');
+        } finally {
+            setPushBusy(false);
+        }
+    };
+
     const submit = (e) => {
         e.preventDefault();
         onSave({
@@ -467,6 +855,9 @@ const SettingsModal = ({ initial, onClose, onSave }) => {
             emailAlertsEnabled: emailEnabled,
             alertEmail: email || undefined,
             enabledEventTypes: events,
+            notifySms: smsEnabled,
+            alertSmsNumber: smsNumber || undefined,
+            notifyPush: pushEnabled,
         });
     };
 
@@ -510,6 +901,30 @@ const SettingsModal = ({ initial, onClose, onSave }) => {
                             style={inp}
                         />
                     )}
+
+                    <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" checked={smsEnabled} onChange={(e) => setSmsEnabled(e.target.checked)} />
+                        Text me (SMS) when a matching alert is issued
+                    </label>
+                    {smsEnabled && (
+                        <input
+                            type="tel"
+                            value={smsNumber}
+                            onChange={(e) => setSmsNumber(e.target.value)}
+                            placeholder="+15551234567"
+                            style={inp}
+                        />
+                    )}
+
+                    <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                            type="checkbox"
+                            checked={pushEnabled}
+                            disabled={pushBusy}
+                            onChange={(e) => togglePush(e.target.checked)}
+                        />
+                        Browser push notifications {pushBusy && '(working…)'}
+                    </label>
 
                     <label style={lbl}>Notify me about:</label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
