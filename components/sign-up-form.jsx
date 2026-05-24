@@ -109,7 +109,7 @@ export function SignUpForm({ className, ...props }) {
         email,
         password,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/dashboard`,
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.claimking.ai"}/auth/callback?next=/dashboard`,
           data: {
             first_name: firstName,
             last_name: lastName,
