@@ -1,6 +1,8 @@
 'use client'
 import React, {useState, useEffect, useRef, useMemo} from 'react';
 import Chart from 'chart.js/auto';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
 import './supplement.css';
 import dynamic from "next/dynamic";
 import MetricCard from "@/app/dashboard/supplements/Components/MetricCard.js";
@@ -27,6 +29,9 @@ const SupplementsManagement = () => {
     const [additionalNotes, setAdditionalNotes] = useState('');
     const [files, setFiles] = useState([]);
     const [recentActivities, setRecentActivities] = useState([])
+    const [supplementsList, setSupplementsList] = useState([]);
+    const [currentSupplementId, setCurrentSupplementId] = useState(null);
+    const [generating, setGenerating] = useState(false);
 
     const [metrics, setMetrics] = useState({
         totalSupplements: { value: "0", change: "0% from last month", isPositive: true },
@@ -85,26 +90,41 @@ const SupplementsManagement = () => {
 
     const supplementItemsData = [];
 
-    // Search clients inline
-    const searchClientsInline = (query) => {
-        if (query.length < 2) {
+    // Search real claims (client_portals) for linking a supplement
+    const searchClientsInline = async (query) => {
+        setSelectedClient(prev => ({ ...(prev || {}), name: query }));
+        if (query.trim().length < 2) {
             setShowSearchResults(false);
             return;
         }
-
-        const filtered = sampleClients.filter(client =>
-            client.name.toLowerCase().includes(query.toLowerCase()) ||
-            client.id.toLowerCase().includes(query.toLowerCase())
-        );
-
-        setClientSearchResults(filtered);
-        setShowSearchResults(true);
+        try {
+            const res = await axiosInstance.get('/client-portal', { params: { search: query } });
+            const rows = (res.data?.data || []).map(c => ({
+                id: c.id,
+                claimNumber: c.claim_number || '',
+                name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                address: [c.address, c.city, c.state, c.zip_code].filter(Boolean).join(', '),
+                policy: c.policy_number || '',
+                insurer: c.insurance_carrier || c.insurance_company || '',
+                adjusterName: c.adjuster_name || '',
+                adjusterPhone: c.adjuster_phone || '',
+            }));
+            setClientSearchResults(rows);
+            setShowSearchResults(true);
+        } catch {
+            setShowSearchResults(false);
+        }
     };
 
-    // Select client inline
-    const selectClientInline = (id, name, address, policy) => {
-        setSelectedClient({ id, name, address, policy });
+    // Select a claim → prefill the form (keeps the real client_portal id)
+    const selectClientInline = (client) => {
+        setSelectedClient(client);
         setShowSearchResults(false);
+        // Prefill the uncontrolled fields the AI/PDF use.
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        set('claimNumber', client.claimNumber);
+        set('adjusterName', client.adjusterName);
+        set('adjusterPhone', client.adjusterPhone);
     };
 
     // Quick add item to supplement
@@ -200,6 +220,59 @@ const SupplementsManagement = () => {
         setUploadedFiles(prev => prev.filter(f => f.name !== fileName));
     };
 
+    // Read the form into a backend payload (omitting empty values).
+    const readForm = () => {
+        const g = (id) => document.getElementById(id)?.value?.trim() || '';
+        const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
+        const payload = {
+            client_name: g('clientName') || selectedClient?.name,
+            property_address: g('propertyAddress') || selectedClient?.address,
+            claim_number: g('claimNumber'),
+            policy_number: g('policyNumber') || selectedClient?.policy,
+            insurance_company: document.getElementById('insuranceCompany')?.value || undefined,
+            adjuster_name: g('adjusterName'),
+            adjuster_phone: g('adjusterPhone'),
+            date_of_loss: document.getElementById('dateOfLoss')?.value || undefined,
+            supplement_type: supplementType || undefined,
+            details: g('supplementDetails') || additionalNotes || undefined,
+        };
+        if (selectedClient?.id && isUuid(selectedClient.id)) payload.client_portal_id = selectedClient.id;
+        Object.keys(payload).forEach((k) => { if (payload[k] === '' || payload[k] == null) delete payload[k]; });
+        return payload;
+    };
+
+    const mapItem = (li, idx) => ({
+        id: li.id || idx + 1,
+        backendId: li.id,
+        description: li.description,
+        quantity: Number(li.quantity) || 0,
+        unit: li.unit || 'EA',
+        price: Number(li.unit_price) || 0,
+        total: Number(li.total_price) || 0,
+        justification: li.justification || '',
+        code_reference: li.code_reference || '',
+        is_ai_suggested: li.is_ai_suggested,
+    });
+
+    // Fetch real supplements for the Active Supplements table + metrics.
+    const fetchSupplements = async () => {
+        try {
+            const res = await axiosInstance.get('/supplements');
+            const rows = res.data?.data || [];
+            setSupplementsList(rows);
+            const m = res.data?.meta || {};
+            const money = (n) => n >= 1000000 ? `$${(n / 1000000).toFixed(1)}M` : `$${Math.round(n || 0).toLocaleString()}`;
+            setMetrics({
+                totalSupplements: { value: String(m.total ?? rows.length), change: 'live', isPositive: true },
+                avgValue: { value: money(m.avg_value || 0), change: 'avg supplement', isPositive: true },
+                successRate: { value: rows.length ? `${Math.round(((m.approved || 0) / rows.length) * 100)}%` : '0%', change: 'approved/total', isPositive: true },
+                revenue: { value: money(m.total_recovered || 0), change: 'recovered', isPositive: true },
+            });
+        } catch { /* toast handled */ }
+    };
+
+    useEffect(() => { fetchSupplements(); }, []);
+
     // Clear form
     const clearForm = () => {
         setSelectedClient(null);
@@ -207,40 +280,117 @@ const SupplementsManagement = () => {
         setSupplementItems([]);
         setSupplementType('');
         setAdditionalNotes('');
-        showNotification('Form cleared');
+        setCurrentSupplementId(null);
+        ['clientName','propertyAddress','claimNumber','policyNumber','adjusterName','adjusterPhone','dateOfLoss','supplementDetails'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        toast('Form cleared');
+    };
+
+    // Persist current line items to a supplement id
+    const persistItems = async (id) => {
+        const items = supplementItems.map((it, idx) => ({
+            description: it.description, quantity: Number(it.quantity) || 0,
+            unit: it.unit || 'EA', unit_price: Number(it.price) || 0,
+            justification: it.justification, code_reference: it.code_reference,
+            is_ai_suggested: it.is_ai_suggested, sort_order: idx,
+        }));
+        await axiosInstance.put(`/supplements/${id}/line-items`, { items });
     };
 
     // Save as draft
-    const saveAsDraft = () => {
-        showNotification('Supplement saved as draft');
+    const saveAsDraft = async () => {
+        try {
+            let id = currentSupplementId;
+            if (!id) {
+                const res = await axiosInstance.post('/supplements', readForm());
+                id = res.data?.data?.id;
+                setCurrentSupplementId(id);
+            } else {
+                await axiosInstance.put(`/supplements/${id}`, readForm());
+            }
+            if (id && supplementItems.length) await persistItems(id);
+            toast.success('Supplement saved as draft');
+            fetchSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not save draft');
+        }
     };
 
-    // Generate supplement
-    const generateSupplement = () => {
-        if (!selectedClient) {
-            alert('Please enter client information');
-            return;
-        }
+    // Generate supplement with AI
+    const generateSupplement = async () => {
+        const form = readForm();
+        if (!form.client_name) { toast.error('Enter or select a client'); return; }
+        if (uploadedFiles.length === 0) { toast.error('Upload at least one adjuster estimate'); return; }
 
-        if (uploadedFiles.length === 0) {
-            alert('Please upload at least one estimate file');
-            return;
+        setGenerating(true);
+        const tId = toast.loading('Creating supplement…');
+        try {
+            // 1. Create the supplement (draft)
+            let id = currentSupplementId;
+            if (!id) {
+                const res = await axiosInstance.post('/supplements', form);
+                id = res.data?.data?.id;
+                setCurrentSupplementId(id);
+            } else {
+                await axiosInstance.put(`/supplements/${id}`, form);
+            }
+            // 2. Upload the estimate files
+            toast.loading('Uploading estimate…', { id: tId });
+            for (const file of uploadedFiles) {
+                const fd = new FormData();
+                fd.append('file', file);
+                try { await axiosInstance.post(`/supplements/${id}/files`, fd); } catch { /* toasted */ }
+            }
+            // 3. AI generate line items
+            toast.loading('AI is reading the estimate…', { id: tId });
+            const gen = await axiosInstance.post(`/supplements/${id}/generate`, {
+                supplement_type: supplementType || undefined,
+                details: form.details,
+            });
+            const items = (gen.data?.data?.line_items || []).map(mapItem);
+            setSupplementItems(items);
+            toast.success(`AI suggested ${items.length} line item(s).`, { id: tId });
+            fetchSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Generation failed', { id: tId });
+        } finally {
+            setGenerating(false);
         }
-
-        if (supplementItems.length === 0) {
-            alert('Please add at least one supplement item');
-            return;
-        }
-
-        showNotification('Generating supplement...');
-        // In production, this would submit the form
     };
 
-    // Show notification
-    const showNotification = (message) => {
-        // Implementation for showing notifications
-        alert(message); // Simple alert for demo
+    // Generate the branded PDF and open it
+    const generatePdf = async (id = currentSupplementId) => {
+        if (!id) { toast.error('Save the supplement first'); return; }
+        const tId = toast.loading('Generating PDF…');
+        try {
+            if (supplementItems.length) await persistItems(id);
+            const res = await axiosInstance.post(`/supplements/${id}/pdf`);
+            const key = res.data?.data?.generated_pdf_url;
+            if (key) {
+                const file = await axiosInstance.get('/s3/file', { params: { key }, responseType: 'blob', suppressErrorToast: true });
+                const url = URL.createObjectURL(file.data);
+                window.open(url, '_blank');
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            }
+            toast.success('PDF ready', { id: tId });
+            fetchSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'PDF failed', { id: tId });
+        }
     };
+
+    const sendToAdjuster = async (id = currentSupplementId) => {
+        if (!id) { toast.error('Save the supplement first'); return; }
+        try {
+            await axiosInstance.post(`/supplements/${id}/send`);
+            toast.success('Supplement marked as sent');
+            fetchSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Send failed');
+        }
+    };
+
+    // Show notification (legacy helper)
+    const showNotification = (message) => toast(message);
 
     // Filter supplements table
     const filterSupplements = (status) => {
@@ -311,11 +461,11 @@ const SupplementsManagement = () => {
                                         <div
                                             key={client.id}
                                             className="client-result"
-                                            onClick={() => selectClientInline(client.id, client.name, client.address, client.policy)}
+                                            onClick={() => selectClientInline(client)}
                                         >
                                             <div style={{fontWeight: 600, fontSize: '0.875rem'}}>{client.name}</div>
                                             <div style={{fontSize: '0.75rem', color: '#6b7280'}}>
-                                                {client.id} • {client.address}
+                                                {client.claimNumber || 'Pending'} • {client.address}
                                             </div>
                                         </div>
                                     ))}
@@ -338,8 +488,7 @@ const SupplementsManagement = () => {
                                 type="text"
                                 id="claimNumber"
                                 placeholder="CLM-2024-XXXX"
-                                value={selectedClient?.id || ''}
-                                readOnly
+                                defaultValue={selectedClient?.claimNumber || ''}
                             />
                         </div>
                         <div className="info-field">
@@ -527,14 +676,24 @@ const SupplementsManagement = () => {
                 </div>
 
                 {/* Generate Button */}
-                <div className="generate-section">
-                    <button className="btn btn-primary btn-large" onClick={generateSupplement}>
+                <div className="generate-section" style={{ gap: '0.75rem' }}>
+                    <button className="btn btn-primary btn-large" onClick={generateSupplement} disabled={generating}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                              strokeWidth="2">
                             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                         </svg>
-                        Generate Supplement with AI
+                        {generating ? 'Generating…' : 'Generate Supplement with AI'}
                     </button>
+                    {supplementItems.length > 0 && (
+                        <>
+                            <button className="btn btn-secondary btn-large" onClick={() => generatePdf()}>
+                                Generate PDF Letter
+                            </button>
+                            <button className="btn btn-outline btn-large" onClick={() => sendToAdjuster()}>
+                                Send to Adjuster
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -1089,99 +1248,26 @@ const AnalyticsCharts = () => {
 const SupplementsTable = () => {
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [supplementsOld] = useState([
-        {
-            id: 'CLM-2024-892',
-            client: 'Johnson Property',
-            originalEst: 47823,
-            supplement: 8234,
-            increase: '17.2%',
-            status: 'approved',
-            created: 'Oct 14, 2024'
-        },
-        {
-            id: 'CLM-2024-891',
-            client: 'Smith Residence',
-            originalEst: 31450,
-            supplement: 5670,
-            increase: '18.0%',
-            status: 'pending',
-            created: 'Oct 13, 2024'
-        },
-        {
-            id: 'CLM-2024-890',
-            client: 'Davis Complex',
-            originalEst: 128900,
-            supplement: 23450,
-            increase: '18.2%',
-            status: 'review',
-            created: 'Oct 12, 2024'
-        },
-        {
-            id: 'CLM-2024-889',
-            client: 'Wilson Estate',
-            originalEst: 92340,
-            supplement: 15200,
-            increase: '16.5%',
-            status: 'denied',
-            created: 'Oct 11, 2024'
-        },
-        {
-            id: 'CLM-2024-888',
-            client: 'Martinez Home',
-            originalEst: 56789,
-            supplement: 9123,
-            increase: '16.1%',
-            status: 'pending',
-            created: 'Oct 10, 2024'
-        },
-        {
-            id: 'CLM-2024-887',
-            client: 'Thompson Warehouse',
-            originalEst: 195000,
-            supplement: 32500,
-            increase: '16.7%',
-            status: 'approved',
-            created: 'Oct 9, 2024'
-        },
-        {
-            id: 'CLM-2024-886',
-            client: 'Anderson Property',
-            originalEst: 44560,
-            supplement: 7890,
-            increase: '17.7%',
-            status: 'review',
-            created: 'Oct 8, 2024'
-        },
-        {
-            id: 'CLM-2024-885',
-            client: 'Lee Manufacturing',
-            originalEst: 225000,
-            supplement: 42300,
-            increase: '18.8%',
-            status: 'pending',
-            created: 'Oct 7, 2024'
-        },
-        {
-            id: 'CLM-2024-884',
-            client: 'Taylor Residence',
-            originalEst: 52300,
-            supplement: 8450,
-            increase: '16.2%',
-            status: 'approved',
-            created: 'Oct 6, 2024'
-        },
-        {
-            id: 'CLM-2024-883',
-            client: 'Brown Office Park',
-            originalEst: 187000,
-            supplement: 28900,
-            increase: '15.5%',
-            status: 'denied',
-            created: 'Oct 5, 2024'
-        }
-    ]);
-    const [supplements] = useState([]);
+    const [supplements, setSupplements] = useState([]);
+
+    const loadSupplements = async () => {
+        try {
+            const res = await axiosInstance.get('/supplements');
+            const rows = (res.data?.data || []).map((s) => ({
+                id: s.id,
+                displayId: s.claim_number || s.id?.slice(0, 8) || '—',
+                client: s.client_name || '—',
+                originalEst: Number(s.original_estimate_amount) || 0,
+                supplement: Number(s.total_amount) || 0,
+                increase: `${Number(s.percentage_increase) || 0}%`,
+                status: s.status || 'draft',
+                generated_pdf_url: s.generated_pdf_url,
+                created: s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+            }));
+            setSupplements(rows);
+        } catch { /* toast handled */ }
+    };
+    useEffect(() => { loadSupplements(); }, []);
 
     const filterSupplements = (status) => {
         setActiveFilter(status);
@@ -1189,6 +1275,35 @@ const SupplementsTable = () => {
 
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);
+    };
+
+    // Open (generating if needed) the branded PDF letter
+    const openPdf = async (id) => {
+        const tId = toast.loading('Preparing PDF…');
+        try {
+            const res = await axiosInstance.post(`/supplements/${id}/pdf`);
+            const key = res.data?.data?.generated_pdf_url;
+            if (key) {
+                const file = await axiosInstance.get('/s3/file', { params: { key }, responseType: 'blob', suppressErrorToast: true });
+                const url = URL.createObjectURL(file.data);
+                window.open(url, '_blank');
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            }
+            toast.success('PDF ready', { id: tId });
+            loadSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'PDF failed', { id: tId });
+        }
+    };
+
+    const resubmit = async (id) => {
+        try {
+            await axiosInstance.put(`/supplements/${id}`, { status: 'draft' });
+            toast.success('Supplement reopened as draft');
+            loadSupplements();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Could not resubmit');
+        }
     };
 
     // Filter and search supplements
@@ -1199,10 +1314,11 @@ const SupplementsTable = () => {
                 (activeFilter === 'review' ? supplement.status === 'review' : supplement.status === activeFilter);
 
             // Search filter
+            const q = searchQuery.toLowerCase();
             const searchMatch = !searchQuery ||
-                supplement.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                supplement.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                supplement.status.toLowerCase().includes(searchQuery.toLowerCase());
+                (supplement.displayId || '').toLowerCase().includes(q) ||
+                (supplement.client || '').toLowerCase().includes(q) ||
+                (supplement.status || '').toLowerCase().includes(q);
 
             return statusMatch && searchMatch;
         });
@@ -1224,17 +1340,16 @@ const SupplementsTable = () => {
         if (status === 'denied') {
             return (
                 <>
-                    <button className="action-btn">View</button>
-                    <button className="action-btn">Resubmit</button>
-                    <button className="action-btn">Download</button>
+                    <button className="action-btn" onClick={() => openPdf(id)}>View</button>
+                    <button className="action-btn" onClick={() => resubmit(id)}>Resubmit</button>
+                    <button className="action-btn" onClick={() => openPdf(id)}>Download</button>
                 </>
             );
         }
         return (
             <>
-                <button className="action-btn">View</button>
-                <button className="action-btn">Edit</button>
-                <button className="action-btn">Download</button>
+                <button className="action-btn" onClick={() => openPdf(id)}>View</button>
+                <button className="action-btn" onClick={() => openPdf(id)}>Download</button>
             </>
         );
     };
@@ -1359,7 +1474,7 @@ const SupplementsTable = () => {
                         const statusBadge = getStatusBadge(supplement.status);
                         return (
                             <tr key={supplement.id}>
-                                <td>#{supplement.id}</td>
+                                <td>#{supplement.displayId}</td>
                                 <td><strong>{supplement.client}</strong></td>
                                 <td>{formatCurrency(supplement.originalEst)}</td>
                                 <td>{formatCurrency(supplement.supplement)}</td>
