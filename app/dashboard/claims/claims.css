@@ -1794,3 +1794,38 @@
         display: none;
     }
 }
+
+/* Drag-and-drop (native HTML5) */
+.claim-card { cursor: grab; }
+.claim-card:active { cursor: grabbing; }
+.pipeline-stage.drag-over {
+    border-color: #FDB813;
+    background: #fffbeb;
+    box-shadow: inset 0 0 0 2px #FDB813;
+}
+
+/* Bulk action bar (list view) */
+.bulk-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    background: #fef9e6;
+    border-bottom: 1px solid #FDB813;
+}
+.bulk-action-bar .bulk-count {
+    font-weight: 700;
+    color: #1a1f3a;
+    font-size: 0.85rem;
+}
+.claims-table tbody tr.row-selected {
+    background: #fffdf6;
+}
+
+/* Top scrollbar mirroring the Kanban board */
+.board-top-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin-bottom: 0.5rem;
+}
