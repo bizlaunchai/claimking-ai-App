@@ -332,21 +332,6 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 <span className="nav-text">Client Portal</span>
                             </Link>
                         </div>)}
-
-                        {/* Billing — company admin/owner only (not visible to estimator/field/office/client) */}
-                        {isCompanyAdmin && (
-                            <div className="nav-item">
-                                <Link href="/dashboard/billing" className={`nav-link ${pathname.startsWith('/dashboard/billing') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Billing & Plans">
-                                    <span className="nav-icon">
-                                        <svg viewBox="0 0 24 24">
-                                            <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-                                        </svg>
-                                    </span>
-                                    <span className="nav-text">Billing & Plans</span>
-                                    <span className="nav-badge storm">$</span>
-                                </Link>
-                            </div>
-                        )}
                     </div>
 
                     {/* AI TOOLS */}
@@ -553,6 +538,21 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 <span className="nav-text">Account</span>
                             </Link>
                         </div>)}
+
+                        {/* Billing — company admin/owner only */}
+                        {isCompanyAdmin && (
+                            <div className="nav-item">
+                                <Link href="/dashboard/billing" className={`nav-link ${pathname.startsWith('/dashboard/billing') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Billing & Plans">
+                                    <span className="nav-icon">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
+                                        </svg>
+                                    </span>
+                                    <span className="nav-text">Billing & Plans</span>
+                                    <span className="nav-badge storm">$</span>
+                                </Link>
+                            </div>
+                        )}
 
                         {/* Team — company admin/owner only */}
                         {isCompanyAdmin && (
