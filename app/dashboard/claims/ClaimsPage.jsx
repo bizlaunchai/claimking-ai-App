@@ -23,6 +23,47 @@ const ClaimsManagement = () => {
     const [moveMenuClaimId, setMoveMenuClaimId] = useState(null);
     const [recentActivities, setRecentActivities] = useState([]);
     const [actionItems, setActionItems] = useState([]);
+    // Tracks viewport size on the client only — kept in state (not read from
+    // window during render) so server and first client render match (no hydration mismatch).
+    const [isMobile, setIsMobile] = useState(false);
+
+    // New Claim form modal
+    const emptyNcForm = {
+        clientName: '', clientEmail: '', clientPhone: '', address: '',
+        insurer: '', policy: '', claimNum: '', dateOfLoss: '',
+        damageType: 'Wind/Hail', priority: 'medium', amount: '', salesRep: '',
+        adjusterName: '', adjusterPhone: '', insuranceEmail: '', notes: ''
+    };
+    const [showNewClaimModal, setShowNewClaimModal] = useState(false);
+    const [ncForm, setNcForm] = useState(emptyNcForm);
+    const [ncFiles, setNcFiles] = useState({ estimates: [], measurements: [], photos: [] });
+    const [ncSuggestions, setNcSuggestions] = useState([]);
+    const [ncErrors, setNcErrors] = useState({ clientName: false, address: false });
+    const [ncDragKey, setNcDragKey] = useState(null);
+    const ncFileInputs = { estimates: useRef(null), measurements: useRef(null), photos: useRef(null) };
+
+    // Reusable Tailwind class strings for the New Claim modal
+    const ncSectionCls = "mb-7 last:mb-0";
+    const ncTitleCls = "flex items-center gap-2 text-[0.9rem] font-bold text-[#1a1f3a] mb-4 pb-2 border-b-2 border-[#FDB813]";
+    const ncStepCls = "inline-flex items-center justify-center w-[22px] h-[22px] bg-[#1a1f3a] text-[#FDB813] rounded-full text-xs font-bold shrink-0";
+    const ncOptionalCls = "ml-auto text-[0.7rem] font-semibold uppercase text-gray-400 tracking-wide";
+    const ncGridCls = "grid grid-cols-1 sm:grid-cols-2 gap-4";
+    const ncFieldCls = "flex flex-col gap-1.5";
+    const ncLabelCls = "text-xs font-semibold text-gray-700";
+    const ncHintCls = "text-[0.7rem] text-gray-400";
+    const ncInputBase = "w-full px-3.5 py-2.5 border-2 rounded-[10px] text-sm text-gray-800 bg-gray-50 transition-all placeholder:text-gray-400 focus:outline-none focus:border-[#FDB813] focus:bg-white focus:shadow-[0_0_0_4px_rgba(253,184,19,0.1)]";
+    const ncInput = (err) => `${ncInputBase} ${err ? 'border-red-600 bg-red-50' : 'border-gray-200'}`;
+
+    const salesReps = ['Mike Reynolds', 'Jessica Tran', 'Carlos Ramirez', 'Emily Brooks'];
+
+    // Demo set of existing clients for autofill. In production this is pulled
+    // from the clients table (Supabase) keyed by company_id.
+    const existingClients = [
+        { name: 'Sarah Mitchell', email: 'sarah.mitchell@email.com', phone: '(330) 555-0142', address: '482 Oakwood Dr, Doylestown, OH 44230', insurer: 'State Farm', policy: 'SF-7741920' },
+        { name: 'James Carter', email: 'jcarter@email.com', phone: '(330) 555-0198', address: '17 Birchwood Ln, Wadsworth, OH 44281', insurer: 'Allstate', policy: 'AL-2298104' },
+        { name: 'Linda Nguyen', email: 'l.nguyen@email.com', phone: '(330) 555-0173', address: '903 Maple Ridge Rd, Medina, OH 44256', insurer: 'Liberty Mutual', policy: 'LM-5530217' },
+        { name: 'Robert Davis', email: 'rdavis@email.com', phone: '(234) 555-0110', address: '226 Sunset Blvd, Akron, OH 44302', insurer: 'Nationwide', policy: 'NW-8841003' }
+    ];
 
     const [statsData, setStatsData] = useState({
         totalClaims: { value: "0", change: "0% vs last month", isPositive: true },
@@ -94,6 +135,14 @@ const ClaimsManagement = () => {
     // Initialize
     useEffect(() => {
         generateClaims();
+    }, []);
+
+    // Track viewport on the client only
+    useEffect(() => {
+        const update = () => setIsMobile(window.innerWidth <= 768);
+        update();
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
     }, []);
 
     // Stage navigation scrolling
@@ -206,10 +255,6 @@ const ClaimsManagement = () => {
 
     // Update Grid View
     const renderGridView = () => {
-        if (typeof window === 'undefined') return null; // prevent SSR error
-
-        const isMobile = window.innerWidth <= 768;
-
         if (isMobile && currentStage > 0) {
             return createStageColumn(currentStage);
         } else {
@@ -540,7 +585,117 @@ const ClaimsManagement = () => {
     };
 
     const createNewClaim = () => {
-        alert('New Claim form would open here');
+        setNcForm(emptyNcForm);
+        setNcFiles({ estimates: [], measurements: [], photos: [] });
+        setNcSuggestions([]);
+        setNcErrors({ clientName: false, address: false });
+        setShowNewClaimModal(true);
+    };
+
+    const closeNewClaim = () => {
+        setShowNewClaimModal(false);
+    };
+
+    const ncUpdate = (field, value) => {
+        setNcForm(prev => ({ ...prev, [field]: value }));
+        if ((field === 'clientName' || field === 'address') && value.trim()) {
+            setNcErrors(prev => ({ ...prev, [field]: false }));
+        }
+    };
+
+    // Autofill: search existing clients
+    const ncSearchClients = (value) => {
+        const q = value.trim().toLowerCase();
+        if (!q) {
+            setNcSuggestions([]);
+            return;
+        }
+        setNcSuggestions(existingClients.filter(c =>
+            c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q)
+        ));
+    };
+
+    const ncPickClient = (c) => {
+        setNcForm(prev => ({
+            ...prev,
+            clientName: c.name,
+            clientEmail: c.email,
+            clientPhone: c.phone,
+            address: c.address,
+            insurer: c.insurer,
+            policy: c.policy
+        }));
+        setNcSuggestions([]);
+        setNcErrors({ clientName: false, address: false });
+    };
+
+    const ncAddFiles = (key, fileList) => {
+        const added = Array.from(fileList);
+        setNcFiles(prev => ({ ...prev, [key]: [...prev[key], ...added] }));
+    };
+
+    const ncRemoveFile = (key, idx) => {
+        setNcFiles(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }));
+    };
+
+    const submitNewClaim = () => {
+        const errors = {
+            clientName: !ncForm.clientName.trim(),
+            address: !ncForm.address.trim()
+        };
+        setNcErrors(errors);
+        if (errors.clientName || errors.address) {
+            alert('Please enter at least the client name and property address.');
+            return;
+        }
+
+        const claimNum = ncForm.claimNum.trim();
+        const amount = parseInt(ncForm.amount, 10) || 0;
+        const priority = ncForm.priority;
+        // No claim number yet -> Stage 1 (Need Claim Number). Otherwise Scheduled Inspection.
+        const stageIndex = claimNum ? 2 : 1;
+
+        const seq = allClaims.length + 1;
+        const newClaim = {
+            id: claimNum || `CLM-2024-${String(seq).padStart(3, '0')}`,
+            client: ncForm.clientName.trim(),
+            email: ncForm.clientEmail.trim(),
+            phone: ncForm.clientPhone.trim(),
+            address: ncForm.address.trim(),
+            insurer: ncForm.insurer.trim(),
+            policyNumber: ncForm.policy.trim(),
+            claimNumber: claimNum,
+            dateOfLoss: ncForm.dateOfLoss,
+            amount: amount,
+            damageType: ncForm.damageType,
+            priority: priority,
+            stage: stageIndex,
+            stageName: stageNames[stageIndex - 1],
+            salesRep: ncForm.salesRep,
+            adjusterName: ncForm.adjusterName.trim(),
+            adjusterPhone: ncForm.adjusterPhone.trim(),
+            insuranceEmail: ncForm.insuranceEmail.trim(),
+            notes: ncForm.notes.trim(),
+            documents: {
+                estimates: ncFiles.estimates.map(f => f.name),
+                measurements: ncFiles.measurements.map(f => f.name),
+                photos: ncFiles.photos.map(f => f.name)
+            },
+            needAction: stageIndex === 1,
+            highValue: amount > 35000,
+            urgent: priority === 'urgent' || priority === 'high',
+            createdAt: new Date().toISOString(),
+            activity: []
+        };
+
+        setAllClaims(prev => [newClaim, ...prev]);
+        setFilteredClaims(prev => [newClaim, ...prev]);
+        closeNewClaim();
+        setCurrentTab('all');
+        setCurrentStage(0);
+        setCurrentPage(1);
+        setVisibleGridItems(10);
+        alert(`Claim created for ${newClaim.client} — placed in "${newClaim.stageName}".`);
     };
 
     // Calculate stage transform for mobile
@@ -661,10 +816,7 @@ const ClaimsManagement = () => {
                     className="stage-nav-arrow left"
                     onClick={() => scrollStages('left')}
                     style={{
-                        display:
-                            typeof window !== 'undefined' && window.innerWidth <= 768 && currentStageScroll > 0
-                                ? 'flex'
-                                : 'none',
+                        display: isMobile && currentStageScroll > 0 ? 'flex' : 'none',
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -689,10 +841,7 @@ const ClaimsManagement = () => {
                     className="stage-nav-arrow right"
                     onClick={() => scrollStages('right')}
                     style={{
-                        display:
-                            typeof window !== 'undefined' && window.innerWidth <= 768
-                                ? 'flex'
-                                : 'none',
+                        display: isMobile ? 'flex' : 'none',
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -1003,6 +1152,230 @@ const ClaimsManagement = () => {
                             <button className="modal-btn secondary" onClick={closeMoveMenu}>
                                 Cancel
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* New Claim Form Modal */}
+            {showNewClaimModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" id="newClaimModal">
+                    {/* Backdrop — intentionally no onClick so an outside click does NOT close the modal */}
+                    <div className="absolute inset-0 bg-black/50"></div>
+                    <div className="relative bg-white rounded-xl w-full max-w-[760px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-bold text-[#1a1f3a]">Create New Claim</h2>
+                            <button
+                                className="w-8 h-8 border-0 bg-gray-100 rounded-full cursor-pointer text-2xl leading-none text-gray-500 flex items-center justify-center hover:bg-gray-200 transition-all"
+                                onClick={closeNewClaim}
+                            >&times;</button>
+                        </div>
+                        <div className="p-6">
+
+                            {/* 1. Client Info */}
+                            <div className={ncSectionCls}>
+                                <div className={ncTitleCls}>
+                                    <span className={ncStepCls}>1</span> Client Information
+                                </div>
+                                <div className={ncGridCls}>
+                                    <div className={`${ncFieldCls} sm:col-span-2 relative`}>
+                                        <label className={ncLabelCls} htmlFor="ncClientName">Client Name <span className="text-red-600 ml-0.5">*</span></label>
+                                        <input
+                                            type="text" id="ncClientName"
+                                            className={ncInput(ncErrors.clientName)}
+                                            placeholder="Start typing to search existing clients..."
+                                            autoComplete="off"
+                                            value={ncForm.clientName}
+                                            onChange={(e) => { ncUpdate('clientName', e.target.value); ncSearchClients(e.target.value); }}
+                                            onFocus={(e) => ncSearchClients(e.target.value)}
+                                        />
+                                        {ncSuggestions.length > 0 && (
+                                            <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-gray-200 rounded-[10px] shadow-[0_10px_30px_rgba(0,0,0,0.12)] z-20 max-h-[220px] overflow-y-auto">
+                                                {ncSuggestions.map((c, i) => (
+                                                    <div key={i} className="px-3.5 py-2.5 cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-[#fffbeb]" onClick={() => ncPickClient(c)}>
+                                                        <div className="text-[0.85rem] font-semibold text-gray-800">{c.name}</div>
+                                                        <div className="text-[0.72rem] text-gray-500">{c.address} • {c.insurer}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <span className={ncHintCls}>Matching clients autofill contact &amp; insurance details.</span>
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncClientEmail">Email</label>
+                                        <input type="email" id="ncClientEmail" className={ncInput(false)} placeholder="client@email.com"
+                                            value={ncForm.clientEmail} onChange={(e) => ncUpdate('clientEmail', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncClientPhone">Phone</label>
+                                        <input type="tel" id="ncClientPhone" className={ncInput(false)} placeholder="(330) 555-0100"
+                                            value={ncForm.clientPhone} onChange={(e) => ncUpdate('clientPhone', e.target.value)} />
+                                    </div>
+                                    <div className={`${ncFieldCls} sm:col-span-2`}>
+                                        <label className={ncLabelCls} htmlFor="ncAddress">Property Address <span className="text-red-600 ml-0.5">*</span></label>
+                                        <input type="text" id="ncAddress"
+                                            className={ncInput(ncErrors.address)}
+                                            placeholder="Street, City, State ZIP"
+                                            value={ncForm.address} onChange={(e) => ncUpdate('address', e.target.value)} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Claim & Policy */}
+                            <div className={ncSectionCls}>
+                                <div className={ncTitleCls}>
+                                    <span className={ncStepCls}>2</span> Claim &amp; Policy Details
+                                </div>
+                                <div className={ncGridCls}>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncInsurer">Insurance Carrier</label>
+                                        <input type="text" id="ncInsurer" className={ncInput(false)} placeholder="e.g. State Farm"
+                                            value={ncForm.insurer} onChange={(e) => ncUpdate('insurer', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncPolicy">Policy Number</label>
+                                        <input type="text" id="ncPolicy" className={ncInput(false)} placeholder="Policy #"
+                                            value={ncForm.policy} onChange={(e) => ncUpdate('policy', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncClaimNum">Claim Number</label>
+                                        <input type="text" id="ncClaimNum" className={ncInput(false)} placeholder="Leave blank if not yet assigned"
+                                            value={ncForm.claimNum} onChange={(e) => ncUpdate('claimNum', e.target.value)} />
+                                        <span className={ncHintCls}>No claim # yet? It will start in "Need Claim Number".</span>
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncDateOfLoss">Date of Loss</label>
+                                        <input type="date" id="ncDateOfLoss" className={ncInput(false)}
+                                            value={ncForm.dateOfLoss} onChange={(e) => ncUpdate('dateOfLoss', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncDamageType">Damage Type</label>
+                                        <select id="ncDamageType" className={ncInput(false)}
+                                            value={ncForm.damageType} onChange={(e) => ncUpdate('damageType', e.target.value)}>
+                                            <option value="Wind/Hail">Wind/Hail</option>
+                                            <option value="Water Damage">Water Damage</option>
+                                            <option value="Fire">Fire</option>
+                                            <option value="Lightning">Lightning</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncPriority">Priority</label>
+                                        <select id="ncPriority" className={ncInput(false)}
+                                            value={ncForm.priority} onChange={(e) => ncUpdate('priority', e.target.value)}>
+                                            <option value="low">Low</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="high">High</option>
+                                            <option value="urgent">Urgent</option>
+                                        </select>
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncAmount">Estimated Claim Value</label>
+                                        <input type="number" id="ncAmount" className={ncInput(false)} placeholder="0" min="0" step="100"
+                                            value={ncForm.amount} onChange={(e) => ncUpdate('amount', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncSalesRep">Sales Rep</label>
+                                        <select id="ncSalesRep" className={ncInput(false)}
+                                            value={ncForm.salesRep} onChange={(e) => ncUpdate('salesRep', e.target.value)}>
+                                            <option value="">Unassigned</option>
+                                            {salesReps.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Adjuster */}
+                            <div className={ncSectionCls}>
+                                <div className={ncTitleCls}>
+                                    <span className={ncStepCls}>3</span> Adjuster Info
+                                    <span className={ncOptionalCls}>Optional</span>
+                                </div>
+                                <div className={ncGridCls}>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncAdjusterName">Adjuster Name</label>
+                                        <input type="text" id="ncAdjusterName" className={ncInput(false)} placeholder="Full name"
+                                            value={ncForm.adjusterName} onChange={(e) => ncUpdate('adjusterName', e.target.value)} />
+                                    </div>
+                                    <div className={ncFieldCls}>
+                                        <label className={ncLabelCls} htmlFor="ncAdjusterPhone">Adjuster Phone</label>
+                                        <input type="tel" id="ncAdjusterPhone" className={ncInput(false)} placeholder="(330) 555-0100"
+                                            value={ncForm.adjusterPhone} onChange={(e) => ncUpdate('adjusterPhone', e.target.value)} />
+                                    </div>
+                                    <div className={`${ncFieldCls} sm:col-span-2`}>
+                                        <label className={ncLabelCls} htmlFor="ncInsuranceEmail">Insurance / Adjuster Email</label>
+                                        <input type="email" id="ncInsuranceEmail" className={ncInput(false)} placeholder="claims@carrier.com"
+                                            value={ncForm.insuranceEmail} onChange={(e) => ncUpdate('insuranceEmail', e.target.value)} />
+                                        <span className={ncHintCls}>Used by the Email AI to send and track claim correspondence.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4. Documents */}
+                            <div className={ncSectionCls}>
+                                <div className={ncTitleCls}>
+                                    <span className={ncStepCls}>4</span> Documents
+                                    <span className={ncOptionalCls}>Optional</span>
+                                </div>
+                                <div className={ncGridCls}>
+                                    {[
+                                        { key: 'estimates', label: 'Insurance Estimate', title: 'Upload estimate', sub: 'PDF, XLSX', full: false },
+                                        { key: 'measurements', label: 'Measurement Report', title: 'Upload report', sub: 'EagleView, Hover, PDF', full: false },
+                                        { key: 'photos', label: 'Damage Photos', title: 'Upload photos', sub: 'JPG, PNG — multiple allowed', full: true }
+                                    ].map(zone => (
+                                        <div key={zone.key} className={`${ncFieldCls} ${zone.full ? 'sm:col-span-2' : ''}`}>
+                                            <label className={ncLabelCls}>{zone.label}</label>
+                                            <div
+                                                className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${ncDragKey === zone.key ? 'border-[#FDB813] bg-[#fffbeb]' : 'border-gray-300 bg-gray-50'} hover:border-[#FDB813] hover:bg-[#fffbeb]`}
+                                                onClick={() => ncFileInputs[zone.key].current?.click()}
+                                                onDragOver={(e) => { e.preventDefault(); setNcDragKey(zone.key); }}
+                                                onDragLeave={(e) => { e.preventDefault(); setNcDragKey(null); }}
+                                                onDrop={(e) => { e.preventDefault(); setNcDragKey(null); if (e.dataTransfer.files.length) ncAddFiles(zone.key, e.dataTransfer.files); }}>
+                                                <svg className="text-gray-400 mb-2 mx-auto" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                                </svg>
+                                                <div className="text-[0.85rem] font-semibold text-gray-700">{zone.title}</div>
+                                                <div className="text-[0.72rem] text-gray-400 mt-0.5">{zone.sub}</div>
+                                                <input type="file" ref={ncFileInputs[zone.key]} className="hidden"
+                                                    multiple={zone.key === 'photos'} accept={zone.key === 'photos' ? 'image/*' : undefined}
+                                                    onChange={(e) => { ncAddFiles(zone.key, e.target.files); e.target.value = ''; }} />
+                                            </div>
+                                            <div className="mt-3 flex flex-col gap-2">
+                                                {ncFiles[zone.key].map((f, i) => (
+                                                    <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 bg-gray-100 rounded-lg text-[0.8rem]">
+                                                        <svg className="text-[#FDB813] shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                                        </svg>
+                                                        <span className="flex-1 text-gray-800 font-medium whitespace-nowrap overflow-hidden text-ellipsis">{f.name}</span>
+                                                        <span className="text-gray-400 text-[0.72rem]">{(f.size / 1024).toFixed(0)} KB</span>
+                                                        <button className="border-0 bg-transparent text-gray-400 cursor-pointer text-[1.1rem] leading-none px-1 hover:text-red-600" onClick={() => ncRemoveFile(zone.key, i)} title="Remove">&times;</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 5. Notes */}
+                            <div className={ncSectionCls}>
+                                <div className={ncTitleCls}>
+                                    <span className={ncStepCls}>5</span> Notes
+                                    <span className={ncOptionalCls}>Optional</span>
+                                </div>
+                                <div className={`${ncFieldCls} sm:col-span-2`}>
+                                    <textarea id="ncNotes" className={`${ncInputBase} border-gray-200 resize-y min-h-[72px]`} placeholder="Anything the team should know about this claim..."
+                                        value={ncForm.notes} onChange={(e) => ncUpdate('notes', e.target.value)}></textarea>
+                                </div>
+                            </div>
+
+                        </div>
+                        <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+                            <button className="px-5 py-2.5 bg-gray-100 text-gray-800 rounded-lg font-semibold text-sm cursor-pointer transition-all hover:bg-gray-200" onClick={closeNewClaim}>Cancel</button>
+                            <button className="px-5 py-2.5 bg-[#16a34a] text-white rounded-lg font-semibold text-sm cursor-pointer transition-all hover:bg-[#15803d]" onClick={submitNewClaim}>Create Claim</button>
                         </div>
                     </div>
                 </div>

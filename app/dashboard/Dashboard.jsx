@@ -34,18 +34,6 @@ const DashboardPage = () => {
     const typesChartInstance = useRef(null);
     const insuranceChartInstance = useRef(null);
 
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                const { data } = await axiosInstance.get('/dashboard-stats');
-                if (data) setDashboardData(data);
-            } catch (error) {
-                console.log("Waiting for API to be ready...");
-            }
-        };
-
-        fetchDashboardData();
-    }, []);
 
     useEffect(() => {
         Chart.defaults.color = "#6b7280";
