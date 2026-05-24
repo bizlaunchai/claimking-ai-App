@@ -81,9 +81,6 @@ export default function SelectPlanPage() {
         <div style={styles.page}>
             <div style={styles.container}>
                 <header style={styles.header}>
-                    <div style={styles.logo}>
-                        <span style={styles.logoLetter}>C</span>
-                    </div>
                     <h1 style={styles.title}>Choose your plan</h1>
                     <p style={styles.subtitle}>
                         Welcome to ClaimKing.AI{userEmail ? `, ${userEmail}` : ''} —
@@ -176,24 +173,12 @@ const styles = {
     page: {
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #f9fafb 0%, #fef9e6 100%)',
-        padding: '2.5rem 1rem',
+        padding: '6rem 1rem 2.5rem',
         fontFamily:
             '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
     },
     container: { maxWidth: '1100px', margin: '0 auto' },
     header: { textAlign: 'center', marginBottom: '2rem' },
-    logo: {
-        width: '64px',
-        height: '64px',
-        margin: '0 auto 1rem',
-        borderRadius: '16px',
-        background: 'linear-gradient(135deg, #FDB813, #d4a000)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxShadow: '0 8px 24px rgba(253, 184, 19, 0.3)',
-    },
-    logoLetter: { fontSize: '2rem', fontWeight: 900, color: '#1a1f3a' },
     title: { fontSize: '2rem', fontWeight: 800, color: '#1a1f3a', margin: 0 },
     subtitle: { color: '#6b7280', marginTop: '0.5rem', fontSize: '0.95rem' },
     errorBox: {
