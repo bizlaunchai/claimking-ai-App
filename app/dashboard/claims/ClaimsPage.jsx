@@ -1,12 +1,19 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
+import { createClient } from '@/lib/supabase/client';
 import "./claims.css"
+import MapView from "@/app/dashboard/claims/MapView.jsx";
 import StatCard from "@/app/dashboard/claims/Components/StatCard.js";
 import AnalyticsCard from "@/app/dashboard/claims/Components/AnalyticsCard.js";
 import RecentActivity from "@/app/dashboard/claims/Components/RecentActivity.js";
 import ActionItems from "@/app/dashboard/claims/Components/ActionItems.js";
 
 const ClaimsManagement = () => {
+    const router = useRouter();
+    const goToDetail = (claimId) => router.push(`/dashboard/claims/${claimId}`);
     // State declarations
     const [allClaims, setAllClaims] = useState([]);
     const [filteredClaims, setFilteredClaims] = useState([]);
@@ -40,6 +47,7 @@ const ClaimsManagement = () => {
     const [ncSuggestions, setNcSuggestions] = useState([]);
     const [ncErrors, setNcErrors] = useState({ clientName: false, address: false });
     const [ncDragKey, setNcDragKey] = useState(null);
+    const [ncDocsOpen, setNcDocsOpen] = useState(false);
     const ncFileInputs = { estimates: useRef(null), measurements: useRef(null), photos: useRef(null) };
 
     // Reusable Tailwind class strings for the New Claim modal
@@ -83,58 +91,185 @@ const ClaimsManagement = () => {
         avgClaim: { value: "$0", trend: "0%", min: "$0", max: "$0", median: "$0" }
     });
 
+    // 12-stage pipeline — matches sql/_patch_client_portals_12_stages.sql (1..12)
     const stageNames = [
         'Need Claim Number',
+        'Awaiting Initial Inspection',
         'Scheduled Inspection',
         'In Progress',
+        'Tile Sample Required',
+        'Reinspection Requested',
         'Partial Approval',
         'Supplementing',
         'Final Check Processing',
         'Completed',
         'Declined',
-        'Cold Claims'
+        'Cold Claims / Lost'
     ];
 
     const stagesPerView = 5;
-    const totalStages = 9;
+    const totalStages = 12;
 
-    // Generate sample claims
-    const generateClaims = () => {
-        // const distributions = [8, 10, 15, 6, 8, 9, 12, 4, 8];
-        const distributions = [];
-        const claims = [];
-        let claimId = 1;
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [currentUserId, setCurrentUserId] = useState(null);
+    const dragClaimId = useRef(null);
+    const [dragOverStage, setDragOverStage] = useState(null);
+    const [selectedIds, setSelectedIds] = useState(() => new Set());
+    // Synced top scrollbar for the Kanban board
+    const boardRef = useRef(null);
+    const topScrollRef = useRef(null);
+    const [boardScrollWidth, setBoardScrollWidth] = useState(0);
+    // Mirrors the active filter so background refetches (realtime) can re-apply
+    // it without resetting the user's view.
+    const filterRef = useRef({ stage: 0, tab: 'all', search: '' });
 
-        distributions.forEach((count, stageIndex) => {
-            for (let i = 0; i < count; i++) {
-                const priorities = ['low', 'medium', 'high', 'urgent'];
-                const priority = priorities[Math.floor(Math.random() * priorities.length)];
-                const amount = Math.floor(Math.random() * 50000) + 10000;
+    // Map a backend client_portal row -> the shape this page renders.
+    const mapClaim = (c) => {
+        const stage = c.claim_status || 1;
+        const amount = Number(c.claim_value) || 0;
+        const addressParts = [c.address, c.city, c.state, c.zip_code].filter(Boolean);
+        return {
+            id: c.id, // real uuid (used for backend calls)
+            displayId: c.claim_number || c.id?.slice(0, 8) || 'Pending',
+            client: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unnamed',
+            address: addressParts.join(', '),
+            amount,
+            damageType: c.damage_type || '—',
+            insurer: c.insurance_carrier || c.insurance_company || '',
+            priority: c.priority || 'medium',
+            stage,
+            stageName: stageNames[stage - 1] || 'Unknown',
+            claimNumber: c.claim_number || '',
+            policyNumber: c.policy_number || '',
+            assignedTo: c.assigned_to_user_id || null,
+            updatedAt: c.updated_at,
+            needAction: stage === 1, // no claim # yet -> action required
+            // Overdue = an active claim (not terminal) untouched for > 7 days
+            overdue: stage < 10 && c.updated_at
+                ? (Date.now() - new Date(c.updated_at).getTime()) > 7 * 86400000
+                : false,
+            highValue: amount > 35000,
+            urgent: c.priority === 'urgent' || c.priority === 'high'
+        };
+    };
 
-                claims.push({
-                    id: `CLM-2024-${String(claimId).padStart(3, '0')}`,
-                    client: `Client ${claimId}`,
-                    address: `${100 + claimId} Main St, Doylestown`,
-                    amount: amount,
-                    damageType: ['Wind/Hail', 'Water Damage', 'Fire', 'Lightning'][Math.floor(Math.random() * 4)],
-                    priority: priority,
-                    stage: stageIndex + 1,
-                    stageName: stageNames[stageIndex],
-                    needAction: Math.random() > 0.7,
-                    highValue: amount > 35000,
-                    urgent: priority === 'urgent' || priority === 'high'
-                });
-                claimId++;
+    // "Updated 2h ago" style relative time
+    const timeAgo = (iso) => {
+        if (!iso) return '';
+        const diff = Date.now() - new Date(iso).getTime();
+        const m = Math.floor(diff / 60000);
+        if (m < 1) return 'just now';
+        if (m < 60) return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h ago`;
+        const d = Math.floor(h / 24);
+        return `${d}d ago`;
+    };
+
+    // Compute stat/analytics cards from the real claim list
+    const recomputeStats = (claims) => {
+        const open = claims.filter(c => c.stage < 10); // not completed/declined/cold
+        const pipelineValue = open.reduce((s, c) => s + c.amount, 0);
+        const actionReq = claims.filter(c => c.needAction).length;
+        const highPri = claims.filter(c => c.urgent).length;
+        const supplement = claims.filter(c => c.stage === 8).length;
+        const fmtMoney = (n) => n >= 1000000 ? `$${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : `$${n}`;
+
+        setStatsData(prev => ({
+            ...prev,
+            totalClaims: { value: String(claims.length), change: 'live', isPositive: true },
+            actionRequired: { value: String(actionReq), change: `${actionReq} need action`, isPositive: false },
+            pipelineValue: { value: fmtMoney(pipelineValue), change: `${open.length} open`, isPositive: true },
+            highPriority: { value: String(highPri), change: `${highPri} urgent/high`, isPositive: false },
+            needSupplement: { value: String(supplement), change: `${supplement} in supplement`, isPositive: true },
+            avgResolution: prev.avgResolution,
+        }));
+        setAnalyticsData(prev => ({
+            ...prev,
+            totalClaims: { value: String(claims.length), trend: '', subtitle: 'Active in Pipeline', progress: Math.min(100, claims.length) },
+            pipelineValue: { value: fmtMoney(pipelineValue), trend: '', subtitle: 'Total Potential Revenue', progress: 0 },
+            needAction: { value: String(actionReq), overdue: 0, supplement, schedule: 0 },
+        }));
+    };
+
+    // Pure filter — given rows + the active filter, return the visible subset.
+    const computeFiltered = (rows, stage, tab, search) => {
+        const term = (search || '').trim().toLowerCase();
+        return rows.filter(claim => {
+            if (stage > 0 && claim.stage !== stage) return false;
+            if (term) {
+                const haystack = `${claim.client} ${claim.displayId} ${claim.claimNumber} ${claim.address} ${claim.insurer}`.toLowerCase();
+                if (!haystack.includes(term)) return false;
+            }
+            switch (tab) {
+                case 'action': return claim.needAction;
+                case 'high': return claim.highValue;
+                case 'urgent': return claim.urgent;
+                case 'mine': return claim.assignedTo && claim.assignedTo === currentUserId;
+                case 'overdue': return claim.overdue;
+                default: return true;
             }
         });
-
-        setAllClaims(claims);
-        setFilteredClaims(claims);
     };
+
+    // Fetch claims from the shared /client-portal API (a client_portal row = one claim)
+    const fetchClaims = async ({ silent = false } = {}) => {
+        try {
+            if (!silent) setLoading(true);
+            const res = await axiosInstance.get('/client-portal');
+            const rows = (res.data?.data || []).map(mapClaim);
+            const { stage, tab, search } = filterRef.current;
+            setAllClaims(rows);
+            setFilteredClaims(computeFiltered(rows, stage, tab, search));
+            recomputeStats(rows);
+        } catch {
+            // axiosInstance surfaces a toast on error
+        } finally {
+            if (!silent) setLoading(false);
+        }
+    };
+
+    // Keep the latest fetchClaims closure reachable from the realtime callback.
+    const fetchClaimsRef = useRef(fetchClaims);
+    fetchClaimsRef.current = fetchClaims;
 
     // Initialize
     useEffect(() => {
-        generateClaims();
+        fetchClaims();
+    }, []);
+
+    // Realtime multi-user sync — when any team member changes a claim, the
+    // board refreshes (debounced, silent). No-op if realtime isn't enabled on
+    // the table / publication, so it degrades gracefully.
+    useEffect(() => {
+        const supabase = createClient();
+        let t;
+        const channel = supabase
+            .channel('claims-board')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'client_portals' },
+                () => {
+                    clearTimeout(t);
+                    t = setTimeout(() => fetchClaimsRef.current({ silent: true }), 800);
+                },
+            )
+            .subscribe();
+        return () => {
+            clearTimeout(t);
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    // Load current user id (for the "My Claims" tab)
+    useEffect(() => {
+        (async () => {
+            try {
+                const { data } = await createClient().auth.getUser();
+                setCurrentUserId(data?.user?.id || null);
+            } catch { /* ignore */ }
+        })();
     }, []);
 
     // Track viewport on the client only
@@ -144,6 +279,23 @@ const ClaimsManagement = () => {
         window.addEventListener('resize', update);
         return () => window.removeEventListener('resize', update);
     }, []);
+
+    // Keep the top scrollbar's width in sync with the board's scroll width.
+    useEffect(() => {
+        const measure = () => setBoardScrollWidth(boardRef.current?.scrollWidth || 0);
+        measure();
+        window.addEventListener('resize', measure);
+        const tid = setTimeout(measure, 100); // after layout settles
+        return () => { window.removeEventListener('resize', measure); clearTimeout(tid); };
+    }, [filteredClaims, currentView, visibleGridItems, isMobile, currentStage]);
+
+    // Two-way scroll sync between the top bar and the board.
+    const onTopScroll = () => {
+        if (boardRef.current && topScrollRef.current) boardRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    };
+    const onBoardScroll = () => {
+        if (boardRef.current && topScrollRef.current) topScrollRef.current.scrollLeft = boardRef.current.scrollLeft;
+    };
 
     // Stage navigation scrolling
     const scrollStages = (direction) => {
@@ -169,31 +321,18 @@ const ClaimsManagement = () => {
         filterClaims(currentStage, tab);
     };
 
-    // Filter claims based on current tab and stage
-    const filterClaims = (stage = currentStage, tab = currentTab) => {
-        let filtered = allClaims.filter(claim => {
-            // Stage filter
-            if (stage > 0 && claim.stage !== stage) {
-                return false;
-            }
-
-            // Tab filter
-            switch(tab) {
-                case 'action':
-                    return claim.needAction;
-                case 'high':
-                    return claim.highValue;
-                case 'urgent':
-                    return claim.urgent;
-                case 'all':
-                default:
-                    return true;
-            }
-        });
-
-        setFilteredClaims(filtered);
+    // Filter claims based on current tab, stage and search term
+    const filterClaims = (stage = currentStage, tab = currentTab, search = searchQuery) => {
+        filterRef.current = { stage, tab, search };
+        setFilteredClaims(computeFiltered(allClaims, stage, tab, search));
         setCurrentPage(1);
         setVisibleGridItems(10);
+    };
+
+    // Search box handler
+    const onSearchChange = (value) => {
+        setSearchQuery(value);
+        filterClaims(currentStage, currentTab, value);
     };
 
     // View Mode Toggle
@@ -204,19 +343,26 @@ const ClaimsManagement = () => {
     // Create claim card HTML
     const createClaimCard = (claim) => {
         return (
-            <div key={claim.id} className="claim-card" onClick={() => showClaimDetails(claim)}>
+            <div key={claim.id} className="claim-card" onClick={() => showClaimDetails(claim)}
+                draggable
+                onDragStart={(e) => onCardDragStart(e, claim.id)}
+                onDragEnd={onCardDragEnd}>
                 <div className="claim-header">
-                    <span className="claim-id">{claim.id}</span>
+                    <span className="claim-id">{claim.displayId}</span>
                     <div className={`claim-priority priority-${claim.priority}`}></div>
                 </div>
                 <div className="claim-client">{claim.client}</div>
+                {claim.insurer && <div style={{fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem'}}>{claim.insurer}</div>}
                 <div className="claim-amount">${claim.amount.toLocaleString()}</div>
                 <div className="claim-tags">
-                    <span className="claim-tag">{claim.damageType}</span>
-                    {claim.urgent && <span className="claim-tag tag-urgent">Urgent</span>}
+                    {claim.damageType && claim.damageType !== '—' && <span className="claim-tag">{claim.damageType}</span>}
+                    {claim.urgent && <span className="claim-tag tag-urgent">🔥 Urgent</span>}
+                    {claim.overdue && <span className="claim-tag tag-urgent">⏰ Overdue</span>}
+                    {claim.stage === 8 && <span className="claim-tag tag-urgent">💰 Supplement</span>}
                 </div>
+                {claim.updatedAt && <div style={{fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.5rem'}}>Updated {timeAgo(claim.updatedAt)}</div>}
                 <div className="claim-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="claim-action-btn" onClick={() => showClaimDetails(claim)}>View</button>
+                    <button className="claim-action-btn primary" onClick={() => goToDetail(claim.id)}>Open</button>
                     <button className="claim-action-btn move-stage" onClick={(e) => showMoveStageMenu(claim.id, e)}>Move Stage</button>
                 </div>
             </div>
@@ -235,7 +381,11 @@ const ClaimsManagement = () => {
         }
 
         return (
-            <div key={stageNum} className="pipeline-stage">
+            <div key={stageNum}
+                className={`pipeline-stage${dragOverStage === stageNum ? ' drag-over' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverStage !== stageNum) setDragOverStage(stageNum); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverStage(prev => prev === stageNum ? null : prev); }}
+                onDrop={(e) => { e.preventDefault(); onStageDrop(stageNum); }}>
                 <div className="stage-header">
                     <div className="stage-info">
                         <div className="stage-number">{stageNum}</div>
@@ -258,7 +408,7 @@ const ClaimsManagement = () => {
         if (isMobile && currentStage > 0) {
             return createStageColumn(currentStage);
         } else {
-            return Array.from({ length: 9 }, (_, i) => i + 1).map(stageNum =>
+            return Array.from({ length: totalStages }, (_, i) => i + 1).map(stageNum =>
                 createStageColumn(stageNum)
             );
         }
@@ -291,27 +441,116 @@ const ClaimsManagement = () => {
         setMoveMenuClaimId(null);
     };
 
-    // Move claim to stage
-    const moveClaimToStage = (claimId, newStage) => {
+    // Apply a stage change to local state (optimistic), keeping the active filter.
+    const applyStageLocally = (claimId, newStage) => {
         const updatedClaims = allClaims.map(claim =>
             claim.id === claimId
-                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1]}
+                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1], needAction: newStage === 1}
                 : claim
         );
-
         setAllClaims(updatedClaims);
-        setFilteredClaims(updatedClaims.filter(claim => {
-            if (currentStage > 0 && claim.stage !== currentStage) return false;
-            switch(currentTab) {
-                case 'action': return claim.needAction;
-                case 'high': return claim.highValue;
-                case 'urgent': return claim.urgent;
-                default: return true;
-            }
-        }));
+        const { stage, tab, search } = filterRef.current;
+        setFilteredClaims(computeFiltered(updatedClaims, stage, tab, search));
+        recomputeStats(updatedClaims);
+    };
 
+    // Persist a stage change to the backend (client_portal.claim_status).
+    // Backend logs the activity event automatically on update.
+    const persistStage = async (claimId, newStage) => {
+        try {
+            await axiosInstance.put(`/client-portal/${claimId}`, { claim_status: newStage });
+            toast.success(`Moved to ${newStage}. ${stageNames[newStage - 1]}`);
+        } catch {
+            toast.error('Could not save stage change — reverting.');
+            fetchClaims(); // re-sync from server
+        }
+    };
+
+    // Move claim to stage (from the move-stage menu)
+    const moveClaimToStage = (claimId, newStage) => {
+        applyStageLocally(claimId, newStage);
         closeMoveMenu();
-        alert(`Moved ${claimId} to Stage ${newStage}: ${stageNames[newStage - 1]}`);
+        persistStage(claimId, newStage);
+    };
+
+    // ── Bulk selection (list view) ────────────────────────────────────────
+    const toggleSelect = (id) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+    const toggleSelectAll = (ids) => {
+        setSelectedIds(prev => {
+            const allSelected = ids.length > 0 && ids.every(id => prev.has(id));
+            return allSelected ? new Set() : new Set(ids);
+        });
+    };
+    const clearSelection = () => setSelectedIds(new Set());
+
+    // Bulk move selected claims to a new stage
+    const bulkMove = async (newStage) => {
+        const ids = [...selectedIds];
+        if (!ids.length || !newStage) return;
+        // Optimistic: apply all locally
+        let updated = allClaims;
+        ids.forEach(id => {
+            updated = updated.map(c => c.id === id
+                ? { ...c, stage: newStage, stageName: stageNames[newStage - 1], needAction: newStage === 1 }
+                : c);
+        });
+        setAllClaims(updated);
+        const { stage, tab, search } = filterRef.current;
+        setFilteredClaims(computeFiltered(updated, stage, tab, search));
+        recomputeStats(updated);
+        clearSelection();
+        // Persist sequentially
+        let ok = 0;
+        for (const id of ids) {
+            try { await axiosInstance.put(`/client-portal/${id}`, { claim_status: newStage }); ok++; }
+            catch { /* toasted */ }
+        }
+        toast.success(`Moved ${ok}/${ids.length} claims to ${stageNames[newStage - 1]}.`);
+        fetchClaims({ silent: true });
+    };
+
+    // Bulk export selected claims to CSV
+    const bulkExport = () => {
+        const rows = allClaims.filter(c => selectedIds.has(c.id));
+        if (!rows.length) return;
+        const headers = ['Claim ID', 'Client Name', 'Address', 'Amount', 'Damage Type', 'Priority', 'Stage'];
+        const csv = [
+            headers.join(','),
+            ...rows.map(c => [c.displayId, `"${c.client}"`, `"${c.address}"`, c.amount, c.damageType, c.priority, `"Stage ${c.stage}: ${c.stageName}"`].join(',')),
+        ].join('\n');
+        const url = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `claims_selected_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        toast.success(`Exported ${rows.length} selected claims.`);
+    };
+
+    // ── Native HTML5 drag-and-drop (no external library) ──────────────────
+    const onCardDragStart = (e, claimId) => {
+        dragClaimId.current = claimId;
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', claimId); } catch { /* ignore */ }
+    };
+    const onCardDragEnd = () => {
+        dragClaimId.current = null;
+        setDragOverStage(null);
+    };
+    const onStageDrop = (newStage) => {
+        const claimId = dragClaimId.current;
+        setDragOverStage(null);
+        dragClaimId.current = null;
+        if (!claimId) return;
+        const claim = allClaims.find(c => c.id === claimId);
+        if (!claim || claim.stage === newStage) return;
+        applyStageLocally(claimId, newStage);
+        persistStage(claimId, newStage);
     };
 
     // Update List View
@@ -319,11 +558,16 @@ const ClaimsManagement = () => {
         const start = (currentPage - 1) * itemsPerPage;
         const end = Math.min(start + itemsPerPage, filteredClaims.length);
         const currentClaims = filteredClaims.slice(start, end);
+        const pageIds = currentClaims.map(c => c.id);
+        const allOnPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
 
         return (
             <table className="claims-table">
                 <thead>
                 <tr>
+                    <th style={{ width: 36 }}>
+                        <input type="checkbox" checked={allOnPageSelected} onChange={() => toggleSelectAll(pageIds)} title="Select all on page" />
+                    </th>
                     <th>Claim ID</th>
                     <th>Client Name</th>
                     <th>Property Address</th>
@@ -336,8 +580,9 @@ const ClaimsManagement = () => {
                 </thead>
                 <tbody>
                 {currentClaims.map(claim => (
-                    <tr key={claim.id}>
-                        <td className="table-claim-id">{claim.id}</td>
+                    <tr key={claim.id} className={selectedIds.has(claim.id) ? 'row-selected' : ''}>
+                        <td><input type="checkbox" checked={selectedIds.has(claim.id)} onChange={() => toggleSelect(claim.id)} /></td>
+                        <td className="table-claim-id">{claim.displayId}</td>
                         <td>{claim.client}</td>
                         <td>{claim.address}</td>
                         <td style={{color: '#16a34a', fontWeight: 600}}>${claim.amount.toLocaleString()}</td>
@@ -370,7 +615,7 @@ const ClaimsManagement = () => {
                 ))}
                 {filteredClaims.length === 0 && (
                     <tr>
-                        <td colSpan="8" style={{textAlign: 'center', padding: '2rem', color: '#6b7280'}}>
+                        <td colSpan="9" style={{textAlign: 'center', padding: '2rem', color: '#6b7280'}}>
                             No claims found
                         </td>
                     </tr>
@@ -380,40 +625,17 @@ const ClaimsManagement = () => {
         );
     };
 
-    // Move claim to different stage from list
+    // Move claim to different stage from the list-view dropdown
     const moveToStage = (claimId, newStage) => {
-        const updatedClaims = allClaims.map(claim =>
-            claim.id === claimId
-                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1]}
-                : claim
-        );
-
-        setAllClaims(updatedClaims);
-        setFilteredClaims(updatedClaims.filter(claim => {
-            if (currentStage > 0 && claim.stage !== currentStage) return false;
-            switch(currentTab) {
-                case 'action': return claim.needAction;
-                case 'high': return claim.highValue;
-                case 'urgent': return claim.urgent;
-                default: return true;
-            }
-        }));
-
-        alert(`Moved ${claimId} to Stage ${newStage}: ${stageNames[newStage - 1]}`);
+        applyStageLocally(claimId, newStage);
+        persistStage(claimId, newStage);
     };
 
-    // View claim details from list
-    const viewClaim = (claimId) => {
-        const claim = allClaims.find(c => c.id === claimId);
-        if (claim) {
-            showClaimDetails(claim);
-        }
-    };
+    // View claim details from list — open the dedicated detail page
+    const viewClaim = (claimId) => goToDetail(claimId);
 
-    // Process claim
-    const processClaim = (claimId) => {
-        alert(`Processing ${claimId}`);
-    };
+    // Process claim — same detail page (work hub)
+    const processClaim = (claimId) => goToDetail(claimId);
 
     // Update items per page
     const updateItemsPerPage = (value) => {
@@ -546,7 +768,7 @@ const ClaimsManagement = () => {
         const csvContent = [
             headers.join(','),
             ...filteredClaims.map(claim => [
-                claim.id,
+                claim.displayId,
                 `"${claim.client}"`,
                 `"${claim.address}"`,
                 claim.amount,
@@ -566,7 +788,7 @@ const ClaimsManagement = () => {
         a.click();
         document.body.removeChild(a);
 
-        alert(`Exported ${filteredClaims.length} claims to CSV`);
+        toast.success(`Exported ${filteredClaims.length} claims to CSV`);
     };
 
     const exportPipeline = () => {
@@ -574,14 +796,14 @@ const ClaimsManagement = () => {
     };
 
     const bulkUpdate = () => {
-        alert('Bulk Update: Select multiple claims to update their status, stage, or priority');
+        setCurrentView('list');
+        toast('Tick the checkboxes in the list to reassign or export multiple claims.');
     };
 
     const generateReport = () => {
         const totalValue = filteredClaims.reduce((sum, c) => sum + c.amount, 0);
-        const avgValue = totalValue / filteredClaims.length;
-
-        alert(`Revenue Report:\nTotal Claims: ${filteredClaims.length}\nTotal Value: $${totalValue.toLocaleString()}\nAverage Claim: $${Math.round(avgValue).toLocaleString()}\n\nDetailed report would open in new window`);
+        const avgValue = filteredClaims.length ? totalValue / filteredClaims.length : 0;
+        toast(`Revenue: ${filteredClaims.length} claims · $${totalValue.toLocaleString()} total · $${Math.round(avgValue).toLocaleString()} avg`);
     };
 
     const createNewClaim = () => {
@@ -589,6 +811,7 @@ const ClaimsManagement = () => {
         setNcFiles({ estimates: [], measurements: [], photos: [] });
         setNcSuggestions([]);
         setNcErrors({ clientName: false, address: false });
+        setNcDocsOpen(false);
         setShowNewClaimModal(true);
     };
 
@@ -638,64 +861,101 @@ const ClaimsManagement = () => {
         setNcFiles(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }));
     };
 
-    const submitNewClaim = () => {
+    // Modal damage-type label -> backend enum value
+    const DAMAGE_TYPE_MAP = {
+        'Wind/Hail': 'wind-hail',
+        'Water Damage': 'water',
+        'Fire': 'fire',
+        'Lightning': 'lightning',
+        'Other': 'other',
+    };
+    const [ncSubmitting, setNcSubmitting] = useState(false);
+
+    const submitNewClaim = async () => {
         const errors = {
             clientName: !ncForm.clientName.trim(),
             address: !ncForm.address.trim()
         };
         setNcErrors(errors);
         if (errors.clientName || errors.address) {
-            alert('Please enter at least the client name and property address.');
+            toast.error('Please enter at least the client name and property address.');
             return;
         }
 
         const claimNum = ncForm.claimNum.trim();
         const amount = parseInt(ncForm.amount, 10) || 0;
-        const priority = ncForm.priority;
-        // No claim number yet -> Stage 1 (Need Claim Number). Otherwise Scheduled Inspection.
-        const stageIndex = claimNum ? 2 : 1;
+        // No claim number yet -> Stage 1 (Need Claim Number). Otherwise Awaiting Initial Inspection.
+        const claimStatus = claimNum ? 2 : 1;
 
-        const seq = allClaims.length + 1;
-        const newClaim = {
-            id: claimNum || `CLM-2024-${String(seq).padStart(3, '0')}`,
-            client: ncForm.clientName.trim(),
-            email: ncForm.clientEmail.trim(),
-            phone: ncForm.clientPhone.trim(),
+        // Split the single "Client Name" into first/last for the backend.
+        const nameParts = ncForm.clientName.trim().split(/\s+/);
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ') || nameParts[0];
+
+        const payload = {
+            first_name: firstName,
+            last_name: lastName,
             address: ncForm.address.trim(),
-            insurer: ncForm.insurer.trim(),
-            policyNumber: ncForm.policy.trim(),
-            claimNumber: claimNum,
-            dateOfLoss: ncForm.dateOfLoss,
-            amount: amount,
-            damageType: ncForm.damageType,
-            priority: priority,
-            stage: stageIndex,
-            stageName: stageNames[stageIndex - 1],
-            salesRep: ncForm.salesRep,
-            adjusterName: ncForm.adjusterName.trim(),
-            adjusterPhone: ncForm.adjusterPhone.trim(),
-            insuranceEmail: ncForm.insuranceEmail.trim(),
-            notes: ncForm.notes.trim(),
-            documents: {
-                estimates: ncFiles.estimates.map(f => f.name),
-                measurements: ncFiles.measurements.map(f => f.name),
-                photos: ncFiles.photos.map(f => f.name)
-            },
-            needAction: stageIndex === 1,
-            highValue: amount > 35000,
-            urgent: priority === 'urgent' || priority === 'high',
-            createdAt: new Date().toISOString(),
-            activity: []
+            claim_status: claimStatus,
+            priority: ncForm.priority,
+            claim_value: amount,
         };
+        // Only send optional fields when filled (backend validates format).
+        if (ncForm.clientEmail.trim()) payload.email = ncForm.clientEmail.trim();
+        if (ncForm.clientPhone.trim()) payload.phone = ncForm.clientPhone.trim();
+        if (ncForm.insurer.trim()) payload.insurance_carrier = ncForm.insurer.trim();
+        if (ncForm.policy.trim()) payload.policy_number = ncForm.policy.trim();
+        if (claimNum) payload.claim_number = claimNum;
+        if (ncForm.dateOfLoss) payload.date_of_loss = ncForm.dateOfLoss;
+        if (DAMAGE_TYPE_MAP[ncForm.damageType]) payload.damage_type = DAMAGE_TYPE_MAP[ncForm.damageType];
+        if (ncForm.adjusterName.trim()) payload.adjuster_name = ncForm.adjusterName.trim();
+        if (ncForm.adjusterPhone.trim()) payload.adjuster_phone = ncForm.adjusterPhone.trim();
+        if (ncForm.insuranceEmail.trim()) payload.adjuster_email = ncForm.insuranceEmail.trim();
+        if (ncForm.notes.trim()) payload.notes = ncForm.notes.trim();
 
-        setAllClaims(prev => [newClaim, ...prev]);
-        setFilteredClaims(prev => [newClaim, ...prev]);
-        closeNewClaim();
-        setCurrentTab('all');
-        setCurrentStage(0);
-        setCurrentPage(1);
-        setVisibleGridItems(10);
-        alert(`Claim created for ${newClaim.client} — placed in "${newClaim.stageName}".`);
+        setNcSubmitting(true);
+        try {
+            const res = await axiosInstance.post('/client-portal', payload);
+            const newId = res?.data?.data?.id;
+            toast.success(`Claim created for ${ncForm.clientName.trim()} — "${stageNames[claimStatus - 1]}".`);
+
+            // Upload any staged documents to the new claim (sequential).
+            const groups = [
+                ['estimate', ncFiles.estimates],
+                ['measurement', ncFiles.measurements],
+                ['photo', ncFiles.photos],
+            ];
+            const totalFiles = groups.reduce((n, [, files]) => n + files.length, 0);
+            if (newId && totalFiles > 0) {
+                let done = 0;
+                for (const [type, files] of groups) {
+                    for (const file of files) {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('upload_type', type);
+                        try {
+                            await axiosInstance.post(`/client-portal/${newId}/uploads`, fd);
+                            done++;
+                        } catch {
+                            // axiosInstance surfaces the error toast
+                        }
+                    }
+                }
+                toast.success(`Uploaded ${done}/${totalFiles} document${totalFiles > 1 ? 's' : ''}.`);
+            }
+
+            closeNewClaim();
+            setCurrentTab('all');
+            setCurrentStage(0);
+            setCurrentPage(1);
+            setVisibleGridItems(10);
+            await fetchClaims();
+        } catch (err) {
+            const msg = err?.response?.data?.message;
+            toast.error(Array.isArray(msg) ? msg[0] : (msg || 'Could not create claim.'));
+        } finally {
+            setNcSubmitting(false);
+        }
     };
 
     // Calculate stage transform for mobile
@@ -748,7 +1008,9 @@ const ClaimsManagement = () => {
                             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     <input type="text" className="search-input"
-                           placeholder="Search by client name, claim ID, or address..."/>
+                           placeholder="Search by client name, claim ID, or address..."
+                           value={searchQuery}
+                           onChange={(e) => onSearchChange(e.target.value)}/>
                 </div>
                 <div className="quick-actions">
                     <button className="quick-action-btn" onClick={createNewClaim}>
@@ -785,28 +1047,42 @@ const ClaimsManagement = () => {
                     onClick={() => switchTab('action')}
                 >
                     Action Required
-                    <span className="tab-badge action">0</span>
+                    <span className="tab-badge action">{allClaims.filter(c => c.needAction).length}</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'all' ? 'active' : ''}`}
                     onClick={() => switchTab('all')}
                 >
                     All Claims
-                    <span className="tab-badge">0</span>
+                    <span className="tab-badge">{allClaims.length}</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'high' ? 'active' : ''}`}
                     onClick={() => switchTab('high')}
                 >
                     High Value
-                    <span className="tab-badge">0</span>
+                    <span className="tab-badge">{allClaims.filter(c => c.highValue).length}</span>
                 </button>
                 <button
                     className={`pipeline-tab ${currentTab === 'urgent' ? 'active' : ''}`}
                     onClick={() => switchTab('urgent')}
                 >
                     Urgent
-                    <span className="tab-badge urgent">0</span>
+                    <span className="tab-badge urgent">{allClaims.filter(c => c.urgent).length}</span>
+                </button>
+                <button
+                    className={`pipeline-tab ${currentTab === 'mine' ? 'active' : ''}`}
+                    onClick={() => switchTab('mine')}
+                >
+                    My Claims
+                    <span className="tab-badge">{allClaims.filter(c => c.assignedTo && c.assignedTo === currentUserId).length}</span>
+                </button>
+                <button
+                    className={`pipeline-tab ${currentTab === 'overdue' ? 'active' : ''}`}
+                    onClick={() => switchTab('overdue')}
+                >
+                    Overdue
+                    <span className="tab-badge urgent">{allClaims.filter(c => c.overdue).length}</span>
                 </button>
             </div>
 
@@ -826,7 +1102,7 @@ const ClaimsManagement = () => {
 
                 <div className="stage-nav-container">
                     <div className="stage-nav-scroll" style={{transform: getStageTransform()}}>
-                        {Array.from({length: 9}, (_, i) => i + 1).map(stageNum => (
+                        {Array.from({length: totalStages}, (_, i) => i + 1).map(stageNum => (
                             <button
                                 key={stageNum}
                                 className={`stage-nav-btn ${currentStage === stageNum ? 'active' : ''}`}
@@ -874,6 +1150,15 @@ const ClaimsManagement = () => {
                         </svg>
                         List View
                     </button>
+                    <button
+                        className={`view-toggle-btn ${currentView === 'map' ? 'active' : ''}`}
+                        onClick={() => setViewMode('map')}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M15.817.113A.5.5 0 0 1 16 .5v14a.5.5 0 0 1-.402.49l-5 1a.502.502 0 0 1-.196 0L5.5 15.01l-4.902.98A.5.5 0 0 1 0 15.5v-14a.5.5 0 0 1 .402-.49l5-1a.5.5 0 0 1 .196 0L10.5.99l4.902-.98a.5.5 0 0 1 .415.103zM10 1.91l-4-.8v12.98l4 .8V1.91z"/>
+                        </svg>
+                        Map View
+                    </button>
                 </div>
 
                 <div className="items-per-page">
@@ -905,7 +1190,11 @@ const ClaimsManagement = () => {
                 {/* Pipeline Board View (Grid) */}
                 {currentView === 'grid' && (
                     <>
-                        <div className="pipeline-board" id="pipelineView">
+                        {/* Top scrollbar — mirrors the board's horizontal scroll */}
+                        <div className="board-top-scroll" ref={topScrollRef} onScroll={onTopScroll}>
+                            <div style={{ width: boardScrollWidth, height: 1 }} />
+                        </div>
+                        <div className="pipeline-board" id="pipelineView" ref={boardRef} onScroll={onBoardScroll}>
                             {renderGridView()}
                         </div>
 
@@ -923,6 +1212,19 @@ const ClaimsManagement = () => {
                 {/* List View Table */}
                 {currentView === 'list' && (
                     <div className="list-view-table">
+                        {selectedIds.size > 0 && (
+                            <div className="bulk-action-bar">
+                                <span className="bulk-count">{selectedIds.size} selected</span>
+                                <select className="stage-selector" defaultValue="" onChange={(e) => { if (e.target.value) { bulkMove(parseInt(e.target.value, 10)); e.target.value = ''; } }}>
+                                    <option value="" disabled>Move to stage…</option>
+                                    {stageNames.map((name, idx) => (
+                                        <option key={idx + 1} value={idx + 1}>{idx + 1}. {name}</option>
+                                    ))}
+                                </select>
+                                <button className="table-action-btn" onClick={bulkExport}>Export selected</button>
+                                <button className="table-action-btn" onClick={clearSelection}>Clear</button>
+                            </div>
+                        )}
                         {renderListView()}
 
                         {/* Pagination Controls */}
@@ -940,6 +1242,11 @@ const ClaimsManagement = () => {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Map View */}
+                {currentView === 'map' && (
+                    <MapView claims={filteredClaims} onSelect={goToDetail} />
                 )}
             </div>
 
@@ -1059,7 +1366,7 @@ const ClaimsManagement = () => {
                             <div className="claim-details-grid">
                                 <div className="detail-group">
                                     <label>Claim ID</label>
-                                    <div className="detail-value">{selectedClaim.id}</div>
+                                    <div className="detail-value">{selectedClaim.displayId}</div>
                                 </div>
                                 <div className="detail-group">
                                     <label>Client Name</label>
@@ -1136,7 +1443,7 @@ const ClaimsManagement = () => {
                         <div className="p-6">
                             <p>Select a new stage for claim <strong>{moveMenuClaimId}</strong>:</p>
                             <div className="stage-options">
-                                {Array.from({length: 9}, (_, i) => i + 1).map(stageNum => (
+                                {Array.from({length: totalStages}, (_, i) => i + 1).map(stageNum => (
                                     <button
                                         key={stageNum}
                                         className="stage-option"
@@ -1311,12 +1618,24 @@ const ClaimsManagement = () => {
                                 </div>
                             </div>
 
-                            {/* 4. Documents */}
+                            {/* 4. Documents (collapsible — most new claims have none yet) */}
                             <div className={ncSectionCls}>
-                                <div className={ncTitleCls}>
-                                    <span className={ncStepCls}>4</span> Documents
+                                <button
+                                    type="button"
+                                    onClick={() => setNcDocsOpen(o => !o)}
+                                    className={`${ncTitleCls} w-full cursor-pointer hover:text-[#FDB813] transition-colors`}
+                                >
+                                    <span className={ncStepCls}>4</span>
+                                    {ncDocsOpen ? 'Documents' : 'Add documents'}
                                     <span className={ncOptionalCls}>Optional</span>
-                                </div>
+                                    <svg className={`ml-2 transition-transform ${ncDocsOpen ? 'rotate-180' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                                {!ncDocsOpen && (
+                                    <p className="text-[0.72rem] text-gray-400 -mt-2">Photos, measurement &amp; carrier estimate are usually added later as the claim progresses. Click to attach now.</p>
+                                )}
+                                {ncDocsOpen && (
                                 <div className={ncGridCls}>
                                     {[
                                         { key: 'estimates', label: 'Insurance Estimate', title: 'Upload estimate', sub: 'PDF, XLSX', full: false },
@@ -1358,6 +1677,7 @@ const ClaimsManagement = () => {
                                         </div>
                                     ))}
                                 </div>
+                                )}
                             </div>
 
                             {/* 5. Notes */}
@@ -1375,7 +1695,7 @@ const ClaimsManagement = () => {
                         </div>
                         <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
                             <button className="px-5 py-2.5 bg-gray-100 text-gray-800 rounded-lg font-semibold text-sm cursor-pointer transition-all hover:bg-gray-200" onClick={closeNewClaim}>Cancel</button>
-                            <button className="px-5 py-2.5 bg-[#16a34a] text-white rounded-lg font-semibold text-sm cursor-pointer transition-all hover:bg-[#15803d]" onClick={submitNewClaim}>Create Claim</button>
+                            <button className="px-5 py-2.5 bg-[#16a34a] text-white rounded-lg font-semibold text-sm cursor-pointer transition-all hover:bg-[#15803d] disabled:opacity-60 disabled:cursor-not-allowed" onClick={submitNewClaim} disabled={ncSubmitting}>{ncSubmitting ? 'Creating…' : 'Create Claim'}</button>
                         </div>
                     </div>
                 </div>
