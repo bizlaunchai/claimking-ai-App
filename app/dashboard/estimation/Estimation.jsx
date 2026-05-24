@@ -342,6 +342,7 @@ const IconSprite = () => (
             <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></symbol>
             <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></symbol>
             <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></symbol>
+            <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></symbol>
             <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></symbol>
             <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></symbol>
             <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0l2.4 8.4L24 12l-9.6 3.6L12 24l-2.4-8.4L0 12l9.6-3.6L12 0z" /></symbol>
@@ -2219,11 +2220,42 @@ const Estimation = () => {
 
     // ====================== FINALIZE ======================
     const openFinalize = () => { if (!ensureClient()) return; setFinalizeModal(true); };
-    const sendEstimate = () => {
-        setFinalizeModal(false);
-        const e = window.prompt("Email address");
-        if (e) toast(`Sent to ${e}`, "success");
+    // Deliver the finalized estimate to the selected client via the chosen
+    // channel(s). Recipients are the client's email/phone on file — the
+    // backend reads them, so we never prompt for an address here.
+    const sendEstimateVia = async (channels) => {
+        const wantsEmail = channels.includes("email");
+        const wantsSms = channels.includes("sms");
+        if (wantsEmail && !client?.email) {
+            toast("This client has no email on file", "error");
+            return;
+        }
+        if (wantsSms && !client?.phone) {
+            toast("This client has no phone number on file", "error");
+            return;
+        }
+        const label = wantsSms && !wantsEmail ? "Texting client…" : "Emailing client…";
+        showLoading(label, "Sending your estimate");
+        try {
+            clearTimeout(saveTimerRef.current);
+            const id = await saveEstimateNow();
+            if (!id) {
+                toast("Save the estimate before sending", "error");
+                return;
+            }
+            const res = await axiosInstance.post(`/estimates/${id}/send`, { channels });
+            const sent = res.data?.sent ?? [];
+            const where = sent.map((s) => s.to).filter(Boolean).join(", ");
+            setFinalizeModal(false);
+            toast(where ? `Sent to ${where}` : "Estimate sent", "success");
+        } catch (err) {
+            toast(err?.userMessage || "Failed to send estimate", "error");
+        } finally {
+            hideLoading();
+        }
     };
+    const sendEstimate = () => sendEstimateVia(["email"]);
+    const sendEstimateSms = () => sendEstimateVia(["sms"]);
     const downloadPDF = async () => {
         showLoading("Generating PDF...", "Building your estimate document");
         try {
@@ -2280,10 +2312,28 @@ const Estimation = () => {
                 { status: "sent" },
                 { suppressErrorToast: true },
             );
+            // Notify the client by email that the estimate is on their portal.
+            // Best-effort: a missing email / SMTP config shouldn't fail the share.
+            let emailed = false;
+            if (client?.email) {
+                try {
+                    await axiosInstance.post(
+                        `/estimates/${id}/send`,
+                        { channels: ["email"] },
+                        { suppressErrorToast: true },
+                    );
+                    emailed = true;
+                } catch { /* email is best-effort on portal share */ }
+            }
             const portalUrl = `${window.location.origin}/portal/${client.id}?estimate=${id}`;
             try { await navigator.clipboard?.writeText(portalUrl); } catch { /* clipboard not available */ }
             setFinalizeModal(false);
-            toast("Shared to client portal — link copied", "success");
+            toast(
+                emailed
+                    ? "Shared to client portal — link copied & client emailed"
+                    : "Shared to client portal — link copied",
+                "success",
+            );
         } catch (err) {
             toast(err?.userMessage || "Failed to share estimate", "error");
         } finally {
@@ -4050,9 +4100,10 @@ const Estimation = () => {
                             <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Choose how to deliver this estimate.</p>
                             <div style={{ display: "grid", gap: 8 }}>
                                 {[
-                                    ["i-send", "Email to client", "Send PDF with portal link", sendEstimate],
+                                    ["i-send", "Email to client", client?.email ? `Send portal link to ${client.email}` : "Client has no email on file", sendEstimate],
+                                    ["i-phone", "Text to client", client?.phone ? `Send portal link by SMS to ${client.phone}` : "Client has no phone on file", sendEstimateSms],
                                     ["i-download", "Download PDF", "Save locally", downloadPDF],
-                                    ["i-cloud", "Save to client portal", "Client sees it instantly", saveToPortal],
+                                    ["i-cloud", "Save to client portal", "Client sees it instantly & gets an email", saveToPortal],
                                     ["i-refresh", "Sync to CRM", "JobNimbus, AccuLynx, Salesforce", sendToCRM],
                                 ].map(([icon, title, desc, fn]) => (
                                     <button key={title} className="menu-item" style={{ border: "1px solid #e5e7eb", padding: 14 }} onClick={fn}>
