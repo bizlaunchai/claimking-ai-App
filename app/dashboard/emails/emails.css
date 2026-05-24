@@ -1061,3 +1061,183 @@
     .email-row-time-inline { width: 100%; margin-left: 0; order: 99; }
 }
 
+
+/* ── SMS Setup tab ──────────────────────────────────────────────────────── */
+.sms-active-card {
+    background: linear-gradient(135deg, #1a1f3a 0%, #2a3151 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.sms-active-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.sms-active-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #FDB813;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+.sms-active-number {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+}
+.sms-active-sub {
+    font-size: 0.8rem;
+    color: #b8bed1;
+    margin-top: 0.4rem;
+    max-width: 30rem;
+}
+.sms-active-actions { display: flex; gap: 0.5rem; align-items: center; }
+.btn-release {
+    padding: 0.5rem 1rem;
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.btn-release:hover { background: #b91c1c; }
+.btn-release:disabled { opacity: 0.6; cursor: default; }
+
+.sms-compose, .sms-provision { max-width: 36rem; }
+.sms-input, .sms-textarea {
+    width: 100%;
+    padding: 0.65rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    font-family: inherit;
+}
+.sms-textarea { resize: vertical; }
+.sms-input:focus, .sms-textarea:focus {
+    outline: none;
+    border-color: #FDB813;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.1);
+}
+
+.sms-number-list {
+    margin-top: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.sms-number-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+.sms-number-row:last-child { border-bottom: none; }
+.sms-number-value {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    color: #1a1f3a;
+}
+.sms-number-loc { font-size: 0.78rem; color: #6b7280; margin-top: 0.15rem; }
+
+/* ── AI chips + reply (Activity) ─────────────────────────────────────────── */
+.email-ai-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.ai-chip {
+    font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 999px;
+    background: #eef2ff; color: #4338ca; font-weight: 600;
+}
+.ai-chip.cat-denial { background: #fee2e2; color: #b91c1c; }
+.ai-chip.cat-new_claim { background: #dcfce7; color: #065f46; }
+.ai-chip.cat-payment { background: #fef9c3; color: #854d0e; }
+.email-reply-zone { margin-top: 0.85rem; }
+.email-reply-input {
+    width: 100%; padding: 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px;
+    font-size: 0.875rem; font-family: inherit; resize: vertical;
+}
+.email-reply-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* ── Campaigns tab ───────────────────────────────────────────────────────── */
+.cmp-metrics {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem; margin-bottom: 1.5rem;
+}
+.cmp-metric { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; }
+.cmp-metric-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 600; }
+.cmp-metric-value { font-size: 1.6rem; font-weight: 700; color: #1a1f3a; margin-top: 0.25rem; }
+.cmp-metric-value.green { color: #16a34a; }
+
+.cmp-toolbar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap; }
+.cmp-new-btn {
+    padding: 0.6rem 1.1rem; background: linear-gradient(135deg, #FDB813, #d4a000);
+    color: #1a1f3a; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.875rem;
+}
+
+.cmp-list { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+.cmp-row { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid #f3f4f6; gap: 1rem; flex-wrap: wrap; }
+.cmp-row:last-child { border-bottom: none; }
+.cmp-row-name { font-weight: 700; color: #1a1f3a; }
+.cmp-row-sub { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.3rem; flex-wrap: wrap; }
+.cmp-type, .cmp-status { font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+.cmp-type { background: #e0e7ff; color: #4338ca; }
+.cmp-type-blast { background: #f3f4f6; color: #4b5563; }
+.cmp-status-active { background: #d1fae5; color: #065f46; }
+.cmp-status-draft { background: #f3f4f6; color: #4b5563; }
+.cmp-status-paused { background: #fed7aa; color: #9a3412; }
+.cmp-status-scheduled { background: #dbeafe; color: #1e40af; }
+.cmp-status-completed { background: #e5e7eb; color: #374151; }
+.cmp-row-stat { font-size: 0.78rem; color: #6b7280; }
+.cmp-row-stat.green { color: #16a34a; font-weight: 600; }
+.cmp-row-actions { display: flex; gap: 0.4rem; }
+.cmp-row-actions button { padding: 0.4rem 0.75rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
+.cmp-row-actions button.primary { background: #FDB813; border-color: #FDB813; color: #1a1f3a; font-weight: 600; }
+.cmp-row-actions button.danger { color: #dc2626; }
+
+/* Builder modal */
+.cmp-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+.cmp-modal { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; max-height: 90vh; display: flex; flex-direction: column; }
+.cmp-modal-head { display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.5rem; border-bottom: 1px solid #e5e7eb; }
+.cmp-modal-head h3 { font-size: 1.1rem; font-weight: 700; color: #1a1f3a; }
+.cmp-modal-head button { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280; }
+.cmp-modal-body { padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+.cmp-modal-foot { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb; }
+.cmp-modal-foot button { padding: 0.6rem 1.25rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; cursor: pointer; font-weight: 500; }
+.cmp-modal-foot button.primary { background: #FDB813; border-color: #FDB813; color: #1a1f3a; font-weight: 700; }
+.cmp-field { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; }
+.cmp-field > span { font-size: 0.8rem; font-weight: 600; color: #374151; }
+.cmp-field input, .cmp-field select { padding: 0.55rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem; font-family: inherit; }
+.cmp-field-row { display: flex; gap: 1rem; }
+.cmp-field-label { font-size: 0.8rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.4rem; }
+.cmp-segment { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.85rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.cmp-check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; }
+.cmp-seg-city { padding: 0.45rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85rem; }
+.cmp-preview-btn { padding: 0.4rem 0.75rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.cmp-seg-count { font-size: 0.85rem; font-weight: 600; color: #16a34a; }
+.cmp-steps { display: flex; flex-direction: column; gap: 0.75rem; }
+.cmp-step { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.cmp-step-head { display: flex; align-items: center; gap: 0.75rem; }
+.cmp-step-head strong { font-size: 0.85rem; color: #1a1f3a; }
+.cmp-delay { font-size: 0.78rem; color: #6b7280; display: flex; align-items: center; gap: 0.35rem; }
+.cmp-delay input { width: 64px; padding: 0.3rem; border: 1px solid #e5e7eb; border-radius: 5px; }
+.cmp-step-remove { margin-left: auto; background: none; border: none; color: #dc2626; cursor: pointer; font-size: 0.8rem; }
+.cmp-step-subject { padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem; font-weight: 600; }
+.cmp-step-body { padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85rem; font-family: inherit; resize: vertical; }
+.cmp-step-actions { display: flex; gap: 0.5rem; }
+.cmp-step-actions button { padding: 0.45rem 0.85rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
+
+/* ── Activity channel toggle (Email / SMS) ───────────────────────────────── */
+.channel-toggle { display: inline-flex; gap: 0; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 1rem; }
+.channel-toggle button {
+    padding: 0.5rem 1.1rem; background: #fff; border: none; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; color: #6b7280;
+}
+.channel-toggle button + button { border-left: 1px solid #e5e7eb; }
+.channel-toggle button.active { background: #1a1f3a; color: #FDB813; }
+.email-avatar.source-sms { background: #16a34a; color: #fff; }

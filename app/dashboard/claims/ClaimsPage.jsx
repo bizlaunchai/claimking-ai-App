@@ -992,10 +992,10 @@ const ClaimsManagement = () => {
     const stageInfo = getCurrentStageInfo();
 
     return (
-        <div className="main-container">
+        <div className="claim-main-container">
             {/* Header */}
             <div className="header-section">
-                <h1 className="header-title">Claims Pipeline Management</h1>
+                <h1 className="text-white text-2xl">Claims Pipeline Management</h1>
                 <p className="header-subtitle">Track and manage all active insurance claims in real-time</p>
             </div>
 

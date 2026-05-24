@@ -87,8 +87,13 @@ const EmailAssistant = () => {
     const [pendingProvider, setPendingProvider] = useState(null); // 'gmail' | 'outlook'
 
     // Activity tab state
+    const [activityChannel, setActivityChannel]   = useState('email'); // 'email' | 'sms'
     const [messages, setMessages]                 = useState([]);
     const [messagesLoading, setMessagesLoading]   = useState(false);
+    const [smsMessages, setSmsMessages]           = useState([]);
+    const [smsMsgLoading, setSmsMsgLoading]       = useState(false);
+    const [smsMsgPage, setSmsMsgPage]             = useState(1);
+    const [smsMsgTotal, setSmsMsgTotal]           = useState(0);
     const [statusFilter, setStatusFilter]         = useState('all');
     const [companyFilter, setCompanyFilter]       = useState('');
     const [query, setQuery]                       = useState('');
@@ -102,6 +107,35 @@ const EmailAssistant = () => {
     const [savingSettings, setSavingSettings]     = useState(false);
     const [newKeyword, setNewKeyword]             = useState('');
     const [newDomain, setNewDomain]               = useState('');
+
+    // SMS Setup tab state
+    const [smsConfigured, setSmsConfigured]       = useState(true);
+    const [smsNumber, setSmsNumber]               = useState(null);
+    const [smsLoading, setSmsLoading]             = useState(false);
+    const [areaCode, setAreaCode]                 = useState('');
+    const [availableNumbers, setAvailableNumbers] = useState([]);
+    const [searchingNumbers, setSearchingNumbers] = useState(false);
+    const [provisioning, setProvisioning]         = useState(null); // phoneNumber being bought
+    const [releasing, setReleasing]               = useState(false);
+    const [smsTo, setSmsTo]                        = useState('');
+    const [smsBody, setSmsBody]                    = useState('');
+    const [sendingSms, setSendingSms]             = useState(false);
+    const [smsCopied, setSmsCopied]               = useState(false);
+
+    // Campaigns tab state
+    const [campaigns, setCampaigns]               = useState([]);
+    const [campaignMetrics, setCampaignMetrics]   = useState(null);
+    const [campaignsLoading, setCampaignsLoading] = useState(false);
+    const [builderOpen, setBuilderOpen]           = useState(false);
+    const [editingCampaign, setEditingCampaign]   = useState(null); // full campaign or null
+    const [savingCampaign, setSavingCampaign]     = useState(false);
+    const [generatingCopy, setGeneratingCopy]     = useState(false);
+    const [segmentPreview, setSegmentPreview]     = useState(null);
+
+    // Reply composer (Activity tab) — keyed by message id
+    const [replyOpenId, setReplyOpenId]           = useState(null);
+    const [replyText, setReplyText]               = useState('');
+    const [replySending, setReplySending]         = useState(false);
 
     // Read-only monitoring info (for non-admins) — pulled from /email/summary
     // so users can see what the admin has configured without exposing the
@@ -247,8 +281,48 @@ const EmailAssistant = () => {
     }, [statusFilter, companyFilter, query, page]);
 
     useEffect(() => {
-        if (activeTab === 'activity') loadMessages();
-    }, [activeTab, loadMessages]);
+        if (activeTab === 'activity' && activityChannel === 'email') loadMessages();
+    }, [activeTab, activityChannel, loadMessages]);
+
+    const loadSmsMessages = useCallback(async () => {
+        setSmsMsgLoading(true);
+        try {
+            const { data } = await axiosInstance.get('/sms/messages', {
+                params: {
+                    status: statusFilter,
+                    query: query || undefined,
+                    page: smsMsgPage,
+                    pageSize,
+                },
+            });
+            setSmsMessages(data.data || []);
+            setSmsMsgTotal(data.total || 0);
+        } catch {/* interceptor */}
+        finally { setSmsMsgLoading(false); }
+    }, [statusFilter, query, smsMsgPage]);
+
+    useEffect(() => {
+        if (activeTab === 'activity' && activityChannel === 'sms') loadSmsMessages();
+    }, [activeTab, activityChannel, loadSmsMessages]);
+
+    const handleSmsAssignPrompt = async (messageId) => {
+        const clientId = prompt('Enter Client ID to assign this text to:');
+        if (!clientId) return;
+        try {
+            await axiosInstance.post(`/sms/messages/${messageId}/assign`, { clientId });
+            toast.success('Text assigned to client');
+            loadSmsMessages();
+        } catch {/* interceptor */}
+    };
+
+    const handleSmsIgnore = async (messageId) => {
+        if (!confirm('Ignore this text? It will be hidden from the list.')) return;
+        try {
+            await axiosInstance.post(`/sms/messages/${messageId}/ignore`);
+            toast.success('Text ignored');
+            loadSmsMessages();
+        } catch {/* interceptor */}
+    };
 
     // ── load settings when settings tab is opened ─────────────────────────
     const loadSettings = useCallback(async () => {
@@ -263,6 +337,211 @@ const EmailAssistant = () => {
     useEffect(() => {
         if (activeTab === 'settings' && isAdmin) loadSettings();
     }, [activeTab, loadSettings, isAdmin]);
+
+    // ── SMS Setup ─────────────────────────────────────────────────────────
+    const loadSmsNumber = useCallback(async () => {
+        setSmsLoading(true);
+        try {
+            const { data } = await axiosInstance.get('/sms/number');
+            setSmsConfigured(data?.configured ?? false);
+            setSmsNumber(data?.number ?? null);
+        } catch {/* interceptor */}
+        finally { setSmsLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'sms') loadSmsNumber();
+    }, [activeTab, loadSmsNumber]);
+
+    const searchSmsNumbers = async () => {
+        setSearchingNumbers(true);
+        setAvailableNumbers([]);
+        try {
+            const { data } = await axiosInstance.get('/sms/available', {
+                params: { areaCode: areaCode.trim() || undefined },
+            });
+            setAvailableNumbers(data?.data || []);
+            if (!data?.data?.length) toast.message('No numbers found for that area code — try another.');
+        } catch {/* interceptor */}
+        finally { setSearchingNumbers(false); }
+    };
+
+    const provisionNumber = async (phoneNumber) => {
+        setProvisioning(phoneNumber);
+        try {
+            await axiosInstance.post('/sms/provision', { phoneNumber });
+            toast.success('SMS number provisioned');
+            setAvailableNumbers([]);
+            loadSmsNumber();
+        } catch {/* interceptor */}
+        finally { setProvisioning(null); }
+    };
+
+    const releaseNumber = async () => {
+        if (!smsNumber) return;
+        if (!confirm(`Release ${smsNumber.phone_number}? Incoming texts to it will stop. This cannot be undone.`)) return;
+        setReleasing(true);
+        try {
+            await axiosInstance.post('/sms/release', { numberId: smsNumber.id });
+            toast.success('SMS number released');
+            loadSmsNumber();
+        } catch {/* interceptor */}
+        finally { setReleasing(false); }
+    };
+
+    const sendTestSms = async () => {
+        if (!smsTo.trim() || !smsBody.trim()) return;
+        setSendingSms(true);
+        try {
+            await axiosInstance.post('/sms/send', { to: smsTo.trim(), body: smsBody.trim() });
+            toast.success('SMS sent');
+            setSmsBody('');
+        } catch {/* interceptor */}
+        finally { setSendingSms(false); }
+    };
+
+    const handleCopySmsNumber = async () => {
+        if (!smsNumber?.phone_number) return;
+        try {
+            await navigator.clipboard.writeText(smsNumber.phone_number);
+            setSmsCopied(true);
+            setTimeout(() => setSmsCopied(false), 2000);
+        } catch {/* ignore */}
+    };
+
+    // ── Campaigns ─────────────────────────────────────────────────────────
+    const loadCampaigns = useCallback(async () => {
+        setCampaignsLoading(true);
+        try {
+            const [list, metrics] = await Promise.all([
+                axiosInstance.get('/email-campaigns'),
+                axiosInstance.get('/email-campaigns/metrics'),
+            ]);
+            setCampaigns(list.data?.data || []);
+            setCampaignMetrics(metrics.data || null);
+        } catch {/* interceptor */}
+        finally { setCampaignsLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'campaigns') loadCampaigns();
+    }, [activeTab, loadCampaigns]);
+
+    const blankCampaign = () => ({
+        name: '',
+        type: 'blast',
+        trigger_event: 'claim_status_completed',
+        segment_filter: { all: true },
+        schedule: {},
+        from_name: '',
+        reply_to: '',
+        steps: [{ step_order: 0, delay_hours: 0, subject: '', body_text: '' }],
+    });
+
+    const openBuilder = async (id) => {
+        if (!id) { setEditingCampaign(blankCampaign()); setSegmentPreview(null); setBuilderOpen(true); return; }
+        try {
+            const { data } = await axiosInstance.get(`/email-campaigns/${id}`);
+            setEditingCampaign({
+                ...data,
+                steps: data.steps?.length ? data.steps : [{ step_order: 0, delay_hours: 0, subject: '', body_text: '' }],
+            });
+            setSegmentPreview(null);
+            setBuilderOpen(true);
+        } catch {/* interceptor */}
+    };
+
+    const updateCampaignField = (field, value) =>
+        setEditingCampaign(prev => ({ ...prev, [field]: value }));
+
+    const updateStep = (idx, field, value) =>
+        setEditingCampaign(prev => {
+            const steps = [...prev.steps];
+            steps[idx] = { ...steps[idx], [field]: value };
+            return { ...prev, steps };
+        });
+
+    const addStep = () =>
+        setEditingCampaign(prev => ({
+            ...prev,
+            steps: [...prev.steps, { step_order: prev.steps.length, delay_hours: 24, subject: '', body_text: '' }],
+        }));
+
+    const removeStep = (idx) =>
+        setEditingCampaign(prev => ({ ...prev, steps: prev.steps.filter((_, i) => i !== idx) }));
+
+    const saveCampaign = async () => {
+        if (!editingCampaign?.name?.trim()) { toast.error('Campaign name is required'); return; }
+        setSavingCampaign(true);
+        try {
+            await axiosInstance.post('/email-campaigns', editingCampaign);
+            toast.success('Campaign saved');
+            setBuilderOpen(false);
+            setEditingCampaign(null);
+            loadCampaigns();
+        } catch {/* interceptor */}
+        finally { setSavingCampaign(false); }
+    };
+
+    const launchCampaign = async (id) => {
+        if (!confirm('Launch this campaign? Emails will be queued for the selected audience.')) return;
+        try {
+            const { data } = await axiosInstance.post(`/email-campaigns/${id}/launch`);
+            toast.success(data?.mode === 'triggered' ? 'Triggered campaign activated' : `Campaign launched — ${data?.enrolled ?? 0} enrolled`);
+            loadCampaigns();
+        } catch {/* interceptor */}
+    };
+
+    const pauseCampaign = async (id, paused) => {
+        try {
+            await axiosInstance.post(`/email-campaigns/${id}/pause`, { paused });
+            toast.success(paused ? 'Campaign paused' : 'Campaign resumed');
+            loadCampaigns();
+        } catch {/* interceptor */}
+    };
+
+    const deleteCampaign = async (id) => {
+        if (!confirm('Delete this campaign? This cannot be undone.')) return;
+        try {
+            await axiosInstance.delete(`/email-campaigns/${id}`);
+            toast.success('Campaign deleted');
+            loadCampaigns();
+        } catch {/* interceptor */}
+    };
+
+    const generateCopy = async () => {
+        const idx = editingCampaign.steps.length - 1;
+        const promptText = prompt('Describe the email you want (e.g. "friendly free roof inspection offer for new storm-damage leads"):');
+        if (!promptText) return;
+        setGeneratingCopy(true);
+        try {
+            const { data } = await axiosInstance.post('/email-campaigns/generate-copy', { prompt: promptText, kind: 'both' });
+            updateStep(idx, 'subject', data?.subject || editingCampaign.steps[idx].subject);
+            updateStep(idx, 'body_text', data?.body || editingCampaign.steps[idx].body_text);
+            toast.success('Draft copy generated — review before sending');
+        } catch {/* interceptor */}
+        finally { setGeneratingCopy(false); }
+    };
+
+    const previewSegment = async () => {
+        try {
+            const { data } = await axiosInstance.post('/email-campaigns/segment-preview', { segment_filter: editingCampaign.segment_filter });
+            setSegmentPreview(data);
+        } catch {/* interceptor */}
+    };
+
+    // ── Reply to a scanned email ──────────────────────────────────────────
+    const sendReply = async (messageId) => {
+        if (!replyText.trim()) return;
+        setReplySending(true);
+        try {
+            await axiosInstance.post(`/email/messages/${messageId}/reply`, { body: replyText.trim() });
+            toast.success('Reply sent');
+            setReplyOpenId(null);
+            setReplyText('');
+        } catch {/* interceptor */}
+        finally { setReplySending(false); }
+    };
 
     // ── connect / disconnect ──────────────────────────────────────────────
     const handleConnect = async (providerId) => {
@@ -498,6 +777,12 @@ const EmailAssistant = () => {
                                 <span className="tab-badge">{summary.unassignedCount}</span>
                             )}
                         </button>
+                        <button className={`tab-btn ${activeTab === 'sms' ? 'active' : ''}`} onClick={() => setActiveTab('sms')}>
+                            SMS Setup
+                        </button>
+                        <button className={`tab-btn ${activeTab === 'campaigns' ? 'active' : ''}`} onClick={() => setActiveTab('campaigns')}>
+                            Campaigns
+                        </button>
                         {isAdmin && (
                             <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
                                 Settings
@@ -646,34 +931,50 @@ const EmailAssistant = () => {
                     {/* ── Activity Tab ──────────────────────────────────────── */}
                     {activeTab === 'activity' && (
                         <div className="tab-content active">
+                            <div className="channel-toggle">
+                                <button
+                                    className={activityChannel === 'email' ? 'active' : ''}
+                                    onClick={() => { setActivityChannel('email'); setStatusFilter('all'); }}
+                                >
+                                    📧 Email
+                                </button>
+                                <button
+                                    className={activityChannel === 'sms' ? 'active' : ''}
+                                    onClick={() => { setActivityChannel('sms'); setStatusFilter('all'); setSmsMsgPage(1); }}
+                                >
+                                    💬 SMS
+                                </button>
+                            </div>
                             <div className="activity-toolbar">
                                 <div className="activity-search">
                                     <input
-                                        placeholder="Search sender, subject, body…"
+                                        placeholder={activityChannel === 'sms' ? 'Search number or text…' : 'Search sender, subject, body…'}
                                         value={query}
-                                        onChange={e => { setQuery(e.target.value); setPage(1); }}
+                                        onChange={e => { setQuery(e.target.value); setPage(1); setSmsMsgPage(1); }}
                                     />
                                 </div>
                                 <select
                                     className="dropdown-select"
                                     value={statusFilter}
-                                    onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+                                    onChange={e => { setStatusFilter(e.target.value); setPage(1); setSmsMsgPage(1); }}
                                 >
-                                    <option value="all">All emails</option>
+                                    <option value="all">All {activityChannel === 'sms' ? 'texts' : 'emails'}</option>
                                     <option value="matched">Matched</option>
                                     <option value="unassigned">Unassigned</option>
                                 </select>
-                                <select
-                                    className="dropdown-select"
-                                    value={companyFilter}
-                                    onChange={e => { setCompanyFilter(e.target.value); setPage(1); }}
-                                >
-                                    <option value="">All companies</option>
-                                    {companies.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
+                                {activityChannel === 'email' && (
+                                    <select
+                                        className="dropdown-select"
+                                        value={companyFilter}
+                                        onChange={e => { setCompanyFilter(e.target.value); setPage(1); }}
+                                    >
+                                        <option value="">All companies</option>
+                                        {companies.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                )}
                             </div>
 
-                            {messagesLoading ? (
+                            {activityChannel === 'email' && (messagesLoading ? (
                                 <div className="empty-state">
                                     <div className="empty-icon">⏳</div>
                                     <div className="empty-title">Loading…</div>
@@ -772,6 +1073,35 @@ const EmailAssistant = () => {
                                                         <div className="email-detail-body">
                                                             {m.body_text || m.snippet || '(empty body)'}
                                                         </div>
+                                                        {m.ai_extracted_data && (
+                                                            <div className="email-ai-chips">
+                                                                {m.ai_extracted_data.claim_number && <span className="ai-chip">Claim #{m.ai_extracted_data.claim_number}</span>}
+                                                                {m.ai_extracted_data.policy_number && <span className="ai-chip">Policy {m.ai_extracted_data.policy_number}</span>}
+                                                                {m.ai_extracted_data.adjuster_name && <span className="ai-chip">Adjuster: {m.ai_extracted_data.adjuster_name}</span>}
+                                                                {m.ai_category && <span className={`ai-chip cat-${m.ai_category}`}>{m.ai_category.replace('_', ' ')}</span>}
+                                                            </div>
+                                                        )}
+                                                        <div className="email-reply-zone">
+                                                            {replyOpenId === m.id ? (
+                                                                <>
+                                                                    <textarea
+                                                                        className="email-reply-input"
+                                                                        rows={3}
+                                                                        placeholder={`Reply to ${m.from_email}…`}
+                                                                        value={replyText}
+                                                                        onChange={e => setReplyText(e.target.value)}
+                                                                    />
+                                                                    <div className="email-reply-actions">
+                                                                        <button className="btn-assign" onClick={() => sendReply(m.id)} disabled={replySending || !replyText.trim()}>
+                                                                            {replySending ? 'Sending…' : 'Send reply'}
+                                                                        </button>
+                                                                        <button className="btn-ignore" onClick={() => { setReplyOpenId(null); setReplyText(''); }}>Cancel</button>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <button className="btn-assign" onClick={() => { setReplyOpenId(m.id); setReplyText(''); }}>↩ Reply</button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -787,6 +1117,252 @@ const EmailAssistant = () => {
                                         </div>
                                     )}
                                 </>
+                            ))}
+
+                            {activityChannel === 'sms' && (smsMsgLoading ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-title">Loading…</div>
+                                </div>
+                            ) : smsMessages.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">💬</div>
+                                    <div className="empty-title">No texts found</div>
+                                    <div className="empty-text">
+                                        {!summary
+                                            ? 'Loading…'
+                                            : 'Provision a number on the SMS Setup tab — inbound texts will appear here.'}
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="email-list">
+                                        {smsMessages.map(m => {
+                                            const inbound = m.direction === 'inbound';
+                                            const contact = inbound ? m.from_number : m.to_number;
+                                            const initial = inbound ? '↙' : '↗';
+                                            return (
+                                                <div
+                                                    key={m.id}
+                                                    className={`email-row-wrap ${m.is_unread && inbound ? 'unread' : ''} ${m.matched_client ? 'matched' : 'unassigned'}`}
+                                                >
+                                                    <div className="email-row" style={{ cursor: 'default' }}>
+                                                        <div className="email-avatar source-sms">{initial}</div>
+                                                        <div className="email-row-main">
+                                                            <div className="email-row-headline">
+                                                                <span className="email-row-name">{contact}</span>
+                                                                <span className={`source-badge source-${inbound ? 'gmail' : 'outlook'}`}>
+                                                                    {inbound ? 'received' : 'sent'}
+                                                                </span>
+                                                                <span className="email-row-time-inline">{fmtRelative(m.occurred_at)}</span>
+                                                            </div>
+                                                            <div className="email-row-snippet">{m.body || '(no text)'}</div>
+                                                        </div>
+                                                        <div className="email-row-side">
+                                                            {m.matched_client ? (
+                                                                <span className="status-pill status-matched">✓ {m.matched_client.full_name}</span>
+                                                            ) : inbound ? (
+                                                                <>
+                                                                    <span className="status-pill status-unassigned">⚠ Unassigned</span>
+                                                                    <div className="meta-actions">
+                                                                        <button className="btn-assign" onClick={() => handleSmsAssignPrompt(m.id)}>Assign</button>
+                                                                        <button className="btn-ignore" onClick={() => handleSmsIgnore(m.id)}>Ignore</button>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <span className="status-pill">{m.status}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {Math.ceil(smsMsgTotal / pageSize) > 1 && (
+                                        <div className="pagination">
+                                            <button disabled={smsMsgPage <= 1} onClick={() => setSmsMsgPage(p => p - 1)}>‹ Prev</button>
+                                            <span>Page {smsMsgPage} of {Math.ceil(smsMsgTotal / pageSize)}</span>
+                                            <button disabled={smsMsgPage >= Math.ceil(smsMsgTotal / pageSize)} onClick={() => setSmsMsgPage(p => p + 1)}>Next ›</button>
+                                        </div>
+                                    )}
+                                </>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ── SMS Setup Tab ─────────────────────────────────────── */}
+                    {activeTab === 'sms' && (
+                        <div className="tab-content active">
+                            {!smsConfigured ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">📵</div>
+                                    <div className="empty-title">SMS not enabled on this server</div>
+                                    <div className="empty-text">
+                                        Twilio credentials aren&apos;t configured. Ask your administrator to set
+                                        TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN to enable text messaging.
+                                    </div>
+                                </div>
+                            ) : smsLoading ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-title">Loading…</div>
+                                </div>
+                            ) : smsNumber ? (
+                                <>
+                                    <div className="sms-active-card">
+                                        <div className="sms-active-head">
+                                            <div>
+                                                <div className="sms-active-label">Your SMS number</div>
+                                                <div className="sms-active-number">{smsNumber.phone_number}</div>
+                                                <div className="sms-active-sub">
+                                                    Give this number to clients and adjusters — inbound texts are
+                                                    matched to claims automatically.
+                                                </div>
+                                            </div>
+                                            <div className="sms-active-actions">
+                                                <button
+                                                    className="copy-btn"
+                                                    onClick={handleCopySmsNumber}
+                                                    style={smsCopied ? { background: '#dcfce7', borderColor: '#86efac' } : {}}
+                                                >
+                                                    {smsCopied ? '✅ Copied!' : '📋 Copy'}
+                                                </button>
+                                                <button className="btn-release" onClick={releaseNumber} disabled={releasing}>
+                                                    {releasing ? 'Releasing…' : 'Release'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="sms-compose">
+                                        <h3 className="settings-title">Send a text</h3>
+                                        <p className="settings-description">
+                                            Outbound texts are logged to the matching client&apos;s timeline.
+                                        </p>
+                                        <input
+                                            className="sms-input"
+                                            placeholder="Recipient number (e.g. +13305551234)"
+                                            value={smsTo}
+                                            onChange={e => setSmsTo(e.target.value)}
+                                        />
+                                        <textarea
+                                            className="sms-textarea"
+                                            placeholder="Your message…"
+                                            value={smsBody}
+                                            onChange={e => setSmsBody(e.target.value)}
+                                            rows={4}
+                                        />
+                                        <button
+                                            className="save-settings-btn"
+                                            onClick={sendTestSms}
+                                            disabled={sendingSms || !smsTo.trim() || !smsBody.trim()}
+                                        >
+                                            <span>💬</span>
+                                            {sendingSms ? 'Sending…' : 'Send SMS'}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="sms-provision">
+                                    <h3 className="settings-title">Get an SMS number</h3>
+                                    <p className="settings-description">
+                                        Pick an area code and choose a number. Clients and adjusters can text it,
+                                        and we&apos;ll link each message to the right claim.
+                                    </p>
+                                    <div className="domain-add">
+                                        <input
+                                            placeholder="Area code (e.g. 330) — optional"
+                                            value={areaCode}
+                                            onChange={e => setAreaCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+                                            onKeyDown={e => e.key === 'Enter' && searchSmsNumbers()}
+                                        />
+                                        <button onClick={searchSmsNumbers} disabled={searchingNumbers}>
+                                            {searchingNumbers ? 'Searching…' : 'Search numbers'}
+                                        </button>
+                                    </div>
+
+                                    {availableNumbers.length > 0 && (
+                                        <div className="sms-number-list">
+                                            {availableNumbers.map(n => (
+                                                <div key={n.phoneNumber} className="sms-number-row">
+                                                    <div>
+                                                        <div className="sms-number-value">{n.phoneNumber}</div>
+                                                        <div className="sms-number-loc">
+                                                            {[n.locality, n.region].filter(Boolean).join(', ') || 'United States'}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        className="btn-assign"
+                                                        onClick={() => provisionNumber(n.phoneNumber)}
+                                                        disabled={!!provisioning}
+                                                    >
+                                                        {provisioning === n.phoneNumber ? 'Buying…' : 'Select'}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Campaigns Tab ─────────────────────────────────────── */}
+                    {activeTab === 'campaigns' && (
+                        <div className="tab-content active">
+                            <div className="cmp-metrics">
+                                <div className="cmp-metric"><div className="cmp-metric-label">Active</div><div className="cmp-metric-value">{campaignMetrics?.active_campaigns ?? '—'}</div></div>
+                                <div className="cmp-metric"><div className="cmp-metric-label">Sent (30d)</div><div className="cmp-metric-value">{campaignMetrics?.sent_30d ?? '—'}</div></div>
+                                <div className="cmp-metric"><div className="cmp-metric-label">Open Rate</div><div className="cmp-metric-value green">{campaignMetrics ? `${campaignMetrics.open_rate}%` : '—'}</div></div>
+                                <div className="cmp-metric"><div className="cmp-metric-label">Click Rate</div><div className="cmp-metric-value green">{campaignMetrics ? `${campaignMetrics.click_rate}%` : '—'}</div></div>
+                            </div>
+
+                            <div className="cmp-toolbar">
+                                <div>
+                                    <h3 className="settings-title">Campaigns</h3>
+                                    <p className="settings-description">Outbound email sequences and one-time sends via Resend.</p>
+                                </div>
+                                <button className="cmp-new-btn" onClick={() => openBuilder(null)}>+ New Campaign</button>
+                            </div>
+
+                            {campaignsLoading ? (
+                                <div className="empty-state"><div className="empty-icon">⏳</div><div className="empty-title">Loading…</div></div>
+                            ) : campaigns.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">📣</div>
+                                    <div className="empty-title">No campaigns yet</div>
+                                    <div className="empty-text">Create a drip sequence, one-time blast, or claim-completed review request.</div>
+                                </div>
+                            ) : (
+                                <div className="cmp-list">
+                                    {campaigns.map(c => (
+                                        <div key={c.id} className="cmp-row">
+                                            <div className="cmp-row-main">
+                                                <div className="cmp-row-name">{c.name}</div>
+                                                <div className="cmp-row-sub">
+                                                    <span className={`cmp-type cmp-type-${c.type}`}>{c.type}</span>
+                                                    <span className={`cmp-status cmp-status-${c.status}`}>{c.status}</span>
+                                                    <span className="cmp-row-stat">{c.sent_count} sent</span>
+                                                    <span className="cmp-row-stat green">{c.open_rate}% open</span>
+                                                </div>
+                                            </div>
+                                            <div className="cmp-row-actions">
+                                                <button onClick={() => openBuilder(c.id)}>Edit</button>
+                                                {['draft', 'paused', 'scheduled'].includes(c.status) && (
+                                                    <button className="primary" onClick={() => launchCampaign(c.id)}>Launch</button>
+                                                )}
+                                                {c.status === 'active' && (
+                                                    <button onClick={() => pauseCampaign(c.id, true)}>Pause</button>
+                                                )}
+                                                {c.status === 'paused' && (
+                                                    <button onClick={() => pauseCampaign(c.id, false)}>Resume</button>
+                                                )}
+                                                <button className="danger" onClick={() => deleteCampaign(c.id)}>Delete</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     )}
@@ -940,6 +1516,20 @@ const EmailAssistant = () => {
                                         </div>
                                         <div className="toggle-row">
                                             <div>
+                                                <div className="toggle-title">Auto-create draft claims</div>
+                                                <div className="toggle-desc">When AI detects a new-claim notification with no existing match, create a draft claim automatically.</div>
+                                            </div>
+                                            <label className="switch">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!settings.auto_create_claims}
+                                                    onChange={e => setSettings(prev => ({ ...prev, auto_create_claims: e.target.checked }))}
+                                                />
+                                                <span className="slider"></span>
+                                            </label>
+                                        </div>
+                                        <div className="toggle-row">
+                                            <div>
                                                 <div className="toggle-title">Notify on claim denials</div>
                                                 <div className="toggle-desc">Send an alert whenever an email is detected with denial language.</div>
                                             </div>
@@ -968,6 +1558,111 @@ const EmailAssistant = () => {
                     )}
                 </div>
             </div>
+
+            {/* ── Campaign builder modal ─────────────────────────────────── */}
+            {builderOpen && editingCampaign && (
+                <div className="cmp-modal-overlay" onClick={() => setBuilderOpen(false)}>
+                    <div className="cmp-modal" onClick={e => e.stopPropagation()}>
+                        <div className="cmp-modal-head">
+                            <h3>{editingCampaign.id ? 'Edit campaign' : 'New campaign'}</h3>
+                            <button onClick={() => setBuilderOpen(false)}>×</button>
+                        </div>
+
+                        <div className="cmp-modal-body">
+                            <label className="cmp-field">
+                                <span>Campaign name</span>
+                                <input value={editingCampaign.name} onChange={e => updateCampaignField('name', e.target.value)} placeholder="New Lead Welcome Series" />
+                            </label>
+
+                            <div className="cmp-field-row">
+                                <label className="cmp-field">
+                                    <span>Type</span>
+                                    <select value={editingCampaign.type} onChange={e => updateCampaignField('type', e.target.value)}>
+                                        <option value="blast">One-time blast</option>
+                                        <option value="drip">Drip sequence</option>
+                                        <option value="triggered">Triggered</option>
+                                        <option value="recurring">Recurring</option>
+                                    </select>
+                                </label>
+                                {editingCampaign.type === 'triggered' ? (
+                                    <label className="cmp-field">
+                                        <span>Trigger event</span>
+                                        <select value={editingCampaign.trigger_event} onChange={e => updateCampaignField('trigger_event', e.target.value)}>
+                                            <option value="claim_status_completed">Claim marked completed</option>
+                                        </select>
+                                    </label>
+                                ) : (
+                                    <label className="cmp-field">
+                                        <span>Send at (optional)</span>
+                                        <input type="datetime-local" value={editingCampaign.schedule?.send_at ?? ''} onChange={e => updateCampaignField('schedule', { ...editingCampaign.schedule, send_at: e.target.value })} />
+                                    </label>
+                                )}
+                            </div>
+
+                            <div className="cmp-field-row">
+                                <label className="cmp-field"><span>From name</span><input value={editingCampaign.from_name ?? ''} onChange={e => updateCampaignField('from_name', e.target.value)} placeholder="Acme Roofing" /></label>
+                                <label className="cmp-field"><span>Reply-to</span><input value={editingCampaign.reply_to ?? ''} onChange={e => updateCampaignField('reply_to', e.target.value)} placeholder="office@acme.com" /></label>
+                            </div>
+
+                            {editingCampaign.type !== 'triggered' && (
+                                <div className="cmp-segment">
+                                    <div className="cmp-field-label">Audience</div>
+                                    <label className="cmp-check">
+                                        <input type="checkbox" checked={!!editingCampaign.segment_filter?.all} onChange={e => updateCampaignField('segment_filter', e.target.checked ? { all: true } : {})} />
+                                        All clients
+                                    </label>
+                                    {!editingCampaign.segment_filter?.all && (
+                                        <input
+                                            className="cmp-seg-city"
+                                            placeholder="Filter by city (optional)"
+                                            value={editingCampaign.segment_filter?.city ?? ''}
+                                            onChange={e => updateCampaignField('segment_filter', { ...editingCampaign.segment_filter, city: e.target.value })}
+                                        />
+                                    )}
+                                    <button className="cmp-preview-btn" onClick={previewSegment}>Preview audience</button>
+                                    {segmentPreview && <span className="cmp-seg-count">{segmentPreview.count} recipients</span>}
+                                </div>
+                            )}
+
+                            <div className="cmp-steps">
+                                <div className="cmp-field-label">Emails {editingCampaign.type === 'drip' && '(sent in sequence)'}</div>
+                                {editingCampaign.steps.map((step, idx) => (
+                                    <div key={idx} className="cmp-step">
+                                        <div className="cmp-step-head">
+                                            <strong>Email {idx + 1}</strong>
+                                            {(editingCampaign.type === 'drip' || idx > 0) && (
+                                                <label className="cmp-delay">
+                                                    Send after
+                                                    <input type="number" min="0" value={step.delay_hours ?? 0} onChange={e => updateStep(idx, 'delay_hours', Number(e.target.value))} />
+                                                    hrs
+                                                </label>
+                                            )}
+                                            {editingCampaign.steps.length > 1 && (
+                                                <button className="cmp-step-remove" onClick={() => removeStep(idx)}>Remove</button>
+                                            )}
+                                        </div>
+                                        <input className="cmp-step-subject" placeholder="Subject line" value={step.subject} onChange={e => updateStep(idx, 'subject', e.target.value)} />
+                                        <textarea className="cmp-step-body" rows={4} placeholder="Email body… use {{first_name}}, {{claim_number}} merge tags" value={step.body_text ?? ''} onChange={e => updateStep(idx, 'body_text', e.target.value)} />
+                                    </div>
+                                ))}
+                                <div className="cmp-step-actions">
+                                    <button onClick={addStep}>+ Add email</button>
+                                    <button onClick={generateCopy} disabled={generatingCopy}>
+                                        {generatingCopy ? '✨ Generating…' : '✨ AI write last email'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="cmp-modal-foot">
+                            <button onClick={() => setBuilderOpen(false)}>Cancel</button>
+                            <button className="primary" onClick={saveCampaign} disabled={savingCampaign}>
+                                {savingCampaign ? 'Saving…' : 'Save campaign'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

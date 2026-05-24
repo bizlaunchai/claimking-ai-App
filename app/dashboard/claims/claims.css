@@ -1,5 +1,5 @@
 /* Main Container */
-.main-container {
+.claim-main-container {
     min-height: 100vh;
     transition: padding-left 0.3s ease;
     max-width: 100%;
