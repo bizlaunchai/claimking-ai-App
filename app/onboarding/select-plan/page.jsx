@@ -130,6 +130,8 @@ const PlanCard = ({ plan, onSubscribe, loading }) => {
         currency: 'USD',
     });
     const features = Array.isArray(plan.features) ? plan.features : [];
+    const trialDays = plan.trial_days ?? 0;
+    const hasTrial = trialDays > 0;
 
     return (
         <div style={{
@@ -139,10 +141,20 @@ const PlanCard = ({ plan, onSubscribe, loading }) => {
             {plan.is_popular && <div style={styles.badge}>MOST POPULAR</div>}
             <h2 style={styles.planName}>{plan.name}</h2>
             <p style={styles.planDesc}>{plan.description}</p>
+            {hasTrial && (
+                <div style={styles.trialPill}>
+                    🎁 {trialDays}-day free trial
+                </div>
+            )}
             <div style={styles.priceRow}>
                 <span style={styles.price}>{price}</span>
                 <span style={styles.priceUnit}>/month</span>
             </div>
+            {hasTrial && (
+                <div style={styles.trialNote}>
+                    Free for {trialDays} days, then {price}/month
+                </div>
+            )}
             <div style={styles.creditsRow}>
                 {plan.monthly_credits.toLocaleString()} credits / month
             </div>
@@ -162,7 +174,11 @@ const PlanCard = ({ plan, onSubscribe, loading }) => {
                 onClick={onSubscribe}
                 disabled={loading}
             >
-                {loading ? 'Starting checkout…' : `Subscribe to ${plan.name}`}
+                {loading
+                    ? 'Starting checkout…'
+                    : hasTrial
+                        ? `Start ${trialDays}-day free trial`
+                        : `Subscribe to ${plan.name}`}
             </button>
         </div>
     );
@@ -233,6 +249,23 @@ const styles = {
     },
     planName: { fontSize: '1.25rem', fontWeight: 700, color: '#1a1f3a', margin: 0 },
     planDesc: { fontSize: '0.875rem', color: '#6b7280', margin: '0.25rem 0 1rem' },
+    trialPill: {
+        display: 'inline-block',
+        margin: '0 0 0.75rem',
+        padding: '0.3rem 0.7rem',
+        background: '#ecfdf5',
+        color: '#047857',
+        border: '1px solid #a7f3d0',
+        borderRadius: '999px',
+        fontSize: '0.78rem',
+        fontWeight: 700,
+    },
+    trialNote: {
+        marginTop: '0.35rem',
+        color: '#047857',
+        fontSize: '0.8rem',
+        fontWeight: 600,
+    },
     priceRow: { display: 'flex', alignItems: 'baseline', gap: '0.25rem' },
     price: { fontSize: '2.25rem', fontWeight: 800, color: '#1a1f3a' },
     priceUnit: { color: '#6b7280', fontSize: '0.875rem' },
