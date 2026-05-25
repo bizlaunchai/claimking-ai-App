@@ -103,12 +103,6 @@ export function LoginForm({ className, ...props }) {
       <div className={cn("flex flex-col gap-6", className)} {...props}>
         <Card>
           <CardHeader>
-            <CardTitle className='flex justify-center'><div className='flex items-center gap-2'>
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-md flex items-center justify-center text-white font-bold">
-                C
-              </div>
-              <Link href='/'><p> <span className="text-lg font-semibold">ClaimKing.AI</span></p></Link>
-            </div></CardTitle>
             <CardTitle className="text-2xl">Login</CardTitle>
             <CardDescription>
               Enter your email below to login to your account

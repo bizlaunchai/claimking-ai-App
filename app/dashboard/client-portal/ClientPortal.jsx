@@ -865,6 +865,7 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                                     <label className={labelReq}>State</label>
                                     <select className={selectCls(errors.state)} name="state" value={formData.state} onChange={handleInputChange}>
                                         <option value="">Select State</option>
+                                        <option value="OH">Ohio</option>
                                         <option value="TX">Texas</option>
                                         <option value="OK">Oklahoma</option>
                                         <option value="LA">Louisiana</option>

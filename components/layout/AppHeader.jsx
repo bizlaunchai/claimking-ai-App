@@ -8,9 +8,13 @@ import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
 import DashboardHeader from "@/components/layout/DashboardHeader";
+import { createClient } from "@/lib/supabase/client";
 
 const AppHeader = () => {
     const [menuActive, setMenuActive] = useState(false);
+    // Hide "Start Free Trial" for logged-in users who already bought a plan
+    // (profiles.company_id is set). Guests + plan-less users still see it.
+    const [hasPlan, setHasPlan] = useState(false);
     const [claims, setClaims] = useState(100);
     const [value, setValue] = useState(5000);
     const [team, setTeam] = useState(5);
@@ -22,6 +26,22 @@ const AppHeader = () => {
     });
 
     const pathname = usePathname();
+
+    // Determine whether the logged-in user already has a plan (company_id).
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || cancelled) return;
+                const { data: profile } = await supabase
+                    .from('profiles').select('company_id').eq('id', user.id).single();
+                if (!cancelled) setHasPlan(!!profile?.company_id);
+            } catch { /* ignore — default keeps the button visible */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
 
     // Toggle menu
@@ -126,13 +146,7 @@ const AppHeader = () => {
                     <div className="nav-cta">
                         {/*<button className="btn btn-secondary">Sign In</button>*/}
                         {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
-                        <button
-                            className="btn btn-secondary"
-                            style={{ borderColor: "#FDB813", color: "#FDB813" }}
-                        >
-                            Free Demo
-                        </button>
-                        <Link href='/auth/login' className="btn btn-primary">Start Free Trial</Link>
+                        {!hasPlan && <Link href='/plans' className="btn btn-primary">Start Free Trial</Link>}
                         <button
                             className={`hamburger ${menuActive ? "active" : ""}`}
                             onClick={toggleMenu}
@@ -187,13 +201,11 @@ const AppHeader = () => {
                     <div className="mobile-cta">
 
                         {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
-                        {/*<Link href='/auth/login' className="btn btn-secondary">*/}
-                        {/*    Sign in*/}
-                        {/*</Link>*/}
-                        <button className="btn btn-demo">Free Demo</button>
-                        <Link href='/auth/login' className="btn btn-secondary">
-                            Start Free Trial
-                        </Link>
+                        {!hasPlan && (
+                            <Link href='/plans' className="btn btn-secondary" onClick={toggleMenu}>
+                                Start Free Trial
+                            </Link>
+                        )}
                     </div>
 
                     {/* Contact Info */}
