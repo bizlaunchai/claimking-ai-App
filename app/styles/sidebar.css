@@ -166,6 +166,106 @@
     filter: drop-shadow(0 2px 4px rgba(253, 184, 19, 0.3));
 }
 
+/* Logged-in company card (below the ClaimKing header) */
+.sidebar-company {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin: 0.75rem 0.75rem 0.25rem;
+    padding: 0.625rem 0.75rem;
+    background: linear-gradient(135deg, rgba(253, 184, 19, 0.12), rgba(253, 184, 19, 0.04));
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    transition: all 0.25s ease;
+}
+
+.sidebar-company:hover {
+    border-color: rgba(253, 184, 19, 0.4);
+    background: linear-gradient(135deg, rgba(253, 184, 19, 0.18), rgba(253, 184, 19, 0.06));
+}
+
+.sidebar-company.collapsed {
+    margin: 0.75rem auto 0.25rem;
+    padding: 0.4rem;
+    justify-content: center;
+}
+
+.sidebar-company-logo {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--crown-dark);
+    border: 1px solid var(--border-color);
+}
+
+.sidebar-company-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sidebar-company-initial {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--crown-gold);
+}
+
+.sidebar-company-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.sidebar-company-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--crown-gold);
+}
+
+.sidebar-company-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Company card skeleton (shown while logo/name loads) */
+.sidebar-company-skeleton,
+.sidebar-company-skeleton:hover {
+    cursor: default;
+    background: linear-gradient(135deg, rgba(253, 184, 19, 0.06), rgba(253, 184, 19, 0.02));
+    border-color: var(--border-color);
+}
+
+.sk-shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.sk-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(253, 184, 19, 0.18) 50%,
+        transparent 100%
+    );
+    animation: ck-shimmer 1.4s ease-in-out infinite;
+}
+
 /* Collapse Toggle */
 .collapse-toggle {
     width: 34px;

@@ -10,6 +10,7 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/lib/permissions/PermissionsContext";
+import axiosInstance from "@/lib/axiosInstance";
 
 function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile = () => {}}) {
     const sidebarRef = useRef(null);
@@ -28,6 +29,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
     const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
     const [staffPerms, setStaffPerms] = useState({});
     const [userInfo, setUserInfo] = useState({ name: '', email: '' });
+    // Logged-in contractor's company — name + logo (S3 key fetched as authed blob).
+    const [company, setCompany] = useState({ name: '', logo: null });
+    const [companyLoading, setCompanyLoading] = useState(true);
 
     const pathname = usePathname();
     const { has, loading: permsLoading } = usePermissions();
@@ -74,6 +78,43 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
             } catch { /* ignore */ }
         })();
         return () => { cancelled = true; };
+    }, []);
+
+    // Fetch the contractor company's name + logo. logo_url is an S3 key, so we
+    // pull it through the authed /s3/file endpoint as a blob (same pattern as
+    // Estimation.jsx / 3d-mockup AuthedImage — plain <img>/next/image won't work).
+    useEffect(() => {
+        let cancelled = false;
+        let blobUrl = null;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || cancelled) return;
+                const res = await axiosInstance.get(`/profile/${user.id}`, { suppressErrorToast: true });
+                if (cancelled) return;
+                const p = res.data ?? {};
+                let logo = null;
+                if (p.business_logo) {
+                    try {
+                        const imgRes = await axiosInstance.get(
+                            `/s3/file?key=${encodeURIComponent(p.business_logo)}`,
+                            { responseType: 'blob', suppressErrorToast: true },
+                        );
+                        if (!cancelled) {
+                            logo = URL.createObjectURL(imgRes.data);
+                            blobUrl = logo;
+                        }
+                    } catch { /* missing logo — fall back to initial */ }
+                }
+                if (!cancelled) setCompany({ name: p.business_name || '', logo });
+            } catch { /* non-fatal — block self-hides if no company */ }
+            finally { if (!cancelled) setCompanyLoading(false); }
+        })();
+        return () => {
+            cancelled = true;
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
+        };
     }, []);
 
     useEffect(() => {
@@ -199,6 +240,37 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                </svg>
                            </button>
                        </div>
+
+                    {/* Logged-in company — skeleton while loading */}
+                    {companyLoading && (
+                        <div className={`sidebar-company sidebar-company-skeleton ${isCollapsed && !isMobile ? 'collapsed' : ''}`} aria-hidden="true">
+                            <div className="sidebar-company-logo sk-shimmer" />
+                            {!(isCollapsed && !isMobile) && (
+                                <div className="sidebar-company-meta" style={{ flex: 1, gap: 6 }}>
+                                    <div className="sk-shimmer" style={{ height: 12, width: '70%', borderRadius: 4 }} />
+                                    <div className="sk-shimmer" style={{ height: 9, width: '45%', borderRadius: 4 }} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Logged-in company — logo + name */}
+                    {!companyLoading && company.name && (
+                        <div className={`sidebar-company ${isCollapsed && !isMobile ? 'collapsed' : ''}`} title={company.name}>
+                            <div className="sidebar-company-logo">
+                                {company.logo ? (
+                                    <img src={company.logo} alt={company.name} />
+                                ) : (
+                                    <span className="sidebar-company-initial">{company.name.charAt(0).toUpperCase()}</span>
+                                )}
+                            </div>
+                            {!(isCollapsed && !isMobile) && (
+                                <div className="sidebar-company-meta">
+                                    <span className="sidebar-company-name">{company.name}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Logged-in user info */}
                     {!isCollapsed && (userInfo.name || userInfo.email) && (

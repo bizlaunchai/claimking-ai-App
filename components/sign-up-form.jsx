@@ -17,8 +17,16 @@ import { useRouter } from "next/navigation";
 import React, { useRef, useState } from "react";
 import GoogleAuth from "@/components/auth/GoogleAuth.jsx";
 import OutlookAuth from "@/components/auth/OutlookAuth.jsx";
-import { MapPin, Phone, Sparkles, Upload, X, ImageIcon } from "lucide-react";
+import { MapPin, Phone, Sparkles, Upload, X, ImageIcon, Eye, EyeOff, Check, AlertCircle, Building2, User, Mail, Lock, Crown, Clock, ShieldCheck, Zap } from "lucide-react";
 import axiosInstance from "@/lib/axiosInstance.js";
+
+// Password rules, evaluated live as the user types.
+const PASSWORD_RULES = [
+  { key: "length", label: "At least 8 characters", test: (v) => v.length >= 8 },
+  { key: "upper", label: "One uppercase letter", test: (v) => /[A-Z]/.test(v) },
+  { key: "lower", label: "One lowercase letter", test: (v) => /[a-z]/.test(v) },
+  { key: "number", label: "One number", test: (v) => /[0-9]/.test(v) },
+];
 
 export function SignUpForm({ className, ...props }) {
   const [firstName, setFirstName] = useState("");
@@ -29,6 +37,15 @@ export function SignUpForm({ className, ...props }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
+
+  // ── password visibility + live validation ───────────────────────────────────
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRepeat, setShowRepeat] = useState(false);
+
+  const passwordChecks = PASSWORD_RULES.map((r) => ({ ...r, ok: r.test(password) }));
+  const passwordValid = passwordChecks.every((c) => c.ok);
+  const passwordsMatch = repeatPassword.length > 0 && password === repeatPassword;
+  const repeatMismatch = repeatPassword.length > 0 && password !== repeatPassword;
 
   // ── logo state ──────────────────────────────────────────────────────────────
   const [logoFile, setLogoFile] = useState(null);      // actual File object
@@ -97,6 +114,12 @@ export function SignUpForm({ className, ...props }) {
     setIsLoading(true);
     setError(null);
 
+    if (!passwordValid) {
+      setError("Please choose a stronger password — see the requirements below.");
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== repeatPassword) {
       setError("Passwords do not match");
       setIsLoading(false);
@@ -122,6 +145,14 @@ export function SignUpForm({ className, ...props }) {
       });
 
       if (authError) throw authError;
+
+      // Supabase doesn't error on duplicate emails (anti-enumeration). When the
+      // email already exists, it returns a user with an empty `identities` array.
+      if (authData?.user && (authData.user.identities?.length ?? 0) === 0) {
+        setError("An account with this email already exists. Please log in instead.");
+        setIsLoading(false);
+        return;
+      }
 
   /*    debugger
 
@@ -150,57 +181,74 @@ export function SignUpForm({ className, ...props }) {
   return (
       <div
           className={cn(
-              "grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl mx-auto items-center p-4",
+              "grid grid-cols-1 md:grid-cols-2 gap-10 w-full max-w-6xl mx-auto items-center p-4",
               className
           )}
           {...props}
       >
         {/* Left Column: Branding */}
-        <div className="space-y-6 text-center md:text-left mt-10 px-6">
-          <div className="flex justify-center md:justify-start">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-2xl">
-                C
-              </div>
-              <span className="text-3xl font-extrabold tracking-tighter">
-              ClaimKing<span className="text-yellow-600">.AI</span>
+        <div className="space-y-8 text-center md:text-left px-2 md:px-6">
+
+          <h1 className="text-3xl md:text-5xl font-bold leading-tight tracking-tight">
+            Your AI-Powered{" "}
+            <span className="bg-gradient-to-r from-yellow-500 to-amber-600 bg-clip-text text-transparent">
+              Claims Assistant
             </span>
-            </Link>
-          </div>
-          <h1 className="text-2xl md:text-5xl font-bold leading-tight">
-            Your AI-Powered Claims Assistant
           </h1>
-          <p className="text-xl text-muted-foreground">
+
+          <p className="text-lg text-muted-foreground leading-relaxed">
             Sign up today and experience the future of claims management.
             Streamline your processes, save time, and boost efficiency.
           </p>
-          <div className="flex items-center gap-2 pt-4 justify-center md:justify-start">
-            <Sparkles className="w-6 h-6 text-yellow-500" />
-            <span className="text-lg font-medium">Get started in minutes!</span>
-          </div>
+
+          <ul className="space-y-4 text-left max-w-sm mx-auto md:mx-0">
+            {[
+              { icon: Zap, title: "AI estimates in minutes", desc: "Generate accurate estimates instantly." },
+              { icon: ShieldCheck, title: "Built for contractors", desc: "Measurements, mockups & client portals." },
+              { icon: Clock, title: "Get started in minutes", desc: "No credit card required to begin." },
+            ].map((f) => (
+                <li key={f.title} className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-500/10 text-yellow-600">
+                    <f.icon className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold leading-tight">{f.title}</p>
+                    <p className="text-sm text-muted-foreground">{f.desc}</p>
+                  </div>
+                </li>
+            ))}
+          </ul>
         </div>
 
         {/* Right Column: Sign Up Form */}
-        <Card className="shadow-2xl border-t-4 border-t-yellow-500 p-2">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-3xl font-bold">Create Account</CardTitle>
-            <CardDescription>Enter your details to register</CardDescription>
+        <Card className="shadow-2xl border-t-4 border-t-yellow-500 rounded-2xl">
+          <CardHeader className="text-center pb-2 space-y-2">
+            <CardTitle className="text-2xl md:text-3xl font-bold">Create Account</CardTitle>
+            <CardDescription>Enter your details to get started</CardDescription>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={handleSignUp} className="space-y-5">
 
               {/* Business Info */}
-              <div className="grid gap-4 border p-4 rounded-xl bg-muted/50">
+              <div className="grid gap-4 border p-4 rounded-xl bg-muted/40">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground/80">
+                  <Building2 className="h-4 w-4 text-yellow-600" />
+                  Business Details
+                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="business-name">Business Name</Label>
-                  <Input
-                      id="business-name"
-                      placeholder="ClaimKing Solutions"
-                      required
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                  />
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        id="business-name"
+                        className="pl-9"
+                        placeholder="ClaimKing Solutions"
+                        required
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 {/* ── Logo Upload ── */}
@@ -280,64 +328,146 @@ export function SignUpForm({ className, ...props }) {
               </div>
 
               {/* Personal Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="first-name">First Name</Label>
-                  <Input
-                      id="first-name"
-                      placeholder="John"
-                      required
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                  />
+              <div className="grid gap-4 border p-4 rounded-xl bg-muted/40">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground/80">
+                  <User className="h-4 w-4 text-yellow-600" />
+                  Your Details
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="last-name">Last Name</Label>
-                  <Input
-                      id="last-name"
-                      placeholder="Doe"
-                      required
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="first-name">First Name</Label>
+                    <Input
+                        id="first-name"
+                        placeholder="John"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="last-name">Last Name</Label>
+                    <Input
+                        id="last-name"
+                        placeholder="Doe"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Credentials */}
-              <div className="grid gap-4">
+              <div className="grid gap-4 border p-4 rounded-xl bg-muted/40">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground/80">
+                  <Lock className="h-4 w-4 text-yellow-600" />
+                  Account Credentials
+                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input
-                      id="email"
-                      type="email"
-                      placeholder="email@example.com"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                  />
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        id="email"
+                        type="email"
+                        className="pl-9"
+                        placeholder="email@example.com"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="password">Password</Label>
-                    <Input
-                        id="password"
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <div className="relative">
+                      <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          required
+                          className="pr-10"
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button
+                          type="button"
+                          onClick={() => setShowPassword((s) => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                          tabIndex={-1}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="repeat-password">Confirm Password</Label>
-                    <Input
-                        id="repeat-password"
-                        type="password"
-                        required
-                        value={repeatPassword}
-                        onChange={(e) => setRepeatPassword(e.target.value)}
-                    />
+                    <div className="relative">
+                      <Input
+                          id="repeat-password"
+                          type={showRepeat ? "text" : "password"}
+                          required
+                          className={cn(
+                              "pr-10",
+                              repeatMismatch && "border-red-400 focus-visible:ring-red-400",
+                              passwordsMatch && "border-green-500 focus-visible:ring-green-500"
+                          )}
+                          placeholder="••••••••"
+                          value={repeatPassword}
+                          onChange={(e) => setRepeatPassword(e.target.value)}
+                      />
+                      <button
+                          type="button"
+                          onClick={() => setShowRepeat((s) => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
+                          tabIndex={-1}
+                          aria-label={showRepeat ? "Hide password" : "Show password"}
+                      >
+                        {showRepeat ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+                {/* Live password requirements */}
+                {password.length > 0 && (
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                      {passwordChecks.map((c) => (
+                          <li
+                              key={c.key}
+                              className={cn(
+                                  "flex items-center gap-1.5 text-xs transition-colors",
+                                  c.ok ? "text-green-600" : "text-muted-foreground"
+                              )}
+                          >
+                            {c.ok ? (
+                                <Check className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0 mx-1" />
+                            )}
+                            {c.label}
+                          </li>
+                      ))}
+                    </ul>
+                )}
+
+                {/* Live confirm-password feedback */}
+                {repeatPassword.length > 0 && (
+                    <p
+                        className={cn(
+                            "flex items-center gap-1.5 text-xs font-medium",
+                            passwordsMatch ? "text-green-600" : "text-red-500"
+                        )}
+                    >
+                      {passwordsMatch ? (
+                          <><Check className="h-3.5 w-3.5" /> Passwords match</>
+                      ) : (
+                          <><AlertCircle className="h-3.5 w-3.5" /> Passwords do not match</>
+                      )}
+                    </p>
+                )}
               </div>
 
               {error && (
@@ -348,8 +478,8 @@ export function SignUpForm({ className, ...props }) {
 
               <Button
                   type="submit"
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold h-12 text-lg"
-                  disabled={isLoading}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold h-12 text-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={isLoading || !passwordValid || !passwordsMatch}
               >
                 {isLoading ? "Creating account..." : "Sign Up"}
               </Button>
