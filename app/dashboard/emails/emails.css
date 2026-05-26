@@ -1048,8 +1048,21 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 1rem;
-        padding-left: 60px; /* room for floating hamburger */
+        padding: 1.25rem 1.25rem; /* global content padding clears the hamburger */
+        margin-bottom: 1.25rem;
     }
+    .sync-btn { width: 100%; }
+
+    /* 5 tabs would squish — let them scroll horizontally instead */
+    .tab-buttons {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .tab-buttons::-webkit-scrollbar { height: 4px; }
+    .tab-buttons::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
+    .tab-btn { flex: 0 0 auto; white-space: nowrap; padding: 0.875rem 1rem; }
+    .tab-content { padding: 1.25rem 1rem; }
 
     .email-row { padding: 0.75rem 0.875rem; }
     .email-row-detail { padding: 0.875rem 0.875rem 1rem; }
@@ -1057,8 +1070,40 @@
     .activity-toolbar { gap: 0.5rem; }
     .activity-search  { min-width: 100%; }
     .dropdown-select  { width: 100%; }
+    .settings-dropdowns { grid-template-columns: 1fr; }
 
     .email-row-time-inline { width: 100%; margin-left: 0; order: 99; }
+
+    /* SMS + campaigns rows stack cleanly */
+    .sms-active-head { flex-direction: column; }
+    .sms-active-actions { width: 100%; }
+    .cmp-toolbar { flex-direction: column; align-items: stretch; }
+    .cmp-new-btn { width: 100%; }
+    .cmp-row { align-items: flex-start; }
+    .cmp-field-row { flex-direction: column; gap: 0.75rem; }
+}
+
+@media (max-width: 480px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    .email-providers { grid-template-columns: 1fr; }
+    .cmp-metrics { grid-template-columns: 1fr 1fr; }
+
+    .header-content h1 { font-size: 1.25rem; }
+    .sms-active-number { font-size: 1.3rem; }
+
+    .forward-box { flex-wrap: wrap; }
+    .forward-content { min-width: 0; width: 100%; }
+    .forward-box .forward-email {
+        display: block;
+        word-break: break-all;
+        max-width: 100%;
+    }
+    .forward-box .copy-btn { width: 100%; }
+
+    .pagination { flex-wrap: wrap; gap: 0.5rem; }
+
+    .cmp-modal-overlay { padding: 0.5rem; }
+    .cmp-row-actions { flex-wrap: wrap; }
 }
 
 
