@@ -592,6 +592,9 @@
 
 @media (max-width: 767px) {
     .mobile-sidebar-toggle { display: inline-flex; }
+    /* Reserve space for the floating toggle (top:12 + 42px tall) so every
+       dashboard page's header starts below it instead of behind it. */
+    .dashboard-content-wrapper { padding-top: 60px; }
 }
 
 @keyframes fadeInOverlay {

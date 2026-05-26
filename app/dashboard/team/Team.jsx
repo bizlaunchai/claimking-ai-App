@@ -853,6 +853,19 @@ const RolesPermissionsEditor = ({ onSave }) => {
         Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])),
     );
 
+    // On phones a 6-column matrix is unusable — collapse to one role at a time,
+    // chosen via a segmented control, so each cell is a big tap target.
+    const [isMobile, setIsMobile] = useState(false);
+    const [mobileRole, setMobileRole] = useState('estimator');
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 768px)');
+        const apply = () => setIsMobile(mq.matches);
+        apply();
+        mq.addEventListener('change', apply);
+        return () => mq.removeEventListener('change', apply);
+    }, []);
+    const displayRoles = isMobile ? [mobileRole] : ROLES;
+
     const toggleGroup = (g) => setCollapsed((p) => ({ ...p, [g]: !p[g] }));
     const expandAll = () => setCollapsed({});
     const collapseAll = () =>
@@ -999,12 +1012,30 @@ const RolesPermissionsEditor = ({ onSave }) => {
                 </div>
             </div>
 
+            {isMobile && (
+                <div className="perms-role-switcher">
+                    <span className="perms-role-switcher-label">Editing role</span>
+                    <div className="perms-role-tabs">
+                        {ROLES.map((r) => (
+                            <button
+                                key={r}
+                                type="button"
+                                className={`perms-role-tab ${mobileRole === r ? 'active' : ''}`}
+                                onClick={() => setMobileRole(r)}
+                            >
+                                {ROLE_LABELS[r]}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="perms-table-scroll">
             <table className="perms-table">
                 <thead>
                     <tr>
                         <th>Permission</th>
-                        {ROLES.map((r) => <th key={r}>{ROLE_LABELS[r]}</th>)}
+                        {displayRoles.map((r) => <th key={r}>{ROLE_LABELS[r]}</th>)}
                     </tr>
                 </thead>
                 <tbody>
@@ -1039,7 +1070,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
                                         <span className="perms-section-label">{group.group}</span>
                                         <span className="perms-section-meta">{group.items.length} permission{group.items.length > 1 ? 's' : ''}</span>
                                     </td>
-                                    {ROLES.map((r) => {
+                                    {displayRoles.map((r) => {
                                         const granted = groupCount(group, r);
                                         const total = group.items.length;
                                         const allOn = granted === total;
@@ -1076,7 +1107,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
                                 {!isCollapsed && visibleItems.map((item) => (
                                     <tr key={item.key}>
                                         <td className="perms-item-label">{item.label}</td>
-                                        {ROLES.map((r) => (
+                                        {displayRoles.map((r) => (
                                             <React.Fragment key={r}>{renderCell(r, item.key)}</React.Fragment>
                                         ))}
                                     </tr>

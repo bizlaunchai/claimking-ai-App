@@ -520,12 +520,135 @@
     font-size: 0.75rem; font-weight: 700;
 }
 
+/* ===== Responsive ===== */
+
+/* Tablet / small laptop */
+@media (max-width: 1024px) {
+    .team-page .page-header { padding: 1.25rem 1.5rem; }
+    .team-page .content { padding: 1.25rem 1.5rem; }
+    .team-page .stats-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
+
+/* Tablet portrait */
 @media (max-width: 768px) {
     .team-page .role-picker { grid-template-columns: 1fr; }
+
+    .team-page .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.875rem;
+        padding: 1rem 1.25rem;
+    }
+    .team-page .page-header .btn-primary { justify-content: center; }
+    .team-page .content { padding: 1rem 1.25rem; }
+
+    .team-page .stats-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .team-page .stat-card { padding: 1rem 1.125rem; }
+    .team-page .stat-value { font-size: 1.5rem; }
+
+    /* Tabs scroll horizontally instead of wrapping/squishing */
+    .team-page .tabs {
+        /* `scroll` (not auto) keeps the track permanently rendered, so the bar
+           never auto-hides on touch/overlay-scrollbar platforms. */
+        overflow-x: scroll;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        gap: 0;
+        /* Flip vertically so the horizontal scrollbar sits on TOP of the tabs,
+           making it obvious there are more tabs to scroll to. */
+        transform: scaleY(-1);
+        border-bottom: none;
+        border-top: 1px solid #e5e7eb; /* renders at the visual bottom once flipped */
+        padding-top: 6px;              /* space below the now-top scrollbar */
+        /* Thin, always-visible gray scrollbar */
+        scrollbar-width: thin;
+        scrollbar-color: #9ca3af #f3f4f6;
+    }
+    .team-page .tabs > * { transform: scaleY(-1); } /* flip each tab back upright */
+    /* Force a classic (non-overlay) bar that stays put */
+    .team-page .tabs::-webkit-scrollbar {
+        height: 7px;
+        -webkit-appearance: none;
+        background: #f3f4f6;
+    }
+    .team-page .tabs::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 999px; }
+    .team-page .tabs::-webkit-scrollbar-thumb {
+        background: #9ca3af;
+        border-radius: 999px;
+        border: 1px solid #f3f4f6;
+    }
+    .team-page .tab { white-space: nowrap; padding: 0.75rem 1rem; }
+
     .team-page .table-toolbar { flex-direction: column; align-items: stretch; }
     .team-page .search-input { width: 100%; }
+    .team-page .filter-row { flex-wrap: wrap; }
+    .team-page .filter-select { flex: 1; min-width: 120px; }
+
+    /* Let wide tables scroll horizontally; card no longer clips them */
+    .team-page .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .team-page table { min-width: 640px; }
+    .team-page th, .team-page td { padding: 0.75rem 1rem; }
+    .team-page .action-cell { flex-wrap: wrap; }
+
+    /* Permissions modal rows stack the label above the controls */
+    .team-page .user-perm-row {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "label source"
+            "seg seg";
+        row-gap: 0.4rem;
+    }
+    .team-page .user-perm-label { grid-area: label; }
+    .team-page .perm-source { grid-area: source; }
+    .team-page .seg { grid-area: seg; justify-self: start; }
+
+    .team-page .modal-footer { flex-wrap: wrap; }
+
+    /* Role permissions matrix — collapsed to 2 columns (Permission + 1 role) */
+    .team-page .perms-header { flex-direction: column; align-items: stretch; gap: 0.875rem; }
+    .team-page .perms-header > div:last-child { flex-wrap: wrap; }
+    .team-page .perms-card { padding: 1rem; }
+
+    /* Keep horizontal scroll; never pin a column (sticky steals width and
+       crushes the rest, causing the label/meta text to overlap). */
+    .team-page .perms-table-scroll { max-height: none; overflow-x: auto; }
+    .team-page .perms-table-scroll thead th:first-child,
+    .team-page .perms-table-scroll tbody td:first-child,
+    .team-page .perms-table-scroll .perms-section-row td:first-child {
+        position: static;
+    }
+
+    /* Smaller type so group name + count fit on one line without overlapping */
+    .team-page .perms-table th { font-size: 0.65rem; }
+    .team-page .perms-section-label { font-size: 0.78rem; }
+    .team-page .perms-section-meta { font-size: 0.62rem; margin-left: 2px; white-space: nowrap; }
+    .team-page .perms-section-name { gap: 5px; padding: 9px 10px !important; }
+    .team-page .perms-section-count { font-size: 0.68rem; padding: 2px 7px; }
+    .team-page .perms-item-label { font-size: 0.8rem; padding-left: 22px !important; }
+    .team-page .perms-table-scroll .perm-cell { padding: 0.7rem 0.5rem !important; font-size: 1rem; }
+    .team-page .perms-section-rolecell { padding: 6px 3px !important; }
+}
+
+/* Phone */
+@media (max-width: 480px) {
+    .team-page .page-title { font-size: 1.25rem; }
+    .team-page .stats-grid { grid-template-columns: 1fr; }
+
+    /* Drop lower-priority columns so the core table fits without scrolling */
     .team-page th:nth-child(3), .team-page td:nth-child(3),
     .team-page th:nth-child(5), .team-page td:nth-child(5) { display: none; }
+    .team-page table { min-width: 0; }
+
+    .team-page .perms-toolbar,
+    .team-page .user-perm-toolbar { flex-wrap: wrap; }
+
+    .team-page .modal-overlay { padding: 0.5rem; }
+    .team-page .modal-header,
+    .team-page .modal-body,
+    .team-page .modal-footer { padding-left: 1rem; padding-right: 1rem; }
+
+    .team-page .toast { left: 1rem; right: 1rem; bottom: 1rem; }
 }
 
 /* ===== User Permissions Modal — grouped/collapsible UI ===== */
@@ -815,6 +938,50 @@
     background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
 }
 
+/* Mobile role switcher — only rendered on phones, lets the admin pick which
+   role's column to edit so the matrix collapses to a tappable 2-column list. */
+.team-page .perms-role-switcher {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fffaeb;
+}
+.team-page .perms-role-switcher-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+}
+.team-page .perms-role-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.team-page .perms-role-tabs::-webkit-scrollbar { height: 0; }
+.team-page .perms-role-tab {
+    flex: 1 0 auto;
+    min-width: 72px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    color: #6b7280;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s ease;
+}
+.team-page .perms-role-tab.active {
+    background: #1a1f3a;
+    color: #FDB813;
+    border-color: #1a1f3a;
+}
+
 /* Custom scrollbar polish */
 .team-page .perms-table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
 .team-page .perms-table-scroll::-webkit-scrollbar-track { background: #f3f4f6; }
@@ -824,4 +991,17 @@
     border: 2px solid #f3f4f6;
 }
 .team-page .perms-table-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Mobile: unpin every sticky cell. Placed last so it wins over the sticky
+   base rules above regardless of media-query specificity. The header row can
+   stay pinned to the top (vertical), but nothing should pin horizontally. */
+@media (max-width: 768px) {
+    .team-page .perms-table-scroll thead th:first-child,
+    .team-page .perms-table-scroll tbody td:first-child,
+    .team-page .perms-table-scroll .perms-section-row td:first-child {
+        position: static;
+        left: auto;
+        z-index: auto;
+    }
+}
 
