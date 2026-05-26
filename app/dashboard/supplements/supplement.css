@@ -1355,3 +1355,67 @@
         padding: 1.5rem;
     }
 }
+
+/* =====================================================================
+   RESPONSIVE — full-device pass (appended last so it wins on source order)
+   Page structure: .main-container → .active-supplement-form (form-header,
+   client-info-grid, line-item table) → .metrics-row → .content-area
+   (.left-column: supplements table + items-grid / .right-column) →
+   .analytics-section → .footer-actions → popup.
+   ===================================================================== */
+
+/* ── Tablet landscape: 4-col client grid is too tight → 2 cols ── */
+@media (max-width: 1024px) {
+    .client-info-grid { grid-template-columns: repeat(2, 1fr); }
+    .metrics-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Tablet portrait / large phone ── */
+@media (max-width: 768px) {
+    /* Trim the big form chrome so content gets the width */
+    .active-supplement-form { margin: 1rem; padding: 1.25rem; }
+    .form-title { font-size: 1.25rem; }
+
+    /* Header: title over actions, buttons share the row */
+    .form-header { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+    .form-actions { width: 100%; }
+    .form-actions .btn { flex: 1; }
+
+    /* Client fields stack to one column */
+    .client-info-grid { grid-template-columns: 1fr; }
+
+    /* Line-item form table — scroll instead of squishing the inputs */
+    .items-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .supplement-items-table { min-width: 560px; }
+
+    /* Active-supplements table scrolls (display:block + overflow set above);
+       give it a floor width so columns stay legible */
+    .supplements-table { min-width: 680px; }
+
+    /* Action buttons row → full-width stack */
+    .generate-section { flex-direction: column; }
+    .footer-actions { flex-direction: column; }
+
+    /* Tighten outer padding. Force a single metrics column — must be
+       restated here because the ≤1024px 2-col rule above appears later in
+       source than the original ≤768px 1-col rule and would otherwise win. */
+    .metrics-row { grid-template-columns: 1fr; padding: 1rem; gap: 1rem; }
+    .content-area { grid-template-columns: 1fr; padding: 0 1rem 1rem; gap: 1rem; }
+    .analytics-section { grid-template-columns: 1fr; padding: 0 1rem 1rem; gap: 1rem; }
+}
+
+/* ── Phone ── */
+@media (max-width: 480px) {
+    .active-supplement-form { margin: 0.75rem; padding: 1rem; border-radius: 10px; }
+    .metric-value { font-size: 1.5rem; }
+    .chart-container { height: 220px; }
+
+    /* Popup near full-screen and type options single column */
+    .supplement-popup { width: 94%; padding: 1.25rem; }
+    .type-options { grid-template-columns: 1fr; }
+    .popup-actions { flex-direction: column; }
+    .popup-actions .btn { width: 100%; }
+
+    /* Filter pills wrap and scroll comfortably */
+    .filter-buttons { flex-wrap: wrap; }
+}

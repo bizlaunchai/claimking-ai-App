@@ -1669,9 +1669,12 @@
         justify-content: center;
     }
 
-    /* Pipeline content mobile */
+    /* Pipeline content mobile. The claim-detail page sets a 2-column grid
+       via inline style on .pipeline-content, so we need !important to stack
+       it (Activity column) below the overview on phones. */
     .pipeline-content {
         padding: 0.75rem;
+        grid-template-columns: 1fr !important;
     }
 
     /* Single stage view on mobile */
