@@ -515,3 +515,161 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
         grid-template-columns: 1fr;
     }
 }
+
+/* =====================================================================
+   RESPONSIVE — all device breakpoints
+   The Next.js builder renders: .mr-hero header → .main-container →
+   .builder-section (grid) → .left-panel / .estimate-panel / .right-rail.
+   Each .estimate-section wraps a wide 7-col .estimate-table.
+   ===================================================================== */
+
+/* ── Tablet (≤900px) — builder collapses to one column here, so the
+   estimate sections must become horizontally scrollable (the 7-col table
+   is ~520px+ and can't shrink to phone width). ── */
+@media (max-width: 900px) {
+    .main-container { padding: 0 12px; margin-top: 14px; }
+    .estimate-panel { padding: 18px 16px; }
+    .ai-bar { gap: 10px; padding: 12px 14px; }
+    .ai-bar-text { min-width: 140px; }
+    .totals-section { padding: 14px 16px; }
+    .rail-content { padding: 12px; }
+
+    /* CRITICAL: a CSS-grid `1fr` track has `min-width: auto`, so the wide
+       .estimate-table (min-width 520px) forces the whole column — and thus
+       every panel — wider than the viewport, cutting content off at the
+       right edge. minmax(0,1fr) + min-width:0 lets the track shrink to the
+       screen so the table's own scroll container handles the overflow. */
+    .builder-section { grid-template-columns: minmax(0, 1fr); }
+    .left-panel,
+    .estimate-panel,
+    .right-rail { min-width: 0; }
+
+    /* Estimate sections — scroll the wide table instead of clipping it.
+       `overflow: auto` resets the base `overflow: hidden` on both axes. */
+    .estimate-section { overflow: auto; -webkit-overflow-scrolling: touch; }
+    .estimate-table { min-width: 560px; }
+
+    /* Category tabs wrap to multiple rows instead of overflowing */
+    .category-tabs { flex-wrap: wrap; }
+}
+
+/* ── Tablet portrait (≤768px) ── */
+@media (max-width: 768px) {
+    /* Header (mr-hero) — let it shrink below its 280px min and tighten chips */
+    .mr-hero { padding: 0.85rem 1rem; }
+    .mr-hero-inner { gap: 0.85rem; }
+    .mr-hero-left { min-width: 0; }
+    .mr-hero-title { font-size: 1.15rem; }
+    .mr-hero-subtitle { font-size: 0.75rem; }
+    .mr-hero-stats { gap: 6px; }
+    .mr-stat { padding: 5px 9px; gap: 6px; }
+
+    /* Main padding */
+    .main-container { padding: 0 10px; margin-top: 10px; }
+
+    /* Estimate panel */
+    .estimate-panel { padding: 16px 12px; }
+    .estimate-header { padding-bottom: 12px; margin-bottom: 16px; }
+    .company-info-text { font-size: 15px; }
+
+    /* Estimate table — tighten cell padding while scrolling */
+    .estimate-table { min-width: 520px; }
+    .estimate-table th,
+    .estimate-table td { padding: 8px 10px; }
+
+    /* AI bar stacks on small tablet */
+    .ai-bar { flex-direction: column; align-items: flex-start; }
+    .ai-bar-actions { width: 100%; flex-wrap: wrap; }
+    .btn-ai, .btn-ai-ghost { flex: 1; justify-content: center; }
+
+    /* Rail tabs: scroll instead of squish */
+    .rail-tabs {
+        overflow-x: scroll;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: #9ca3af #f3f4f6;
+    }
+    .rail-tabs::-webkit-scrollbar { height: 4px; -webkit-appearance: none; }
+    .rail-tabs::-webkit-scrollbar-track { background: #f3f4f6; }
+    .rail-tabs::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 999px; }
+    .rail-tab { flex: 0 0 auto; white-space: nowrap; padding: 10px 12px; }
+
+    /* Totals */
+    .total-row.final { font-size: 14px; }
+    .total-value.final { font-size: 17px; }
+
+    /* Push the action row (and thus the More button) to the right edge so
+       the dropdown — which anchors to the button's right via right:0 — drops
+       straight below the button and stays fully on-screen instead of
+       overflowing the left edge. */
+    .mr-hero-actions { width: 100%; justify-content: flex-end; }
+
+    /* More-options menu: normal dropdown directly below the button, width
+       clamped to the viewport so it never overflows. */
+    .more-options-menu {
+        right: 0;
+        left: auto;
+        width: min(280px, calc(100vw - 16px));
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+    }
+
+    /* Start layout */
+    .est-start-layout { padding: 0 0.75rem 2rem !important; }
+    .est-start-layout > .cs-card,
+    .est-start-layout > .start-stage,
+    .est-start-layout > .cs-selected-bar { max-width: 100%; }
+}
+
+/* ── Phone (≤480px) ── */
+@media (max-width: 480px) {
+    /* Header (mr-hero) — compact, actions go full width, chips wrap 2-up */
+    .mr-hero { padding: 0.7rem 0.85rem; }
+    .mr-hero-title { font-size: 1.05rem; }
+    .mr-hero-subtitle { display: none; } /* free up vertical space on phones */
+    .mr-hero-actions { width: 100%; }
+    .mr-hero-actions .mr-btn-ghost,
+    .mr-hero-actions .mr-btn-primary { flex: 1; justify-content: center; }
+    .mr-hero-stats { gap: 5px; }
+    .mr-stat { padding: 4px 8px; }
+    .mr-stat-icon { width: 18px; height: 18px; }
+
+    /* Main */
+    .main-container { padding: 0 8px; }
+    .estimate-panel { padding: 12px 10px; }
+    .estimate-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .client-info { text-align: left; }
+    .estimate-title { font-size: 14px; }
+
+    /* Table — tighter on phone */
+    .estimate-table { min-width: 460px; font-size: 11.5px; }
+    .estimate-table th,
+    .estimate-table td { padding: 7px 8px; }
+    .qty-input { width: 44px; }
+
+    /* Totals */
+    .totals-section { padding: 10px 12px; }
+    .total-row { font-size: 12px; }
+    .total-row.final { font-size: 13px; }
+    .total-value.final { font-size: 15px; }
+
+    /* Rate learning stats */
+    .rate-stats { grid-template-columns: 1fr 1fr; }
+
+    /* AI bar */
+    .ai-bar-title { font-size: 13px; }
+    .ai-bar-sub { font-size: 11px; }
+
+    /* Section header bar text wrap */
+    .section-header-bar { font-size: 11.5px; flex-wrap: wrap; gap: 6px; }
+
+    /* Toast */
+    .toast-container { left: 8px; right: 8px; bottom: 10px; }
+    .toast { min-width: 0; width: 100%; }
+
+    /* CS form on phone */
+    .cs-form-grid { grid-template-columns: 1fr; }
+    .cs-form-group.full-width { grid-column: span 1; }
+    .cs-selected-bar { flex-direction: column; align-items: flex-start; }
+    .cs-selected-info { flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+}
