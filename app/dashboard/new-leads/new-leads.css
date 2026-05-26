@@ -364,6 +364,10 @@
 }
 @media (max-width: 900px) {
     .new-leads-page .scheduling-grid { grid-template-columns: 1fr; }
+    /* Let both stacked items shrink to the viewport. Without this the
+       calendar's 560px min-width forces the shared 1fr track wide, dragging
+       the rep list and booking card off the right edge. */
+    .new-leads-page .scheduling-grid > * { min-width: 0; }
 }
 .new-leads-page .rep-list {
     background: #f9fafb; border-radius: 8px; padding: 0.875rem;
@@ -468,4 +472,50 @@
     padding: 0.5rem 0.875rem; background: #FDB813; color: #1a1f3a;
     border: none; border-radius: 6px;
     font-weight: 600; cursor: pointer; font-size: 0.8rem;
+}
+
+/* =====================================================================
+   RESPONSIVE — phone / tablet pass
+   ===================================================================== */
+@media (max-width: 768px) {
+    /* Tighten outer padding so cards get the width */
+    .new-leads-page .page-header { padding: 1.25rem 1rem; }
+    .new-leads-page .content { padding: 1rem; }
+
+    /* Header buttons share the row full-width */
+    .new-leads-page .header-right { width: 100%; }
+    .new-leads-page .header-right .btn-primary,
+    .new-leads-page .header-right .btn-secondary { flex: 1; justify-content: center; }
+
+    /* Channel tabs scroll instead of wrapping awkwardly */
+    .new-leads-page .channel-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .new-leads-page .channel-tab { white-space: nowrap; flex: 0 0 auto; }
+
+    /* Toolbar controls stack to full width */
+    .new-leads-page .toolbar-left { flex-direction: column; align-items: stretch; }
+    .new-leads-page .toolbar-left .search-input,
+    .new-leads-page .toolbar-left .filter-select { width: 100%; }
+
+    /* Scheduling header actions full-width */
+    .new-leads-page .scheduling-header > div:last-child { width: 100%; }
+    .new-leads-page .scheduling-header > div:last-child .btn-primary,
+    .new-leads-page .scheduling-header > div:last-child .btn-secondary { flex: 1; justify-content: center; }
+
+    /* CRITICAL: the 6-col calendar grid has a large intrinsic min-width that
+       blew the whole scheduling column — and the booking card — past the
+       viewport (cut off on the right). Let the calendar scroll horizontally
+       inside its own box and pin a sensible min-width so columns stay usable. */
+    .new-leads-page .calendar-view { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .new-leads-page .calendar-grid { min-width: 560px; }
+    .new-leads-page .calendar-toolbar { flex-wrap: wrap; gap: 0.5rem; }
+
+    /* Booking link: URL wraps, action buttons share a full-width row */
+    .new-leads-page .booking-link-url { word-break: break-all; min-width: 0; flex-basis: 100%; }
+    .new-leads-page .booking-link-copy { flex: 1; }
+}
+
+@media (max-width: 480px) {
+    /* One stat card per row reads better than cramped halves */
+    .new-leads-page .stats-grid { grid-template-columns: 1fr; }
+    .new-leads-page .modal-box { width: 94%; }
 }
