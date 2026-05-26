@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import axiosInstance from '@/lib/axiosInstance';
 import { LEGAL_DISCLAIMER_SHORT } from '../disclaimer';
+import '../policy-analysis.css';
 
 const PAGE_SIZE = 25;
 
