@@ -611,3 +611,107 @@
 .pa-action-done .pa-action-title { text-decoration: line-through; color: #9ca3af; }
 .pa-action-done .pa-action-detail { color: #9ca3af; }
 
+/* ===== Responsive — all breakpoints ===== */
+
+/* ── Tablet (≤1024px) ── */
+@media (max-width: 1024px) {
+    .pa-panel { height: 520px; }
+}
+
+/* ── Tablet portrait / phablet (≤768px) ── */
+@media (max-width: 768px) {
+    /* Reduce heavy Tailwind px-6 padding inside both page roots */
+    .policy-analysis .px-6,
+    .policy-analysis-history .px-6 { padding-left: 1rem !important; padding-right: 1rem !important; }
+
+    /* Progress stepper: smaller circles + labels, less spacing */
+    .progress-steps { margin-bottom: 1.25rem; }
+    .step-circle { width: 32px; height: 32px; font-size: 0.8rem; }
+    .progress-steps::before,
+    .progress-line { top: 16px; }
+    .step-label { font-size: 10px; }
+
+    /* Side-by-side panels: already stacks to 1fr, just reduce fixed height */
+    .pa-panel { height: 420px; }
+
+    /* Hero card */
+    .pa-hero-top { flex-wrap: wrap; }
+    .pa-hero-card { padding: 1rem; }
+
+    /* Spec rows: stack label above value on narrow */
+    .pa-spec { flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+    .pa-spec-val { text-align: left; }
+
+    /* Meta rows: tighten key min-width */
+    .pa-meta-key { min-width: 90px; }
+
+    /* History page header: title + button stack */
+    .policy-analysis-history .flex.justify-between.items-center {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    .policy-analysis-history .flex.justify-between.items-center a {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* History table: horizontal scroll */
+    .policy-analysis-history .bg-white.rounded-lg.border.border-gray-200.overflow-hidden {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .policy-analysis-history table { min-width: 640px; }
+
+    /* History filter bar: wrap */
+    .policy-analysis-history .bg-white.rounded-lg.border.border-gray-200.p-4.mb-4 {
+        flex-wrap: wrap;
+    }
+    .policy-analysis-history .bg-white.rounded-lg.border.border-gray-200.p-4.mb-4 .ml-auto {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 0.25rem;
+    }
+
+    /* Deadline/action panels reduce internal padding */
+    .pa-action { padding: 0.5rem 0.6rem; }
+}
+
+/* ── Phone (≤480px) ── */
+@media (max-width: 480px) {
+    /* Further reduce padding */
+    .policy-analysis .px-6,
+    .policy-analysis-history .px-6 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+    .policy-analysis .py-6,
+    .policy-analysis-history .py-6 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+
+    /* Stepper: hide labels, keep circles */
+    .step-label { display: none; }
+    .step-circle { width: 28px; height: 28px; font-size: 0.75rem; }
+    .progress-steps::before,
+    .progress-line { top: 14px; }
+
+    /* Panels full-height natural, not fixed */
+    .pa-panel { height: auto; min-height: 280px; }
+    .pa-panel-body { min-height: 260px; }
+
+    /* Hero */
+    .pa-hero-icon { width: 40px; height: 40px; font-size: 1.4rem; }
+    .pa-hero-title { font-size: 1rem; }
+    .pa-fact-grid { grid-template-columns: 1fr 1fr; }
+
+    /* Meta key tighter */
+    .pa-meta-key { min-width: 70px; font-size: 0.82rem; }
+    .pa-meta-val { font-size: 0.82rem; }
+
+    /* Document modal edge-to-edge */
+    .pa-doc-modal { padding: 0.5rem; }
+
+    /* History: hide lower-priority columns */
+    .policy-analysis-history th:nth-child(5),
+    .policy-analysis-history td:nth-child(5),
+    .policy-analysis-history th:nth-child(6),
+    .policy-analysis-history td:nth-child(6) { display: none; }
+    .policy-analysis-history table { min-width: 0; }
+}
+
