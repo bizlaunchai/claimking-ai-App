@@ -467,7 +467,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>)}
 
-                        {has('use_email_assistant') && (<div className="nav-item">
+                        {/*{has('use_email_assistant') && (<div className="nav-item">
                             <Link href="/dashboard/emails" className={`nav-link ${pathname === '/dashboard/emails' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Email Assistant">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">
@@ -476,7 +476,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 </span>
                                 <span className="nav-text">Email Assistant</span>
                             </Link>
-                        </div>)}
+                        </div>)}*/}
 
                         {has('use_call_center') && (<div className="nav-item">
                             <Link href="/dashboard/ai-call-center" className={`nav-link ${pathname === '/dashboard/ai-call-center' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Call Center AI">
@@ -505,7 +505,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                     )}
 
                     {/* INTEGRATIONS */}
-                    {(has('view_crm_sync') || has('view_email_sms') || has('view_gmb') || has('manage_social') || has('manage_api_settings')) && (
+                    {(has('view_crm_sync') || has('view_email_sms') || has('view_gmb') || has('manage_social') || has('use_email_assistant') || has('manage_api_settings')) && (
                     <div className="nav-category">
                         <div className="nav-category-header">Integrations</div>
 
@@ -520,7 +520,7 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>)}
 
-                        {has('view_email_sms') && (<div className="nav-item">
+                        {has('use_email_assistant') && (<div className="nav-item">
                             <Link href="/dashboard/email-sms" className={`nav-link ${pathname === '/dashboard/email-sms' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Email & SMS">
                                 <span className="nav-icon">
                                     <svg viewBox="0 0 24 24">

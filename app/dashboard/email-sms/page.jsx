@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import EmailAssistant from "@/app/dashboard/emails/EmailAssistant.jsx";
+import EmailAssistant from "@/app/dashboard/email-sms/EmailAssistant.jsx";
 
 export const metadata = {
     title: "Email Assistant | ClaimKing AI",
