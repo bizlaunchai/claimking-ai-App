@@ -1,651 +1,375 @@
-'use client'
-import React, { useState, useRef, useEffect } from 'react';
-import "./crm-sync.css"
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import axiosInstance from '@/lib/axiosInstance';
+import './crm-sync.css';
+
+/**
+ * Connect Your CRM page — backend-wired (replaces the prior static docs mock).
+ *
+ * Flow:
+ *   1. Lists every CRM in the catalogue + the company's current connections
+ *   2. Click a card → opens the Connect modal (API key paste OR OAuth button)
+ *   3. Click an existing connection → goes to the detail page
+ *
+ * Routes used:
+ *   GET    /crm/connections                    list current connections
+ *   POST   /crm/connections                    create API-key connection
+ *   GET    /crm/oauth/:crm/authorize           OAuth redirect (303)
+ *   DELETE /crm/connections/:id                disconnect
+ */
+
+// Catalogue order mirrors the spec — JobNimbus + AccuLynx surface first as P1.
+const CRM_CATALOGUE = [
+    { key: 'jobnimbus',    name: 'JobNimbus',   icon: '🛠️',  tag: 'P1 · Roofing',     auth: 'api_key', help: 'developer.jobnimbus.com' },
+    { key: 'acculynx',     name: 'AccuLynx',    icon: '🏠',  tag: 'P1 · Roofing',     auth: 'oauth',   help: 'developer.acculynx.com' },
+    { key: 'salesforce',   name: 'Salesforce',  icon: '☁️',  tag: 'Popular',          auth: 'oauth',   help: 'developer.salesforce.com' },
+    { key: 'hubspot',      name: 'HubSpot',     icon: '🔶',  tag: 'Easy Setup',       auth: 'oauth',   help: 'developers.hubspot.com' },
+    { key: 'zoho',         name: 'Zoho CRM',    icon: '📊',  tag: 'Affordable',       auth: 'oauth',   help: 'zoho.com/crm/developer' },
+    { key: 'pipedrive',    name: 'Pipedrive',   icon: '🎯',  tag: 'Sales Focus',      auth: 'api_key', help: 'developers.pipedrive.com' },
+    { key: 'monday',       name: 'Monday.com',  icon: '📅',  tag: 'Visual',           auth: 'api_key', help: 'developer.monday.com' },
+    { key: 'clickup',      name: 'ClickUp',     icon: '🚀',  tag: 'All-in-One',       auth: 'api_key', help: 'clickup.com/api' },
+    { key: 'freshsales',   name: 'Freshsales',  icon: '🌿',  tag: 'AI Powered',       auth: 'api_key', help: 'developers.freshworks.com' },
+    { key: 'jobber',       name: 'Jobber',      icon: '🔨',  tag: 'Field Service',    auth: 'oauth',   help: 'developer.getjobber.com' },
+    { key: 'jobprogress',  name: 'JobProgress', icon: '📈',  tag: 'Contractors',      auth: 'api_key', help: 'jobprogress.com/api' },
+];
+
+// CRMs the backend actually has adapter code for. Others show "Coming soon".
+const SUPPORTED_FOR_PUSH = new Set(['jobnimbus', 'acculynx', 'salesforce', 'hubspot']);
 
 const CRMSync = () => {
-    const [selectedCRM, setSelectedCRM] = useState(null);
-    const [showCustomCRM, setShowCustomCRM] = useState(false);
-    const [customCRMName, setCustomCRMName] = useState('');
-    const [aiResponse, setAiResponse] = useState(null);
-    const [openFAQs, setOpenFAQs] = useState({});
-    const [showChat, setShowChat] = useState(false);
-    const [chatMessages, setChatMessages] = useState([
-        { type: 'bot', text: "Hi! I'm your ClaimKing AI assistant. I can help you connect any CRM to ClaimKing.AI. What CRM are you using?" }
-    ]);
-    const [chatInput, setChatInput] = useState('');
-    const chatMessagesRef = useRef(null);
+    const router = useRouter();
+    const [connections, setConnections] = useState([]);
+    const [availability, setAvailability] = useState({});  // { acculynx: true|false, ... }
+    const [loading, setLoading] = useState(true);
 
-    const integrations = {
-        salesforce: {
-            icon: '☁️',
-            name: 'Salesforce',
-            subtitle: 'Follow these steps to connect Salesforce with ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Login to Salesforce',
-                    description: 'Navigate to Setup > Apps > App Manager in your Salesforce account.',
-                    code: null
-                },
-                {
-                    title: 'Create Connected App',
-                    description: 'Click "New Connected App" and fill in the following details:\n• App Name: ClaimKing Integration\n• Contact Email: Your email\n• Enable OAuth Settings: Checked',
-                    code: 'Callback URL: https://app.claimking.ai/auth/salesforce/callback'
-                },
-                {
-                    title: 'Configure OAuth Scopes',
-                    description: 'Select the following OAuth scopes:\n• Access and manage your data (api)\n• Perform requests on your behalf (refresh_token)',
-                    code: null
-                },
-                {
-                    title: 'Copy Credentials',
-                    description: 'After saving, copy your Consumer Key and Consumer Secret.',
-                    code: 'Consumer Key: YOUR_KEY_HERE\nConsumer Secret: YOUR_SECRET_HERE'
-                },
-                {
-                    title: 'Enter in ClaimKing',
-                    description: 'Go to ClaimKing Settings > Integrations > Salesforce and paste your credentials. Click "Connect" to complete the integration.',
-                    code: null
-                }
-            ]
-        },
-        hubspot: {
-            icon: '🔶',
-            name: 'HubSpot',
-            subtitle: 'Connect HubSpot CRM with ClaimKing.AI in minutes',
-            steps: [
-                {
-                    title: 'Access HubSpot Settings',
-                    description: 'Log in to HubSpot and navigate to Settings > Integrations > Private Apps.',
-                    code: null
-                },
-                {
-                    title: 'Create Private App',
-                    description: 'Click "Create a private app" and name it "ClaimKing Integration".',
-                    code: null
-                },
-                {
-                    title: 'Set Scopes',
-                    description: 'Enable these scopes:\n• CRM: Contacts, Companies, Deals\n• Timeline: Read/Write access',
-                    code: null
-                },
-                {
-                    title: 'Generate Access Token',
-                    description: 'Click "Create app" and copy your Access Token.',
-                    code: 'Access Token: pk_live_xxxxxxxxxxxxx'
-                },
-                {
-                    title: 'Complete Integration',
-                    description: 'In ClaimKing, go to Settings > Integrations > HubSpot, paste your token, and click "Connect".',
-                    code: null
-                }
-            ]
-        },
-        zoho: {
-            icon: '📊',
-            name: 'Zoho CRM',
-            subtitle: 'Set up Zoho CRM integration with ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Zoho Developer Console',
-                    description: 'Go to Zoho Developer Console at api-console.zoho.com',
-                    code: null
-                },
-                {
-                    title: 'Register Client',
-                    description: 'Click "Add Client" and select "Server-based Applications".',
-                    code: 'Redirect URI: https://app.claimking.ai/auth/zoho/callback'
-                },
-                {
-                    title: 'Configure Scopes',
-                    description: 'Add these scopes:\n• ZohoCRM.modules.ALL\n• ZohoCRM.settings.ALL',
-                    code: null
-                },
-                {
-                    title: 'Get Credentials',
-                    description: 'Copy your Client ID and Client Secret.',
-                    code: 'Client ID: YOUR_CLIENT_ID\nClient Secret: YOUR_CLIENT_SECRET'
-                },
-                {
-                    title: 'Authorize in ClaimKing',
-                    description: 'Enter credentials in ClaimKing Settings > Integrations > Zoho and authorize.',
-                    code: null
-                }
-            ]
-        },
-        pipedrive: {
-            icon: '🎯',
-            name: 'Pipedrive',
-            subtitle: 'Connect Pipedrive to ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Get API Token',
-                    description: 'In Pipedrive, go to Settings > Personal Preferences > API.',
-                    code: null
-                },
-                {
-                    title: 'Copy Your Token',
-                    description: 'Your personal API token is displayed. Copy it securely.',
-                    code: 'API Token: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-                },
-                {
-                    title: 'Configure Webhooks',
-                    description: 'Go to Tools > Webhooks and add ClaimKing webhook URL.',
-                    code: 'Webhook URL: https://app.claimking.ai/webhooks/pipedrive'
-                },
-                {
-                    title: 'Connect in ClaimKing',
-                    description: 'Enter your API token in ClaimKing Settings > Integrations > Pipedrive.',
-                    code: null
-                }
-            ]
-        },
-        monday: {
-            icon: '📅',
-            name: 'Monday.com',
-            subtitle: 'Integrate Monday.com with ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Access Admin Settings',
-                    description: 'Click your profile picture > Admin > API.',
-                    code: null
-                },
-                {
-                    title: 'Generate API Token',
-                    description: 'Click "Generate" to create a new API v2 token.',
-                    code: 'API Token: eyJhbGciOiJIUzI1NiJ9.xxxxx'
-                },
-                {
-                    title: 'Set Permissions',
-                    description: 'Ensure the token has read/write access to boards and items.',
-                    code: null
-                },
-                {
-                    title: 'Add to ClaimKing',
-                    description: 'Paste token in ClaimKing Settings > Integrations > Monday.com.',
-                    code: null
-                }
-            ]
-        },
-        clickup: {
-            icon: '🚀',
-            name: 'ClickUp',
-            subtitle: 'Connect ClickUp to ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Get Personal Token',
-                    description: 'Go to Settings > Apps > Generate Personal Token.',
-                    code: null
-                },
-                {
-                    title: 'Copy Token',
-                    description: 'Copy your personal API token.',
-                    code: 'Personal Token: pk_xxxxxxxxxx_xxxxxxxxxxxxxxxxxx'
-                },
-                {
-                    title: 'Find Workspace ID',
-                    description: 'Your Workspace ID is in the URL when viewing ClickUp.',
-                    code: 'Workspace ID: 1234567'
-                },
-                {
-                    title: 'Configure ClaimKing',
-                    description: 'Add token and workspace ID in ClaimKing Settings > Integrations > ClickUp.',
-                    code: null
-                }
-            ]
-        },
-        freshsales: {
-            icon: '🌿',
-            name: 'Freshsales',
-            subtitle: 'Set up Freshsales CRM integration',
-            steps: [
-                {
-                    title: 'Access API Settings',
-                    description: 'Go to Settings > API Settings in your Freshsales account.',
-                    code: null
-                },
-                {
-                    title: 'Copy API Key',
-                    description: 'Your API key is displayed in the settings.',
-                    code: 'API Key: xxxxxxxxxxxxxxxxxx'
-                },
-                {
-                    title: 'Note Your Domain',
-                    description: 'Your Freshsales domain is needed for connection.',
-                    code: 'Domain: yourcompany.freshsales.io'
-                },
-                {
-                    title: 'Connect to ClaimKing',
-                    description: 'Enter API key and domain in ClaimKing Settings > Integrations > Freshsales.',
-                    code: null
-                }
-            ]
-        },
-        jobber: {
-            icon: '🔨',
-            name: 'Jobber',
-            subtitle: 'Connect Jobber to ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Request API Access',
-                    description: 'Contact Jobber support to enable API access for your account.',
-                    code: null
-                },
-                {
-                    title: 'Create App in Developer Portal',
-                    description: 'Once approved, create a new app in developer.getjobber.com',
-                    code: 'Redirect URL: https://app.claimking.ai/auth/jobber/callback'
-                },
-                {
-                    title: 'Get OAuth Credentials',
-                    description: 'Copy your Client ID and Client Secret from the app settings.',
-                    code: 'Client ID: xxxxx\nClient Secret: xxxxx'
-                },
-                {
-                    title: 'Authorize in ClaimKing',
-                    description: 'Enter credentials in ClaimKing Settings > Integrations > Jobber and complete OAuth flow.',
-                    code: null
-                }
-            ]
-        },
-        acculynx: {
-            icon: '🏠',
-            name: 'AccuLynx',
-            subtitle: 'Integrate AccuLynx with ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Enable API Access',
-                    description: 'Contact AccuLynx support to enable API access for your account.',
-                    code: null
-                },
-                {
-                    title: 'Get API Credentials',
-                    description: 'AccuLynx will provide your API key and subdomain.',
-                    code: 'API Key: xxxxxxxxxx\nSubdomain: yourcompany'
-                },
-                {
-                    title: 'Configure Webhooks',
-                    description: 'Set up webhooks in AccuLynx for real-time updates.',
-                    code: 'Webhook URL: https://app.claimking.ai/webhooks/acculynx'
-                },
-                {
-                    title: 'Complete Setup',
-                    description: 'Enter credentials in ClaimKing Settings > Integrations > AccuLynx.',
-                    code: null
-                }
-            ]
-        },
-        jobprogress: {
-            icon: '📈',
-            name: 'JobProgress',
-            subtitle: 'Connect JobProgress to ClaimKing.AI',
-            steps: [
-                {
-                    title: 'Access Developer Settings',
-                    description: 'Go to Settings > Developer > API Keys in JobProgress.',
-                    code: null
-                },
-                {
-                    title: 'Create API Key',
-                    description: 'Click "Create New Key" and name it "ClaimKing Integration".',
-                    code: 'API Key: JP_xxxxxxxxxxxxxxxxxx'
-                },
-                {
-                    title: 'Set Permissions',
-                    description: 'Enable permissions for Jobs, Customers, and Financial data.',
-                    code: null
-                },
-                {
-                    title: 'Add to ClaimKing',
-                    description: 'Enter API key in ClaimKing Settings > Integrations > JobProgress.',
-                    code: null
-                }
-            ]
+    // Connect modal
+    const [connectFor, setConnectFor] = useState(null);   // catalogue entry
+    const [apiKey, setApiKey] = useState('');
+    const [connectionName, setConnectionName] = useState('');
+    const [connecting, setConnecting] = useState(false);
+
+    // ─── Load ─────────────────────────────────────────────────────────────
+    const reload = useCallback(async () => {
+        setLoading(true);
+        try {
+            // Connections + platform availability in parallel. Availability is
+            // best-effort — if the endpoint errors we just assume every OAuth
+            // CRM is unavailable and the card shows "Awaiting setup".
+            const [connRes, availRes] = await Promise.all([
+                axiosInstance.get('/crm/connections'),
+                axiosInstance.get('/crm/platform-availability', { suppressErrorToast: true })
+                    .catch(() => ({ data: {} })),
+            ]);
+            setConnections(connRes.data?.data ?? []);
+            setAvailability(availRes.data ?? {});
+        } catch {
+            /* axios toasts */
+        } finally {
+            setLoading(false);
         }
-    };
+    }, []);
 
-    const crms = [
-        { key: 'salesforce', icon: '☁️', name: 'Salesforce', tag: 'Popular' },
-        { key: 'hubspot', icon: '🔶', name: 'HubSpot', tag: 'Easy Setup' },
-        { key: 'zoho', icon: '📊', name: 'Zoho CRM', tag: 'Affordable' },
-        { key: 'pipedrive', icon: '🎯', name: 'Pipedrive', tag: 'Sales Focus' },
-        { key: 'monday', icon: '📅', name: 'Monday.com', tag: 'Visual' },
-        { key: 'clickup', icon: '🚀', name: 'ClickUp', tag: 'All-in-One' },
-        { key: 'freshsales', icon: '🌿', name: 'Freshsales', tag: 'AI Powered' },
-        { key: 'jobber', icon: '🔨', name: 'Jobber', tag: 'Field Service' },
-        { key: 'acculynx', icon: '🏠', name: 'AccuLynx', tag: 'Roofing' },
-        { key: 'jobprogress', icon: '📈', name: 'JobProgress', tag: 'Contractors' },
-    ];
+    useEffect(() => { reload(); }, [reload]);
 
-    const faqs = [
-        {
-            question: 'How long does the integration process take?',
-            answer: 'Most CRM integrations can be completed in 10-15 minutes. Simply follow our step-by-step guide and enter your API credentials. Our support team is available if you need assistance.'
-        },
-        {
-            question: 'Is my data secure during integration?',
-            answer: 'Absolutely. We use enterprise-grade encryption and OAuth 2.0 authentication for all CRM connections. Your data is transmitted securely and we never store your CRM passwords. All integrations comply with SOC 2 and industry standards.'
-        },
-        {
-            question: 'Can I connect multiple CRMs?',
-            answer: 'Yes! ClaimKing.AI supports multi-CRM integration. You can connect different CRMs for different teams or workflows. Each connection is managed separately in your settings.'
-        },
-        {
-            question: 'What data syncs between ClaimKing and my CRM?',
-            answer: 'ClaimKing.AI syncs client information, project details, estimates, communications, and documents. You can customize which data types to sync in your integration settings. All syncing happens in real-time or on your preferred schedule.'
-        },
-        {
-            question: 'What if my CRM isn\'t listed?',
-            answer: 'No problem! Use our AI assistant below or contact our support team. We can help you set up a custom integration using webhooks, Zapier, or our REST API. Most CRMs can be connected even if they\'re not in our pre-configured list.'
+    // ─── Read query params (set by OAuth callback redirect) ───────────────
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const connected = url.searchParams.get('connected');
+        const error = url.searchParams.get('error');
+        const message = url.searchParams.get('message');
+        if (connected) {
+            toast.success(`Connected ${connected} successfully.`);
+            reload();
         }
-    ];
+        if (error) {
+            toast.error(`${error} connection failed: ${message ?? 'Unknown error'}`);
+        }
+        if (connected || error) {
+            // Clean the URL so a refresh doesn't re-fire the toast.
+            url.searchParams.delete('connected');
+            url.searchParams.delete('error');
+            url.searchParams.delete('message');
+            url.searchParams.delete('connection_id');
+            window.history.replaceState({}, '', url.toString());
+        }
+    }, [reload]);
 
-    const handleCRMClick = (crmKey) => {
-        setSelectedCRM(crmKey);
-        setShowCustomCRM(false);
-        setAiResponse(null);
-    };
+    // Lookup: crm_type → first active connection (we cap at one active per type).
+    const activeByType = useMemo(() => {
+        const map = {};
+        for (const c of connections) {
+            if (c.status === 'connected' || c.status === 'pending' || c.status === 'rate_limited') {
+                map[c.crm_type] = c;
+            }
+        }
+        return map;
+    }, [connections]);
 
-    const handleGetAIHelp = () => {
-        if (!customCRMName.trim()) {
-            alert('Please enter your CRM name');
+    // ─── Connect handlers ────────────────────────────────────────────────
+    const openConnect = (cat) => {
+        if (activeByType[cat.key]) {
+            // Already connected — go straight to the detail page.
+            router.push(`/dashboard/crm-sync/${activeByType[cat.key].id}`);
             return;
         }
-        
-        const crmNameLower = customCRMName.toLowerCase().replace(/\s+/g, '');
-        setAiResponse({
-            name: customCRMName,
-            steps: [
-                {
-                    title: 'Locate API Settings',
-                    description: `In ${customCRMName}, navigate to Settings or Administration panel. Look for "API", "Integrations", or "Developer" section.`,
-                    code: null
-                },
-                {
-                    title: 'Generate API Credentials',
-                    description: 'Create a new API key or OAuth application. You\'ll need read/write access to contacts, companies, and deals.',
-                    code: `API Endpoint: https://api.${crmNameLower}.com/v1/`
-                },
-                {
-                    title: 'Configure Webhooks',
-                    description: 'Set up webhooks for real-time data sync. Use this URL for webhook callbacks:',
-                    code: 'https://app.claimking.ai/webhooks/custom'
-                },
-                {
-                    title: 'Test & Connect',
-                    description: 'Use our API testing tool in ClaimKing Settings > Integrations > Custom CRM to verify your connection.',
-                    code: null
-                }
-            ]
-        });
-    };
-
-    const toggleFAQ = (index) => {
-        setOpenFAQs(prev => ({
-            ...prev,
-            [index]: !prev[index]
-        }));
-    };
-
-    const sendChatMessage = () => {
-        if (!chatInput.trim()) return;
-
-        const userMessage = { type: 'user', text: chatInput };
-        setChatMessages(prev => [...prev, userMessage]);
-        setChatInput('');
-
-        setTimeout(() => {
-            let response = "I can help you with that! ";
-            
-            if (chatInput.toLowerCase().includes('api')) {
-                response += "To find your API key, check the Settings or Developer section of your CRM. Most CRMs have it under 'Integrations' or 'API Access'.";
-            } else if (chatInput.toLowerCase().includes('webhook')) {
-                response += "For webhooks, you'll need to add this URL to your CRM: https://app.claimking.ai/webhooks/custom. This allows real-time data syncing.";
-            } else if (chatInput.toLowerCase().includes('error') || chatInput.toLowerCase().includes('problem')) {
-                response += "Let me help troubleshoot. What error message are you seeing? Common issues include incorrect API keys or insufficient permissions.";
-            } else {
-                response += "Could you tell me which CRM you're using and what specific help you need with the integration?";
-            }
-            
-            setChatMessages(prev => [...prev, { type: 'bot', text: response }]);
-        }, 1000);
-    };
-
-    useEffect(() => {
-        if (chatMessagesRef.current) {
-            chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        if (!SUPPORTED_FOR_PUSH.has(cat.key)) {
+            toast.info(`${cat.name} adapter is in our roadmap.`);
+            return;
         }
-    }, [chatMessages]);
+        // OAuth CRMs need ClaimKing's platform credentials. Block here with
+        // a friendly message rather than letting the OAuth start and 500.
+        if (cat.auth === 'oauth' && availability[cat.key] === false) {
+            toast.error(
+                `${cat.name} isn't ready yet — our team is finalising the integration. Check back soon.`,
+            );
+            return;
+        }
+        setConnectFor(cat);
+        setApiKey('');
+        setConnectionName(cat.name);
+    };
 
-    const currentIntegration = selectedCRM ? integrations[selectedCRM] : null;
+    const closeConnect = () => {
+        if (connecting) return;
+        setConnectFor(null);
+        setApiKey('');
+        setConnectionName('');
+    };
 
+    const submitApiKey = async () => {
+        if (!connectFor) return;
+        if (!apiKey.trim()) {
+            toast.error('Please paste your API key');
+            return;
+        }
+        setConnecting(true);
+        try {
+            const res = await axiosInstance.post('/crm/connections', {
+                crm_type: connectFor.key,
+                connection_name: connectionName.trim() || connectFor.name,
+                api_key: apiKey.trim(),
+            });
+            toast.success(`${connectFor.name} connected.`);
+            closeConnect();
+            await reload();
+            if (res.data?.id) router.push(`/dashboard/crm-sync/${res.data.id}`);
+        } catch {
+            /* axios toasts */
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const startOAuth = async () => {
+        if (!connectFor) return;
+        setConnecting(true);
+        try {
+            // The /authorize endpoint returns a 302 redirect — axios resolves the
+            // final URL in res.request.responseURL. Easier path: do a full nav.
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+            // We still need an auth header on /authorize, so call it ourselves to
+            // resolve the upstream URL, then redirect the browser there.
+            const res = await axiosInstance.get(`/crm/oauth/${connectFor.key}/authorize`, {
+                maxRedirects: 0,
+                validateStatus: (s) => s >= 200 && s < 400,
+            });
+            const redirectUrl = res.data?.url ?? res.headers?.location;
+            if (!redirectUrl) {
+                toast.error('OAuth flow could not start — check superadmin API settings.');
+                return;
+            }
+            window.location.href = redirectUrl;
+        } catch (err) {
+            const msg = err?.response?.data?.message || err?.message;
+            toast.error(msg || 'Could not start OAuth flow');
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const disconnect = async (conn) => {
+        if (!window.confirm(`Disconnect ${conn.connection_name}? Stored credentials will be wiped.`)) return;
+        try {
+            await axiosInstance.delete(`/crm/connections/${conn.id}`);
+            toast.success(`${conn.connection_name} disconnected`);
+            reload();
+        } catch {
+            /* axios toasts */
+        }
+    };
+
+    // ─── Render ──────────────────────────────────────────────────────────
     return (
-        <div>
-            {/* Top Header */}
-            <div className="crm-sync-header">
-                <div className="crm-sync-header-container">
-                    <div className="crm-sync-logo-section">
-                        <div className="crm-sync-logo-text">CRM Sync</div>
-                    </div>
-                    <div className="crm-sync-support-info">
-                        <div className="crm-sync-support-item">
-                            <svg stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                            </svg>
-                            <strong>Support:</strong> 1-800-CLAIMKING
-                        </div>
-                        <div className="crm-sync-support-item">
-                            <svg stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
-                            <strong>Email:</strong> support@claimking.ai
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="main-container">
-            {/* Hero Section */}
+        <div className="main-container">
             <div className="hero-section">
-                <div className="hero-badge">Easy Setup</div>
-                <h1 className="hero-title">Connect Your CRM to ClaimKing.AI</h1>
+                <div className="hero-badge">CRM Sync</div>
+                <h1 className="hero-title">Connect your CRM to ClaimKing.AI</h1>
                 <p className="hero-subtitle">
-                    Seamlessly integrate ClaimKing.AI with your existing CRM system. Choose from our pre-configured integrations or use our AI assistant to help set up any CRM.
+                    ClaimKing isn't a CRM — it sits beside the one you already use and keeps
+                    contacts, claims, and estimates in sync.
                 </p>
             </div>
 
-            {/* CRM Selection */}
+            {/* Current connections */}
+            {connections.length > 0 && (
+                <div className="crm-selection">
+                    <div className="section-header">
+                        <h2 className="section-title">Your connections</h2>
+                        <p className="section-description">Click a connection to view sync settings, field mapping, and sync log.</p>
+                    </div>
+                    <div className="conn-list">
+                        {connections.map((c) => {
+                            const cat = CRM_CATALOGUE.find(x => x.key === c.crm_type);
+                            return (
+                                <div key={c.id} className="conn-card" onClick={() => router.push(`/dashboard/crm-sync/${c.id}`)}>
+                                    <div className="conn-card-head">
+                                        <span className="conn-card-icon">{cat?.icon ?? '🔌'}</span>
+                                        <div style={{ flex: 1 }}>
+                                            <div className="conn-card-name">{c.connection_name}</div>
+                                            <div className="conn-card-sub">{cat?.name ?? c.crm_type}</div>
+                                        </div>
+                                        <span className={`conn-status conn-status-${c.status}`}>{c.status.replace('_', ' ')}</span>
+                                    </div>
+                                    <div className="conn-card-foot">
+                                        <span>Last sync: {c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : '—'}</span>
+                                        <button
+                                            type="button"
+                                            className="conn-disconnect"
+                                            onClick={(e) => { e.stopPropagation(); disconnect(c); }}
+                                            disabled={c.status === 'disconnected'}
+                                        >Disconnect</button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* CRM catalogue */}
             <div className="crm-selection">
                 <div className="section-header">
-                    <h2 className="section-title">Select Your CRM System</h2>
-                    <p className="section-description">Choose from our top 10 supported CRMs or select "Other" for custom integration help</p>
+                    <h2 className="section-title">Pick a CRM</h2>
+                    <p className="section-description">Choose from our supported integrations. Most setups take 2–5 minutes.</p>
                 </div>
 
-                <div className="crm-grid">
-                    {crms.map((crm) => (
-                        <div 
-                            key={crm.key}
-                            className={`crm-card ${selectedCRM === crm.key ? 'selected' : ''}`}
-                            onClick={() => handleCRMClick(crm.key)}
-                        >
-                            <div className="crm-icon">{crm.icon}</div>
-                            <div className="crm-name">{crm.name}</div>
-                            <div className="crm-tag">{crm.tag}</div>
-                        </div>
-                    ))}
-                    <div className="other-crm-btn" onClick={() => {
-                        setShowCustomCRM(true);
-                        setSelectedCRM(null);
-                        setAiResponse(null);
-                    }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Other CRM System
+                {loading ? (
+                    <div style={{ color: '#6b7280', padding: '1rem' }}>Loading…</div>
+                ) : (
+                    <div className="crm-grid">
+                        {CRM_CATALOGUE.map((cat) => {
+                            const active = activeByType[cat.key];
+                            const supported = SUPPORTED_FOR_PUSH.has(cat.key);
+                            const platformReady = availability[cat.key] !== false; // undefined → assume ready
+                            const isAwaitingSetup = supported && cat.auth === 'oauth' && !platformReady;
+                            const isComingSoon = !supported;
+
+                            let tag = cat.tag;
+                            let className = 'crm-card';
+                            if (active) {
+                                tag = 'Connected';
+                                className += ' selected';
+                            } else if (isAwaitingSetup) {
+                                tag = 'Awaiting setup';
+                                className += ' crm-card-disabled';
+                            } else if (isComingSoon) {
+                                tag = 'Coming soon';
+                                className += ' crm-card-disabled';
+                            }
+
+                            return (
+                                <div
+                                    key={cat.key}
+                                    className={className}
+                                    onClick={() => openConnect(cat)}
+                                    title={isAwaitingSetup
+                                        ? `${cat.name} integration is pending platform setup`
+                                        : isComingSoon
+                                        ? `${cat.name} adapter is on our roadmap`
+                                        : `Connect ${cat.name}`}
+                                >
+                                    <div className="crm-icon">{cat.icon}</div>
+                                    <div className="crm-name">{cat.name}</div>
+                                    <div className="crm-tag">{tag}</div>
+                                </div>
+                            );
+                        })}
                     </div>
-                </div>
+                )}
             </div>
 
-            {/* Integration Instructions */}
-            {currentIntegration && (
-                <div className="integration-section active">
-                    <div className="integration-header">
-                        <div className="integration-icon">{currentIntegration.icon}</div>
-                        <div className="integration-title">
-                            <h3>{currentIntegration.name} Integration</h3>
-                            <p>{currentIntegration.subtitle}</p>
+            {/* Connect modal */}
+            {connectFor && (
+                <div className="crm-modal-overlay" onClick={closeConnect}>
+                    <div className="crm-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="crm-modal-head">
+                            <span className="crm-modal-icon">{connectFor.icon}</span>
+                            <div style={{ flex: 1 }}>
+                                <h3>Connect {connectFor.name}</h3>
+                                <p>{connectFor.auth === 'oauth'
+                                    ? `You'll be redirected to ${connectFor.name} to authorise ClaimKing.AI.`
+                                    : `Paste the API key from your ${connectFor.name} settings.`}
+                                </p>
+                            </div>
+                            <button type="button" className="crm-modal-close" onClick={closeConnect} disabled={connecting}>×</button>
                         </div>
-                    </div>
-                    <div className="steps-container">
-                        {currentIntegration.steps.map((step, index) => (
-                            <div key={index} className="step">
-                                <div className="step-number">{index + 1}</div>
-                                <div className="step-content">
-                                    <div className="step-title">{step.title}</div>
-                                    <div className="step-description">{step.description}</div>
-                                    {step.code && <div className="code-snippet">{step.code}</div>}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
 
-            {/* Custom CRM Section */}
-            {showCustomCRM && (
-                <div className="custom-crm-section active">
-                    <div className="section-header">
-                        <h2 className="section-title">Tell Us About Your CRM</h2>
-                        <p className="section-description">Enter your CRM name and our AI will provide custom integration instructions</p>
-                    </div>
+                        <div className="crm-modal-body">
+                            {connectFor.auth === 'api_key' && (
+                                <>
+                                    <label className="crm-field">
+                                        <span>Connection name</span>
+                                        <input
+                                            type="text"
+                                            value={connectionName}
+                                            onChange={(e) => setConnectionName(e.target.value)}
+                                            placeholder={connectFor.name}
+                                        />
+                                    </label>
+                                    <label className="crm-field">
+                                        <span>API key</span>
+                                        <input
+                                            type="password"
+                                            value={apiKey}
+                                            onChange={(e) => setApiKey(e.target.value)}
+                                            placeholder="Paste your API key"
+                                            autoComplete="off"
+                                        />
+                                    </label>
+                                    <p className="crm-hint">
+                                        Find this in {connectFor.name} → Settings → API. Stored encrypted at rest.
+                                        Docs: <a href={`https://${connectFor.help}`} target="_blank" rel="noreferrer">{connectFor.help}</a>
+                                    </p>
+                                </>
+                            )}
+                            {connectFor.auth === 'oauth' && (
+                                <p className="crm-hint">
+                                    Clicking <strong>Continue to {connectFor.name}</strong> opens {connectFor.name}'s login page.
+                                    After you approve, we'll bring you back here and your sync will be ready.
+                                </p>
+                            )}
+                        </div>
 
-                    <div className="custom-crm-input-group">
-                        <input 
-                            type="text" 
-                            className="custom-crm-input" 
-                            placeholder="Enter your CRM name (e.g., Microsoft Dynamics, SugarCRM)"
-                            value={customCRMName}
-                            onChange={(e) => setCustomCRMName(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleGetAIHelp()}
-                        />
-                        <button className="submit-btn" onClick={handleGetAIHelp}>Get AI Help</button>
-                    </div>
-
-                    {aiResponse && (
-                        <div className="integration-section active" style={{ marginTop: '2rem' }}>
-                            <div className="integration-header">
-                                <div className="integration-icon">🤖</div>
-                                <div className="integration-title">
-                                    <h3>{aiResponse.name} Integration Guide</h3>
-                                    <p>AI-generated instructions for connecting {aiResponse.name}</p>
-                                </div>
-                            </div>
-                            <div className="steps-container">
-                                {aiResponse.steps.map((step, index) => (
-                                    <div key={index} className="step">
-                                        <div className="step-number">{index + 1}</div>
-                                        <div className="step-content">
-                                            <div className="step-title">{step.title}</div>
-                                            <div className="step-description">{step.description}</div>
-                                            {step.code && <div className="code-snippet">{step.code}</div>}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={{ marginTop: '2rem', padding: '1rem', background: '#f9fafb', borderRadius: '8px' }}>
-                                <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Need more help? Our AI assistant can provide specific configuration details.</p>
-                                <button className="chat-btn" onClick={() => setShowChat(true)} style={{ padding: '0.75rem 1.5rem', fontSize: '1rem' }}>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                                    </svg>
-                                    Chat with AI Assistant
+                        <div className="crm-modal-foot">
+                            <button type="button" className="crm-btn-secondary" onClick={closeConnect} disabled={connecting}>Cancel</button>
+                            {connectFor.auth === 'api_key' ? (
+                                <button type="button" className="crm-btn-primary" onClick={submitApiKey} disabled={connecting}>
+                                    {connecting ? 'Connecting…' : 'Connect'}
                                 </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* FAQ Section */}
-            <div className="faq-section">
-                <div className="section-header">
-                    <h2 className="section-title">Frequently Asked Questions</h2>
-                </div>
-
-                {faqs.map((faq, index) => (
-                    <div key={index} className={`faq-item ${openFAQs[index] ? 'active' : ''}`} onClick={() => toggleFAQ(index)}>
-                        <div className="faq-question">
-                            {faq.question}
-                            <span className="faq-toggle">+</span>
-                        </div>
-                        <div className="faq-answer">{faq.answer}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* AI Chat Section */}
-            <div className="ai-chat-section">
-                <div className="ai-chat-content">
-                    <div className="ai-badge">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M21.928 11.607c-.202-.488-.635-.605-.928-.633V8c0-1.103-.897-2-2-2h-6V4.61c.305-.274.5-.668.5-1.11a1.5 1.5 0 0 0-3 0c0 .442.195.836.5 1.11V6H5c-1.103 0-2 .897-2 2v2.997l-.082.006A1 1 0 0 0 1.99 12v2a1 1 0 0 0 1 1H3v5c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2v-5a1 1 0 0 0 1-1v-1.938a1.006 1.006 0 0 0-.072-.455zM5 20V8h14l.001 3.996L19 12v2l.001.005.001 5.995H5z"/>
-                            <ellipse cx="8.5" cy="12" rx="1.5" ry="2"/>
-                            <ellipse cx="15.5" cy="12" rx="1.5" ry="2"/>
-                            <path d="M8 16h8v2H8z"/>
-                        </svg>
-                        AI Powered Support
-                    </div>
-                    <h2 className="ai-chat-title">Need Help Connecting Your CRM?</h2>
-                    <p className="ai-chat-description">
-                        Our AI assistant can guide you through any CRM integration, provide custom API configurations, and troubleshoot connection issues.
-                    </p>
-                    <button className="chat-btn" onClick={() => setShowChat(true)}>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                        </svg>
-                        Click Here to Ask AI How to Connect
-                    </button>
-                </div>
-            </div>
-
-            {/* Chat Modal */}
-            {showChat && (
-                <div className="chat-modal active">
-                    <div className="chat-header">
-                        <div className="chat-title">ClaimKing AI Assistant</div>
-                        <button className="close-chat" onClick={() => setShowChat(false)}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
-                    <div className="chat-messages" ref={chatMessagesRef}>
-                        {chatMessages.map((msg, index) => (
-                            <div key={index} className={`message ${msg.type}`}>
-                                {msg.text}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="chat-input-container">
-                        <div className="chat-input-wrapper">
-                            <input 
-                                type="text" 
-                                className="chat-input" 
-                                placeholder="Type your message..."
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                            />
-                            <button className="send-btn" onClick={sendChatMessage}>Send</button>
+                            ) : (
+                                <button type="button" className="crm-btn-primary" onClick={startOAuth} disabled={connecting}>
+                                    {connecting ? 'Redirecting…' : `Continue to ${connectFor.name}`}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
             )}
-            </div>
         </div>
     );
 };
 
 export default CRMSync;
-

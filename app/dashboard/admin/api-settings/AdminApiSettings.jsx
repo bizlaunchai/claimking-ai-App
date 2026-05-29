@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     Cpu, Image as ImageIcon, HardDrive, Shield, Database, Loader2,
-    CheckCircle2, XCircle, CircleDot, Server, KeyRound,
+    CheckCircle2, XCircle, CircleDot, Server, KeyRound, Link as LinkIcon, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '../../../../lib/axiosInstance.js';
@@ -68,6 +68,44 @@ const PROVIDER_META = {
     replicate:{ label: 'Replicate',       hint: 'Optional FLUX/Stable Diffusion image edits.', placeholder: 'r8_...' },
 };
 
+/**
+ * Platform-level OAuth apps ClaimKing registers ONCE with each CRM provider.
+ * Customers don't see these — they just click "Connect AccuLynx" and the
+ * OAuth dance uses these credentials behind the scenes.
+ */
+const CRM_OAUTH_PROVIDERS = ['acculynx_oauth', 'hubspot_oauth', 'salesforce_oauth', 'zoho_oauth'];
+
+const CRM_OAUTH_META = {
+    acculynx_oauth: {
+        label: 'AccuLynx',
+        crmKey: 'acculynx',
+        icon: '🏠',
+        hint: 'Register at developer.acculynx.com. Scope: read_write.',
+        docs: 'https://developer.acculynx.com/',
+    },
+    hubspot_oauth: {
+        label: 'HubSpot',
+        crmKey: 'hubspot',
+        icon: '🔶',
+        hint: 'Create a Public App at developers.hubspot.com. Scopes: crm.objects.contacts.* + crm.objects.deals.*',
+        docs: 'https://developers.hubspot.com/docs/api/creating-an-app',
+    },
+    salesforce_oauth: {
+        label: 'Salesforce',
+        crmKey: 'salesforce',
+        icon: '☁️',
+        hint: 'Create a Connected App in Salesforce → Setup → App Manager. Scopes: api, refresh_token, offline_access.',
+        docs: 'https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_oauth_and_connected_apps.htm',
+    },
+    zoho_oauth: {
+        label: 'Zoho CRM',
+        crmKey: 'zoho',
+        icon: '📊',
+        hint: 'Register at api-console.zoho.com. Scopes: ZohoCRM.modules.ALL, ZohoCRM.settings.ALL.',
+        docs: 'https://api-console.zoho.com/',
+    },
+};
+
 const StatusBadge = ({ configured, loading }) => {
     if (loading) return <span className="status-pill pending"><Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> Checking</span>;
     if (configured) return <span className="status-pill connected"><CheckCircle2 size={10} /> Configured</span>;
@@ -107,6 +145,8 @@ export default function AdminApiSettings() {
     // Local input buffers (cleared after a successful save)
     const [secrets, setSecrets] = useState({}); // { openai: 'sk-...', ... }
     const [s3, setS3] = useState({ accessKeyId: '', secretAccessKey: '', region: '', bucketName: '' });
+    /** Per-OAuth-provider { clientId, clientSecret } drafts. */
+    const [oauthApps, setOauthApps] = useState({}); // { acculynx_oauth: { clientId, clientSecret }, ... }
 
     const refresh = async () => {
         setLoading(true);
@@ -181,6 +221,45 @@ export default function AdminApiSettings() {
             toast.error(extractError(e));
         } finally {
             setBusy(null);
+        }
+    };
+
+    /**
+     * Persist a CRM OAuth app (client_id + client_secret) against
+     * `global_api_keys`. Backend re-uses the AWS pattern: `access_key_id`
+     * column = encrypted client_id, `secret_key` = encrypted client_secret.
+     */
+    const saveOAuthApp = async (provider) => {
+        const draft = oauthApps[provider] || {};
+        const clientId = (draft.clientId || '').trim();
+        const clientSecret = (draft.clientSecret || '').trim();
+        if (!clientId || !clientSecret) {
+            toast.error('Both Client ID and Client Secret are required');
+            return;
+        }
+        setBusy(provider);
+        try {
+            await axiosInstance.post(`/admin/global-api-keys/oauth-app/${provider}`, { clientId, clientSecret });
+            toast.success(`${CRM_OAUTH_META[provider].label} OAuth app saved`);
+            // Clear secret field but keep client_id visible so the admin can
+            // see what's stored (the masked placeholder will show on next refresh).
+            setOauthApps((s) => ({ ...s, [provider]: { clientId: '', clientSecret: '' } }));
+            await refresh();
+        } catch (e) {
+            toast.error(extractError(e));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const copyCallbackUrl = async (crmKey) => {
+        const base = process.env.NEXT_PUBLIC_API_URL || '';
+        const url = `${String(base).replace(/\/$/, '')}/crm/oauth/${crmKey}/callback`;
+        try {
+            await navigator.clipboard.writeText(url);
+            toast.success('Callback URL copied');
+        } catch {
+            toast.error('Could not copy — select manually');
         }
     };
 
@@ -337,8 +416,138 @@ export default function AdminApiSettings() {
                     </div>
                 </Card>
 
+                {/* CRM OAuth Apps — platform-level credentials for OAuth-based CRMs */}
+                <Card
+                    accent="#FDB813" iconBg="#fffbeb" icon={LinkIcon} title="CRM OAuth Apps"
+                    badge={<StatusBadge loading={loading}
+                        configured={CRM_OAUTH_PROVIDERS.every((k) => providerStatus(k).configured)} />}
+                >
+                    <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
+                        Each OAuth-based CRM requires ClaimKing.AI to register ONCE as an "app"
+                        with the provider. Customers don't see these — they just click
+                        "Connect" on their CRM page and the OAuth flow uses these credentials.
+                        Until configured here, the customer-facing connect button stays disabled.
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                        {CRM_OAUTH_PROVIDERS.map((key) => {
+                            const meta = CRM_OAUTH_META[key];
+                            const status = providerStatus(key);
+                            const draft = oauthApps[key] || {};
+                            return (
+                                <OAuthAppEditor
+                                    key={key}
+                                    meta={meta}
+                                    status={status}
+                                    clientId={draft.clientId || ''}
+                                    clientSecret={draft.clientSecret || ''}
+                                    onChange={(patch) =>
+                                        setOauthApps((s) => ({ ...s, [key]: { ...draft, ...patch } }))
+                                    }
+                                    onSave={() => saveOAuthApp(key)}
+                                    onClear={() => clearProvider(key)}
+                                    onToggle={() => toggleActive(key, status.is_active)}
+                                    onCopyCallback={() => copyCallbackUrl(meta.crmKey)}
+                                    disabled={isEnvOnly || busy === key}
+                                    busy={busy === key}
+                                />
+                            );
+                        })}
+                    </div>
+                </Card>
+
                 <div style={{ height: 40 }} />
             </div>
+        </div>
+    );
+}
+
+function OAuthAppEditor({
+    meta, status, clientId, clientSecret, onChange,
+    onSave, onClear, onToggle, onCopyCallback, disabled, busy,
+}) {
+    return (
+        <div style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: 16, background: '#fafafa' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ fontSize: 22 }}>{meta.icon}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#1f2937', flex: 1 }}>{meta.label}</span>
+                <StatusBadge configured={status.configured} />
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, lineHeight: 1.5 }}>
+                {meta.hint}{' '}
+                <a href={meta.docs} target="_blank" rel="noreferrer" style={{ color: '#4f46e5', fontWeight: 600 }}>
+                    Docs ↗
+                </a>
+            </div>
+
+            {/* Callback URL — what the admin must paste in the CRM dev portal */}
+            <div style={{
+                display: 'flex', gap: 8, alignItems: 'center',
+                background: '#1f2937', borderRadius: 6, padding: '8px 10px', marginBottom: 12,
+            }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#FDB813', letterSpacing: 0.5, flexShrink: 0 }}>
+                    CALLBACK URL
+                </span>
+                <code className="mono" style={{
+                    flex: 1, fontSize: 12, color: '#FDB813', overflow: 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                    {(process.env.NEXT_PUBLIC_API_URL || '<API_URL>').replace(/\/$/, '')}/crm/oauth/{meta.crmKey}/callback
+                </code>
+                <button
+                    type="button"
+                    onClick={onCopyCallback}
+                    className="btn btn-ghost"
+                    style={{ padding: '4px 8px', fontSize: 11, background: '#374151', color: '#fbbf24', border: 'none' }}
+                    title="Copy"
+                >
+                    <Copy size={12} /> Copy
+                </button>
+            </div>
+
+            <div className="grid-simple">
+                <F label="Client ID">
+                    <input
+                        className="input mono"
+                        placeholder={status.configured ? '•••••• Saved — enter to replace' : 'e.g. acc_app_xxxxx'}
+                        value={clientId}
+                        onChange={(e) => onChange({ clientId: e.target.value })}
+                        disabled={disabled}
+                    />
+                </F>
+                <F label="Client Secret">
+                    <input
+                        className="input mono"
+                        type="password"
+                        placeholder={status.configured ? '••••••' : ''}
+                        value={clientSecret}
+                        onChange={(e) => onChange({ clientSecret: e.target.value })}
+                        disabled={disabled}
+                    />
+                </F>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                <button className="btn btn-indigo" onClick={onSave} disabled={disabled}>
+                    {busy && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                    {status.configured ? 'Update' : 'Save'}
+                </button>
+                {status.configured && (
+                    <>
+                        <button className="btn btn-ghost" onClick={onToggle} disabled={disabled}>
+                            {status.is_active ? 'Disable' : 'Enable'}
+                        </button>
+                        <button className="btn btn-ghost" onClick={onClear} disabled={disabled}>
+                            Remove
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {!status.is_active && status.configured && (
+                <div className="err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e', marginTop: 12 }}>
+                    <XCircle size={14} /> Disabled — customers cannot connect {meta.label} until you enable it.
+                </div>
+            )}
         </div>
     );
 }
