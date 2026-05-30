@@ -786,21 +786,138 @@
 /*  Phase CRM-5 — backend-wired connect flow + detail page      */
 /* ============================================================ */
 
-/* Disabled / pending state for catalogue cards (CRM-A2) */
-.crm-card.crm-card-disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    background: #f3f4f6;
+/* ─── Skeleton loader for the catalogue grid ────────────────── */
+
+@keyframes crm-shimmer {
+    0%   { background-position: -480px 0; }
+    100% { background-position: 480px 0; }
 }
-.crm-card.crm-card-disabled:hover {
+@keyframes crm-pulse {
+    0%, 100% { opacity: 0.7; }
+    50%      { opacity: 1; }
+}
+
+.crm-card-skeleton {
+    cursor: default;
+    pointer-events: none;
+    border-color: #f1f5f9;
+    background: #fafbfc;
+    animation: crm-pulse 1.8s ease-in-out infinite;
+}
+.crm-card-skeleton:hover {
     transform: none;
     box-shadow: none;
-    border-color: #e5e7eb;
-    background: #f3f4f6;
+    border-color: #f1f5f9;
+    background: #fafbfc;
 }
-.crm-card.crm-card-disabled .crm-tag {
-    background: #e5e7eb;
-    color: #6b7280;
+
+/* Shimmer base — applied to every skeleton element */
+.crm-card-skeleton .skeleton-icon,
+.crm-card-skeleton .skeleton-line {
+    background: linear-gradient(
+        90deg,
+        #eef2f6 0%,
+        #f8fafc 40%,
+        #ffffff 50%,
+        #f8fafc 60%,
+        #eef2f6 100%
+    );
+    background-size: 480px 100%;
+    animation: crm-shimmer 1.5s linear infinite;
+    border-radius: 6px;
+}
+
+.crm-card-skeleton .skeleton-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    margin: 0 auto 0.75rem;
+}
+.crm-card-skeleton .skeleton-line {
+    height: 12px;
+    margin: 0.5rem auto;
+}
+.crm-card-skeleton .skeleton-line-name { width: 70%; height: 14px; }
+.crm-card-skeleton .skeleton-line-tag  { width: 45%; height: 10px; opacity: 0.7; }
+
+/* ─── CRM-A2 — distinct visual states ──────────────────────── */
+
+/* Common: card needs relative positioning for the corner ribbon */
+.crm-card { position: relative; overflow: hidden; }
+
+/* "Awaiting setup" — amber/gold theme (admin needs to set creds) */
+.crm-card.crm-card-awaiting {
+    background: repeating-linear-gradient(
+        45deg,
+        #fffbeb 0px, #fffbeb 8px,
+        #fef3c7 8px, #fef3c7 14px
+    );
+    border-color: #fcd34d;
+    cursor: pointer;
+}
+.crm-card.crm-card-awaiting:hover {
+    border-color: #f59e0b;
+    background: repeating-linear-gradient(
+        45deg,
+        #fef3c7 0px, #fef3c7 8px,
+        #fde68a 8px, #fde68a 14px
+    );
+    transform: translateY(-2px);
+}
+
+/* "Coming soon" — muted slate / lock-style theme */
+.crm-card.crm-card-soon {
+    background: repeating-linear-gradient(
+        135deg,
+        #f1f5f9 0px, #f1f5f9 10px,
+        #e2e8f0 10px, #e2e8f0 16px
+    );
+    border-color: #cbd5e1;
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+.crm-card.crm-card-soon:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #cbd5e1;
+}
+.crm-card.crm-card-soon .crm-icon { filter: grayscale(0.5); }
+
+/* Tag pills — color-coded */
+.crm-tag.crm-tag-connected {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+.crm-tag.crm-tag-awaiting {
+    background: #f59e0b;
+    color: white;
+    font-weight: 700;
+}
+.crm-tag.crm-tag-soon {
+    background: #475569;
+    color: white;
+    font-weight: 700;
+}
+
+/* Corner ribbons — eye-catching diagonal label */
+.crm-corner-ribbon {
+    position: absolute;
+    top: 12px;
+    right: -28px;
+    transform: rotate(45deg);
+    padding: 3px 32px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: white;
+    z-index: 1;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.crm-corner-awaiting {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.crm-corner-soon {
+    background: linear-gradient(135deg, #475569, #334155);
 }
 
 .conn-list {

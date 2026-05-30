@@ -722,13 +722,26 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
 
                             {canAccess('manage_api_keys') && (
                                 <div className="nav-item">
-                                    <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname.startsWith('/dashboard/admin/api-settings') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
+                                    <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname === '/dashboard/admin/api-settings' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
                                         <span className="nav-icon">
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M12.65 10A6 6 0 1 0 7 16h5v3a1 1 0 0 0 1 1h2v2h4v-4h-3.35A6 6 0 0 0 12.65 10zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
                                             </svg>
                                         </span>
                                         <span className="nav-text">API Settings</span>
+                                    </Link>
+                                </div>
+                            )}
+
+                            {canAccess('manage_api_keys') && (
+                                <div className="nav-item">
+                                    <Link href="/dashboard/admin/crm-oauth" className={`nav-link ${pathname.startsWith('/dashboard/admin/crm-oauth') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="CRM OAuth Apps">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M10.59 13.41c.41.39.41 1.03 0 1.42-.39.39-1.03.39-1.42 0a5.003 5.003 0 0 1 0-7.07l3.54-3.54a5.003 5.003 0 0 1 7.07 0 5.003 5.003 0 0 1 0 7.07l-1.49 1.49c.01-.82-.12-1.64-.4-2.42l.47-.48a2.982 2.982 0 0 0 0-4.24 2.982 2.982 0 0 0-4.24 0l-3.53 3.53a2.982 2.982 0 0 0 0 4.24zm2.82-4.24c.39-.39 1.03-.39 1.42 0a5.003 5.003 0 0 1 0 7.07l-3.54 3.54a5.003 5.003 0 0 1-7.07 0 5.003 5.003 0 0 1 0-7.07l1.49-1.49c-.01.82.12 1.64.4 2.43l-.47.47a2.982 2.982 0 0 0 0 4.24 2.982 2.982 0 0 0 4.24 0l3.53-3.53a2.982 2.982 0 0 0 0-4.24.973.973 0 0 1 0-1.42z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">CRM OAuth Apps</span>
                                     </Link>
                                 </div>
                             )}
