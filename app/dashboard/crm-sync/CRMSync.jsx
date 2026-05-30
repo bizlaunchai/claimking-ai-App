@@ -257,7 +257,17 @@ const CRMSync = () => {
                 </div>
 
                 {loading ? (
-                    <div style={{ color: '#6b7280', padding: '1rem' }}>Loading…</div>
+                    <div className="crm-grid">
+                        {/* Skeleton placeholders match the catalogue length so the layout
+                            doesn't jump when real data lands. */}
+                        {CRM_CATALOGUE.map((cat) => (
+                            <div key={cat.key} className="crm-card crm-card-skeleton" aria-hidden="true">
+                                <div className="skeleton-icon" />
+                                <div className="skeleton-line skeleton-line-name" />
+                                <div className="skeleton-line skeleton-line-tag" />
+                            </div>
+                        ))}
+                    </div>
                 ) : (
                     <div className="crm-grid">
                         {CRM_CATALOGUE.map((cat) => {
@@ -268,16 +278,23 @@ const CRMSync = () => {
                             const isComingSoon = !supported;
 
                             let tag = cat.tag;
+                            let tagClass = 'crm-tag';
                             let className = 'crm-card';
+                            let cornerLabel = null;
                             if (active) {
                                 tag = 'Connected';
+                                tagClass = 'crm-tag crm-tag-connected';
                                 className += ' selected';
                             } else if (isAwaitingSetup) {
                                 tag = 'Awaiting setup';
-                                className += ' crm-card-disabled';
+                                tagClass = 'crm-tag crm-tag-awaiting';
+                                className += ' crm-card-awaiting';
+                                cornerLabel = { text: 'SETUP', cls: 'crm-corner-awaiting' };
                             } else if (isComingSoon) {
                                 tag = 'Coming soon';
-                                className += ' crm-card-disabled';
+                                tagClass = 'crm-tag crm-tag-soon';
+                                className += ' crm-card-soon';
+                                cornerLabel = { text: 'SOON', cls: 'crm-corner-soon' };
                             }
 
                             return (
@@ -291,9 +308,12 @@ const CRMSync = () => {
                                         ? `${cat.name} adapter is on our roadmap`
                                         : `Connect ${cat.name}`}
                                 >
+                                    {cornerLabel && (
+                                        <span className={`crm-corner-ribbon ${cornerLabel.cls}`}>{cornerLabel.text}</span>
+                                    )}
                                     <div className="crm-icon">{cat.icon}</div>
                                     <div className="crm-name">{cat.name}</div>
-                                    <div className="crm-tag">{tag}</div>
+                                    <div className={tagClass}>{tag}</div>
                                 </div>
                             );
                         })}
