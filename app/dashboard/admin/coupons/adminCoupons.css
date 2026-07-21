@@ -1,0 +1,200 @@
+/* Admin → Coupons. Table styles come from components/ui/responsive-table.css */
+
+.cp-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.cp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.cp-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.cp-subtitle {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.cp-new-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #0891b2;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* 8 columns — needs the widest scroll floor of the admin tables. */
+.cp-page .rt-table {
+    min-width: 1080px;
+}
+
+/* Coupon codes are monospace and can be long; let them break in card mode. */
+.cp-code {
+    font-weight: 700;
+    color: #111827;
+    font-family: monospace;
+    overflow-wrap: anywhere;
+}
+
+/* Editor modal */
+.cp-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+}
+
+.cp-modal {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 92vh;
+    overflow: auto;
+}
+
+.cp-modal-head {
+    padding: 18px 22px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cp-modal-title {
+    font-weight: 700;
+    font-size: 16px;
+    flex: 1;
+    overflow-wrap: anywhere;
+}
+
+.cp-modal-body {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cp-modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Two-up field rows inside the editor. */
+.cp-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* User picker list — capped so the modal stays scrollable as a whole. */
+.cp-user-list {
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.cp-user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+}
+
+.cp-user-row .cp-user-meta {
+    min-width: 0;
+}
+
+.cp-user-row .cp-user-meta > div {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+    .cp-page {
+        padding: 24px 16px;
+    }
+
+    /* Card mode — min-width would otherwise force a scrollbar. */
+    .cp-page .rt-table {
+        min-width: 0;
+    }
+
+    /* Action buttons share the card width evenly. */
+    .cp-page .rt-actions-inner > * {
+        flex: 1;
+    }
+}
+
+@media (max-width: 560px) {
+    .cp-page {
+        padding: 20px 12px;
+    }
+
+    .cp-title {
+        font-size: 22px;
+    }
+
+    .cp-new-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .cp-field-row {
+        grid-template-columns: 1fr;
+    }
+
+    .cp-modal-overlay {
+        padding: 12px;
+    }
+
+    .cp-modal-body {
+        padding: 16px;
+    }
+
+    .cp-modal-head,
+    .cp-modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .cp-modal-footer > button {
+        flex: 1;
+        justify-content: center;
+    }
+
+    /* Shorter viewport → give the list less of the modal. */
+    .cp-user-list {
+        max-height: 180px;
+    }
+}

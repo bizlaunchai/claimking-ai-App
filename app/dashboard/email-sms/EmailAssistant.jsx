@@ -684,7 +684,7 @@ const EmailAssistant = () => {
             <div className="page-header">
                 <div className="header-left">
                     <div className="email-icon">✉</div>
-                    <div className="header-content">
+                    <div className="header-content flex flex-col">
                         <h1>Email & SMS AI Assistant</h1>
                         <p>Connect Gmail or Outlook to automatically import insurance emails</p>
                     </div>

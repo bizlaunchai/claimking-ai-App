@@ -7,6 +7,8 @@ import {
     Coins, DollarSign, Star, FileText, AlertCircle, Sparkles,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
+import '../../../../components/ui/responsive-table.css';
+import './adminPlans.css';
 
 const STATUS_STYLE = {
     draft:    { label: 'Draft',    bg: '#f3f4f6', color: '#6b7280', border: '#e5e7eb' },
@@ -180,18 +182,15 @@ export default function AdminPlans() {
     };
 
     return (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        <div className="ap-page">
+            <div className="ap-header">
                 <div>
-                    <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>Plans</h1>
-                    <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
+                    <h1 className="ap-title">Plans</h1>
+                    <p className="ap-subtitle">
                         Drafts can be edited freely. Once activated, the plan is published in Stripe and shown to users.
                     </p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
-                >
+                <button onClick={openCreate} className="ap-new-btn">
                     <Plus size={16} /> New Plan
                 </button>
             </div>
@@ -207,26 +206,26 @@ export default function AdminPlans() {
                     <div style={{ fontSize: 13, color: '#6b7280' }}>Create your first plan to get started.</div>
                 </div>
             ) : (
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="rt-wrap">
+                    <table className="rt-table">
                         <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                                <th style={th}>Plan</th>
-                                <th style={th}>Price</th>
-                                <th style={th}>Credits / mo</th>
-                                <th style={th}>Trial</th>
-                                {/*<th style={th}>Discount</th>*/}
-                                <th style={th}>Status</th>
-                                <th style={th}>Stripe</th>
-                                <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+                            <tr>
+                                <th>Plan</th>
+                                <th>Price</th>
+                                <th>Credits / mo</th>
+                                <th>Trial</th>
+                                {/*<th>Discount</th>*/}
+                                <th>Status</th>
+                                <th>Stripe</th>
+                                <th className="rt-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {plans.map((p) => {
                                 const sty = STATUS_STYLE[p.status] || STATUS_STYLE.draft;
                                 return (
-                                    <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={td}>
+                                    <tr key={p.id}>
+                                        <td data-label="Plan" className="rt-heading">
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                 <span style={{ fontWeight: 600, color: '#111827' }}>{p.name}</span>
                                                 {p.is_popular && (
@@ -237,9 +236,9 @@ export default function AdminPlans() {
                                             </div>
                                             {p.description && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{p.description}</div>}
                                         </td>
-                                        <td style={td}>{fmtMoney(p.price_cents)}</td>
-                                        <td style={td}>{p.monthly_credits.toLocaleString()}</td>
-                                        <td style={td}>
+                                        <td data-label="Price">{fmtMoney(p.price_cents)}</td>
+                                        <td data-label="Credits / mo">{p.monthly_credits.toLocaleString()}</td>
+                                        <td data-label="Trial">
                                             {p.trial_days > 0 ? (
                                                 <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{p.trial_days}d</span>
                                             ) : (
@@ -255,12 +254,12 @@ export default function AdminPlans() {
                                                 <span style={{ color: '#9ca3af' }}>—</span>
                                             )}
                                         </td>*/}
-                                        <td style={td}>
+                                        <td data-label="Status">
                                             <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: sty.bg, color: sty.color, border: `1px solid ${sty.border}` }}>
                                                 {sty.label}
                                             </span>
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Stripe">
                                             {p.stripe_price_id ? (
                                                 <span style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }} title={p.stripe_price_id}>
                                                     {p.stripe_price_id.slice(0, 12)}…
@@ -269,8 +268,8 @@ export default function AdminPlans() {
                                                 <span style={{ fontSize: 12, color: '#9ca3af' }}>—</span>
                                             )}
                                         </td>
-                                        <td style={{ ...td, textAlign: 'right' }}>
-                                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                                        <td className="rt-actions">
+                                            <div className="rt-actions-inner">
                                                 {p.status === 'draft' && (
                                                     <>
                                                         <button style={btnIcon('#4f46e5')} title="Edit" onClick={() => openEdit(p)}>
@@ -345,8 +344,6 @@ export default function AdminPlans() {
     );
 }
 
-const th = { padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
-const td = { padding: '14px 16px', fontSize: 14, color: '#1f2937', verticalAlign: 'top' };
 const btnIcon = (color) => ({
     width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     borderRadius: 6, background: `${color}10`, color, border: `1px solid ${color}30`, cursor: 'pointer',
@@ -359,12 +356,9 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
     return (
         <div
             onClick={onClose}
-            style={{
-                position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20,
-            }}
+            className="ap-modal-overlay"
         >
-            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 560, width: '100%', maxHeight: '90vh', overflow: 'auto' }}>
+            <div onClick={(e) => e.stopPropagation()} className="ap-modal">
                 <div style={{ padding: '18px 22px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <FileText size={18} color="#4f46e5" />
                     <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
@@ -386,7 +380,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                     {editor.mode === 'edit' && (editor.plan.stripe_product_id || editor.plan.stripe_price_id) && (
                         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.05, marginBottom: 8 }}>Stripe identifiers</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '6px 12px', fontFamily: 'monospace', fontSize: 12, color: '#1f2937', alignItems: 'center' }}>
+                            <div className="ap-stripe-ids">
                                 <div style={{ color: '#6b7280' }}>Product ID</div>
                                 <div style={{ wordBreak: 'break-all' }}>{editor.plan.stripe_product_id || <span style={{ color: '#9ca3af' }}>— not synced —</span>}</div>
                                 <div style={{ color: '#6b7280' }}>Price ID</div>
@@ -408,7 +402,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                         />
                     </Field>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="ap-field-row">
                         <Field label="Price (USD / month) *">
                             <div style={{ position: 'relative' }}>
                                 <DollarSign size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
@@ -457,7 +451,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                         </div>
                     </Field>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="ap-field-row">
                         <Field label="Sort order">
                             <input
                                 style={input}
@@ -521,7 +515,7 @@ function PlanEditor({ editor, saving, onClose, onSave, onChange, onFeatureChange
                     </div>
                 </div>
 
-                <div style={{ padding: '14px 22px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="ap-modal-footer">
                     <button onClick={onClose} disabled={saving} style={{ padding: '10px 16px', background: '#fff', color: '#1f2937', border: '1px solid #e5e7eb', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
                         Cancel
                     </button>

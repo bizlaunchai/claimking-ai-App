@@ -7,6 +7,9 @@ import {
     Users as UsersIcon, X,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
+import Pagination from '../../../../components/ui/Pagination.jsx';
+import '../../../../components/ui/responsive-table.css';
+import './adminCompanies.css';
 
 // Status pill colors — must match values in companies.status CHECK constraint.
 const STATUS_BG = {
@@ -34,15 +37,31 @@ export default function AdminCompanies() {
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionTarget, setActionTarget] = useState(null); // { company, mode: 'suspend' | 'unsuspend' }
+    // Mirrors the backend envelope from src/common/pagination.ts
+    const [meta, setMeta] = useState({ page: 1, limit: 25, total: 0, total_pages: 1 });
 
-    const refresh = async ({ q = search, st = status } = {}) => {
+    const refresh = async ({ q = search, st = status, page = meta.page, limit = meta.limit } = {}) => {
         setLoading(true);
         try {
-            const params = { limit: 200 };
+            const params = { page, limit };
             if (q?.trim())  params.search = q.trim();
             if (st)         params.status = st;
             const { data } = await axiosInstance.get('/admin/companies', { params });
-            setCompanies(Array.isArray(data) ? data : []);
+            const rows = Array.isArray(data?.data) ? data.data : [];
+
+            // The current page can fall off the end (e.g. the last row on it was
+            // filtered away). Snap back to page 1 rather than showing a blank list.
+            if (rows.length === 0 && page > 1 && (data?.total ?? 0) > 0) {
+                return refresh({ q, st, page: 1, limit });
+            }
+
+            setCompanies(rows);
+            setMeta({
+                page: data?.page ?? page,
+                limit: data?.limit ?? limit,
+                total: data?.total ?? 0,
+                total_pages: data?.total_pages ?? 1,
+            });
         } catch (e) {
             toast.error(e?.response?.data?.message || 'Failed to load companies');
         } finally {
@@ -52,68 +71,51 @@ export default function AdminCompanies() {
 
     useEffect(() => { refresh(); }, []);
 
+    // Search / filter changes must reset to page 1 — otherwise a narrower
+    // result set can leave you stranded on a page that no longer exists.
     const onSearchSubmit = (e) => {
         e.preventDefault();
-        refresh({ q: search });
+        refresh({ q: search, page: 1 });
     };
 
     const onStatusChange = (e) => {
         const v = e.target.value;
         setStatus(v);
-        refresh({ st: v });
+        refresh({ st: v, page: 1 });
     };
 
     return (
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+        <div className="ac-page">
+            <div className="ac-title-row">
                 <Building2 size={22} color="#0d9488" />
-                <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>
-                    Companies
-                </h1>
+                <h1 className="ac-title">Companies</h1>
                 {!loading && (
-                    <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '4px 12px', borderRadius: 999,
-                        background: '#eef2ff', color: '#3730a3',
-                        fontSize: 13, fontWeight: 700,
-                    }}>
-                        {companies.length.toLocaleString()} total
+                    <span className="ac-count">
+                        {meta.total.toLocaleString()} total
                     </span>
                 )}
             </div>
-            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#6b7280' }}>
+            <p className="ac-subtitle">
                 All companies on the platform. Inspect team, billing, and credits — or suspend an account.
             </p>
 
-            <form
-                onSubmit={onSearchSubmit}
-                style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}
-            >
-                <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 400 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+            <form onSubmit={onSearchSubmit} className="ac-filters">
+                <div className="ac-search">
+                    <Search size={14} className="ac-search-icon" />
                     <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by company name or slug…"
-                        style={{
-                            width: '100%', padding: '10px 12px 10px 32px',
-                            background: '#fff', border: '1.5px solid #e5e7eb',
-                            borderRadius: 8, fontSize: 14, outline: 'none',
-                        }}
                     />
                 </div>
-                <select
-                    value={status}
-                    onChange={onStatusChange}
-                    style={{ padding: '10px 12px', background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 8, fontSize: 13, color: '#1f2937' }}
-                >
+                <select value={status} onChange={onStatusChange} className="ac-select">
                     <option value="">All statuses</option>
                     <option value="active">Active</option>
                     <option value="past_due">Past due</option>
                     <option value="suspended">Suspended</option>
                     <option value="cancelled">Cancelled</option>
                 </select>
-                <button type="submit" style={{ padding: '10px 16px', background: '#1f2937', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                <button type="submit" className="ac-search-btn">
                     Search
                 </button>
             </form>
@@ -127,19 +129,19 @@ export default function AdminCompanies() {
                     No companies found.
                 </div>
             ) : (
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="rt-wrap">
+                    <table className="rt-table">
                         <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                                <th style={th}>Company</th>
-                                <th style={th}>Owner</th>
-                                <th style={th}>Status</th>
-                                <th style={th}>Plan</th>
-                                <th style={th}>Sub</th>
-                                <th style={th}>Team</th>
-                                <th style={th}>Credits</th>
-                                <th style={th}>Created</th>
-                                <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+                            <tr>
+                                <th>Company</th>
+                                <th>Owner</th>
+                                <th>Status</th>
+                                <th>Plan</th>
+                                <th>Sub</th>
+                                <th>Team</th>
+                                <th>Credits</th>
+                                <th>Created</th>
+                                <th className="rt-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -152,8 +154,8 @@ export default function AdminCompanies() {
                                 const isSuspended = c.status === 'suspended';
 
                                 return (
-                                    <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={td}>
+                                    <tr key={c.id}>
+                                        <td data-label="Company" className="rt-heading">
                                             <div style={{ fontWeight: 600, color: '#111827', fontSize: 16 }}>
                                                 {c.name}
                                             </div>
@@ -161,20 +163,20 @@ export default function AdminCompanies() {
                                                 <div style={{ fontSize: 13, color: '#6b7280' }}>{c.slug}</div>
                                             )}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Owner">
                                             {c.owner ? (
                                                 <div>
                                                     <div style={{ fontSize: 15, color: '#1f2937' }}>{c.owner.full_name || '—'}</div>
-                                                    <div style={{ fontSize: 13, color: '#6b7280' }}>{c.owner.email}</div>
+                                                    <div style={{ fontSize: 13, color: '#6b7280', wordBreak: 'break-word' }}>{c.owner.email}</div>
                                                 </div>
                                             ) : <span style={{ fontSize: 14, color: '#9ca3af' }}>—</span>}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Status">
                                             <span style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: compStyle.bg, color: compStyle.color }}>
                                                 {compStyle.label}
                                             </span>
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Plan">
                                             {c.subscription?.plan ? (
                                                 <div>
                                                     <div style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>{c.subscription.plan.name}</div>
@@ -184,27 +186,29 @@ export default function AdminCompanies() {
                                                 </div>
                                             ) : <span style={{ fontSize: 14, color: '#9ca3af' }}>—</span>}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Sub">
                                             {subStatus ? (
                                                 <span style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: subStyle.bg, color: subStyle.color }}>
                                                     {subStatus}
                                                 </span>
                                             ) : <span style={{ fontSize: 14, color: '#9ca3af' }}>—</span>}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Team">
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 15, color: '#1f2937' }}>
                                                 <UsersIcon size={14} color="#6b7280" /> {c.member_count ?? 0}
                                             </span>
                                         </td>
-                                        <td style={td}>
-                                            <div style={{ fontSize: 15, color: '#1f2937' }}>{total.toLocaleString()}</div>
-                                            <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                                                {(bal?.monthly_credits ?? 0)}m + {(bal?.bonus_credits ?? 0)}b
+                                        <td data-label="Credits">
+                                            <div>
+                                                <div style={{ fontSize: 15, color: '#1f2937' }}>{total.toLocaleString()}</div>
+                                                <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                                                    {(bal?.monthly_credits ?? 0)}m + {(bal?.bonus_credits ?? 0)}b
+                                                </div>
                                             </div>
                                         </td>
-                                        <td style={{ ...td, fontSize: 14, color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtDate(c.created_at)}</td>
-                                        <td style={{ ...td, textAlign: 'right' }}>
-                                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                                        <td data-label="Created" className="rt-nowrap" style={{ fontSize: 14, color: '#6b7280' }}>{fmtDate(c.created_at)}</td>
+                                        <td className="rt-actions">
+                                            <div className="rt-actions-inner">
                                                 <Link
                                                     href={`/dashboard/admin/companies/${c.id}`}
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 12px', background: '#fff', color: '#4b5563', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}
@@ -236,6 +240,18 @@ export default function AdminCompanies() {
                 </div>
             )}
 
+            {!loading && companies.length > 0 && (
+                <Pagination
+                    page={meta.page}
+                    totalPages={meta.total_pages}
+                    total={meta.total}
+                    limit={meta.limit}
+                    itemLabel="companies"
+                    onPageChange={(p) => refresh({ page: p })}
+                    onLimitChange={(l) => refresh({ page: 1, limit: l })}
+                />
+            )}
+
             {actionTarget && (
                 <SuspendModal
                     target={actionTarget}
@@ -246,9 +262,6 @@ export default function AdminCompanies() {
         </div>
     );
 }
-
-const th = { padding: '14px 18px', textAlign: 'left', fontSize: 13, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
-const td = { padding: '16px 18px', fontSize: 15, color: '#1f2937', verticalAlign: 'middle' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Confirm modal — suspend OR unsuspend a company. Captures an optional
@@ -280,9 +293,9 @@ function SuspendModal({ target, onClose, onDone }) {
     return (
         <div
             onClick={() => !busy && onClose()}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}
+            className="ac-modal-overlay"
         >
-            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 460, width: '100%' }}>
+            <div onClick={(e) => e.stopPropagation()} className="ac-modal">
                 <div style={{ padding: '18px 22px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
                     {isSuspend
                         ? <Ban size={18} color="#dc2626" />
@@ -329,7 +342,7 @@ function SuspendModal({ target, onClose, onDone }) {
                     </div>
                 </div>
 
-                <div style={{ padding: '14px 22px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="ac-modal-footer">
                     <button onClick={onClose} disabled={busy} style={{ padding: '10px 16px', background: '#fff', color: '#1f2937', border: '1px solid #e5e7eb', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
                         Cancel
                     </button>

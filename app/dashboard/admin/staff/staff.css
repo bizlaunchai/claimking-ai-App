@@ -1,0 +1,236 @@
+/* Admin → Platform Staff. Table styles come from components/ui/responsive-table.css */
+
+.st-page {
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.st-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.st-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    color: #1a1f3a;
+}
+
+.st-subtitle {
+    margin: 4px 0 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.st-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #FDB813, #d4a000);
+    color: #1a1f3a;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Row action buttons */
+.st-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    padding: 7px 10px;
+    color: #4b5563;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.st-action:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.st-action.danger {
+    color: #dc2626;
+}
+
+.st-action.warn {
+    color: #b45309;
+}
+
+.st-action.go {
+    color: #047857;
+}
+
+.st-action-label {
+    display: none;
+}
+
+/* Deactivated rows read as muted, but stay legible. */
+.st-row-off .st-name,
+.st-row-off .st-perms {
+    opacity: 0.55;
+}
+
+.st-status {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.st-status.on {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.st-status.off {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+/* Staff has 5 narrow columns; it fits down to ~820px. */
+.st-page .rt-table {
+    min-width: 820px;
+}
+
+@media (max-width: 860px) {
+    .st-page {
+        padding: 20px 16px;
+    }
+
+    /* Card mode — min-width would otherwise force a scrollbar. */
+    .st-page .rt-table {
+        min-width: 0;
+    }
+
+    /* Icon-only buttons are ambiguous once they stretch across a card. */
+    .st-action-label {
+        display: inline;
+    }
+
+    .st-page .rt-actions-inner > * {
+        flex: 1;
+    }
+
+    /* Permission badges wrap to their own full-width block in card mode. */
+    .st-page .rt-table td[data-label='Permissions'] {
+        display: block;
+        text-align: left;
+    }
+
+    .st-page .rt-table td[data-label='Permissions']::before {
+        display: block;
+        margin-bottom: 6px;
+    }
+}
+
+@media (max-width: 520px) {
+    .st-page {
+        padding: 16px 12px;
+    }
+
+    .st-title {
+        font-size: 21px;
+    }
+
+    .st-add-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .st-page .rt-actions-inner {
+        flex-wrap: wrap;
+    }
+
+    .st-page .rt-actions-inner > * {
+        flex: 1 1 100%;
+    }
+}
+
+/* Modal */
+.st-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10000;
+}
+
+.st-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.st-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.st-modal-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    /* Titles embed an email address — never let it push the close button off. */
+    overflow-wrap: anywhere;
+}
+
+.st-modal-body {
+    padding: 20px;
+}
+
+/* Email + Find user row in the Add modal. */
+.st-lookup {
+    display: flex;
+    gap: 8px;
+}
+
+.st-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 520px) {
+    .st-lookup {
+        flex-direction: column;
+    }
+
+    .st-modal-actions > button {
+        flex: 1;
+    }
+
+    .st-modal-body {
+        padding: 16px;
+    }
+}

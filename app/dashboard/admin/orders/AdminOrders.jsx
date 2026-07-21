@@ -6,6 +6,7 @@ import {
     CheckCircle2, XCircle, DollarSign, Users,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
+import Pagination from '../../../../components/ui/Pagination.jsx';
 
 // ── AuthedLogo ─────────────────────────────────────────────────────────────
 // `companies.logo_url` stores an S3 key, not a public URL — plain <img> would
@@ -90,20 +91,38 @@ export default function AdminOrders() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState('');
     const [search, setSearch] = useState('');
+    // Mirrors the backend envelope from src/common/pagination.ts
+    const [meta, setMeta] = useState({ page: 1, limit: 25, total: 0, total_pages: 1 });
 
     const refresh = async (opts = {}) => {
         setLoading(true);
         const filterStatus = opts.status !== undefined ? opts.status : status;
         const filterSearch = opts.search !== undefined ? opts.search : search;
+        const page  = opts.page  ?? meta.page;
+        const limit = opts.limit ?? meta.limit;
         try {
-            const params = { limit: 200 };
+            const params = { page, limit };
             if (filterStatus) params.status = filterStatus;
             if (filterSearch) params.search = filterSearch;
             const [{ data }, mRes] = await Promise.all([
                 axiosInstance.get('/subscriptions/admin/all', { params }),
                 axiosInstance.get('/subscriptions/admin/metrics').catch(() => ({ data: null })),
             ]);
-            setRows(data?.subscriptions || []);
+            const list = Array.isArray(data?.data) ? data.data : [];
+
+            // The current page can fall off the end when filters narrow the
+            // result set — snap back to page 1 instead of showing a blank list.
+            if (list.length === 0 && page > 1 && (data?.total ?? 0) > 0) {
+                return refresh({ ...opts, page: 1 });
+            }
+
+            setRows(list);
+            setMeta({
+                page: data?.page ?? page,
+                limit: data?.limit ?? limit,
+                total: data?.total ?? 0,
+                total_pages: data?.total_pages ?? 1,
+            });
             setMetrics(mRes?.data || null);
         } catch (e) {
             toast.error(e?.response?.data?.message || 'Failed to load orders');
@@ -137,7 +156,7 @@ export default function AdminOrders() {
 
             {/* Filters */}
             <form
-                onSubmit={(e) => { e.preventDefault(); refresh({ search }); }}
+                onSubmit={(e) => { e.preventDefault(); refresh({ search, page: 1 }); }}
                 style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}
             >
                 <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 380 }}>
@@ -151,7 +170,7 @@ export default function AdminOrders() {
                 </div>
                 <select
                     value={status}
-                    onChange={(e) => { setStatus(e.target.value); refresh({ status: e.target.value }); }}
+                    onChange={(e) => { setStatus(e.target.value); refresh({ status: e.target.value, page: 1 }); }}
                     style={{ padding: '10px 12px', background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}
                 >
                     {STATUS_FILTERS.map((f) => (
@@ -265,6 +284,18 @@ export default function AdminOrders() {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {!loading && rows.length > 0 && (
+                <Pagination
+                    page={meta.page}
+                    totalPages={meta.total_pages}
+                    total={meta.total}
+                    limit={meta.limit}
+                    itemLabel="subscriptions"
+                    onPageChange={(p) => refresh({ page: p })}
+                    onLimitChange={(l) => refresh({ page: 1, limit: l })}
+                />
             )}
         </div>
     );

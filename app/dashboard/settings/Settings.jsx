@@ -48,11 +48,11 @@ const Settings = () => {
     return (
         <div>
             {/* Top Header */}
-            <div className="top-header">
-                <div className="header-container">
+            {/*<div className="top-header">
+                <div className="header-container flex flex-col">
                     <div className="header-left">
                         <div className="logo-section">
-                            <div className="logo-text">General</div>
+                            <div className="text-gray-600 text-[20px]">General</div>
                         </div>
                         <div className="page-title">Settings & Configuration</div>
                     </div>
@@ -72,6 +72,42 @@ const Settings = () => {
                             </svg>
                             Save All Settings
                         </button>
+                    </div>
+                </div>
+            </div>*/}
+
+            <div className="top-header">
+                <div className="header-container px-4 sm:px-6 lg:px-8">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+                        <div className="header-left flex sm:flex-row sm:items-center gap-2 sm:gap-4">
+                            <div className="text-gray-700 text-base sm:text-lg lg:text-xl break-words">
+                                Settings & Configuration
+                            </div>
+                        </div>
+
+                        <div className="header-actions flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                            <button className="header-btn w-full sm:w-auto">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M9 11l3 3L22 4"/>
+                                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                                </svg>
+                                Reset to Defaults
+                            </button>
+
+                            <button
+                                className="header-btn primary w-full sm:w-auto"
+                                onClick={handleSaveAll}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                Save All Settings
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </div>

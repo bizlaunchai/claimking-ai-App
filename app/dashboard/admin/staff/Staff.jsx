@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, UserPlus, Trash2, Edit2, Loader2, X } from 'lucide-react';
+import { ShieldCheck, UserPlus, Trash2, Edit2, Loader2, X, PauseCircle, PlayCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import '@/components/ui/responsive-table.css';
+import './staff.css';
 
 // Mirror of backend SuperadminService.STAFF_PERMISSION_KEYS with human labels.
 const PERMISSION_CATALOG = [
@@ -47,68 +49,108 @@ export default function Staff() {
         } catch {/* toasted */}
     };
 
+    // Deactivate suspends platform permissions only — the person keeps their
+    // ordinary ClaimKing account. Permissions are preserved for reactivation.
+    const handleToggleActive = async (s) => {
+        const isOff = !!s.staff_deactivated_at;
+        const verb = isOff ? 'Reactivate' : 'Deactivate';
+        if (!confirm(
+            isOff
+                ? `Reactivate staff access for ${s.email}? Their previous permissions come back immediately.`
+                : `Deactivate staff access for ${s.email}? They keep their normal account but lose all platform permissions until reactivated.`
+        )) return;
+        try {
+            await axiosInstance.post(`/admin/staff/${s.id}/${isOff ? 'activate' : 'deactivate'}`);
+            toast.success(`Staff ${isOff ? 'reactivated' : 'deactivated'}`);
+            load();
+        } catch {/* toasted */}
+    };
+
     return (
-        <div style={styles.page}>
-            <header style={styles.header}>
+        <div className="st-page">
+            <header className="st-header">
                 <div>
-                    <h1 style={styles.h1}>Platform Staff</h1>
-                    <p style={styles.subtitle}>
+                    <h1 className="st-title">Platform Staff</h1>
+                    <p className="st-subtitle">
                         Sub-admins with granular permissions. They can help manage the platform without full superadmin access.
                     </p>
                 </div>
-                <button onClick={() => setAddOpen(true)} style={styles.btnPrimary}>
+                <button onClick={() => setAddOpen(true)} className="st-add-btn">
                     <UserPlus size={16} /> Add Staff
                 </button>
             </header>
 
-            <div style={styles.card}>
-                {loading ? (
+            {loading ? (
+                <div style={styles.card}>
                     <div style={styles.empty}>
                         <Loader2 size={20} className="animate-spin" /> Loading…
                     </div>
-                ) : staff.length === 0 ? (
+                </div>
+            ) : staff.length === 0 ? (
+                <div style={styles.card}>
                     <div style={styles.empty}>
                         No platform staff yet. Click "Add Staff" to grant a user platform access.
                     </div>
-                ) : (
-                    <table style={styles.table}>
+                </div>
+            ) : (
+                <div className="rt-wrap">
+                    <table className="rt-table">
                         <thead>
-                            <tr style={styles.tr}>
-                                <th style={styles.th}>Email / Name</th>
-                                <th style={styles.th}>Permissions Granted</th>
-                                <th style={styles.th}>Added</th>
-                                <th style={styles.th} />
+                            <tr>
+                                <th>Email / Name</th>
+                                <th>Status</th>
+                                <th>Permissions Granted</th>
+                                <th>Added</th>
+                                <th className="rt-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {staff.map((s) => (
-                                <tr key={s.id} style={styles.tr}>
-                                    <td style={styles.td}>
-                                        <div style={{ fontWeight: 600, color: '#111827' }}>{s.full_name || '—'}</div>
-                                        <div style={{ fontSize: 12, color: '#6b7280' }}>{s.email}</div>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <PermissionBadges perms={s.permissions} />
-                                    </td>
-                                    <td style={styles.td}>
-                                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                            {s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...styles.td, textAlign: 'right' }}>
-                                        <button onClick={() => setEditing(s)} style={styles.btnGhost} title="Edit permissions">
-                                            <Edit2 size={14} />
-                                        </button>
-                                        <button onClick={() => handleRemove(s)} style={{ ...styles.btnGhost, color: '#dc2626' }} title="Remove">
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {staff.map((s) => {
+                                const off = !!s.staff_deactivated_at;
+                                return (
+                                    <tr key={s.id} className={off ? 'st-row-off' : undefined}>
+                                        <td data-label="Email / Name" className="rt-heading st-name">
+                                            <div style={{ fontWeight: 600, color: '#111827' }}>{s.full_name || '—'}</div>
+                                            <div style={{ fontSize: 12, color: '#6b7280', overflowWrap: 'anywhere' }}>{s.email}</div>
+                                        </td>
+                                        <td data-label="Status">
+                                            <span className={`st-status ${off ? 'off' : 'on'}`}>
+                                                {off ? 'Deactivated' : 'Active'}
+                                            </span>
+                                        </td>
+                                        <td data-label="Permissions" className="st-perms">
+                                            <PermissionBadges perms={s.permissions} deactivated={off} />
+                                        </td>
+                                        <td data-label="Added" className="rt-nowrap">
+                                            <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                                {s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}
+                                            </span>
+                                        </td>
+                                        <td className="rt-actions">
+                                            <div className="rt-actions-inner">
+                                                <button onClick={() => setEditing(s)} className="st-action" title="Edit permissions">
+                                                    <Edit2 size={14} /> <span className="st-action-label">Edit</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleToggleActive(s)}
+                                                    className={`st-action ${off ? 'go' : 'warn'}`}
+                                                    title={off ? 'Reactivate staff access' : 'Deactivate staff access'}
+                                                >
+                                                    {off ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                                                    <span className="st-action-label">{off ? 'Reactivate' : 'Deactivate'}</span>
+                                                </button>
+                                                <button onClick={() => handleRemove(s)} className="st-action danger" title="Remove from staff">
+                                                    <Trash2 size={14} /> <span className="st-action-label">Remove</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
-                )}
-            </div>
+                </div>
+            )}
 
             {addOpen && (
                 <AddStaffModal
@@ -134,10 +176,31 @@ export default function Staff() {
     );
 }
 
-const PermissionBadges = ({ perms }) => {
+const PermissionBadges = ({ perms, deactivated }) => {
     const enabled = Object.keys(perms || {}).filter((k) => perms[k] === true);
     if (enabled.length === 0) {
         return <span style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No permissions granted</span>;
+    }
+    if (deactivated) {
+        // Say why the badges below are inert, rather than showing live-looking
+        // grants for someone who currently has none of them.
+        return (
+            <div>
+                <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 4 }}>
+                    Suspended — {enabled.length} permission{enabled.length === 1 ? '' : 's'} kept for reactivation
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {enabled.map((k) => {
+                        const def = PERMISSION_CATALOG.find((p) => p.key === k);
+                        return (
+                            <span key={k} style={{ ...styles.badge, background: '#f3f4f6', color: '#6b7280' }}>
+                                {def?.label ?? k}
+                            </span>
+                        );
+                    })}
+                </div>
+            </div>
+        );
     }
     return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -172,9 +235,9 @@ const AddStaffModal = ({ onClose, onAdded }) => {
         setLookupBusy(true);
         try {
             // We use the admin/users endpoint to find by email
-            const { data } = await axiosInstance.get(
-                `/credits/admin/users?search=${encodeURIComponent(email.trim())}&limit=5`,
-            );
+            const { data } = await axiosInstance.get('/admin/users', {
+                params: { search: email.trim(), limit: 5 },
+            });
             const list = data?.users ?? [];
             const match = list.find(
                 (u) => (u.email ?? '').toLowerCase() === email.trim().toLowerCase(),
@@ -210,12 +273,18 @@ const AddStaffModal = ({ onClose, onAdded }) => {
         }
         setSubmitting(true);
         try {
-            await axiosInstance.post('/admin/staff', {
+            const { data } = await axiosInstance.post('/admin/staff', {
                 targetUserId,
                 permissions,
                 notes: notes || undefined,
             });
-            toast.success('Staff added');
+            // The grant succeeds even if mail is unconfigured — say so rather
+            // than implying they've been notified.
+            if (data?.emailSent) {
+                toast.success('Staff added — notification email sent');
+            } else {
+                toast.success('Staff added (no email sent — mail not configured)');
+            }
             onAdded();
         } catch {
             // toasted
@@ -229,7 +298,7 @@ const AddStaffModal = ({ onClose, onAdded }) => {
             <div style={{ display: 'grid', gap: 16 }}>
                 <div>
                     <label style={styles.label}>User Email</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="st-lookup">
                         <input
                             type="email"
                             value={email}
@@ -270,7 +339,7 @@ const AddStaffModal = ({ onClose, onAdded }) => {
                     />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="st-modal-actions">
                     <button onClick={onClose} style={styles.btnSecondary}>Cancel</button>
                     <button
                         onClick={submit}
@@ -339,7 +408,7 @@ const EditPermissionsModal = ({ staff, onClose, onSaved }) => {
                     />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="st-modal-actions">
                     <button onClick={onClose} style={styles.btnSecondary}>Cancel</button>
                     <button onClick={submit} disabled={submitting} style={styles.btnPrimary}>
                         {submitting ? 'Saving…' : 'Save'}
@@ -373,31 +442,18 @@ const PermissionRow = ({ def, checked, onToggle }) => (
 );
 
 const ModalShell = ({ title, children, onClose }) => (
-    <div
-        onClick={onClose}
-        style={{
-            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 16, zIndex: 10000,
-        }}
-    >
-        <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-                background: 'white', borderRadius: 12, width: '100%', maxWidth: 600,
-                maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            }}
-        >
-            <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '16px 20px', borderBottom: '1px solid #e5e7eb',
-            }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h2>
-                <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}>
+    <div onClick={onClose} className="st-modal-overlay">
+        <div onClick={(e) => e.stopPropagation()} className="st-modal">
+            <div className="st-modal-head">
+                <h2 className="st-modal-title">{title}</h2>
+                <button
+                    onClick={onClose}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280', flexShrink: 0 }}
+                >
                     <X size={20} />
                 </button>
             </div>
-            <div style={{ padding: 20 }}>{children}</div>
+            <div className="st-modal-body">{children}</div>
         </div>
     </div>
 );

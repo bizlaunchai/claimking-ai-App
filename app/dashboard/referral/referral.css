@@ -66,7 +66,7 @@
 /* Earnings Overview */
 .earnings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
     gap: 1rem;
     margin-bottom: 2rem;
 }
@@ -187,7 +187,7 @@
 /* Charts Section */
 .charts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
@@ -400,7 +400,7 @@
 
 .tiers-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
     gap: 1rem;
     margin-top: 1.5rem;
 }
@@ -448,8 +448,19 @@
 }
 
 /* Referrals Table */
+.referrals-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    background: white;
+}
+
 .referrals-table {
     width: 100%;
+    min-width: 640px;
+    border-collapse: collapse;
     background: white;
     border-radius: 12px;
     overflow: hidden;
@@ -457,6 +468,7 @@
 }
 
 .referrals-table th {
+    white-space: nowrap;
     background: #f9fafb;
     padding: 0.75rem;
     text-align: left;
@@ -527,7 +539,7 @@
 
 .coupon-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 1rem;
     margin-top: 1rem;
 }
@@ -569,39 +581,209 @@
     margin-bottom: 2rem;
 }
 
+.commission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    gap: 1.5rem;
+}
+
+.commission-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.commission-card-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.commission-card-title {
+    font-weight: 600;
+    color: #1a1f3a;
+    margin-bottom: 0.5rem;
+}
+
+.commission-card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #16a34a;
+}
+
+.commission-card-desc {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+/* Coupon card actions */
+.coupon-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.coupon-actions button {
+    flex: 1 1 100px;
+    padding: 0.375rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+/* QR Modal */
+.qr-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 1000;
+}
+
+.qr-modal {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+    width: 100%;
+    max-width: 360px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.qr-modal-box {
+    width: min(200px, 60vw);
+    aspect-ratio: 1;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
 /* Responsive */
+@media (max-width: 1024px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 768px) {
     .container {
-        padding: 1rem;
+        padding: 0 1rem;
     }
-    
+
+    .referral-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .referral-header-actions {
+        width: 100%;
+    }
+
+    .referral-header-actions .btn {
+        flex: 1;
+    }
+
     .earnings-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.75rem;
     }
-    
+
+    .earnings-value {
+        font-size: 1.375rem;
+    }
+
     .referral-link-section {
         padding: 1.5rem 1rem;
     }
-    
+
     .referral-link-container {
         flex-direction: column;
     }
-    
+
     .referral-link-input {
-        min-width: auto;
+        min-width: 0;
     }
-    
-    .charts-grid {
-        grid-template-columns: 1fr;
+
+    .share-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+        gap: 0.5rem;
     }
-    
-    .tiers-grid {
-        grid-template-columns: repeat(2, 1fr);
+
+    .share-btn {
+        justify-content: center;
     }
-    
+
+    .chart-card {
+        padding: 1rem;
+    }
+
+    .chart-header {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    .pie-chart-container {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .legend {
+        width: 100%;
+        max-width: 260px;
+    }
+
+    .funnel-stage {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .tiers-grid,
     .coupon-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 560px) {
+    .earnings-grid,
+    .tiers-grid,
+    .coupon-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .referral-header {
+        padding: 1rem 0.75rem;
+    }
+
+    .referral-header-actions {
+        flex-wrap: wrap;
+    }
+
+    .bar-chart {
+        height: 200px;
+        gap: 0.375rem;
+    }
+
+    .bar-value {
+        font-size: 0.625rem;
+    }
+
+    .tier-card {
+        padding: 1rem;
+    }
+
+    .qr-modal {
+        padding: 1.5rem 1rem;
     }
 }
 

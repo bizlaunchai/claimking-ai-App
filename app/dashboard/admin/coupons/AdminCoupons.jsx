@@ -6,6 +6,9 @@ import {
     Calendar, Users as UsersIcon, Hash, ToggleRight, Search, Sparkles, Power,
 } from 'lucide-react';
 import axiosInstance from '../../../../lib/axiosInstance.js';
+import Pagination from '../../../../components/ui/Pagination.jsx';
+import '../../../../components/ui/responsive-table.css';
+import './adminCoupons.css';
 
 const fmtMoney = (cents) =>
     `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -36,21 +39,41 @@ export default function AdminCoupons() {
     const [editor, setEditor] = useState(null);
     const [saving, setSaving] = useState(false);
     const [busyId, setBusyId] = useState(null);
+    // Mirrors the backend envelope from src/common/pagination.ts
+    const [meta, setMeta] = useState({ page: 1, limit: 25, total: 0, total_pages: 1 });
 
-    const refresh = async () => {
+    const refresh = async (opts = {}) => {
+        const page = opts.page ?? meta.page;
+        const limit = opts.limit ?? meta.limit;
+
         // Run in parallel but handle each independently so one failure
         // doesn't blank out the others (e.g. plans should still load even
         // if the users endpoint is slow or the SQL migration isn't applied).
         const results = await Promise.allSettled([
-            axiosInstance.get('/coupons/admin/all'),
+            axiosInstance.get('/coupons/admin/all', { params: { page, limit } }),
             axiosInstance.get('/plans/admin/all'),
-            axiosInstance.get('/credits/admin/users', { params: { limit: 200 } }),
+            axiosInstance.get('/admin/users', { params: { limit: 200 } }),
         ]);
 
         const [coupRes, planRes, userRes] = results;
 
         if (coupRes.status === 'fulfilled') {
-            setCoupons(coupRes.value.data || []);
+            const body = coupRes.value.data;
+            const rows = Array.isArray(body?.data) ? body.data : [];
+
+            // Deleting the last coupon on a page can strand us past the end —
+            // fall back to page 1 rather than showing an empty list.
+            if (rows.length === 0 && page > 1 && (body?.total ?? 0) > 0) {
+                return refresh({ ...opts, page: 1 });
+            }
+
+            setCoupons(rows);
+            setMeta({
+                page: body?.page ?? page,
+                limit: body?.limit ?? limit,
+                total: body?.total ?? 0,
+                total_pages: body?.total_pages ?? 1,
+            });
         } else {
             toast.error(coupRes.reason?.response?.data?.message || 'Failed to load coupons (run the SQL migration?)');
         }
@@ -186,7 +209,9 @@ export default function AdminCoupons() {
                 toast.success('Coupon updated');
             }
             setEditor(null);
-            await refresh();
+            // A new coupon sorts to the top, so jump to page 1 — otherwise
+            // creating one from page 3 looks like nothing happened.
+            await refresh(editor.mode === 'create' ? { page: 1 } : {});
         } catch (e) {
             toast.error(e?.response?.data?.message || 'Save failed');
         } finally {
@@ -222,18 +247,15 @@ export default function AdminCoupons() {
     };
 
     return (
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        <div className="cp-page">
+            <div className="cp-header">
                 <div>
-                    <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>Coupons</h1>
-                    <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
+                    <h1 className="cp-title">Coupons</h1>
+                    <p className="cp-subtitle">
                         Create discount codes — percent or fixed amount, with redemption limits, date validity, plan scope and per-user assignment.
                     </p>
                 </div>
-                <button
-                    onClick={openCreate}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: '#0891b2', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
-                >
+                <button onClick={openCreate} className="cp-new-btn">
                     <Plus size={16} /> New Coupon
                 </button>
             </div>
@@ -249,18 +271,18 @@ export default function AdminCoupons() {
                     <div style={{ fontSize: 13, color: '#6b7280' }}>Create your first coupon to offer discounts.</div>
                 </div>
             ) : (
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="rt-wrap">
+                    <table className="rt-table">
                         <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                                <th style={th}>Code</th>
-                                <th style={th}>Discount</th>
-                                <th style={th}>Plan scope</th>
-                                <th style={th}>Validity</th>
-                                <th style={th}>Usage</th>
-                                <th style={th}>Users</th>
-                                <th style={th}>Status</th>
-                                <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+                            <tr>
+                                <th>Code</th>
+                                <th>Discount</th>
+                                <th>Plan scope</th>
+                                <th>Validity</th>
+                                <th>Usage</th>
+                                <th>Users</th>
+                                <th>Status</th>
+                                <th className="rt-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -275,12 +297,12 @@ export default function AdminCoupons() {
                                     ? { label: 'Exhausted', color: '#b91c1c', bg: '#fef2f2' }
                                     : { label: 'Active', color: '#047857', bg: '#ecfdf5' };
                                 return (
-                                    <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={td}>
-                                            <div style={{ fontWeight: 700, color: '#111827', fontFamily: 'monospace' }}>{c.code}</div>
+                                    <tr key={c.id}>
+                                        <td data-label="Code" className="rt-heading">
+                                            <div className="cp-code">{c.code}</div>
                                             {c.description && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{c.description}</div>}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Discount">
                                             {c.discount_type === 'percent' ? (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#0891b2', fontWeight: 600 }}>
                                                     <Percent size={12} /> {c.discount_value}%
@@ -291,14 +313,14 @@ export default function AdminCoupons() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Plan scope">
                                             {c.plan ? (
                                                 <span style={{ fontSize: 13 }}>{c.plan.name}</span>
                                             ) : (
                                                 <span style={{ fontSize: 12, color: '#6b7280' }}>Any plan</span>
                                             )}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Validity">
                                             <div style={{ fontSize: 12, color: '#4b5563' }}>
                                                 {c.valid_from || c.valid_until ? (
                                                     <>
@@ -309,16 +331,18 @@ export default function AdminCoupons() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td style={td}>
-                                            <div style={{ fontSize: 13, fontWeight: 600 }}>
-                                                {c.times_redeemed}
-                                                <span style={{ color: '#9ca3af', fontWeight: 400 }}> / {c.max_redemptions ?? '∞'}</span>
-                                            </div>
-                                            <div style={{ fontSize: 11, color: '#6b7280' }}>
-                                                Per user: {c.per_user_limit}
+                                        <td data-label="Usage">
+                                            <div>
+                                                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                                    {c.times_redeemed}
+                                                    <span style={{ color: '#9ca3af', fontWeight: 400 }}> / {c.max_redemptions ?? '∞'}</span>
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                    Per user: {c.per_user_limit}
+                                                </div>
                                             </div>
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Users">
                                             {c.is_user_restricted ? (
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#7c3aed', fontWeight: 600 }}>
                                                     <UsersIcon size={12} /> {(c.allowed_users || []).length} assigned
@@ -327,13 +351,13 @@ export default function AdminCoupons() {
                                                 <span style={{ fontSize: 12, color: '#6b7280' }}>Open to all</span>
                                             )}
                                         </td>
-                                        <td style={td}>
+                                        <td data-label="Status">
                                             <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: status.bg, color: status.color }}>
                                                 {status.label}
                                             </span>
                                         </td>
-                                        <td style={{ ...td, textAlign: 'right' }}>
-                                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                                        <td className="rt-actions">
+                                            <div className="rt-actions-inner">
                                                 <button style={btnIcon('#0891b2')} title="Edit" onClick={() => openEdit(c)}>
                                                     <Edit3 size={14} />
                                                 </button>
@@ -363,6 +387,18 @@ export default function AdminCoupons() {
                 </div>
             )}
 
+            {!loading && coupons.length > 0 && (
+                <Pagination
+                    page={meta.page}
+                    totalPages={meta.total_pages}
+                    total={meta.total}
+                    limit={meta.limit}
+                    itemLabel="coupons"
+                    onPageChange={(p) => refresh({ page: p })}
+                    onLimitChange={(l) => refresh({ page: 1, limit: l })}
+                />
+            )}
+
             {editor && (
                 <CouponEditor
                     editor={editor}
@@ -378,8 +414,6 @@ export default function AdminCoupons() {
     );
 }
 
-const th = { padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
-const td = { padding: '14px 16px', fontSize: 14, color: '#1f2937', verticalAlign: 'top' };
 const btnIcon = (color) => ({
     width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     borderRadius: 6, background: `${color}10`, color, border: `1px solid ${color}30`, cursor: 'pointer',
@@ -406,15 +440,12 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
     return (
         <div
             onClick={onClose}
-            style={{
-                position: 'fixed', inset: 0, background: 'rgba(17, 24, 39, 0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20,
-            }}
+            className="cp-modal-overlay"
         >
-            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 640, width: '100%', maxHeight: '92vh', overflow: 'auto' }}>
-                <div style={{ padding: '18px 22px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Ticket size={18} color="#0891b2" />
-                    <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
+            <div onClick={(e) => e.stopPropagation()} className="cp-modal">
+                <div className="cp-modal-head">
+                    <Ticket size={18} color="#0891b2" style={{ flexShrink: 0 }} />
+                    <span className="cp-modal-title">
                         {editor.mode === 'create' ? 'New Coupon' : `Edit Coupon: ${editor.coupon.code}`}
                     </span>
                     <button onClick={onClose} disabled={saving} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}>
@@ -422,7 +453,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                     </button>
                 </div>
 
-                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="cp-modal-body">
                     <Field label="Code *">
                         <input
                             style={{ ...input, fontFamily: 'monospace', textTransform: 'uppercase' }}
@@ -442,7 +473,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                         />
                     </Field>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="cp-field-row">
                         <Field label="Discount type *">
                             <select
                                 style={input}
@@ -471,7 +502,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                         </Field>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="cp-field-row">
                         <Field label="Lifetime redemption limit">
                             <div style={{ position: 'relative' }}>
                                 <Hash size={14} style={iconAbs} />
@@ -497,7 +528,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                         </Field>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="cp-field-row">
                         <Field label="Valid from">
                             <div style={{ position: 'relative' }}>
                                 <Calendar size={14} style={iconAbs} />
@@ -582,7 +613,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                                 <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>
                                     {f.userIds.length} selected
                                 </div>
-                                <div style={{ maxHeight: 220, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}>
+                                <div className="cp-user-list">
                                     {users.length === 0 ? (
                                         <div style={{ padding: 14, fontSize: 13, color: '#b45309', textAlign: 'center' }}>
                                             No users loaded. Make sure you're logged in as admin and the backend is reachable.
@@ -593,9 +624,9 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                                         filteredUsers.map((u) => {
                                             const checked = f.userIds.includes(u.id);
                                             return (
-                                                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: checked ? '#ecfdf5' : '#fff' }}>
-                                                    <input type="checkbox" checked={checked} onChange={() => toggleUser(u.id)} />
-                                                    <div style={{ flex: 1 }}>
+                                                <label key={u.id} className="cp-user-row" style={{ background: checked ? '#ecfdf5' : '#fff' }}>
+                                                    <input type="checkbox" checked={checked} onChange={() => toggleUser(u.id)} style={{ flexShrink: 0 }} />
+                                                    <div className="cp-user-meta" style={{ flex: 1 }}>
                                                         <div style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>{u.full_name || u.email}</div>
                                                         {u.full_name && <div style={{ fontSize: 11, color: '#6b7280' }}>{u.email}</div>}
                                                     </div>
@@ -609,7 +640,7 @@ function CouponEditor({ editor, saving, plans, users, onClose, onSave, onChange 
                     </div>
                 </div>
 
-                <div style={{ padding: '14px 22px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <div className="cp-modal-footer">
                     <button onClick={onClose} disabled={saving} style={{ padding: '10px 16px', background: '#fff', color: '#1f2937', border: '1px solid #e5e7eb', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
                         Cancel
                     </button>

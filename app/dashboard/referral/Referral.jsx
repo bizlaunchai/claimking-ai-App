@@ -256,24 +256,24 @@ const Referral = () => {
                 {/* Commission Structure */}
                 <div className="commission-structure-section">
                     <h3 className="chart-title" style={{ marginBottom: '1rem' }}>💰 How Commissions Work</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
-                        <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>💵</div>
-                            <div style={{ fontWeight: 600, color: '#1a1f3a', marginBottom: '0.5rem' }}>Base Plan Bonus</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#16a34a' }}>$150</div>
-                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>When referral uses base plan for 3 months</div>
+                    <div className="commission-grid">
+                        <div className="commission-card">
+                            <div className="commission-card-icon">💵</div>
+                            <div className="commission-card-title">Base Plan Bonus</div>
+                            <div className="commission-card-value">$150</div>
+                            <div className="commission-card-desc">When referral uses base plan for 3 months</div>
                         </div>
-                        <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>💎</div>
-                            <div style={{ fontWeight: 600, color: '#1a1f3a', marginBottom: '0.5rem' }}>Upgraded Plan Bonus</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#16a34a' }}>$300</div>
-                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>When referral uses pro/enterprise for 3 months</div>
+                        <div className="commission-card">
+                            <div className="commission-card-icon">💎</div>
+                            <div className="commission-card-title">Upgraded Plan Bonus</div>
+                            <div className="commission-card-value">$300</div>
+                            <div className="commission-card-desc">When referral uses pro/enterprise for 3 months</div>
                         </div>
-                        <div style={{ background: 'white', padding: '1rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔄</div>
-                            <div style={{ fontWeight: 600, color: '#1a1f3a', marginBottom: '0.5rem' }}>Recurring Commission</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#16a34a' }}>5-20%</div>
-                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>On all claim points purchased</div>
+                        <div className="commission-card">
+                            <div className="commission-card-icon">🔄</div>
+                            <div className="commission-card-title">Recurring Commission</div>
+                            <div className="commission-card-value">5-20%</div>
+                            <div className="commission-card-desc">On all claim points purchased</div>
                         </div>
                     </div>
                 </div>
@@ -335,31 +335,18 @@ const Referral = () => {
                                 <div className="coupon-uses" style={{ marginTop: '0.5rem' }}>
                                     Used {coupon.uses} times
                                 </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                                    <button 
+                                <div className="coupon-actions">
+                                    <button
                                         onClick={() => handleCopyCoupon(coupon.code)}
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '0.375rem', 
-                                            background: 'white', 
-                                            border: '1px solid #e5e7eb', 
-                                            borderRadius: '4px', 
-                                            fontSize: '0.75rem', 
-                                            cursor: 'pointer' 
-                                        }}
+                                        style={{ background: 'white', border: '1px solid #e5e7eb' }}
                                     >
                                         📋 Copy
                                     </button>
-                                    <button 
-                                        style={{ 
-                                            flex: 1, 
-                                            padding: '0.375rem', 
-                                            background: coupon.color, 
-                                            color: coupon.color === '#16a34a' ? 'white' : '#1a1f3a', 
-                                            border: 'none', 
-                                            borderRadius: '4px', 
-                                            fontSize: '0.75rem', 
-                                            cursor: 'pointer' 
+                                    <button
+                                        style={{
+                                            background: coupon.color,
+                                            color: coupon.color === '#16a34a' ? 'white' : '#1a1f3a',
+                                            border: 'none'
                                         }}
                                     >
                                         📢 Share
@@ -371,7 +358,8 @@ const Referral = () => {
                 </div>
 
                 {/* Recent Referrals Table */}
-                <table className="referrals-table mb-10">
+                <div className="referrals-table-wrap mb-10">
+                <table className="referrals-table">
                     <thead>
                         <tr>
                             <th>Referral</th>
@@ -400,46 +388,21 @@ const Referral = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* QR Code Modal */}
             {showQR && (
-                <div 
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000
-                    }}
+                <div
+                    className="qr-modal-overlay"
                     onClick={() => setShowQR(false)}
                 >
-                    <div 
-                        style={{
-                            background: 'white',
-                            padding: '2rem',
-                            borderRadius: '12px',
-                            textAlign: 'center'
-                        }}
+                    <div
+                        className="qr-modal"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h3 style={{ marginBottom: '1rem' }}>QR Code for Your Referral Link</h3>
-                        <div style={{
-                            width: '200px',
-                            height: '200px',
-                            background: '#f3f4f6',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 1rem',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px'
-                        }}>
+                        <div className="qr-modal-box">
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontSize: '3rem' }}>📱</div>
                                 <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>QR Code Here</div>

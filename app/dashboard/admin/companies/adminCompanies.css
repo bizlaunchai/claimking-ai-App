@@ -1,0 +1,190 @@
+/* Admin → Companies list. Desktop = table, small screens = stacked cards. */
+
+.ac-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.ac-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.ac-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.ac-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.ac-subtitle {
+    margin: 0 0 24px;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+/* Filters */
+.ac-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.ac-search {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 0;
+    max-width: 400px;
+}
+
+.ac-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+.ac-search input {
+    width: 100%;
+    padding: 10px 12px 10px 32px;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.ac-select {
+    padding: 10px 12px;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1f2937;
+}
+
+.ac-search-btn {
+    padding: 10px 16px;
+    background: #1f2937;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Table shell comes from components/ui/responsive-table.css.
+   Companies has 9 columns, so it needs a wider scroll floor than the default. */
+.ac-page .rt-table {
+    min-width: 1100px;
+}
+
+.ac-page .rt-table th {
+    padding: 14px 18px;
+    font-size: 13px;
+}
+
+.ac-page .rt-table td {
+    padding: 16px 18px;
+    font-size: 15px;
+}
+
+@media (max-width: 860px) {
+    .ac-page {
+        padding: 24px 16px;
+    }
+
+    /* Card mode — the min-width above would otherwise force a scrollbar. */
+    .ac-page .rt-table {
+        min-width: 0;
+    }
+
+    .ac-page .rt-table td {
+        padding: 8px 0;
+    }
+
+    /* View / Suspend split the card width evenly. */
+    .ac-page .rt-actions-inner > * {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 520px) {
+    .ac-page {
+        padding: 20px 12px;
+    }
+
+    .ac-title {
+        font-size: 22px;
+    }
+
+    .ac-search {
+        flex-basis: 100%;
+        max-width: none;
+    }
+
+    .ac-select,
+    .ac-search-btn {
+        flex: 1;
+    }
+}
+
+/* Suspend / unsuspend modal */
+.ac-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+}
+
+.ac-modal {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 460px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.ac-modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+    .ac-modal-overlay {
+        padding: 12px;
+    }
+
+    .ac-modal-footer > button {
+        flex: 1;
+        justify-content: center;
+    }
+}
