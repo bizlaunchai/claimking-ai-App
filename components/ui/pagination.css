@@ -1,0 +1,108 @@
+/* Shared pagination bar — see components/ui/Pagination.jsx */
+
+.pg-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding: 12px 4px;
+}
+
+.pg-summary {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.pg-summary strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.pg-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.pg-limit {
+    padding: 8px 10px;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1f2937;
+    cursor: pointer;
+}
+
+.pg-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: #fff;
+    color: #1f2937;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pg-btn:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.pg-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.pg-page {
+    font-size: 13px;
+    color: #6b7280;
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
+.pg-page strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .pg-bar {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .pg-controls {
+        justify-content: space-between;
+    }
+
+    .pg-nav {
+        flex: 1;
+        justify-content: space-between;
+    }
+}
+
+@media (max-width: 400px) {
+    .pg-btn-text {
+        display: none;
+    }
+
+    .pg-btn {
+        padding: 8px 10px;
+    }
+}

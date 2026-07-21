@@ -1,0 +1,139 @@
+/* Admin → Plans. Table styles come from components/ui/responsive-table.css */
+
+.ap-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.ap-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.ap-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.ap-subtitle {
+    margin: 6px 0 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.ap-new-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #4f46e5;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Plans has only 7 narrow columns — 900px is enough before it scrolls. */
+.ap-page .rt-table {
+    min-width: 900px;
+}
+
+/* Editor modal */
+.ap-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+}
+
+.ap-modal {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: auto;
+}
+
+.ap-modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Two-up field rows inside the editor. */
+.ap-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.ap-stripe-ids {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 6px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #1f2937;
+    align-items: center;
+}
+
+@media (max-width: 860px) {
+    .ap-page {
+        padding: 24px 16px;
+    }
+
+    /* Card mode — the min-width from above would force a scrollbar. */
+    .ap-page .rt-table {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 560px) {
+    .ap-page {
+        padding: 20px 12px;
+    }
+
+    .ap-title {
+        font-size: 22px;
+    }
+
+    .ap-new-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .ap-field-row {
+        grid-template-columns: 1fr;
+    }
+
+    .ap-stripe-ids {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .ap-modal-overlay {
+        padding: 12px;
+    }
+
+    .ap-modal-footer > button {
+        flex: 1;
+        justify-content: center;
+    }
+}

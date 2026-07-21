@@ -1,0 +1,172 @@
+/**
+ * Shared responsive table styles for admin list pages.
+ *
+ * Desktop  → normal table
+ * ≤1200px  → horizontal scroll (set .rt-table { min-width } per page if needed)
+ * ≤860px   → each row collapses into a card
+ *
+ * Usage:
+ *   import '../../../../components/ui/responsive-table.css';
+ *
+ *   <div className="rt-wrap">
+ *     <table className="rt-table">
+ *       <thead><tr><th>Name</th>…<th className="rt-actions">Actions</th></tr></thead>
+ *       <tbody>
+ *         <tr>
+ *           <td data-label="Name" className="rt-heading">…</td>   ← card title, no label
+ *           <td data-label="Price">…</td>                          ← label shown in card mode
+ *           <td className="rt-actions"><div className="rt-actions-inner">…</div></td>
+ *         </tr>
+ *       </tbody>
+ *     </table>
+ *   </div>
+ *
+ * IMPORTANT: every <td> needs a data-label — that attribute is what the card
+ * layout renders as the field name. A cell without one shows a blank label.
+ * A <td> whose content is two stacked divs should wrap them in a single
+ * element, since cells become flex containers in card mode.
+ */
+
+.rt-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.rt-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.rt-table thead tr {
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.rt-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.rt-table td {
+    padding: 14px 16px;
+    font-size: 14px;
+    color: #1f2937;
+    vertical-align: middle;
+}
+
+.rt-table tbody tr {
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.rt-actions {
+    text-align: right;
+}
+
+.rt-actions-inner {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.rt-nowrap {
+    white-space: nowrap;
+}
+
+/* Tablet — keep the table, let it scroll sideways. */
+@media (max-width: 1200px) and (min-width: 861px) {
+    .rt-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* ── Card layout ───────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+    .rt-wrap {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        overflow: visible;
+    }
+
+    .rt-table,
+    .rt-table tbody,
+    .rt-table tr,
+    .rt-table td {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .rt-table thead {
+        display: none;
+    }
+
+    .rt-table tbody tr {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+
+    .rt-table td {
+        padding: 8px 0;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: right;
+    }
+
+    /* Field name, pulled from data-label on the cell. */
+    .rt-table td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 700;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-align: left;
+        flex: 0 0 auto;
+    }
+
+    /* Card title — full width, no label. */
+    .rt-table td.rt-heading {
+        display: block;
+        text-align: left;
+        padding-top: 0;
+    }
+
+    .rt-table td.rt-heading::before {
+        content: none;
+    }
+
+    /* Action buttons stretch across the bottom of the card. */
+    .rt-table td.rt-actions {
+        display: block;
+        text-align: left;
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .rt-table td.rt-actions::before {
+        content: none;
+    }
+
+    .rt-actions-inner {
+        display: flex;
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
