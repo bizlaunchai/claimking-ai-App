@@ -168,6 +168,22 @@ const Page = () => {
         setEdits(prev => ({ ...prev, [field]: value }));
     };
 
+    // ── Correct a misclassified report → PATCH /measurement/:id ──────────
+    // Optimistic: flip the grid immediately, revert if the server rejects it.
+    const changeReportType = async (nextType) => {
+        if (!extractResult?.id || nextType === extractResult.report_type) return;
+        const previous = extractResult.report_type;
+        setExtractResult(prev => ({ ...prev, report_type: nextType }));
+        try {
+            const res = await axiosInstance.patch(`/measurement/${extractResult.id}`, {
+                report_type: nextType,
+            });
+            if (res.data?.data) setExtractResult(res.data.data);
+        } catch {
+            setExtractResult(prev => ({ ...prev, report_type: previous }));
+        }
+    };
+
     // ── Save edits → PATCH /measurement/:id ──────────────────────────────
     const saveEdits = async () => {
         if (!extractResult?.id || savingEdits) return;
@@ -542,6 +558,7 @@ const Page = () => {
                                         row={extractResult}
                                         edits={edits}
                                         onChange={updateField}
+                                        onChangeReportType={changeReportType}
                                         onSave={saveEdits}
                                         onConfirm={confirmMeasurement}
                                         onUseInEstimate={useInEstimate}
@@ -715,7 +732,7 @@ export default Page;
 //   + Save / Confirm / Use-in-Estimate actions. Defined in this file (not a
 //   separate component file) because it's used in exactly one place.
 // ──────────────────────────────────────────────────────────────────────────
-const FIELD_GRID = [
+const ROOF_FIELDS = [
     { key: 'squares',          label: 'Squares',            unit: 'sq',  step: '0.1' },
     { key: 'total_sq_ft',      label: 'Total Area',         unit: 'ft²', step: '1'   },
     { key: 'pitch',            label: 'Pitch',              unit: 'x/12', step: null,  type: 'text' },
@@ -730,8 +747,54 @@ const FIELD_GRID = [
     { key: 'penetrations',     label: 'Penetrations',       unit: '#',   step: '1'   },
 ];
 
+// Siding / exterior reports (SidingScope, HOVER exterior) carry a completely
+// different field set — wall areas by material, trim LF, opening counts.
+const SIDING_FIELDS = [
+    { key: 'siding_total_sf',    label: 'Total Siding',      unit: 'ft²', step: '1'   },
+    { key: 'horizontal_lap_sf',  label: 'Horizontal Lap',    unit: 'ft²', step: '1'   },
+    { key: 'vertical_siding_sf', label: 'Vertical Siding',   unit: 'ft²', step: '1'   },
+    { key: 'shake_sf',           label: 'Shake',             unit: 'ft²', step: '1'   },
+    { key: 'brick_sf',           label: 'Brick',             unit: 'ft²', step: '1'   },
+    { key: 'stone_sf',           label: 'Stone',             unit: 'ft²', step: '1'   },
+    { key: 'stucco_sf',          label: 'Stucco',            unit: 'ft²', step: '1'   },
+    { key: 'soffit_sf',          label: 'Soffit',            unit: 'ft²', step: '1'   },
+    { key: 'starter_strip_lf',   label: 'Starter Strip',     unit: 'LF',  step: '1'   },
+    { key: 'fascia_soffit_lf',   label: 'Fascia/Soffit',     unit: 'LF',  step: '1'   },
+    { key: 'frieze_board_lf',    label: 'Frieze Board',      unit: 'LF',  step: '1'   },
+    { key: 'inside_corner_lf',   label: 'Inside Corner',     unit: 'LF',  step: '1'   },
+    { key: 'outside_corner_lf',  label: 'Outside Corner',    unit: 'LF',  step: '1'   },
+    { key: 'window_wrap_lf',     label: 'Window Wrap',       unit: 'LF',  step: '1'   },
+    { key: 'door_wrap_lf',       label: 'Door Wrap',         unit: 'LF',  step: '1'   },
+    { key: 'garage_wrap_lf',     label: 'Garage Wrap',       unit: 'LF',  step: '1'   },
+    { key: 'window_count',       label: 'Windows',           unit: '#',   step: '1'   },
+    { key: 'door_count',         label: 'Doors',             unit: '#',   step: '1'   },
+    { key: 'garage_door_count',  label: 'Garage Doors',      unit: '#',   step: '1'   },
+    { key: 'siding_waste_factor',label: 'Siding Waste',      unit: '%',   step: '1'   },
+];
+
+const REPORT_TYPE_LABEL = {
+    roof:    'Roof report',
+    siding:  'Siding report',
+    both:    'Roof + siding report',
+    unknown: 'Unrecognised document',
+};
+
+/** Which field grids to render for a given report_type. */
+function gridsFor(reportType) {
+    if (reportType === 'siding') return [{ title: 'Siding', fields: SIDING_FIELDS }];
+    if (reportType === 'both') {
+        return [
+            { title: 'Roof', fields: ROOF_FIELDS },
+            { title: 'Siding', fields: SIDING_FIELDS },
+        ];
+    }
+    // 'roof' and 'unknown' both fall back to the roof grid so the contractor
+    // always has somewhere to type manual numbers.
+    return [{ title: 'Roof', fields: ROOF_FIELDS }];
+}
+
 function ExtractedPanel({
-    row, edits, onChange, onSave, onConfirm, onUseInEstimate,
+    row, edits, onChange, onChangeReportType, onSave, onConfirm, onUseInEstimate,
     savingEdits, confirming,
 }) {
     const isConfirmed = row?.status === 'confirmed';
@@ -740,6 +803,12 @@ function ExtractedPanel({
         row?.source_provider && row.source_provider !== 'unknown'
             ? row.source_provider
             : null;
+    const reportType = row?.report_type ?? 'roof';
+    // Nothing usable came back — either it wasn't a measurement report, or it
+    // was a family we couldn't read. Say so instead of showing empty inputs
+    // next to a high confidence number.
+    const nothingExtracted = row?.status === 'failed' || reportType === 'unknown';
+    const grids = gridsFor(reportType);
 
     return (
         <div style={{
@@ -752,43 +821,87 @@ function ExtractedPanel({
                         {isConfirmed ? '✓ Confirmed measurements' : 'Review & confirm extracted measurements'}
                     </div>
                     <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-                        {provider ? `Detected: ${provider} • ` : ''}
-                        Confidence: {conf}%
-                        {conf < 70 && ' — please double-check the numbers below'}
+                        {REPORT_TYPE_LABEL[reportType] ?? REPORT_TYPE_LABEL.roof}
+                        {provider ? ` • Detected: ${provider}` : ''}
+                        {' • '}Confidence: {conf}%
+                        {!nothingExtracted && conf < 70 && ' — please double-check the numbers below'}
                     </div>
                 </div>
-                {isConfirmed && (
-                    <span style={{
-                        background: '#10b981', color: 'white', fontSize: 11, fontWeight: 600,
-                        padding: '3px 10px', borderRadius: 12,
-                    }}>CONFIRMED</span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Escape hatch: if the AI classified the document wrong, the
+                        contractor can switch grids instead of being stuck. */}
+                    {!isConfirmed && (
+                        <select
+                            value={reportType}
+                            onChange={(e) => onChangeReportType(e.target.value)}
+                            title="Which measurement fields to show"
+                            style={{
+                                padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6,
+                                fontSize: 12, background: '#fff', color: '#374151',
+                            }}
+                        >
+                            <option value="roof">Roof fields</option>
+                            <option value="siding">Siding fields</option>
+                            <option value="both">Roof + siding</option>
+                        </select>
+                    )}
+                    {isConfirmed && (
+                        <span style={{
+                            background: '#10b981', color: 'white', fontSize: 11, fontWeight: 600,
+                            padding: '3px 10px', borderRadius: 12,
+                        }}>CONFIRMED</span>
+                    )}
+                </div>
             </div>
 
-            <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                gap: 10, marginBottom: 12,
-            }}>
-                {FIELD_GRID.map(f => (
-                    <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                            {f.label} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({f.unit})</span>
-                        </label>
-                        <input
-                            type={f.type ?? 'number'}
-                            step={f.step ?? undefined}
-                            value={edits?.[f.key] ?? ''}
-                            placeholder={row?.extracted_data?.[f.key] === null || row?.extracted_data?.[f.key] === undefined ? '—' : ''}
-                            onChange={(e) => onChange(f.key, e.target.value)}
-                            disabled={isConfirmed}
-                            style={{
-                                padding: '7px 9px', border: '1px solid #e5e7eb', borderRadius: 6,
-                                fontSize: 13, background: isConfirmed ? '#f3f4f6' : '#fff',
-                            }}
-                        />
+            {nothingExtracted && (
+                <div style={{
+                    marginBottom: 12, padding: '10px 12px', borderRadius: 6, fontSize: 13,
+                    background: '#fef2f2', border: '1px solid #fecaca',
+                    borderLeft: '4px solid #dc2626', color: '#7f1d1d',
+                }}>
+                    <strong>No measurements found in this file.</strong>{' '}
+                    {row?.error_message
+                        || 'Upload a roof or siding measurement report (EagleView, HOVER, GAF, SidingScope…), or type the numbers in manually below.'}
+                </div>
+            )}
+
+            {grids.map(({ title, fields }) => (
+                <div key={title}>
+                    {grids.length > 1 && (
+                        <div style={{
+                            fontSize: 11, fontWeight: 700, color: '#1a1f3a',
+                            textTransform: 'uppercase', letterSpacing: 0.5, margin: '4px 0 8px',
+                        }}>
+                            {title}
+                        </div>
+                    )}
+                    <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                        gap: 10, marginBottom: 12,
+                    }}>
+                        {fields.map(f => (
+                            <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                    {f.label} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({f.unit})</span>
+                                </label>
+                                <input
+                                    type={f.type ?? 'number'}
+                                    step={f.step ?? undefined}
+                                    value={edits?.[f.key] ?? ''}
+                                    placeholder={row?.extracted_data?.[f.key] === null || row?.extracted_data?.[f.key] === undefined ? '—' : ''}
+                                    onChange={(e) => onChange(f.key, e.target.value)}
+                                    disabled={isConfirmed}
+                                    style={{
+                                        padding: '7px 9px', border: '1px solid #e5e7eb', borderRadius: 6,
+                                        fontSize: 13, background: isConfirmed ? '#f3f4f6' : '#fff',
+                                    }}
+                                />
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
+                </div>
+            ))}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {!isConfirmed && (
