@@ -5,6 +5,12 @@ import dynamic from "next/dynamic.js";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import Can from "@/lib/permissions/Can";
+import {
+    CSV_COLUMN_NAMES,
+    buildClientsCsv,
+    csvFilename,
+    downloadCsv,
+} from "./clientCsv";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -78,6 +84,7 @@ const getStatusClass = (statusNum) => {
 const ClientPortal = () => {
     const [showAddClient, setShowAddClient] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
+    const [showExport, setShowExport] = useState(false);
     const [showPortalSettings, setShowPortalSettings] = useState(false);
     const [showTrash, setShowTrash] = useState(false);
 
@@ -164,6 +171,46 @@ const ClientPortal = () => {
         }
         setFilteredClients(sorted);
         setCurrentListPage(1);
+    };
+
+    /**
+     * Export clients to CSV.
+     *
+     * scope 'all'      → re-fetches /client-portal with NO status/search
+     *                    params. The list on screen is already filtered, so
+     *                    exporting from local state would silently ship a
+     *                    partial file labelled "all".
+     * scope 'filtered' → exactly the rows currently on screen (current
+     *                    status chip + search + sort order).
+     *
+     * Trashed clients are excluded either way — the backend list endpoint
+     * omits soft-deleted rows, and a trashed client in an "all clients"
+     * export would be misleading.
+     */
+    const exportClients = async (scope) => {
+        try {
+            let rows;
+            if (scope === 'all') {
+                const res = await axiosInstance.get('/client-portal');
+                rows = res.data?.data ?? [];
+            } else {
+                rows = filteredClients;
+            }
+
+            if (!rows.length) {
+                toast.error('No clients to export.');
+                return false;
+            }
+
+            downloadCsv(buildClientsCsv(rows), csvFilename(scope));
+            toast.success(
+                `Exported ${rows.length} client${rows.length === 1 ? '' : 's'} to CSV.`,
+            );
+            return true;
+        } catch {
+            // axiosInstance toasts the network error; nothing downloaded.
+            return false;
+        }
     };
 
     const handleSoftDelete = async (id) => {
@@ -388,6 +435,16 @@ const ClientPortal = () => {
                                 <line x1="12" y1="3" x2="12" y2="15"></line>
                             </svg>
                             Bulk Import
+                        </button>
+                        </Can>
+                        <Can permission="manage_portal_links">
+                        <button className="btn btn-secondary" onClick={() => setShowExport(true)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Export CSV
                         </button>
                         </Can>
                        {/* <button className="btn btn-outline" onClick={() => { setShowTrash(true); fetchTrashed(); }}>
@@ -657,6 +714,16 @@ const ClientPortal = () => {
             <BulkImportModal
                 isOpen={showBulkImport}
                 onClose={() => setShowBulkImport(false)}
+            />
+
+            <ExportClientsModal
+                isOpen={showExport}
+                onClose={() => setShowExport(false)}
+                onExport={exportClients}
+                totalCount={meta.total ?? 0}
+                filteredCount={filteredClients.length}
+                filterLabel={statusOptions.find(o => o.value === currentFilter)?.label ?? 'All'}
+                hasSearch={Boolean(searchQuery)}
             />
 
             <TrashModal
@@ -1250,6 +1317,178 @@ const TrashModal = ({ isOpen, clients, onClose, onRestore, onPermanentDelete }) 
                 </div>
                 <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Export modal — the scope choice is the whole point of it.
+ *
+ * "Export CSV" straight from the toolbar would be ambiguous: the list is
+ * almost always filtered by a stage chip or a search, so a one-click export
+ * either quietly drops rows the user expected, or ignores a filter they
+ * deliberately set. Two labelled options with live counts remove the guess.
+ */
+const ExportClientsModal = ({
+    isOpen, onClose, onExport, totalCount, filteredCount, filterLabel, hasSearch,
+}) => {
+    const [scope, setScope] = useState('all');
+    const [exporting, setExporting] = useState(false);
+    const [showColumns, setShowColumns] = useState(false);
+
+    if (!isOpen) return null;
+
+    const isFiltered = filterLabel !== 'All' || hasSearch;
+    const selectedCount = scope === 'all' ? totalCount : filteredCount;
+
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            const ok = await onExport(scope);
+            if (ok) onClose();
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const scopeOptions = [
+        {
+            value: 'all',
+            title: 'All clients',
+            count: totalCount,
+            hint: 'Every client in your account, ignoring the filters below.',
+        },
+        {
+            value: 'filtered',
+            title: 'Current view only',
+            count: filteredCount,
+            hint: isFiltered
+                ? `Matches ${filterLabel}${hasSearch ? ' + your search' : ''}, in the order shown.`
+                : 'Same as the list on screen right now.',
+        },
+    ];
+
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-800">Export Clients to CSV</h2>
+                    <button
+                        className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 transition-all duration-200 hover:bg-gray-100"
+                        onClick={onClose}
+                        aria-label="Close"
+                    >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div className="p-6">
+                    <div className="form-section">
+                        <h3 className="section-title">What to export</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {scopeOptions.map(opt => (
+                                <label
+                                    key={opt.value}
+                                    style={{
+                                        display: 'flex', alignItems: 'flex-start', gap: 12,
+                                        padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                                        border: `1px solid ${scope === opt.value ? '#FDB813' : '#e5e7eb'}`,
+                                        background: scope === opt.value ? '#fffbe7' : '#fff',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="exportScope"
+                                        value={opt.value}
+                                        checked={scope === opt.value}
+                                        onChange={() => setScope(opt.value)}
+                                        style={{ marginTop: 3, accentColor: '#FDB813' }}
+                                    />
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                            <span style={{ fontWeight: 600, color: '#1a1f3a', fontSize: 14 }}>
+                                                {opt.title}
+                                            </span>
+                                            <span style={{
+                                                background: '#1a1f3a', color: '#fff', fontSize: 11, fontWeight: 700,
+                                                padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+                                            }}>
+                                                {opt.count} {opt.count === 1 ? 'client' : 'clients'}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 3 }}>
+                                            {opt.hint}
+                                        </div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="form-section">
+                        <h3 className="section-title">What's included</h3>
+                        <p className="help-text" style={{ marginTop: 0 }}>
+                            All {CSV_COLUMN_NAMES.length} fields per client — contact, property,
+                            insurance, claim stage, adjuster, and amounts. Opens directly in
+                            Excel, Numbers, or Google Sheets.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowColumns(v => !v)}
+                            style={{
+                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                color: '#2563eb', fontSize: 12.5, fontWeight: 600,
+                            }}
+                        >
+                            {showColumns ? 'Hide column list' : 'Show all columns'}
+                        </button>
+                        {showColumns && (
+                            <div style={{
+                                display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10,
+                                padding: 12, background: '#f9fafb', borderRadius: 8,
+                                border: '1px solid #e5e7eb',
+                            }}>
+                                {CSV_COLUMN_NAMES.map(name => (
+                                    <span key={name} style={{
+                                        fontSize: 11.5, color: '#374151', background: '#fff',
+                                        border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 8px',
+                                    }}>
+                                        {name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <p className="help-text" style={{ marginBottom: 0 }}>
+                            Portal share links are never exported — those are access
+                            credentials, not client data.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+                    <button className="btn btn-outline" onClick={onClose} disabled={exporting}>
+                        Cancel
+                    </button>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleExport}
+                        disabled={exporting || selectedCount === 0}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        {exporting
+                            ? 'Preparing…'
+                            : `Download ${selectedCount} ${selectedCount === 1 ? 'client' : 'clients'}`}
+                    </button>
                 </div>
             </div>
         </div>
