@@ -481,7 +481,7 @@ const ClientPortal = () => {
                         Share Link
                     </button>
                     <button
-                        className="action-btn"
+                        className={`action-btn${hasUnread ? ' has-unread' : ''}`}
                         onClick={() => setMessagesTarget(client)}
                         title={hasUnread
                             ? 'Unread messages from this client'
@@ -781,7 +781,7 @@ const ClientPortal = () => {
                                             <td style={{ display: 'flex', gap: '0.5rem' }}>
                                                 <button className="action-btn" onClick={() => openShareModal(client)}>Share Link</button>
                                                 <button
-                                                    className="action-btn"
+                                                    className={`action-btn${(unreadByClient[client.id] ?? 0) > 0 ? ' has-unread' : ''}`}
                                                     onClick={() => setMessagesTarget(client)}
                                                     title={(unreadByClient[client.id] ?? 0) > 0
                                                         ? 'Unread messages from this client'

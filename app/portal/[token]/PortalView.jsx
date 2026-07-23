@@ -205,6 +205,34 @@ export default function PortalView() {
 
     const stage = c.claim_status ?? 1;
     const stageLabel = STAGE_LABEL[stage] || `Stage ${stage}`;
+
+    /**
+     * Jump to the message box and put the cursor in it, so one tap gets the
+     * homeowner from "I have a question" to typing.
+     *
+     * `scrollIntoView` is smooth, but focusing a field mid-scroll makes the
+     * browser snap the page — so the focus waits for the scroll to settle.
+     * On `prefers-reduced-motion` the jump is instant and focus is immediate.
+     */
+    const scrollToMessages = () => {
+        const section = document.getElementById('pv-messages');
+        if (!section) return;
+
+        const reduceMotion =
+            typeof window !== 'undefined' &&
+            window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+        section.scrollIntoView({
+            behavior: reduceMotion ? 'auto' : 'smooth',
+            block: 'start',
+        });
+        section.classList.add('pv-flash');
+        setTimeout(() => section.classList.remove('pv-flash'), 1400);
+
+        const focusInput = () => section.querySelector('textarea')?.focus();
+        if (reduceMotion) focusInput();
+        else setTimeout(focusInput, 650);
+    };
     const stageStyleObj = stageStyle(stage);
     const progressPct = Math.max(0, Math.min(100, c.progress ?? 0));
     const firstName = c?.first_name || c?.full_name?.split(' ')[0] || 'there';
@@ -255,6 +283,18 @@ export default function PortalView() {
                                 {stageStyleObj.label}
                             </span>
                         </div>
+
+                        {/* The message box lives at the bottom of a long page —
+                            without this, a homeowner with a question has to
+                            scroll past everything to find it. */}
+                        <button
+                            type="button"
+                            className="pv-hero-msg-btn"
+                            onClick={scrollToMessages}
+                        >
+                            <Icon.Message width="16" height="16" />
+                            Message {contractorName}
+                        </button>
                     </div>
                 </div>
             </section>
@@ -376,6 +416,7 @@ export default function PortalView() {
 
             {/* ── Messages ─────────────────────────────────────────────────── */}
             <SectionCard
+                id="pv-messages"
                 icon={<Icon.Message width="18" height="18" />}
                 accent="amber"
                 title={`Message ${contractorName}`}
@@ -383,6 +424,8 @@ export default function PortalView() {
             >
                 <PortalMessages contractorName={contractorName} />
             </SectionCard>
+
+            <MessagesFab onClick={scrollToMessages} label="Message us" />
 
             {/* ── Footer ──────────────────────────────────────────────────
                  Three-tier layout:
@@ -450,9 +493,51 @@ function StatCard({ icon, label, value, sub, accent = 'blue' }) {
     );
 }
 
-function SectionCard({ icon, title, subtitle, children, accent = 'blue' }) {
+/**
+ * Floating "message us" shortcut.
+ *
+ * Its own component (rather than state on PortalView) because PortalView has
+ * early returns for the loading / error states — a hook added down there would
+ * break the rules of hooks.
+ *
+ * It hides itself once the message box is actually on screen: a button that
+ * scrolls you to something you are already looking at is just clutter.
+ */
+function MessagesFab({ onClick, label }) {
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+        const section = document.getElementById('pv-messages');
+        if (!section || typeof IntersectionObserver === 'undefined') {
+            // No section or no observer support — always offer the shortcut.
+            setShow(!!section);
+            return;
+        }
+        const io = new IntersectionObserver(
+            ([entry]) => setShow(!entry.isIntersecting),
+            { threshold: 0.15 },
+        );
+        io.observe(section);
+        return () => io.disconnect();
+    }, []);
+
     return (
-        <section className="pv-container">
+        <button
+            type="button"
+            className={`pv-msg-fab${show ? ' is-visible' : ''}`}
+            onClick={onClick}
+            aria-hidden={!show}
+            tabIndex={show ? 0 : -1}
+        >
+            <Icon.Message width="18" height="18" />
+            <span className="pv-msg-fab-label">{label}</span>
+        </button>
+    );
+}
+
+function SectionCard({ id, icon, title, subtitle, children, accent = 'blue' }) {
+    return (
+        <section className="pv-container" id={id}>
             <div className="pv-section">
                 <div className="pv-section-title-row">
                     <div className={`pv-section-icon pv-section-icon-${accent}`}>{icon}</div>
@@ -756,6 +841,82 @@ function PortalStyles() {
             .pv-stage-dot {
                 width: 6px; height: 6px;
                 border-radius: 50%;
+            }
+
+            /* ── Jump-to-messages ─────────────────────────────────────────
+               The message box sits at the bottom of a long page. Two ways in:
+                 1. a hero button, seen the moment the page opens
+                 2. a floating pill that appears once you scroll past the hero
+                    and hides again when the message box is on screen. */
+            .pv-hero-msg-btn {
+                display: inline-flex; align-items: center; gap: 0.5rem;
+                margin-top: 1.25rem;
+                padding: 0.7rem 1.25rem;
+                border: none;
+                border-radius: 10px;
+                background: linear-gradient(135deg, #FDB813, #d4a000);
+                color: #1a1f3a;
+                font-family: inherit;
+                font-size: 0.875rem;
+                font-weight: 700;
+                cursor: pointer;
+                box-shadow: 0 4px 14px rgba(253, 184, 19, 0.35);
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }
+            .pv-hero-msg-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(253, 184, 19, 0.45);
+            }
+
+            .pv-msg-fab {
+                position: fixed;
+                right: 20px;
+                bottom: 20px;
+                z-index: 40;
+                display: inline-flex; align-items: center; gap: 0.5rem;
+                padding: 0.8rem 1.15rem;
+                border: none;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #FDB813, #d4a000);
+                color: #1a1f3a;
+                font-family: inherit;
+                font-size: 0.875rem;
+                font-weight: 700;
+                cursor: pointer;
+                box-shadow: 0 8px 24px rgba(26, 31, 58, 0.28);
+                /* Parked out of reach until needed — visibility (not display)
+                   so the fade can actually run. */
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(14px);
+                transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+            }
+            .pv-msg-fab.is-visible {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+            }
+            .pv-msg-fab:hover { filter: brightness(1.05); }
+
+            /* A brief gold wash so it's obvious where the jump landed. */
+            #pv-messages { scroll-margin-top: 16px; }
+            .pv-flash .pv-card {
+                animation: pv-flash-highlight 1.4s ease-out;
+            }
+            @keyframes pv-flash-highlight {
+                0%   { box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.55); }
+                100% { box-shadow: 0 0 0 0 rgba(253, 184, 19, 0); }
+            }
+
+            @media (max-width: 520px) {
+                /* Icon-only on small screens so the pill never covers content. */
+                .pv-msg-fab { padding: 0.85rem; }
+                .pv-msg-fab-label { display: none; }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .pv-msg-fab { transition: none; }
+                .pv-flash .pv-card { animation: none; }
             }
 
             /* ── Stat cards ───────────────────────────────────────────────
