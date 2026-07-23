@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useUnreadMessages } from "@/lib/hooks/useUnreadMessages";
 
 /**
  * Top-bar widget for the dashboard.
@@ -25,6 +26,9 @@ const DashboardHeader = ({
     const [credits, setCredits] = useState(null); // null while loading
     const [role, setRole] = useState(null);
     const [companyId, setCompanyId] = useState(null);
+    // Notification bell — driven by the same unread-message store as the
+    // sidebar badge. Zero unread → plain bell, no dot.
+    const { unreadMessages } = useUnreadMessages();
 
     useEffect(() => {
         document.title = title;
@@ -121,6 +125,63 @@ const DashboardHeader = ({
             </div>
 
             <div className="dashboard-header-right">
+                {/* Notification bell — links straight to the Messages inbox.
+                    Only rendered for company members (superadmins have no
+                    client conversations of their own). */}
+                {isCompanyMember && (
+                    <Link
+                        href="/dashboard/messages"
+                        aria-label={
+                            unreadMessages > 0
+                                ? `${unreadMessages} unread messages`
+                                : "Messages"
+                        }
+                        title={
+                            unreadMessages > 0
+                                ? `${unreadMessages} unread message${unreadMessages > 1 ? "s" : ""}`
+                                : "Messages"
+                        }
+                        style={{
+                            position: "relative",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "8px",
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            color: "#374151",
+                            textDecoration: "none",
+                        }}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                        </svg>
+                        {unreadMessages > 0 && (
+                            <span
+                                style={{
+                                    position: "absolute",
+                                    top: "-5px",
+                                    right: "-5px",
+                                    minWidth: "17px",
+                                    height: "17px",
+                                    padding: "0 4px",
+                                    borderRadius: "999px",
+                                    background: "#FDB813",
+                                    color: "#1a1f3a",
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    lineHeight: "17px",
+                                    textAlign: "center",
+                                }}
+                            >
+                                {unreadMessages > 99 ? "99+" : unreadMessages}
+                            </span>
+                        )}
+                    </Link>
+                )}
+
                 {/* Credits widget:
                     - Company admin → wrapped in a link to /dashboard/billing
                     - Other team members → plain badge, no link, no $ amount

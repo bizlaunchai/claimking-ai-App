@@ -11,6 +11,7 @@ import {usePathname} from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usePermissions } from "@/lib/permissions/PermissionsContext";
 import axiosInstance from "@/lib/axiosInstance";
+import { useUnreadMessages } from "@/lib/hooks/useUnreadMessages";
 
 function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile = () => {}}) {
     const sidebarRef = useRef(null);
@@ -35,6 +36,9 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
 
     const pathname = usePathname();
     const { has, loading: permsLoading } = usePermissions();
+    // Live unread badge on the Messages tab (shared store — one fetch + one
+    // realtime channel no matter how many components read it).
+    const { unreadThreads } = useUnreadMessages();
 
     // Helper: does the current user have access to a given admin sub-link?
     // Superadmin → wildcard yes; platform_staff → check their granted perms.
@@ -391,6 +395,22 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                     </svg>
                                 </span>
                                 <span className="nav-text">Supplements</span>
+                            </Link>
+                        </div>)}
+
+                        {has('manage_portal_links') && (<div className="nav-item">
+                            <Link href="/dashboard/messages" className={`nav-link ${pathname.startsWith('/dashboard/messages') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Messages">
+                                <span className="nav-icon">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                                    </svg>
+                                </span>
+                                <span className="nav-text">Messages</span>
+                                {unreadThreads > 0 && (
+                                    <span className="nav-badge" aria-label={`${unreadThreads} unread conversations`}>
+                                        {unreadThreads > 99 ? '99+' : unreadThreads}
+                                    </span>
+                                )}
                             </Link>
                         </div>)}
 
