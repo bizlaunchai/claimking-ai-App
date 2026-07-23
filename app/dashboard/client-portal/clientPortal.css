@@ -582,6 +582,43 @@
     color: #1a1f3a;
 }
 
+/* "This client is waiting on you" dot on a card's Messages button.
+   No number — presence is the whole signal. Red is the one hue that stays
+   loud on BOTH states this button has: the white default and the gold hover.
+   (Gold would vanish on hover; navy read as decoration, not an alert.)
+
+   The expanding ring is a pseudo-element, so only IT animates — the dot
+   itself never moves and the button's layout is untouched (the ring is
+   painted outside the flow and fades before it can overlap the label). */
+.msg-unread-dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    flex-shrink: 0;
+}
+
+.msg-unread-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: msgDotPing 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+}
+
+@keyframes msgDotPing {
+    0%        { transform: scale(1);   opacity: 0.5; }
+    70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* A ring that never stops is exactly what motion-sensitive users switch off. */
+@media (prefers-reduced-motion: reduce) {
+    .msg-unread-dot::after { animation: none; }
+}
+
 .action-btn.primary {
     background: #FDB813;
     color: #1a1f3a;

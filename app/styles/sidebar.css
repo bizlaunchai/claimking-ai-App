@@ -405,6 +405,18 @@
     padding: 3px 7px;
     border-radius: 999px;
     flex-shrink: 0;
+    /* Expanding halo. box-shadow is used rather than a pseudo-element so the
+       same rule works for the pill AND the collapsed-sidebar dot. */
+    animation: navBadgePing 2s ease-out infinite;
+}
+
+@keyframes navBadgePing {
+    0%        { box-shadow: 0 0 0 0 rgba(253, 184, 19, 0.65); }
+    70%, 100% { box-shadow: 0 0 0 9px rgba(253, 184, 19, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-badge { animation: none; }
 }
 
 .sidebar.collapsed .nav-badge {

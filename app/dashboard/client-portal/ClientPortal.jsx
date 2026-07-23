@@ -5,6 +5,8 @@ import dynamic from "next/dynamic.js";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import Can from "@/lib/permissions/Can";
+import { createClient } from "@/lib/supabase/client";
+import { refreshUnreadMessages } from "@/lib/hooks/useUnreadMessages";
 import {
     CSV_COLUMN_NAMES,
     buildClientsCsv,
@@ -144,6 +146,10 @@ const ClientPortal = () => {
     const [shareTarget, setShareTarget] = useState(null);
     // Client whose two-way message thread is open in the messages modal.
     const [messagesTarget, setMessagesTarget] = useState(null);
+    // { [client_portal_id]: unreadCount } — drives the badge on each card's
+    // Messages button. Fetched separately from the client list so the list
+    // endpoint's contract (shared with the Claims page) stays untouched.
+    const [unreadByClient, setUnreadByClient] = useState({});
 
     const gridItemsPerPage = 9;
 
@@ -173,9 +179,45 @@ const ClientPortal = () => {
         }
     }, []);
 
+    const fetchUnread = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/messages/unread-by-thread', {
+                suppressErrorToast: true,
+            });
+            setUnreadByClient(res.data?.counts ?? {});
+        } catch {
+            // Cosmetic only (403 for roles without portal access, offline, …) —
+            // the page must never break because a badge could not load.
+        }
+    }, []);
+
     useEffect(() => {
         fetchClients(currentFilter, searchQuery);
+        fetchUnread();
     }, []);
+
+    // Keep the badges live: any change on portal_messages (new client message,
+    // or a teammate reading one) refreshes the counts, debounced. Falls back to
+    // "refresh on modal close" if realtime isn't enabled on the table.
+    useEffect(() => {
+        const supabase = createClient();
+        let t;
+        const channel = supabase
+            .channel('client-portal-unread')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'portal_messages' },
+                () => {
+                    clearTimeout(t);
+                    t = setTimeout(fetchUnread, 800);
+                },
+            )
+            .subscribe();
+        return () => {
+            clearTimeout(t);
+            supabase.removeChannel(channel);
+        };
+    }, [fetchUnread]);
 
     // Stage renames/hides live in localStorage — pull them in after hydration
     // and re-render, so the server HTML and first client render stay identical.
@@ -369,6 +411,7 @@ const ClientPortal = () => {
     const ClientCard = ({ client }) => {
         const statusClass = getStatusClass(client.claim_status);
         const portalActive = ![1, 8].includes(client.claim_status);
+        const hasUnread = (unreadByClient[client.id] ?? 0) > 0;
 
         return (
             <div className="client-card">
@@ -437,11 +480,20 @@ const ClientPortal = () => {
                         </svg>
                         Share Link
                     </button>
-                    <button className="action-btn" onClick={() => setMessagesTarget(client)} title="Open message thread with this client">
+                    <button
+                        className="action-btn"
+                        onClick={() => setMessagesTarget(client)}
+                        title={hasUnread
+                            ? 'Unread messages from this client'
+                            : 'Open message thread with this client'}
+                    >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
                         Messages
+                        {hasUnread && (
+                            <span className="msg-unread-dot" aria-label="Unread messages" />
+                        )}
                     </button>
                     <button className="action-btn" onClick={() => setEditingClient(client)}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -728,7 +780,18 @@ const ClientPortal = () => {
                                             <td>{client.progress ?? 0}%</td>
                                             <td style={{ display: 'flex', gap: '0.5rem' }}>
                                                 <button className="action-btn" onClick={() => openShareModal(client)}>Share Link</button>
-                                                <button className="action-btn" onClick={() => setMessagesTarget(client)}>Messages</button>
+                                                <button
+                                                    className="action-btn"
+                                                    onClick={() => setMessagesTarget(client)}
+                                                    title={(unreadByClient[client.id] ?? 0) > 0
+                                                        ? 'Unread messages from this client'
+                                                        : 'Open message thread with this client'}
+                                                >
+                                                    Messages
+                                                    {(unreadByClient[client.id] ?? 0) > 0 && (
+                                                        <span className="msg-unread-dot" aria-label="Unread messages" />
+                                                    )}
+                                                </button>
                                                 <button className="action-btn" onClick={() => setEditingClient(client)}>Edit</button>
                                                 {/*<button className="action-btn" style={{ color: '#ef4444' }} onClick={() => handleSoftDelete(client.id)}>Delete</button>*/}
                                             </td>
@@ -766,7 +829,13 @@ const ClientPortal = () => {
 
             <ClientMessagesModal
                 client={messagesTarget}
-                onClose={() => setMessagesTarget(null)}
+                onClose={() => {
+                    setMessagesTarget(null);
+                    // The modal marks the thread read on open, so both this
+                    // page's dots and the sidebar badge are now stale.
+                    fetchUnread();
+                    refreshUnreadMessages();
+                }}
             />
 
             <StageManagerModal

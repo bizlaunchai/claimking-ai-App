@@ -212,6 +212,7 @@
 .mi-thread.unread .mi-t-preview { color: #111827; font-weight: 600; }
 
 .mi-unread-dot {
+    position: relative;
     width: 9px;
     height: 9px;
     background: #FDB813;
@@ -221,6 +222,27 @@
     visibility: hidden;
 }
 .mi-thread.unread .mi-unread-dot { visibility: visible; }
+
+/* Pulse ring — only on unread rows, and only the pseudo-element animates so
+   the row's layout never shifts. */
+.mi-thread.unread .mi-unread-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: #FDB813;
+    animation: miDotPing 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+    pointer-events: none;
+}
+
+@keyframes miDotPing {
+    0%        { transform: scale(1);   opacity: 0.55; }
+    70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mi-thread.unread .mi-unread-dot::after { animation: none; }
+}
 
 /* ── Right pane ───────────────────────────────────────────────────────────── */
 .mi-convo-pane {
