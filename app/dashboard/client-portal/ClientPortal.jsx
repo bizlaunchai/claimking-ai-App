@@ -78,6 +78,18 @@ const statusOptions = [
     { value: '12', label: '12. Cold / Lost' },
 ];
 
+// CSV import whitelist — mirrors CreateClientDto on the backend. Anything
+// not listed here is dropped before POST, because the API validates with
+// forbidNonWhitelisted and rejects the whole row on an unknown property.
+const CSV_IMPORT_FIELDS = [
+    'first_name', 'last_name', 'phone', 'email',
+    'address', 'city', 'state', 'zip_code', 'property_type',
+    'insurance_company', 'insurance_carrier', 'policy_number', 'claim_number',
+    'damage_type', 'priority', 'date_of_loss',
+    'adjuster_name', 'adjuster_email', 'adjuster_phone', 'notes',
+];
+const CSV_IMPORT_INT_FIELDS = ['claim_value', 'approved_amount', 'paid_amount'];
+
 const sortOptions = [
     { value: 'recent', label: 'Most Recent Activity' },
     { value: 'created', label: 'Recently Created' },
@@ -764,6 +776,7 @@ const ClientPortal = () => {
             <BulkImportModal
                 isOpen={showBulkImport}
                 onClose={() => setShowBulkImport(false)}
+                onImported={() => fetchClients(currentFilter, searchQuery)}
             />
 
             <ExportClientsModal
@@ -1616,7 +1629,7 @@ const StageManagerModal = ({ isOpen, onClose }) => {
     );
 };
 
-const BulkImportModal = ({ isOpen, onClose }) => {
+const BulkImportModal = ({ isOpen, onClose, onImported }) => {
     // CK-FIX Jul-22: validateEmails removed per spec; invitations split
     // into independent email / text channels (either or both).
     const [importOptions, setImportOptions] = useState({
@@ -1674,9 +1687,17 @@ const BulkImportModal = ({ isOpen, onClose }) => {
             const text = await f.text();
             const rows = parseCSV(text);
             if (rows.length < 2) { toast.error('CSV has no data rows'); return; }
-            const headers = rows[0].map((h) => h.trim().toLowerCase());
+            // Normalise headers so both the template ("first_name") and a
+            // sheet exported from this page ("First Name") import cleanly.
+            const headers = rows[0].map((h) =>
+                h.trim().toLowerCase().replace(/﻿/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
+            );
             const dataRows = rows.slice(1);
-            let ok = 0, failed = 0, skipped = 0;
+            let ok = 0, failed = 0, skipped = 0, inviteFailed = 0;
+            // Errors are counted and summarised once at the end instead of
+            // toasting per row — a 50-row import would otherwise bury the
+            // result under 50 identical toasts.
+            let firstRowError = null, firstInviteError = null;
             const seen = new Set();
             for (let i = 0; i < dataRows.length; i++) {
                 setImportProgress(`Importing ${i + 1} / ${dataRows.length}...`);
@@ -1686,22 +1707,76 @@ const BulkImportModal = ({ isOpen, onClose }) => {
                 const dupKey = (rec.email || `${rec.first_name}|${rec.last_name}|${rec.phone}`).toLowerCase();
                 if (importOptions.skipDuplicates && seen.has(dupKey)) { skipped++; continue; }
                 seen.add(dupKey);
+
+                // Whitelist to the CreateClientDto fields. The API runs
+                // forbidNonWhitelisted, so any stray CSV column (or an extra
+                // flag) turns the whole row into a 400. Empty strings are
+                // dropped too — "" fails @IsEmail/@Matches on optional fields.
+                const payload = {};
+                CSV_IMPORT_FIELDS.forEach((k) => { if (rec[k]) payload[k] = rec[k]; });
+                CSV_IMPORT_INT_FIELDS.forEach((k) => {
+                    const n = parseInt(rec[k]);
+                    if (Number.isFinite(n)) payload[k] = Math.max(n, 0);
+                });
+                payload.claim_status = Math.min(Math.max(parseInt(rec.claim_status) || 1, 1), 12);
+
                 try {
-                    await axiosInstance.post('/client-portal', {
-                        ...rec,
-                        claim_status: Math.min(Math.max(parseInt(rec.claim_status) || 1, 1), 12),
-                        claim_value: parseInt(rec.claim_value) || 0,
-                        // TODO(backend): honor these flags — email and/or SMS invite
-                        send_invitation_email: importOptions.inviteEmail,
-                        send_invitation_sms: importOptions.inviteText,
-                    });
+                    const res = await axiosInstance.post('/client-portal', payload, { suppressErrorToast: true });
                     ok++;
-                } catch {
+
+                    // Portal invitations go through the token-send endpoint —
+                    // the create endpoint has no invite flag. Best-effort: the
+                    // client IS imported even if the invite bounces (unverified
+                    // SMTP domain, missing Twilio config, bad address), so an
+                    // invite failure is reported separately from a failed row.
+                    const newId = res.data?.data?.id;
+                    if (newId) {
+                        const channels = [];
+                        if (importOptions.inviteEmail && payload.email) channels.push('email');
+                        if (importOptions.inviteText && payload.phone) channels.push('sms');
+                        for (const channel of channels) {
+                            try {
+                                await axiosInstance.post(
+                                    `/client-portal/${newId}/tokens/send`,
+                                    { channel },
+                                    { suppressErrorToast: true },
+                                );
+                            } catch (e) {
+                                inviteFailed++;
+                                firstInviteError = firstInviteError || e.userMessage;
+                            }
+                        }
+                    }
+                } catch (e) {
                     failed++;
+                    firstRowError = firstRowError || e.userMessage;
                 }
             }
-            toast.success(`Import done — ${ok} added${skipped ? `, ${skipped} skipped` : ''}${failed ? `, ${failed} failed` : ''}`);
-            if (ok > 0) { onClose(); window.location.reload(); }
+
+            const summary = `${ok} added${skipped ? `, ${skipped} skipped` : ''}${failed ? `, ${failed} failed` : ''}`;
+            if (failed) {
+                toast.error(`Import finished — ${summary}`, {
+                    description: firstRowError ? `First error: ${firstRowError}` : undefined,
+                    duration: 10000,
+                });
+            } else {
+                toast.success(`Import done — ${summary}`);
+            }
+            if (inviteFailed) {
+                // Separate toast: these clients ARE in the system, only the
+                // invite did not go out — the fix is a mail/SMS setting, not a re-import.
+                toast.warning(`${inviteFailed} portal invitation${inviteFailed === 1 ? '' : 's'} could not be sent`, {
+                    description: `${firstInviteError || 'Sending failed.'} — clients were imported; resend from each client's Share Portal button.`,
+                    duration: 12000,
+                });
+            }
+            // Refresh the list in place rather than reloading the page — a
+            // reload wipes the toasts, and the failure / invite messages are
+            // the whole point when something went wrong. On a clean run the
+            // modal closes itself; otherwise it stays open so the summary can
+            // be read next to the file that produced it.
+            if (ok > 0) onImported?.();
+            if (ok > 0 && !failed && !inviteFailed) onClose();
         } catch {
             toast.error('Could not read that CSV');
         } finally {
