@@ -5,13 +5,27 @@
    Inputs use the light standard (#f3f4f6 background, #111827 text).
    ============================================================================= */
 
+/* The dashboard has no global top bar — `.dashboard-content-wrapper` is the
+   full viewport (min-height:100vh, padding:0). So the inbox owns the whole
+   screen height. `dvh` keeps it honest on mobile browsers whose URL bar
+   changes the viewport; `vh` stays as the fallback for older engines. */
 .mi-page {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 140px);
+    height: 100vh;
+    height: 100dvh;
     min-height: 520px;
     color: #1a1f3a;
     font-size: 14px;
+}
+
+/* Under 768px the wrapper adds 60px of padding-top for the floating menu
+   button — subtract it or the inbox overflows by exactly that much. */
+@media (max-width: 767px) {
+    .mi-page {
+        height: calc(100vh - 60px);
+        height: calc(100dvh - 60px);
+    }
 }
 
 /* ── Top bar ──────────────────────────────────────────────────────────────── */
@@ -22,9 +36,7 @@
     gap: 12px;
     flex-wrap: wrap;
     background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px 12px 0 0;
-    border-bottom: none;
+    border-bottom: 1px solid #e5e7eb;
     padding: 14px 20px;
 }
 .mi-topbar-left { display: flex; align-items: center; gap: 12px; }
@@ -65,8 +77,6 @@
     display: grid;
     grid-template-columns: minmax(320px, 400px) 1fr;
     min-height: 0;
-    border: 1px solid #e5e7eb;
-    border-radius: 0 0 12px 12px;
     overflow: hidden;
     background: #fff;
 }
@@ -392,13 +402,14 @@
     text-overflow: ellipsis;
 }
 
-/* ── Responsive: single pane on narrow screens ────────────────────────────── */
+/* ── Responsive: one pane at a time on narrow screens ─────────────────────── */
+/* The page keeps its full viewport height here too — exactly one pane is
+   mounted, so it fills the screen and scrolls internally instead of turning
+   the whole dashboard into a long scrolling page. */
 @media (max-width: 900px) {
-    .mi-page { height: auto; min-height: 0; }
     .mi-wrap { grid-template-columns: 1fr; }
-    .mi-list-pane { border-right: none; max-height: 60vh; }
-    .mi-convo-pane { min-height: 60vh; }
-    /* When a conversation is open, give the whole screen to it. */
+    .mi-list-pane { border-right: none; }
     .mi-wrap.mi-has-active .mi-list-pane { display: none; }
+    .mi-wrap:not(.mi-has-active) .mi-convo-pane { display: none; }
     .mi-back-btn { display: inline-flex; align-items: center; justify-content: center; }
 }
