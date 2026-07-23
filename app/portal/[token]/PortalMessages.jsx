@@ -10,12 +10,18 @@ import axiosInstance from '@/lib/axiosInstance';
 // GET  /portal-public/:token/messages  →  visible thread (oldest first)
 // POST /portal-public/:token/messages  →  homeowner posts a reply
 //
-// We poll every 30s while the tab is visible so the homeowner sees the
-// contractor's reply without manual refresh. (No websocket infra in the
-// project yet; polling is the pragmatic choice.)
+// We poll every 10s while the tab is visible so the homeowner sees the
+// contractor's reply without manual refresh.
+//
+// Why polling and NOT Supabase realtime (as the contractor inbox uses):
+// `portal_messages` has no public/anon SELECT policy — the homeowner is not an
+// authenticated user, the URL token is their credential. A realtime
+// subscription would therefore receive nothing, and opening an anon read policy
+// to make it work would let anyone guessing a portal id read someone else's
+// thread. Polling keeps the security model intact.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 10_000;
 
 const fmtTime = (iso) => {
     if (!iso) return '';
