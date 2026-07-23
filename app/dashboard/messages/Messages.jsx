@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
-import { refreshUnreadMessages } from '@/lib/hooks/useUnreadMessages';
+import {
+    refreshUnreadMessages,
+    setActiveMessageThread,
+} from '@/lib/hooks/useUnreadMessages';
 import './messages.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,6 +95,15 @@ const Messages = () => {
     const msgScrollRef = useRef(null);
     const replyRef = useRef(null);
 
+    // Declared up here because the fetchers below read it from timers and
+    // realtime callbacks, where the render-time closure would be stale.
+    const activeIdRef = useRef(activeId);
+    activeIdRef.current = activeId;
+
+    /** Is the user actually looking at this tab right now? */
+    const isTabVisible = () =>
+        typeof document === 'undefined' || document.visibilityState === 'visible';
+
     // Debounce the search box.
     useEffect(() => {
         const t = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
@@ -110,7 +122,18 @@ const Messages = () => {
                 },
                 suppressErrorToast: true,
             });
-            const rows = Array.isArray(data?.data) ? data.data : [];
+            const raw = Array.isArray(data?.data) ? data.data : [];
+
+            // The conversation on screen is being read as it arrives, so never
+            // render an unread dot for it — otherwise a message that lands
+            // while it's open flashes the badge until mark-read comes back.
+            const openId = isTabVisible() ? activeIdRef.current : null;
+            const rows = openId
+                ? raw.map((r) => (r.client_portal_id === openId
+                    ? { ...r, unread_count: 0, unread: false }
+                    : r))
+                : raw;
+
             setThreads(rows);
             setListError(null);
 
@@ -165,10 +188,21 @@ const Messages = () => {
         }
     }, []);
 
-    const activeIdRef = useRef(activeId);
-    activeIdRef.current = activeId;
     const loadThreadRef = useRef(loadThread);
     loadThreadRef.current = loadThread;
+
+    // Keep the sidebar / bell badge from counting the conversation on screen.
+    // Cleared when it closes, when the page unmounts, and when the tab goes to
+    // the background — nobody is reading then, so the badge should count again.
+    useEffect(() => {
+        const sync = () => setActiveMessageThread(isTabVisible() ? activeId : null);
+        sync();
+        document.addEventListener('visibilitychange', sync);
+        return () => {
+            document.removeEventListener('visibilitychange', sync);
+            setActiveMessageThread(null);
+        };
+    }, [activeId]);
 
     // ── Realtime + polling fallback ────────────────────────────────────────
     // Any insert/update on portal_messages refreshes the list and the open
@@ -200,9 +234,17 @@ const Messages = () => {
             if (document.visibilityState === 'visible') refreshAll();
         }, POLL_INTERVAL_MS);
 
+        // Coming back to the tab refreshes immediately — that also lets the
+        // auto-mark-read effect run on anything that arrived while away.
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') refreshAll();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+
         return () => {
             clearTimeout(debounce);
             clearInterval(poll);
+            document.removeEventListener('visibilitychange', onVisibility);
             supabase.removeChannel(channel);
         };
     }, []);
@@ -213,34 +255,62 @@ const Messages = () => {
         if (el) el.scrollTop = el.scrollHeight;
     }, [messages.length, activeId]);
 
-    // ── Open a thread (and mark it read) ───────────────────────────────────
+    // ── Open a thread ──────────────────────────────────────────────────────
+    // The actual read-marking is owned by the effect below, so a message that
+    // arrives WHILE the thread is open gets marked too — not just the ones
+    // that were already there when it opened. Here we only clear the dot
+    // optimistically so the UI reacts instantly.
     const openThread = async (clientPortalId) => {
         if (!clientPortalId) return;
         setActiveId(clientPortalId);
         setDraft('');
-        await loadThread(clientPortalId);
-
-        const wasUnread = threads.find(
-            (t) => t.client_portal_id === clientPortalId,
-        )?.unread_count > 0;
-        if (!wasUnread) return;
-
-        // Optimistic: clear the dot immediately, then persist.
         setThreads((prev) => prev.map((t) => (
             t.client_portal_id === clientPortalId
                 ? { ...t, unread_count: 0, unread: false }
                 : t
         )));
-        try {
-            await axiosInstance.post(`/messages/threads/${clientPortalId}/read`, null, {
-                suppressErrorToast: true,
-            });
-            refreshUnreadMessages();
-        } catch {
-            // Non-fatal: the next list refresh restores the true state.
-            loadThreads({ silent: true });
-        }
+        await loadThread(clientPortalId);
     };
+
+    // Mark the OPEN conversation read — on open, and again whenever a new
+    // inbound message lands while the contractor is looking at it.
+    //
+    // Only when the tab is actually visible: a thread left open in a
+    // background tab must not silently swallow the unread badge.
+    //
+    // No loop risk — the mark-read UPDATE triggers a realtime refetch, but by
+    // then every inbound row has a read_at, so `hasUnread` is false and this
+    // effect stops.
+    useEffect(() => {
+        if (!activeId) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+
+        const hasUnread = messages.some((m) => m.direction === 'in' && !m.read_at);
+        if (!hasUnread) return;
+
+        let cancelled = false;
+        (async () => {
+            try {
+                await axiosInstance.post(`/messages/threads/${activeId}/read`, null, {
+                    suppressErrorToast: true,
+                });
+                if (cancelled) return;
+                const now = new Date().toISOString();
+                setMessages((prev) => prev.map((m) => (
+                    m.direction === 'in' && !m.read_at ? { ...m, read_at: now } : m
+                )));
+                setThreads((prev) => prev.map((t) => (
+                    t.client_portal_id === activeId
+                        ? { ...t, unread_count: 0, unread: false }
+                        : t
+                )));
+                refreshUnreadMessages();
+            } catch {
+                // Non-fatal — the next refresh retries.
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [activeId, messages]);
 
     const closeConversation = () => {
         setActiveId(null);
