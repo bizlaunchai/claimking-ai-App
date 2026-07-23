@@ -1375,29 +1375,3 @@
     background: #fef9e6 !important;
     border: 1px solid #FDB813;
 }
-
-/* ══════════════════════════════════════════════════════════════════
-   CK-FIX Jul-22 — layout overflow + global light inputs
-   ══════════════════════════════════════════════════════════════════ */
-/* Content was running off the right edge of the page */
-.mockup-page, .mockup-container, .panel-card {
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
-}
-.mockup-page { padding-right: 1.5rem; }
-
-/* Global light input standard — overrides any dark typing surfaces */
-input[type="text"], input[type="number"], input[type="email"],
-input[type="search"], textarea, select {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px;
-}
-input::placeholder, textarea::placeholder { color: #9ca3af !important; }
-input:focus, textarea:focus, select:focus {
-  background: #fff !important;
-  border-color: #FDB813 !important;
-  outline: none;
-}
