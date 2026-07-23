@@ -36,32 +36,6 @@ const STATUS_MAP = {
 };
 
 // Shorter labels for filter chips (where horizontal space is tight)
-// CK-FIX Jul-22: per-company stage customization (rename + hide).
-// Labels/hidden flags overlay the hardcoded map via localStorage.
-// TODO(backend): persist to company settings (PATCH /company/stage-labels)
-// and honor overrides in portal + emails. True add/remove of stages
-// requires a DB migration (claim_status CHECK 1-12) — see handoff doc.
-// Read once after mount into a module cache. Reading localStorage during
-// render breaks SSR hydration (server has no overrides, client does), so the
-// first client render must match the server: empty cache until hydrateStageOverrides().
-let stageOverridesCache = {};
-const readStageOverrides = () => {
-    try { return JSON.parse(localStorage.getItem('ck_stage_overrides') || '{}'); } catch { return {}; }
-};
-const hydrateStageOverrides = () => {
-    stageOverridesCache = readStageOverrides();
-    return stageOverridesCache;
-};
-const loadStageOverrides = () => stageOverridesCache;
-const stageLabel = (n) => {
-    const o = loadStageOverrides();
-    return (o.labels && o.labels[n]) || STATUS_MAP[n] || `Stage ${n}`;
-};
-const hiddenStages = () => {
-    const o = loadStageOverrides();
-    return new Set(o.hidden || []);
-};
-
 const statusOptions = [
     { value: 'all', label: 'All' },
     { value: '1',  label: '1. Need Claim #' },
@@ -110,7 +84,6 @@ const getStatusClass = (statusNum) => {
 const ClientPortal = () => {
     const [showAddClient, setShowAddClient] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
-    const [showStageManager, setShowStageManager] = useState(false); // CK-FIX Jul-22
     const [showExport, setShowExport] = useState(false);
     const [showPortalSettings, setShowPortalSettings] = useState(false);
     const [showTrash, setShowTrash] = useState(false);
@@ -163,14 +136,6 @@ const ClientPortal = () => {
 
     useEffect(() => {
         fetchClients(currentFilter, searchQuery);
-    }, []);
-
-    // Stage renames/hides live in localStorage — pull them in after hydration
-    // and re-render, so the server HTML and first client render stay identical.
-    const [, setStageOverridesVersion] = useState(0);
-    useEffect(() => {
-        hydrateStageOverrides();
-        setStageOverridesVersion((v) => v + 1);
     }, []);
 
     const filterByStatus = (status, event) => {
@@ -237,14 +202,7 @@ const ClientPortal = () => {
                 return false;
             }
 
-            // CK-FIX Jul-22: the Stage column follows the company's renamed
-            // stages, so the sheet matches what the user sees on screen.
-            const withStageLabels = rows.map((c) => ({
-                ...c,
-                status_label: stageLabel(c.claim_status),
-            }));
-
-            downloadCsv(buildClientsCsv(withStageLabels), csvFilename(scope));
+            downloadCsv(buildClientsCsv(rows), csvFilename(scope));
             toast.success(
                 `Exported ${rows.length} client${rows.length === 1 ? '' : 's'} to CSV.`,
             );
@@ -367,7 +325,7 @@ const ClientPortal = () => {
                     </div>
                     <div className="status-indicator">
                         <div className={`portal-indicator ${!portalActive ? 'inactive' : ''}`}></div>
-                        <span className={`status-badge ${statusClass}`}>{stageLabel(client.claim_status)}</span>
+                        <span className={`status-badge ${statusClass}`}>{STATUS_MAP[client.claim_status]}</span>
                     </div>
                 </div>
 
@@ -470,10 +428,6 @@ const ClientPortal = () => {
                         </button>
                         </Can>
                         <Can permission="manage_portal_links">
-                        {/* CK-FIX Jul-22: stage rename/hide manager */}
-                        <button className="btn btn-secondary" onClick={() => setShowStageManager(true)}>
-                            Manage Stages
-                        </button>
                         <button className="btn btn-secondary" onClick={() => setShowBulkImport(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -528,7 +482,7 @@ const ClientPortal = () => {
 
                     <div className="filter-row">
                         <div className="filter-chips">
-                            {statusOptions.filter(o => o.value === 'all' || !hiddenStages().has(parseInt(o.value))).map(option => option.value === 'all' ? option : { ...option, label: `${option.value}. ${stageLabel(parseInt(option.value)).replace(/^\d+\.\s*/, '')}` }).map(option => (
+                            {statusOptions.map(option => (
                                 <button
                                     key={option.value}
                                     className={`filter-chip ${currentFilter === option.value ? 'active' : ''}`}
@@ -711,7 +665,7 @@ const ClientPortal = () => {
                                             <td>{client.phone}</td>
                                             <td>{client.email}</td>
                                             <td>{client.insurance_company}</td>
-                                            <td><span className={`status-badge ${getStatusClass(client.claim_status)}`}>{stageLabel(client.claim_status)}</span></td>
+                                            <td><span className={`status-badge ${getStatusClass(client.claim_status)}`}>{STATUS_MAP[client.claim_status]}</span></td>
                                             <td>${((client.claim_value ?? 0) / 1000).toFixed(0)}k</td>
                                             <td>{client.progress ?? 0}%</td>
                                             <td style={{ display: 'flex', gap: '0.5rem' }}>
@@ -757,10 +711,6 @@ const ClientPortal = () => {
                 onClose={() => setMessagesTarget(null)}
             />
 
-            <StageManagerModal
-                isOpen={showStageManager}
-                onClose={() => setShowStageManager(false)}
-            />
             <BulkImportModal
                 isOpen={showBulkImport}
                 onClose={() => setShowBulkImport(false)}
@@ -1352,7 +1302,7 @@ const TrashModal = ({ isOpen, clients, onClose, onRestore, onPermanentDelete }) 
                                     <tr key={client.id}>
                                         <td><strong>{client.full_name}</strong></td>
                                         <td>{client.email}</td>
-                                        <td><span className={`status-badge ${getStatusClass(client.claim_status)}`}>{stageLabel(client.claim_status)}</span></td>
+                                        <td><span className={`status-badge ${getStatusClass(client.claim_status)}`}>{STATUS_MAP[client.claim_status]}</span></td>
                                         <td>{new Date(client.deleted_at).toLocaleDateString()}</td>
                                         <td style={{ display: 'flex', gap: '0.5rem' }}>
                                             <button className="action-btn" style={{ color: '#16a34a' }} onClick={() => onRestore(client.id)}>Restore</button>
@@ -1545,87 +1495,12 @@ const ExportClientsModal = ({
     );
 };
 
-// CK-FIX Jul-22: rename or hide pipeline stages. Saved locally now;
-// TODO(backend): persist per company + reflect in client portal + emails.
-// True add/remove needs the claim_status DB constraint widened (see handoff).
-const StageManagerModal = ({ isOpen, onClose }) => {
-    const [overrides, setOverrides] = useState({});
-    // Re-read on open: the module cache is empty until the page hydrates.
-    useEffect(() => {
-        if (isOpen) setOverrides(readStageOverrides());
-    }, [isOpen]);
-    if (!isOpen) return null;
-    const setLabel = (n, v) => setOverrides((o) => ({ ...o, labels: { ...(o.labels || {}), [n]: v } }));
-    const toggleHidden = (n) => setOverrides((o) => {
-        const h = new Set(o.hidden || []);
-        h.has(n) ? h.delete(n) : h.add(n);
-        return { ...o, hidden: [...h] };
-    });
-    const save = () => {
-        try { localStorage.setItem('ck_stage_overrides', JSON.stringify(overrides)); } catch {}
-        toast.success('Stages updated');
-        onClose();
-        window.location.reload();
-    };
-    const reset = () => {
-        setOverrides({});
-        try { localStorage.removeItem('ck_stage_overrides'); } catch {}
-        hydrateStageOverrides();
-        toast.success('Stages reset to defaults');
-    };
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-                <div className="flex justify-between items-center px-6 py-5 border-b border-gray-200">
-                    <h2 className="text-lg font-bold text-gray-800">Manage Pipeline Stages</h2>
-                    <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500" onClick={onClose}>&times;</button>
-                </div>
-                <div className="p-6">
-                    <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
-                        Rename any stage or hide the ones you do not use. Hidden stages disappear from the filter bar but existing clients keep their status.
-                    </p>
-                    {Object.entries(STATUS_MAP).map(([num, def]) => {
-                        const n = parseInt(num);
-                        const hidden = (overrides.hidden || []).includes(n);
-                        return (
-                            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                <span style={{ width: 26, fontSize: 12.5, fontWeight: 700, color: '#6b7280' }}>{n}.</span>
-                                <input
-                                    type="text"
-                                    value={(overrides.labels && overrides.labels[n]) ?? def.replace(/^\d+\.\s*/, '')}
-                                    onChange={(e) => setLabel(n, e.target.value)}
-                                    style={{ flex: 1, padding: '7px 10px', opacity: hidden ? 0.45 : 1 }}
-                                />
-                                <button type="button" onClick={() => toggleHidden(n)}
-                                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, cursor: 'pointer', border: '1px solid #e5e7eb', background: hidden ? '#fee2e2' : '#fff', color: hidden ? '#dc2626' : '#374151', fontWeight: 600 }}>
-                                    {hidden ? 'Hidden' : 'Hide'}
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="p-6 border-t border-gray-200 flex justify-between gap-3">
-                    <button className="btn btn-outline" onClick={reset}>Reset Defaults</button>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                        <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-                        <button className="btn btn-primary" onClick={save}>Save Stages</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 const BulkImportModal = ({ isOpen, onClose }) => {
-    // CK-FIX Jul-22: validateEmails removed per spec; invitations split
-    // into independent email / text channels (either or both).
     const [importOptions, setImportOptions] = useState({
-        inviteEmail: true,
-        inviteText: false,
+        sendInvitations: true,
         skipDuplicates: true,
+        validateEmails: true,
     });
-    const [importing, setImporting] = useState(false);
-    const [importProgress, setImportProgress] = useState(null);
     const [files, setFiles] = useState([]);
 
     const handleOptionChange = (option) => {
@@ -1642,72 +1517,6 @@ const BulkImportModal = ({ isOpen, onClose }) => {
         a.click();
         window.URL.revokeObjectURL(url);
         toast.success('Template downloaded!');
-    };
-
-    // CK-FIX Jul-22: working CSV import (replaces "coming soon" stub)
-    const parseCSV = (text) => {
-        const rows = [];
-        let cur = [''], inQ = false, row = cur;
-        for (let i = 0; i < text.length; i++) {
-            const ch = text[i];
-            if (inQ) {
-                if (ch === '"' && text[i + 1] === '"') { row[row.length - 1] += '"'; i++; }
-                else if (ch === '"') inQ = false;
-                else row[row.length - 1] += ch;
-            } else if (ch === '"') inQ = true;
-            else if (ch === ',') row.push('');
-            else if (ch === '\n' || ch === '\r') {
-                if (row.length > 1 || row[0] !== '') { rows.push(row); }
-                if (ch === '\r' && text[i + 1] === '\n') i++;
-                row = ['']; rows.push; cur = row;
-            } else row[row.length - 1] += ch;
-        }
-        if (row.length > 1 || row[0] !== '') rows.push(row);
-        return rows;
-    };
-
-    const runImport = async () => {
-        const f = files[0]?.file || files[0];
-        if (!f) { toast.error('Upload a CSV file first'); return; }
-        setImporting(true);
-        try {
-            const text = await f.text();
-            const rows = parseCSV(text);
-            if (rows.length < 2) { toast.error('CSV has no data rows'); return; }
-            const headers = rows[0].map((h) => h.trim().toLowerCase());
-            const dataRows = rows.slice(1);
-            let ok = 0, failed = 0, skipped = 0;
-            const seen = new Set();
-            for (let i = 0; i < dataRows.length; i++) {
-                setImportProgress(`Importing ${i + 1} / ${dataRows.length}...`);
-                const rec = {};
-                headers.forEach((h, hi) => { rec[h] = (dataRows[i][hi] || '').trim(); });
-                if (!rec.first_name && !rec.last_name && !rec.email) { skipped++; continue; }
-                const dupKey = (rec.email || `${rec.first_name}|${rec.last_name}|${rec.phone}`).toLowerCase();
-                if (importOptions.skipDuplicates && seen.has(dupKey)) { skipped++; continue; }
-                seen.add(dupKey);
-                try {
-                    await axiosInstance.post('/client-portal', {
-                        ...rec,
-                        claim_status: Math.min(Math.max(parseInt(rec.claim_status) || 1, 1), 12),
-                        claim_value: parseInt(rec.claim_value) || 0,
-                        // TODO(backend): honor these flags — email and/or SMS invite
-                        send_invitation_email: importOptions.inviteEmail,
-                        send_invitation_sms: importOptions.inviteText,
-                    });
-                    ok++;
-                } catch {
-                    failed++;
-                }
-            }
-            toast.success(`Import done — ${ok} added${skipped ? `, ${skipped} skipped` : ''}${failed ? `, ${failed} failed` : ''}`);
-            if (ok > 0) { onClose(); window.location.reload(); }
-        } catch {
-            toast.error('Could not read that CSV');
-        } finally {
-            setImporting(false);
-            setImportProgress(null);
-        }
     };
 
     if (!isOpen) return null;
@@ -1728,7 +1537,7 @@ const BulkImportModal = ({ isOpen, onClose }) => {
                     <div className="form-section">
                         <h3 className="section-title">Upload CSV File</h3>
                         <FileUploader label='Click to upload or drag and drop' files={files} setFiles={setFiles} allowedExtensions={['.csv']} maxSizeMB={10} />
-                        <p className="help-text">Columns: first_name, last_name, email, phone, address, city, state, zip_code, insurance_company, policy_number, claim_number, claim_status (1-12), claim_value, notes</p>
+                        <p className="help-text">Columns: first_name, last_name, email, phone, address, city, state, zip_code, insurance_company, policy_number, claim_number, claim_status (1-9), claim_value, notes</p>
                     </div>
                     <div className="form-section">
                         <h3 className="section-title">Download Template</h3>
@@ -1744,9 +1553,9 @@ const BulkImportModal = ({ isOpen, onClose }) => {
                     <div className="form-section">
                         <h3 className="section-title">Import Options</h3>
                         {[
-                            { key: 'inviteEmail', label: 'Send portal invitation by email' },
-                            { key: 'inviteText', label: 'Send portal invitation by text (SMS)' },
+                            { key: 'sendInvitations', label: 'Send portal invitations automatically' },
                             { key: 'skipDuplicates', label: 'Skip duplicate entries' },
+                            { key: 'validateEmails', label: 'Validate email addresses' },
                         ].map(({ key, label }) => (
                             <div key={key} className="toggle-group">
                                 <span className="toggle-label">{label}</span>
@@ -1760,8 +1569,8 @@ const BulkImportModal = ({ isOpen, onClose }) => {
                 </div>
                 <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-                    <button className="btn btn-primary" disabled={importing} onClick={runImport}>
-                        {importing ? (importProgress || 'Importing...') : 'Start Import'}
+                    <button className="btn btn-primary" onClick={() => { toast.info('Bulk import coming soon'); onClose(); }}>
+                        Start Import
                     </button>
                 </div>
             </div>
@@ -2459,7 +2268,7 @@ const ClientMessagesModal = ({ client, onClose }) => {
                     display: 'flex', alignItems: 'center', gap: 12,
                 }}>
                     <div style={{
-                        width: 36, height: 36, borderRadius: '50%', flexShrink: 0, // CK-FIX Jul-22: blob fix
+                        width: 36, height: 36, borderRadius: '50%',
                         background: 'linear-gradient(135deg, #FDB813, #d4a000)',
                         color: '#1a1f3a', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',

@@ -39,48 +39,6 @@ const ROOFING_COLORS = [
         { name: 'Terra Cotta', value: '#a0522d' },
         { name: 'Sand Dune', value: '#bc8f8f' },
     ]},
-    // CK-FIX Jul-22: expanded manufacturer catalog
-    { brand: 'CertainTeed Landmark', colors: [
-        { name: 'Moire Black', value: '#232323' },
-        { name: 'Weathered Wood', value: '#8a7561' },
-        { name: 'Driftwood', value: '#9a8a76' },
-        { name: 'Burnt Sienna', value: '#8a5a3b' },
-        { name: 'Resawn Shake', value: '#6e5a44' },
-        { name: 'Georgetown Gray', value: '#75726b' },
-        { name: 'Colonial Slate', value: '#5d6166' },
-        { name: 'Heather Blend', value: '#7d6a58' },
-        { name: 'Pewter', value: '#8c8c8a' },
-        { name: 'Cottage Red', value: '#7e3b32' },
-    ]},
-    { brand: 'Atlas Pinnacle Pristine', colors: [
-        { name: 'Pristine Black', value: '#1f1f1f' },
-        { name: 'Pristine Weathered Wood', value: '#87715c' },
-        { name: 'Pristine Desert', value: '#b09a7a' },
-        { name: 'Pristine Hearthstone', value: '#6d5f52' },
-        { name: 'Pristine Green', value: '#3c4f3d' },
-        { name: 'Pristine Blue', value: '#3f5a73' },
-        { name: 'Pristine Copper', value: '#9a6b45' },
-        { name: 'Pristine Slate', value: '#5b5f63' },
-    ]},
-    { brand: 'TAMKO Heritage', colors: [
-        { name: 'Rustic Black', value: '#262422' },
-        { name: 'Rustic Cedar', value: '#8a6a4a' },
-        { name: 'Rustic Slate', value: '#5c5e60' },
-        { name: 'Weathered Wood', value: '#8b7862' },
-        { name: 'Oxford Grey', value: '#77797b' },
-        { name: 'Shadow Grey', value: '#909294' },
-        { name: 'Virginia Slate', value: '#4f5457' },
-    ]},
-    { brand: 'IKO Cambridge', colors: [
-        { name: 'Dual Black', value: '#242424' },
-        { name: 'Driftwood', value: '#98876f' },
-        { name: 'Weatherwood', value: '#8d7c67' },
-        { name: 'Charcoal Grey', value: '#4d4f51' },
-        { name: 'Harvard Slate', value: '#606468' },
-        { name: 'Earthtone Cedar', value: '#7d6248' },
-        { name: 'Dual Brown', value: '#5f4a38' },
-        { name: 'Patriot Slate', value: '#4a5a6a' },
-    ]},
 ];
 
 const SIDING_MATERIALS = ['Vinyl Lap', 'Fiber Cement', 'Wood', 'Board & Batten', 'Brick', 'Stone', 'Other'];
@@ -92,21 +50,6 @@ const SIDING_COLORS = [
     { name: 'Iron Gray',     value: '#4b5563' },
     { name: 'Cape Cod Blue', value: '#5b8fa3' },
     { name: 'Sandstone',     value: '#d4a574' },
-    // CK-FIX Jul-22: expanded palette (James Hardie / Mastic / Alside range)
-    { name: 'Aged Pewter',   value: '#7b7d78' },
-    { name: 'Boothbay Blue', value: '#7295a5' },
-    { name: 'Deep Ocean',    value: '#33505e' },
-    { name: 'Evening Blue',  value: '#3e4f5f' },
-    { name: 'Mountain Sage', value: '#8f9683' },
-    { name: 'Heathered Moss',value: '#7d7f5f' },
-    { name: 'Khaki Brown',   value: '#8a7a5e' },
-    { name: 'Timber Bark',   value: '#6d5f50' },
-    { name: 'Cobble Stone',  value: '#b7ab97' },
-    { name: 'Navajo Beige',  value: '#d9c7a8' },
-    { name: 'Monterey Taupe',value: '#a3937e' },
-    { name: 'Countrylane Red', value: '#7e4038' },
-    { name: 'Night Gray',    value: '#55575a' },
-    { name: 'Light Mist',    value: '#dfe3e2' },
     { name: 'Other',        value: '__other__' },
 ];
 
@@ -138,30 +81,6 @@ const DOOR_COLORS = [
     { name: 'Natural Wood',    value: '#8b6f47' },
     { name: 'Crisp White',     value: '#ffffff' },
     { name: 'Other',           value: '__other__' },
-];
-
-// CK-FIX Jul-22: popular whole-house color combinations for one-click templates
-const MOCKUP_TEMPLATES = [
-    { name: 'Modern Farmhouse', desc: 'Black roof, white siding, black trim',
-      roofing: { name: 'Onyx Black', value: '#1a1a1a' }, siding: { name: 'Arctic White', value: '#ffffff' }, trim: { name: 'Black', value: '#2f2f2f' }, windows: { name: 'Black', value: '#1a1a1a' } },
-    { name: 'Classic Craftsman', desc: 'Weathered wood roof, sage siding, cream trim',
-      roofing: { name: 'Weathered Wood', value: '#8b7355' }, siding: { name: 'Mountain Sage', value: '#8f9683' }, trim: { name: 'Almond', value: '#f5f5dc' }, windows: { name: 'White', value: '#ffffff' } },
-    { name: 'Coastal Cottage', desc: 'Gray roof, blue siding, white trim',
-      roofing: { name: 'Estate Gray', value: '#6b6b6b' }, siding: { name: 'Boothbay Blue', value: '#7295a5' }, trim: { name: 'White', value: '#ffffff' }, windows: { name: 'White', value: '#ffffff' } },
-    { name: 'Executive Slate', desc: 'Slate roof, iron gray siding, black accents',
-      roofing: { name: 'Colonial Slate', value: '#5d6166' }, siding: { name: 'Iron Gray', value: '#4b5563' }, trim: { name: 'Black', value: '#2f2f2f' }, windows: { name: 'Black', value: '#1a1a1a' } },
-    { name: 'Warm Traditional', desc: 'Brown roof, cream siding, brown trim',
-      roofing: { name: 'Mission Brown', value: '#7d6144' }, siding: { name: 'Cream', value: '#f5f5f0' }, trim: { name: 'Brown', value: '#8b7355' }, windows: { name: 'White', value: '#ffffff' } },
-    { name: 'Deep Forest', desc: 'Hunter green roof, tan siding, white trim',
-      roofing: { name: 'Hunter Green', value: '#2f4538' }, siding: { name: 'Navajo Beige', value: '#d9c7a8' }, trim: { name: 'White', value: '#ffffff' }, windows: { name: 'White', value: '#ffffff' } },
-    { name: 'Storm Gray', desc: 'Charcoal roof, light mist siding, navy door pop',
-      roofing: { name: 'Charcoal', value: '#2d2d2d' }, siding: { name: 'Light Mist', value: '#dfe3e2' }, trim: { name: 'White', value: '#ffffff' }, windows: { name: 'Navy', value: '#1e3a5f' } },
-    { name: 'Rustic Cedar', desc: 'Cedar roof, timber bark siding, almond trim',
-      roofing: { name: 'Rustic Cedar', value: '#8a6a4a' }, siding: { name: 'Timber Bark', value: '#6d5f50' }, trim: { name: 'Almond', value: '#f5f5dc' }, windows: { name: 'White', value: '#ffffff' } },
-    { name: 'Red Door Colonial', desc: 'Black roof, gray siding, classic red accent',
-      roofing: { name: 'Moire Black', value: '#232323' }, siding: { name: 'Sterling Gray', value: '#9ca3af' }, trim: { name: 'White', value: '#ffffff' }, windows: { name: 'Classic Red', value: '#a23737' } },
-    { name: 'Desert Southwest', desc: 'Terra cotta roof, cobble stone siding',
-      roofing: { name: 'Terra Cotta', value: '#a0522d' }, siding: { name: 'Cobble Stone', value: '#b7ab97' }, trim: { name: 'Almond', value: '#f5f5dc' }, windows: { name: 'Bronze', value: '#8b6f47' } },
 ];
 
 const ROOFING_TYPES = [...SHINGLE_TYPES, 'Other'];
@@ -740,16 +659,8 @@ const ThreeDMockup = () => {
         }
     };
 
-    // CK-FIX Jul-22: Refine Further now jumps you into the AI instructions box
     const refineMore = () => {
-        const el = document.querySelector('textarea[placeholder*="instruction" i], textarea[placeholder*="AI" i], #ai-instructions');
-        if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => el.focus(), 350);
-            toast.info('Describe your changes, then click Generate Mockup for a new version.');
-        } else {
-            toast.info('Tweak materials or AI instructions, then click Generate Mockup again.');
-        }
+        toast.info('Tweak materials or AI instructions, then click Generate Mockup again.');
     };
 
     const startOver = () => {
@@ -767,85 +678,7 @@ const ThreeDMockup = () => {
         setGenerationError(null);
     };
 
-    // CK-FIX Jul-22: Save as Template now works — persists locally.
-    // TODO(backend): POST /mockup/templates to persist server-side per company.
-    const [myTemplates, setMyTemplates] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('ck_mockup_templates') || '[]'); } catch { return []; }
-    });
-    const saveTemplate = () => {
-        const hasColor = Object.values(selectedColors).some(Boolean);
-        if (!hasColor) { toast.error('Pick at least one color first, then save as a template'); return; }
-        const name = prompt('Template name:', 'My Color Combo');
-        if (!name) return;
-        const next = [...myTemplates, { name, colors: selectedColors, savedAt: Date.now() }];
-        setMyTemplates(next);
-        try { localStorage.setItem('ck_mockup_templates', JSON.stringify(next)); } catch {}
-        toast.success(`Template "${name}" saved — find it under Mockup Templates`);
-    };
-    const deleteMyTemplate = (idx) => {
-        const next = myTemplates.filter((_, i) => i !== idx);
-        setMyTemplates(next);
-        try { localStorage.setItem('ck_mockup_templates', JSON.stringify(next)); } catch {}
-    };
-    const applyTemplate = (t) => {
-        setSelectedColors({
-            roofing: t.roofing ?? t.colors?.roofing ?? null,
-            siding:  t.siding  ?? t.colors?.siding  ?? null,
-            trim:    t.trim    ?? t.colors?.trim    ?? null,
-            windows: t.windows ?? t.colors?.windows ?? null,
-        });
-        if (t.instructions) setAiInstructions(t.instructions);
-        setShowTemplates(false);
-        toast.success(`Applied "${t.name}" — click Generate Mockup`);
-    };
-    // CK-FIX Jul-22: Save to Client Profile — makes the mockup portal-visible
-    // for the selected client without emailing them.
-    // CK-FIX Jul-22: AI color-list import — upload up to 10 manufacturer
-    // files/images; AI extracts colors into an editable custom palette.
-    // TODO(backend): POST /mockup/colors/import (multipart, up to 10 files)
-    //   → returns [{ name, value }]. Wire Gemini vision on the API side.
-    const [colorImportModal, setColorImportModal] = useState(false);
-    const [colorImportFiles, setColorImportFiles] = useState([]);
-    const [colorImportBusy, setColorImportBusy] = useState(false);
-    const [customColors, setCustomColors] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('ck_custom_colors') || '[]'); } catch { return []; }
-    });
-    const persistCustomColors = (list) => {
-        setCustomColors(list);
-        try { localStorage.setItem('ck_custom_colors', JSON.stringify(list)); } catch {}
-    };
-    const runColorImport = async () => {
-        if (colorImportFiles.length === 0) { toast.error('Add at least one file'); return; }
-        setColorImportBusy(true);
-        try {
-            const fd = new FormData();
-            colorImportFiles.slice(0, 10).forEach((f) => fd.append('files', f));
-            const res = await axiosInstance.post('/mockup/colors/import', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            const extracted = Array.isArray(res?.data) ? res.data : res?.data?.colors || [];
-            if (extracted.length === 0) { toast.info('No colors detected in those files'); return; }
-            persistCustomColors([...customColors, ...extracted.map((c) => ({ name: c.name || 'Imported', value: c.value || '#cccccc' }))]);
-            toast.success(`Imported ${extracted.length} colors — check "My Colors" and adjust any swatch`);
-            setColorImportModal(false); setColorImportFiles([]);
-        } catch {
-            toast.error('Color import failed — is the AI endpoint configured? (API Settings)');
-        } finally {
-            setColorImportBusy(false);
-        }
-    };
-
-    const saveToClientProfile = async () => {
-        if (!currentMockup) { toast.error('Generate a mockup first'); return; }
-        if (!selectedClient) { toast.error('Pick a client first'); return; }
-        try {
-            await axiosInstance.patch(`/mockup/${currentMockup.id}/visibility`, { visible: true });
-            setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: true } : m));
-            toast.success(`Saved to ${selectedClient.name}'s profile — visible in their portal`);
-        } catch {
-            toast.error('Could not save to client profile');
-        }
-    };
+    const saveTemplate = () => toast.info('Templates: coming soon.');
     const shareViaSMS   = () => toast.info('SMS sharing: coming soon.');
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1266,7 +1099,6 @@ const ThreeDMockup = () => {
                         <button className="btn btn-outline" onClick={() => setShowGallery(true)}>View Mockup Gallery</button>
                         <button className="btn btn-outline" onClick={() => setShowRecent(true)}>Recent Projects</button>
                         <button className="btn btn-outline" onClick={() => setShowTemplates(true)}>Mockup Templates</button>
-                        <button className="btn btn-outline" onClick={() => setColorImportModal(true)}>Import Colors (AI)</button>
                         <button className="btn btn-outline" onClick={() => setShowTutorial(true)}>Tutorial</button>
                     </div>
                 </div>
@@ -1312,20 +1144,6 @@ const ThreeDMockup = () => {
                             maxSizeMB={50}
                             uploadFolderName="mockup-sources"
                         />
-                        {/* CK-FIX Jul-22: explicit upload button (drag-only was a mobile blocker) */}
-                        <input
-                            type="file" id="ck-browse-photo" accept=".jpg,.jpeg,.png,.heif" style={{ display: 'none' }}
-                            onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (!f) return;
-                                setFiles([{ id: `local-${Date.now()}`, file: f, name: f.name, valid: true, previewUrl: f.type.startsWith('image/') ? URL.createObjectURL(f) : '' }]);
-                                e.target.value = '';
-                            }}
-                        />
-                        <button
-                            type="button" className="btn btn-outline" style={{ width: '100%', marginTop: 8 }}
-                            onClick={() => document.getElementById('ck-browse-photo')?.click()}
-                        >Browse Files to Upload</button>
 
                         {sourcePhotoKey && (
                             <>
@@ -1362,7 +1180,7 @@ const ThreeDMockup = () => {
                                 marginBottom: '1rem',
                                 fontWeight: 500,
                             }}>
-                                Upload a property photo first to unlock material, color &amp; AI instruction options.
+                                📷 Upload a property photo first to unlock material, color &amp; AI instruction options.
                             </div>
                         )}
 
@@ -1944,8 +1762,6 @@ const ThreeDMockup = () => {
                             </button>
 
                             <button className="btn btn-secondary" onClick={refineMore} disabled={!currentMockup}>Refine Further</button>
-                            {/* CK-FIX Jul-22: new Save to Client Profile action */}
-                            <button className="btn btn-secondary" onClick={saveToClientProfile} disabled={!currentMockup || !selectedClient}>Save to Client Profile</button>
                             <button className="btn btn-outline" onClick={startOver}>Start Over</button>
                             <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
                         </div>
@@ -2271,50 +2087,6 @@ const ThreeDMockup = () => {
                 </div>
             )}
 
-            {/* CK-FIX Jul-22: AI color import modal */}
-            {colorImportModal && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-xl w-full max-w-[560px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-                        <div className="flex justify-between items-center px-6 py-5 border-b border-gray-200">
-                            <h2 className="text-lg font-bold text-gray-800">Import Colors with AI</h2>
-                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500" onClick={() => setColorImportModal(false)}>&times;</button>
-                        </div>
-                        <div className="p-6">
-                            <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-                                Upload up to 10 manufacturer color sheets (PDF) or photos. AI extracts every color into your palette — you can fine-tune any swatch afterward.
-                            </div>
-                            <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={(e) => setColorImportFiles(Array.from(e.target.files || []).slice(0, 10))} />
-                            {colorImportFiles.length > 0 && (
-                                <div style={{ fontSize: 12.5, color: '#374151', marginTop: 8 }}>{colorImportFiles.length} file(s) ready</div>
-                            )}
-                            {customColors.length > 0 && (
-                                <>
-                                    <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>My Colors (click swatch to adjust)</div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                        {customColors.map((c, ci) => (
-                                            <label key={ci} style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px', cursor: 'pointer' }}>
-                                                <input type="color" value={c.value}
-                                                    onChange={(e) => persistCustomColors(customColors.map((x, i) => i === ci ? { ...x, value: e.target.value } : x))}
-                                                    style={{ width: 26, height: 26, border: 'none', padding: 0, background: 'transparent' }} />
-                                                <span style={{ fontSize: 12 }}>{c.name}</span>
-                                                <button type="button" onClick={() => persistCustomColors(customColors.filter((_, i) => i !== ci))}
-                                                    style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', fontWeight: 700 }}>&times;</button>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                                <button className="btn btn-primary" onClick={runColorImport} disabled={colorImportBusy}>
-                                    {colorImportBusy ? 'Analyzing...' : 'Extract Colors'}
-                                </button>
-                                <button className="btn btn-outline" onClick={() => setColorImportModal(false)}>Close</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
             {showTemplates && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
@@ -2323,43 +2095,7 @@ const ThreeDMockup = () => {
                             <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('templates')}>×</button>
                         </div>
                         <div className="p-6">
-                            {/* CK-FIX Jul-22: real template presets (was "coming soon") */}
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 10 }}>Popular Combinations</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-                                {MOCKUP_TEMPLATES.map((t) => (
-                                    <button key={t.name} type="button" onClick={() => applyTemplate(t)}
-                                        style={{ textAlign: 'left', border: '1px solid #e5e7eb', borderRadius: 12, padding: '0.9rem', background: '#fff', cursor: 'pointer' }}>
-                                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                                            {[t.roofing, t.siding, t.trim, t.windows].filter(Boolean).map((c, i) => (
-                                                <span key={i} style={{ width: 22, height: 22, borderRadius: '50%', background: c.value, border: '1px solid #d1d5db', display: 'inline-block' }} />
-                                            ))}
-                                        </div>
-                                        <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1a1f3a' }}>{t.name}</div>
-                                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t.desc}</div>
-                                    </button>
-                                ))}
-                            </div>
-                            {myTemplates.length > 0 && (
-                                <>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: '18px 0 10px' }}>My Saved Templates</div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-                                        {myTemplates.map((t, ti) => (
-                                            <div key={ti} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '0.9rem', background: '#fffef7' }}>
-                                                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                                                    {['roofing','siding','trim','windows'].map((k) => t.colors?.[k] ? (
-                                                        <span key={k} style={{ width: 22, height: 22, borderRadius: '50%', background: t.colors[k].value, border: '1px solid #d1d5db', display: 'inline-block' }} />
-                                                    ) : null)}
-                                                </div>
-                                                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{t.name}</div>
-                                                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                                    <button type="button" onClick={() => applyTemplate({ ...t.colors, name: t.name })} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #FDB813', background: '#FDB813', fontWeight: 700, cursor: 'pointer' }}>Apply</button>
-                                                    <button type="button" onClick={() => deleteMyTemplate(ti)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#dc2626', cursor: 'pointer' }}>Delete</button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
+                            <div style={{ color: '#6b7280', fontSize: 14 }}>Templates feature is coming soon.</div>
                         </div>
                     </div>
                 </div>
