@@ -130,14 +130,21 @@ const NewClientForm = ({
             {/* ── Insurance Information ────────────────────────────────── */}
             <h4 style={{ ...sectionTitle, marginTop: 20 }}>Insurance Information</h4>
             <div style={grid}>
-                <Field label="Insurance Company" required error={fieldErrors.insurance_company}>
-                    <select style={styleFor('insurance_company')}
-                        value={value.insurance_company} onChange={set('insurance_company')}>
-                        <option value="">Select Insurance</option>
+                <Field label="Insurance Company" error={fieldErrors.insurance_company}>
+                    {/* CK-FIX Jul-22: typeable carrier — any name accepted,
+                        CLIENT_INSURANCE is only a suggestion list, and the
+                        field is no longer required. */}
+                    <input
+                        type="text"
+                        list="ck-insurance-carriers"
+                        placeholder="Type or pick a carrier (optional)"
+                        style={styleFor('insurance_company')}
+                        value={value.insurance_company} onChange={set('insurance_company')} />
+                    <datalist id="ck-insurance-carriers">
                         {CLIENT_INSURANCE.map(([v, label]) => (
-                            <option key={v} value={v}>{label}</option>
+                            <option key={v} value={label} />
                         ))}
-                    </select>
+                    </datalist>
                 </Field>
                 <Field label="Policy Number">
                     <input type="text" placeholder="POL-123456" style={inputBase}

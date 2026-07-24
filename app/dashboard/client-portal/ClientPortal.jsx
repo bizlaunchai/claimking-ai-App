@@ -13,6 +13,14 @@ import {
     csvFilename,
     downloadCsv,
 } from "./clientCsv";
+// CK-FIX Jul-22: the Add/Edit modals below used to hard-code their own state
+// and carrier lists (10-11 states, 6 carriers). They now share the single
+// source of truth in lib/clients so every entry point matches.
+import {
+    CLIENT_STATES,
+    CLIENT_INSURANCE,
+    carrierLabel,
+} from "@/lib/clients/newClientForm";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -39,20 +47,32 @@ const STATUS_MAP = {
 
 // Shorter labels for filter chips (where horizontal space is tight)
 // CK-FIX Jul-22: per-company stage customization (rename + hide).
-// Labels/hidden flags overlay the hardcoded map via localStorage.
-// TODO(backend): persist to company settings (PATCH /company/stage-labels)
-// and honor overrides in portal + emails. True add/remove of stages
-// requires a DB migration (claim_status CHECK 1-12) — see handoff doc.
-// Read once after mount into a module cache. Reading localStorage during
-// render breaks SSR hydration (server has no overrides, client does), so the
-// first client render must match the server: empty cache until hydrateStageOverrides().
-let stageOverridesCache = {};
-const readStageOverrides = () => {
-    try { return JSON.parse(localStorage.getItem('ck_stage_overrides') || '{}'); } catch { return {}; }
-};
-const hydrateStageOverrides = () => {
-    stageOverridesCache = readStageOverrides();
+//
+// Overrides are stored PER COMPANY on `companies.stage_overrides`
+// (sql/70_company_stage_labels.sql) and served by
+// GET/PUT /client-portal/stage-overrides. They used to live in localStorage,
+// which meant a rename vanished on the next machine and teammates never saw it.
+//
+// Still a module-level cache read through `loadStageOverrides()`: `stageLabel()`
+// is called from deep inside render paths that aren't components. The cache
+// starts EMPTY so the server HTML and the first client render match — the fetch
+// fills it and bumps a version counter to re-render.
+let stageOverridesCache = { labels: {}, hidden: [] };
+const setStageOverridesCache = (o) => {
+    stageOverridesCache = {
+        labels: o?.labels ?? {},
+        hidden: Array.isArray(o?.hidden) ? o.hidden : [],
+    };
     return stageOverridesCache;
+};
+const fetchStageOverrides = async () => {
+    try {
+        const res = await axiosInstance.get('/client-portal/stage-overrides', { suppressErrorToast: true });
+        return setStageOverridesCache(res.data?.data);
+    } catch {
+        // A failed fetch just means the canonical labels are used.
+        return stageOverridesCache;
+    }
 };
 const loadStageOverrides = () => stageOverridesCache;
 const stageLabel = (n) => {
@@ -219,13 +239,15 @@ const ClientPortal = () => {
         };
     }, [fetchUnread]);
 
-    // Stage renames/hides live in localStorage — pull them in after hydration
-    // and re-render, so the server HTML and first client render stay identical.
+    // Stage renames/hides come from the company row — fetch after mount and
+    // re-render, so the server HTML and first client render stay identical.
     const [, setStageOverridesVersion] = useState(0);
+    const bumpStageOverrides = useCallback(() => setStageOverridesVersion((v) => v + 1), []);
     useEffect(() => {
-        hydrateStageOverrides();
-        setStageOverridesVersion((v) => v + 1);
-    }, []);
+        let cancelled = false;
+        fetchStageOverrides().then(() => { if (!cancelled) bumpStageOverrides(); });
+        return () => { cancelled = true; };
+    }, [bumpStageOverrides]);
 
     const filterByStatus = (status, event) => {
         event?.preventDefault();
@@ -455,7 +477,7 @@ const ClientPortal = () => {
                         <div className="stat-label">Documents</div>
                     </div>
                     <div className="stat-item">
-                        <div className="stat-value">{client.insurance_company}</div>
+                        <div className="stat-value">{carrierLabel(client.insurance_company)}</div>
                         <div className="stat-label">Insurance</div>
                     </div>
                     <div className="stat-item">
@@ -774,7 +796,7 @@ const ClientPortal = () => {
                                             <td>{client.address}, {client.city}, {client.state}</td>
                                             <td>{client.phone}</td>
                                             <td>{client.email}</td>
-                                            <td>{client.insurance_company}</td>
+                                            <td>{carrierLabel(client.insurance_company)}</td>
                                             <td><span className={`status-badge ${getStatusClass(client.claim_status)}`}>{stageLabel(client.claim_status)}</span></td>
                                             <td>${((client.claim_value ?? 0) / 1000).toFixed(0)}k</td>
                                             <td>{client.progress ?? 0}%</td>
@@ -841,6 +863,9 @@ const ClientPortal = () => {
             <StageManagerModal
                 isOpen={showStageManager}
                 onClose={() => setShowStageManager(false)}
+                // Re-render the chips/dropdowns in place — the old version did
+                // a full window.location.reload() to pick the renames up.
+                onSaved={bumpStageOverrides}
             />
             <BulkImportModal
                 isOpen={showBulkImport}
@@ -920,11 +945,21 @@ const validateClientForm = (data) => {
         errors.zip_code = 'ZIP code must be valid (e.g. 75201)';
     }
 
-    if (!data.insurance_company) errors.insurance_company = 'Insurance company is required';
+    // CK-FIX Jul-22: insurance company is optional now (free text).
     if (!data.claim_status) errors.claim_status = 'Claim status is required';
 
     return errors;
 };
+
+// CK-FIX Jul-22: suggestion list behind the free-text carrier input. Rendered
+// once per modal — the `list="ck-insurance-carriers"` inputs bind to it by id.
+const CarrierDatalist = () => (
+    <datalist id="ck-insurance-carriers">
+        {CLIENT_INSURANCE.map(([v, label]) => (
+            <option key={v} value={label} />
+        ))}
+    </datalist>
+);
 
 const AddClientModal = ({ isOpen, onClose, onSaved }) => {
     const [formData, setFormData] = useState(INITIAL_FORM);
@@ -951,6 +986,10 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                 ...formData,
                 claim_status: parseInt(formData.claim_status),
                 claim_value: formData.claim_value ? parseInt(formData.claim_value) : 0,
+                // Carrier is optional free text now — store NULL, not "", when
+                // it's left blank. (On EDIT an empty string is meaningful: it
+                // clears a value, so this only applies to create.)
+                insurance_company: formData.insurance_company?.trim() || undefined,
             });
             toast.success('Client added successfully!');
             setFormData(INITIAL_FORM);
@@ -1064,17 +1103,9 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                                     <label className={labelReq}>State</label>
                                     <select className={selectCls(errors.state)} name="state" value={formData.state} onChange={handleInputChange}>
                                         <option value="">Select State</option>
-                                        <option value="OH">Ohio</option>
-                                        <option value="TX">Texas</option>
-                                        <option value="OK">Oklahoma</option>
-                                        <option value="LA">Louisiana</option>
-                                        <option value="AR">Arkansas</option>
-                                        <option value="FL">Florida</option>
-                                        <option value="CO">Colorado</option>
-                                        <option value="CA">California</option>
-                                        <option value="AZ">Arizona</option>
-                                        <option value="GA">Georgia</option>
-                                        <option value="NC">North Carolina</option>
+                                        {CLIENT_STATES.map(([code, label]) => (
+                                            <option key={code} value={code}>{label}</option>
+                                        ))}
                                     </select>
                                     {errors.state && <span className={fieldErrCls}>{errors.state}</span>}
                                 </div>
@@ -1098,18 +1129,14 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                         {/* Insurance Information */}
                         <div className="mb-0">
                             <h3 className={sectionTitle}>Insurance Information</h3>
+                            <CarrierDatalist />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className={fieldGroup}>
-                                    <label className={labelReq}>Insurance Company</label>
-                                    <select className={selectCls(errors.insurance_company)} name="insurance_company" value={formData.insurance_company} onChange={handleInputChange}>
-                                        <option value="">Select Insurance</option>
-                                        <option value="state-farm">State Farm</option>
-                                        <option value="allstate">Allstate</option>
-                                        <option value="farmers">Farmers</option>
-                                        <option value="liberty">Liberty Mutual</option>
-                                        <option value="usaa">USAA</option>
-                                        <option value="other">Other</option>
-                                    </select>
+                                    <label className={labelBase}>Insurance Company</label>
+                                    {/* CK-FIX Jul-22: typeable + optional */}
+                                    <input type="text" list="ck-insurance-carriers" className={inputCls(errors.insurance_company)}
+                                        placeholder="Type or pick a carrier (optional)"
+                                        name="insurance_company" value={formData.insurance_company} onChange={handleInputChange} />
                                     {errors.insurance_company && <span className={fieldErrCls}>{errors.insurance_company}</span>}
                                 </div>
                                 <div className={fieldGroup}>
@@ -1305,16 +1332,9 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
                                     <label className="form-label required">State</label>
                                     <select className={`form-select ${errors.state ? 'input-error' : ''}`} name="state" value={formData.state} onChange={handleInputChange}>
                                         <option value="">Select State</option>
-                                        <option value="TX">Texas</option>
-                                        <option value="OK">Oklahoma</option>
-                                        <option value="LA">Louisiana</option>
-                                        <option value="AR">Arkansas</option>
-                                        <option value="FL">Florida</option>
-                                        <option value="CO">Colorado</option>
-                                        <option value="CA">California</option>
-                                        <option value="AZ">Arizona</option>
-                                        <option value="GA">Georgia</option>
-                                        <option value="NC">North Carolina</option>
+                                        {CLIENT_STATES.map(([code, label]) => (
+                                            <option key={code} value={code}>{label}</option>
+                                        ))}
                                     </select>
                                     {errors.state && <span className="field-error">{errors.state}</span>}
                                 </div>
@@ -1337,18 +1357,15 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
 
                         <div className="form-section">
                             <h3 className="section-title">Insurance Information</h3>
+                            <CarrierDatalist />
                             <div className="form-grid">
                                 <div className="form-group">
-                                    <label className="form-label required">Insurance Company</label>
-                                    <select className={`form-select ${errors.insurance_company ? 'input-error' : ''}`} name="insurance_company" value={formData.insurance_company} onChange={handleInputChange}>
-                                        <option value="">Select Insurance</option>
-                                        <option value="state-farm">State Farm</option>
-                                        <option value="allstate">Allstate</option>
-                                        <option value="farmers">Farmers</option>
-                                        <option value="liberty">Liberty Mutual</option>
-                                        <option value="usaa">USAA</option>
-                                        <option value="other">Other</option>
-                                    </select>
+                                    <label className="form-label">Insurance Company</label>
+                                    {/* CK-FIX Jul-22: typeable + optional */}
+                                    <input type="text" list="ck-insurance-carriers"
+                                        className={`form-input ${errors.insurance_company ? 'input-error' : ''}`}
+                                        placeholder="Type or pick a carrier (optional)"
+                                        name="insurance_company" value={formData.insurance_company} onChange={handleInputChange} />
                                     {errors.insurance_company && <span className="field-error">{errors.insurance_company}</span>}
                                 </div>
                                 <div className="form-group">
@@ -1630,31 +1647,47 @@ const ExportClientsModal = ({
 // CK-FIX Jul-22: rename or hide pipeline stages. Saved locally now;
 // TODO(backend): persist per company + reflect in client portal + emails.
 // True add/remove needs the claim_status DB constraint widened (see handoff).
-const StageManagerModal = ({ isOpen, onClose }) => {
-    const [overrides, setOverrides] = useState({});
-    // Re-read on open: the module cache is empty until the page hydrates.
+const StageManagerModal = ({ isOpen, onClose, onSaved }) => {
+    const [overrides, setOverrides] = useState({ labels: {}, hidden: [] });
+    const [saving, setSaving] = useState(false);
+    // Re-fetch on open so two admins editing stages see each other's work.
     useEffect(() => {
-        if (isOpen) setOverrides(readStageOverrides());
+        if (!isOpen) return;
+        let cancelled = false;
+        fetchStageOverrides().then((o) => {
+            if (!cancelled) setOverrides({ labels: { ...(o.labels ?? {}) }, hidden: [...(o.hidden ?? [])] });
+        });
+        return () => { cancelled = true; };
     }, [isOpen]);
-    if (!isOpen) return null;
     const setLabel = (n, v) => setOverrides((o) => ({ ...o, labels: { ...(o.labels || {}), [n]: v } }));
     const toggleHidden = (n) => setOverrides((o) => {
         const h = new Set(o.hidden || []);
         h.has(n) ? h.delete(n) : h.add(n);
         return { ...o, hidden: [...h] };
     });
-    const save = () => {
-        try { localStorage.setItem('ck_stage_overrides', JSON.stringify(overrides)); } catch {}
-        toast.success('Stages updated');
-        onClose();
-        window.location.reload();
+    const persist = async (payload, message) => {
+        setSaving(true);
+        try {
+            const res = await axiosInstance.put('/client-portal/stage-overrides', payload);
+            setStageOverridesCache(res.data?.data);
+            setOverrides({
+                labels: { ...(res.data?.data?.labels ?? {}) },
+                hidden: [...(res.data?.data?.hidden ?? [])],
+            });
+            onSaved?.();
+            toast.success(message);
+            return true;
+        } catch {
+            return false;   // axios interceptor already surfaced the error
+        } finally {
+            setSaving(false);
+        }
     };
-    const reset = () => {
-        setOverrides({});
-        try { localStorage.removeItem('ck_stage_overrides'); } catch {}
-        hydrateStageOverrides();
-        toast.success('Stages reset to defaults');
+    const save = async () => {
+        if (await persist(overrides, 'Stages updated')) onClose();
     };
+    const reset = () => persist({ labels: {}, hidden: [] }, 'Stages reset to defaults');
+    if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
@@ -1687,10 +1720,12 @@ const StageManagerModal = ({ isOpen, onClose }) => {
                     })}
                 </div>
                 <div className="p-6 border-t border-gray-200 flex justify-between gap-3">
-                    <button className="btn btn-outline" onClick={reset}>Reset Defaults</button>
+                    <button className="btn btn-outline" onClick={reset} disabled={saving}>Reset Defaults</button>
                     <div style={{ display: 'flex', gap: 10 }}>
-                        <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-                        <button className="btn btn-primary" onClick={save}>Save Stages</button>
+                        <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
+                        <button className="btn btn-primary" onClick={save} disabled={saving}>
+                            {saving ? 'Saving…' : 'Save Stages'}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1789,30 +1824,25 @@ const BulkImportModal = ({ isOpen, onClose, onImported }) => {
                 });
                 payload.claim_status = Math.min(Math.max(parseInt(rec.claim_status) || 1, 1), 12);
 
+                // The create endpoint honors these directly now (one request
+                // per row instead of a create + one call per channel).
+                if (importOptions.inviteEmail && payload.email) payload.send_invitation_email = true;
+                if (importOptions.inviteText && payload.phone) payload.send_invitation_sms = true;
+
                 try {
                     const res = await axiosInstance.post('/client-portal', payload, { suppressErrorToast: true });
                     ok++;
 
-                    // Portal invitations go through the token-send endpoint —
-                    // the create endpoint has no invite flag. Best-effort: the
-                    // client IS imported even if the invite bounces (unverified
-                    // SMTP domain, missing Twilio config, bad address), so an
-                    // invite failure is reported separately from a failed row.
-                    const newId = res.data?.data?.id;
-                    if (newId) {
-                        const channels = [];
-                        if (importOptions.inviteEmail && payload.email) channels.push('email');
-                        if (importOptions.inviteText && payload.phone) channels.push('sms');
-                        for (const channel of channels) {
-                            try {
-                                await axiosInstance.post(
-                                    `/client-portal/${newId}/tokens/send`,
-                                    { channel },
-                                    { suppressErrorToast: true },
-                                );
-                            } catch (e) {
+                    // Invites are best-effort server-side: the client IS imported
+                    // even when sending bounces (unverified SMTP domain, missing
+                    // Twilio config, bad address), so a failed invite is reported
+                    // separately from a failed row.
+                    const invitations = res.data?.invitations;
+                    if (invitations) {
+                        for (const ch of ['email', 'sms']) {
+                            if (invitations[ch] && !invitations[ch].sent) {
                                 inviteFailed++;
-                                firstInviteError = firstInviteError || e.userMessage;
+                                firstInviteError = firstInviteError || invitations[ch].error;
                             }
                         }
                     }
