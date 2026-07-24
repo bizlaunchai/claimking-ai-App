@@ -1161,3 +1161,118 @@
   .hero { padding: 5rem 0.75rem 2rem 0.75rem; }
   .hero h1 { font-size: 1.5rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   P3.1 — SITE-WIDE LIGHT INPUT STANDARD
+   Reference: the Messages inbox (.mi-input in dashboard/messages/messages.css).
+
+   Every typing surface in the app: light gray #f3f4f6, black #111827 text,
+   #e5e7eb border, and on focus a white background with a gold #FDB813 border.
+
+   This block is the SINGLE source of truth. Near-identical copies used to sit
+   at the bottom of 3d-mockup.css and clientPortal.css — and because Next.js
+   route CSS is global once loaded, whether your inputs looked light depended on
+   which page you had visited first. They have been removed; don't re-add them.
+
+   Two rules for editing this block:
+
+   1. TYPE LIST, NEVER BARE `input`. The app has 186 checkboxes, 31 radios,
+      5 range sliders, 3 colour pickers, 13 file inputs and 181 button-type
+      inputs. A bare `input { background: #f3f4f6 !important }` greys out every
+      button, hides the colour swatches in the 3D Mockup palette, and breaks the
+      custom toggle switches in six stylesheets. The focus rule needs the same
+      list — that's exactly what the previous copies got wrong.
+
+   2. COLOUR ONLY. `background`, `color` and `border-color` are forced, because
+      page-level class selectors (.form-input, .search-input, …) outrank a bare
+      element selector. Size properties are deliberately NOT forced: pages size
+      their inputs to fit their layouts (the QTY box in an estimate row, the
+      inline rate fields in the totals panel), and overriding padding or
+      font-size app-wide would break those.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input[type="password"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="time"],
+input[type="week"],
+input:not([type]),
+textarea,
+select {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+}
+
+input[type="text"]::placeholder,
+input[type="number"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder,
+input[type="url"]::placeholder,
+input[type="search"]::placeholder,
+input[type="password"]::placeholder,
+input:not([type])::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1;                    /* Firefox dims placeholders by default */
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="search"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="month"]:focus,
+input[type="time"]:focus,
+input[type="week"]:focus,
+input:not([type]):focus,
+textarea:focus,
+select:focus {
+  background-color: #fff !important;
+  border-color: #FDB813 !important;
+  outline: none;
+}
+
+/* A `select` renders its dropdown list from the option elements, which do not
+   inherit the control's colours — a dark page that styled its options stays
+   dark once the list is open unless they are set too. */
+select option {
+  background-color: #fff;
+  color: #111827;
+}
+
+/* Chrome paints autofilled fields pale blue and ignores background-color. The
+   inset shadow is the only way to repaint them. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: #111827;
+  -webkit-box-shadow: 0 0 0 1000px #f3f4f6 inset;
+  box-shadow: 0 0 0 1000px #f3f4f6 inset;
+}
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  box-shadow: 0 0 0 1000px #fff inset;
+}
+
+/* Disabled fields must still read as disabled, not merely as empty. */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: #e5e7eb !important;
+  color: #6b7280 !important;
+  cursor: not-allowed;
+}

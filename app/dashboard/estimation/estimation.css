@@ -673,29 +673,6 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
        @media (max-width:768px) block — see client-selector.css. */
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   CK-FIX Jul-22 — LIGHT INPUT STANDARD (estimation page)
-   Light gray bg, black text, gold focus. Scoped to .estimation-page so
-   the !important rules can't leak into other routes' inputs — Next.js
-   CSS is global once the route loads, and the original unscoped version
-   of this block restyled every input in the app.
-   ══════════════════════════════════════════════════════════════════ */
-.estimation-page input[type="text"], .estimation-page input[type="number"],
-.estimation-page input[type="email"], .estimation-page input[type="tel"],
-.estimation-page input[type="date"], .estimation-page input[type="search"],
-.estimation-page textarea, .estimation-page select {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px;
-  font-family: inherit;
-}
-.estimation-page input::placeholder,
-.estimation-page textarea::placeholder { color: #9ca3af !important; }
-.estimation-page input:focus,
-.estimation-page textarea:focus,
-.estimation-page select:focus {
-  background: #fff !important;
-  border-color: #FDB813 !important;
-  outline: none;
-}
+/* The light input standard lives in app/globals.css (P3.1). The scoped copy
+   that was here is gone — one rule for the whole app beats four near-identical
+   ones that drift apart. */

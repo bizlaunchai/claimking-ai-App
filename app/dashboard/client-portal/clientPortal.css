@@ -1111,16 +1111,5 @@ input:checked + .toggle-slider:before {
 /* ══════════════════════════════════════════════════════════════════
    CK-FIX Jul-22 — global light input standard + avatar blob guard
    ══════════════════════════════════════════════════════════════════ */
-input[type="text"], input[type="number"], input[type="email"],
-input[type="tel"], input[type="search"], textarea, select {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px;
-}
-input::placeholder, textarea::placeholder { color: #9ca3af !important; }
-input:focus, textarea:focus, select:focus {
-  background: #fff !important;
-  border-color: #FDB813 !important;
-  outline: none;
-}
+/* The light input standard moved to app/globals.css (P3.1) — this copy was
+   unscoped and leaked into every other page. Don't re-add it here. */

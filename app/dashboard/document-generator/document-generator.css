@@ -416,9 +416,16 @@
     background: #3b82f6;
 }
 
-/* Create Document Section */
+/* Create Document Section
+   ─────────────────────────────────────────────────────────────────────────
+   Was a navy gradient panel — the only dark surface left on an otherwise
+   light page, which is why it read as broken next to the light input fields.
+   Now matches the document cards below it (#f9fafb / #e5e7eb), with the gold
+   kept for the icon tile and the Generate button so the AI feature still
+   announces itself. */
 .create-document-section {
-    background: linear-gradient(135deg, #1a1f3a, #2a3151);
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
     border-radius: 16px;
     padding: 3rem;
     position: relative;
@@ -426,20 +433,18 @@
     margin-bottom: 2rem;
 }
 
+/* A faint gold wash in the corner, replacing the rotating radial sweep the
+   dark panel used. Static: an infinite animation on a full-page element costs
+   battery on every visit and this is a form, not a hero. */
 .create-document-section::before {
     content: '';
     position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(253, 184, 19, 0.1) 0%, transparent 70%);
-    animation: rotate 30s linear infinite;
-}
-
-@keyframes rotate {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    top: -40%;
+    right: -20%;
+    width: 60%;
+    height: 180%;
+    background: radial-gradient(circle, rgba(253, 184, 19, 0.10) 0%, transparent 70%);
+    pointer-events: none;
 }
 
 .create-content {
@@ -457,12 +462,14 @@
 .create-icon-wrapper {
     width: 80px;
     height: 80px;
-    background: rgba(253, 184, 19, 0.15);
+    /* Slightly stronger than the dark-panel values — a 15%/30% gold that read
+       clearly against navy nearly disappears against #f9fafb. */
+    background: rgba(253, 184, 19, 0.18);
     border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid rgba(253, 184, 19, 0.3);
+    border: 2px solid rgba(253, 184, 19, 0.55);
 }
 
 .create-icon {
@@ -475,31 +482,39 @@
 
 .create-title {
     font-size: 1.75rem;
-    color: white;
+    color: #1a1f3a;
     margin-bottom: 0.5rem;
     font-weight: 700;
 }
 
 .create-subtitle {
-    color: #9ca3af;
+    /* #6b7280 measures 4.63:1 on #f9fafb — it passes AA, but only just, and
+       this is a full sentence of body copy. #4b5563 takes it to 7.4:1. */
+    color: #4b5563;
     font-size: 1rem;
     line-height: 1.5;
 }
 
 .create-form {
-    background: rgba(255, 255, 255, 0.05);
+    background: #fff;
     border-radius: 12px;
     padding: 2rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e5e7eb;
+    position: relative;   /* sits above the corner wash */
+    z-index: 1;
 }
 
 .form-group {
     margin-bottom: 1.5rem;
 }
 
-.form-label {
+/* Gold text was legible on the navy panel; on white it measures ~1.8:1. Labels
+   are now navy, which is also what `.form-label.light` already did — the two
+   have simply converged. */
+.form-label,
+.form-label.light {
     display: block;
-    color: #FDB813;
+    color: #1a1f3a;
     font-weight: 600;
     margin-bottom: 0.75rem;
     font-size: 0.875rem;
@@ -507,94 +522,54 @@
     letter-spacing: 0.5px;
 }
 
-.form-label.light {
-    color: #1a1f3a;
-}
+/* ─────────────────────────────────────────────────────────────────────────
+   P3.1 — typing surfaces on this page follow the site-wide light standard
+   (#f3f4f6 background, #111827 text, gold focus). They were the only truly
+   dark inputs left in the app: translucent white on the dark card, with the
+   select's own option list hard-coded to #1e1e2e so the open dropdown stayed
+   black even where the control looked light.
 
-.form-input {
-    width: 100%;
-    padding: 1rem;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-}
-.form-input-select {
-    width: 100%;
-    padding: 1rem;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-}
-.form-input-select option {
-    background: #1e1e2e;
-    color: white;
-}
-
-.form-input.light {
-    color: #1a1f3a;
-    border-color: #e5e7eb;
-    background: white;
-}
-
-.form-input::placeholder {
-    color: #9ca3af;
-}
-
-.form-input.light::placeholder {
-    color: #9ca3af;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: #FDB813;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.form-input.light:focus {
-    background: white;
-}
-
+   Fixed at the source rather than left to the !important rules in globals.css,
+   so this stylesheet says what it means. The `.light` modifier that some
+   fields carry is now redundant — it is kept as a no-op so the existing JSX
+   keeps working, and the labels still need it because THEY stay light-on-dark.
+   ───────────────────────────────────────────────────────────────────────── */
+.form-input,
+.form-input-select,
 .form-textarea {
     width: 100%;
     padding: 1rem;
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
+    background: #f3f4f6;
+    color: #111827;
     font-size: 1rem;
-    transition: all 0.3s ease;
+    font-family: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.form-textarea {
     min-height: 120px;
     resize: vertical;
 }
 
-.form-textarea.light {
-    color: #1a1f3a;
-    border-color: #e5e7eb;
-    background: white;
+/* The dropdown list does not inherit the control's colours. */
+.form-input-select option {
+    background: #fff;
+    color: #111827;
 }
 
-.form-textarea:focus {
-    outline: none;
-    border-color: #FDB813;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.form-textarea.light:focus {
-    background: white;
-}
-
+.form-input::placeholder,
 .form-textarea::placeholder {
     color: #9ca3af;
 }
 
-.form-textarea.light::placeholder {
-    color: #9ca3af;
+.form-input:focus,
+.form-input-select:focus,
+.form-textarea:focus {
+    outline: none;
+    background: #fff;
+    border-color: #FDB813;
 }
 
 .form-actions {
