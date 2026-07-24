@@ -1387,17 +1387,8 @@
 }
 .mockup-page { padding-right: 1.5rem; }
 
-/* Global light input standard — overrides any dark typing surfaces */
-input[type="text"], input[type="number"], input[type="email"],
-input[type="search"], textarea, select {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-  border: 1px solid #e5e7eb !important;
-  border-radius: 8px;
-}
-input::placeholder, textarea::placeholder { color: #9ca3af !important; }
-input:focus, textarea:focus, select:focus {
-  background: #fff !important;
-  border-color: #FDB813 !important;
-  outline: none;
-}
+/* The light input standard moved to app/globals.css (P3.1). The copy that
+   lived here was unscoped, so it restyled inputs on every other page too —
+   but only once someone had opened the mockup studio. Its `input:focus` rule
+   also had no type list, which meant it repainted checkboxes, colour swatches
+   and range sliders. Don't re-add it here. */

@@ -2483,8 +2483,8 @@ const Estimation = () => {
         .filter((t) => !sections.find((s) => s.id === t.id));
 
     // ====================== RENDER ======================
-    // `estimation-page` scopes the CK-FIX light-input CSS block to this route —
-    // that block uses !important and would otherwise restyle the whole app.
+    // `estimation-page` is this route's styling hook. (The light-input block it
+    // originally scoped now lives in globals.css and applies app-wide.)
     return (
         <div className={`estimation-page mode-${mode}`}>
             <IconSprite />
