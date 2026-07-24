@@ -35,6 +35,43 @@ import './client-selector.css';
  *   searchPlaceholder      — optional override for the search input placeholder
  *   submitLabel            — optional override for the New Client submit button
  */
+
+/**
+ * Inline icons. Emoji were used here before, but they render at different
+ * sizes and weights on every OS (and Windows draws 📍 in full colour at a
+ * different baseline than the text), which is what made the selected bar look
+ * misaligned. `currentColor` also lets each icon inherit its row's colour.
+ */
+const CsIcon = {
+    Pin: () => (
+        <svg className="cs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+        </svg>
+    ),
+    Mail: () => (
+        <svg className="cs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="m22 7-10 6L2 7" />
+        </svg>
+    ),
+    Phone: () => (
+        <svg className="cs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" />
+        </svg>
+    ),
+    Swap: () => (
+        <svg className="cs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M16 3h5v5" /><path d="M21 3l-7 7" />
+            <path d="M8 21H3v-5" /><path d="M3 21l7-7" />
+        </svg>
+    ),
+};
+
 const ClientSelector = ({
     client,
     onChange,
@@ -124,27 +161,45 @@ const ClientSelector = ({
     if (client) {
         return (
             <div className="cs-selected-bar">
-                <div className="cs-selected-info" style={{ alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                <div className="cs-selected-main">
+                    <div className="cs-selected-identity">
                         <span className="cs-selected-name">{client.name}</span>
-                        {client.address && (
-                            <span className="cs-option-addr">📍 {client.address}</span>
-                        )}
-                        {(client.email || client.phone) && (
-                            <div className="cs-option-meta">
-                                {client.email && <span>✉️ {client.email}</span>}
-                                {client.phone && <span>📞 {client.phone}</span>}
-                            </div>
-                        )}
                         {client.claim && (
-                            <div className="cs-option-claim">Claim #: {client.claim}</div>
+                            <span className="cs-claim-chip">Claim #{client.claim}</span>
                         )}
                     </div>
-                    <button type="button" className="cs-action-link" onClick={change}>Change</button>
+
+                    {/* One row per contact fact, each with its own icon column so
+                        the values line up instead of wrapping into each other. */}
+                    <div className="cs-selected-details">
+                        {client.address && (
+                            <span className="cs-detail">
+                                <CsIcon.Pin />
+                                <span className="cs-detail-text">{client.address}</span>
+                            </span>
+                        )}
+                        {client.email && (
+                            <a className="cs-detail cs-detail-link" href={`mailto:${client.email}`}>
+                                <CsIcon.Mail />
+                                <span className="cs-detail-text">{client.email}</span>
+                            </a>
+                        )}
+                        {client.phone && (
+                            <a className="cs-detail cs-detail-link" href={`tel:${client.phone}`}>
+                                <CsIcon.Phone />
+                                <span className="cs-detail-text">{client.phone}</span>
+                            </a>
+                        )}
+                    </div>
                 </div>
-                {selectedExtraActions && (
-                    <div className="cs-selected-actions">{selectedExtraActions}</div>
-                )}
+
+                <div className="cs-selected-actions">
+                    {selectedExtraActions}
+                    <button type="button" className="cs-action-btn" onClick={change}>
+                        <CsIcon.Swap />
+                        Change client
+                    </button>
+                </div>
             </div>
         );
     }
@@ -191,10 +246,14 @@ const ClientSelector = ({
                                     <div className="cs-option-inner">
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div className="cs-option-name">{displayName || 'Unnamed'}</div>
-                                            {addressLine && <div className="cs-option-addr">📍 {addressLine}</div>}
+                                            {addressLine && (
+                                                <div className="cs-option-addr">
+                                                    <CsIcon.Pin />{addressLine}
+                                                </div>
+                                            )}
                                             <div className="cs-option-meta">
-                                                {c.email && <span>✉️ {c.email}</span>}
-                                                {c.phone && <span>📞 {c.phone}</span>}
+                                                {c.email && <span><CsIcon.Mail />{c.email}</span>}
+                                                {c.phone && <span><CsIcon.Phone />{c.phone}</span>}
                                             </div>
                                             {c.claim_number && (
                                                 <div className="cs-option-claim">Claim #: {c.claim_number}</div>

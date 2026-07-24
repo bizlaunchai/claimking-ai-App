@@ -370,13 +370,12 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
 .cs-option{cursor:pointer}
 .cs-option > div{display:flex;justify-content:space-between;align-items:center;padding:.75rem;background:#f9fafb;border-radius:6px;border:1px solid transparent;transition:all .2s ease}
 .cs-option:hover > div{background:#fef9e6;border-color:#FDB813}
-.cs-selected-bar{display:flex;padding:1rem;background:linear-gradient(135deg,#fef9e6,#fffbeb);border:1px solid #FDB813;border-radius:8px;margin:1rem auto 1.5rem;max-width:1600px;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
-.cs-selected-info{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
-.cs-selected-name{font-weight:600;color:#1a1f3a}
-.cs-selected-address{color:#6b7280;font-size:.875rem}
-.cs-selected-actions{display:flex;gap:.75rem;flex-wrap:wrap}
-.cs-action-link{color:#FDB813;font-size:.875rem;text-decoration:none;font-weight:500;cursor:pointer}
-.cs-action-link:hover{color:#d4a000}
+/* The selected-client bar (.cs-selected-bar, .cs-action-link, …) is owned by
+   components/clients/client-selector.css. A stale COPY of those rules lived
+   here and, depending on stylesheet order, overrode the component with the old
+   gold-on-cream treatment — which is why the bar rendered unreadable and
+   misaligned on this page only. Do not re-add them here; edit the component's
+   own stylesheet so every page that uses ClientSelector stays in sync. */
 .cs-error-banner{background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;color:#7f1d1d;padding:10px 12px;border-radius:6px;font-size:13px}
 @media (max-width:720px){
   .cs-form-grid{grid-template-columns:1fr}
@@ -670,8 +669,8 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
     /* CS form on phone */
     .cs-form-grid { grid-template-columns: 1fr; }
     .cs-form-group.full-width { grid-column: span 1; }
-    .cs-selected-bar { flex-direction: column; align-items: flex-start; }
-    .cs-selected-info { flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+    /* .cs-selected-bar stacking is handled by the component's own
+       @media (max-width:768px) block — see client-selector.css. */
 }
 
 /* ══════════════════════════════════════════════════════════════════
