@@ -767,25 +767,44 @@ const ThreeDMockup = () => {
         setGenerationError(null);
     };
 
-    // CK-FIX Jul-22: Save as Template now works — persists locally.
-    // TODO(backend): POST /mockup/templates to persist server-side per company.
-    const [myTemplates, setMyTemplates] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('ck_mockup_templates') || '[]'); } catch { return []; }
-    });
-    const saveTemplate = () => {
+    // CK-FIX Jul-22: Save as Template — persisted PER COMPANY via
+    // /mockup/templates (sql/71_mockup_templates.sql). Was localStorage, so a
+    // saved combo vanished on the next machine and teammates never saw it.
+    const [myTemplates, setMyTemplates] = useState([]);
+    const loadMyTemplates = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/mockup/templates', { suppressErrorToast: true });
+            setMyTemplates(res.data?.data ?? []);
+        } catch {
+            setMyTemplates([]);   // saved templates are additive — an empty list is a safe fallback
+        }
+    }, []);
+    useEffect(() => { loadMyTemplates(); }, [loadMyTemplates]);
+
+    const saveTemplate = async () => {
         const hasColor = Object.values(selectedColors).some(Boolean);
         if (!hasColor) { toast.error('Pick at least one color first, then save as a template'); return; }
         const name = prompt('Template name:', 'My Color Combo');
         if (!name) return;
-        const next = [...myTemplates, { name, colors: selectedColors, savedAt: Date.now() }];
-        setMyTemplates(next);
-        try { localStorage.setItem('ck_mockup_templates', JSON.stringify(next)); } catch {}
-        toast.success(`Template "${name}" saved — find it under Mockup Templates`);
+        try {
+            await axiosInstance.post('/mockup/templates', {
+                name: name.trim().slice(0, 80),
+                colors: selectedColors,
+                instructions: aiInstructions?.trim() || undefined,
+            });
+            await loadMyTemplates();
+            toast.success(`Template "${name}" saved — find it under Mockup Templates`);
+        } catch {
+            // axios interceptor already showed the error
+        }
     };
-    const deleteMyTemplate = (idx) => {
-        const next = myTemplates.filter((_, i) => i !== idx);
-        setMyTemplates(next);
-        try { localStorage.setItem('ck_mockup_templates', JSON.stringify(next)); } catch {}
+    const deleteMyTemplate = async (tpl) => {
+        try {
+            await axiosInstance.delete(`/mockup/templates/${tpl.id}`);
+            setMyTemplates((list) => list.filter((t) => t.id !== tpl.id));
+        } catch {
+            // handled by interceptor
+        }
     };
     const applyTemplate = (t) => {
         setSelectedColors({
@@ -796,42 +815,125 @@ const ThreeDMockup = () => {
         });
         if (t.instructions) setAiInstructions(t.instructions);
         setShowTemplates(false);
+        // Usage drives the "most used first" ordering. Fire-and-forget: a
+        // failed counter must never block applying the colours.
+        if (t.id) {
+            axiosInstance
+                .post(`/mockup/templates/${t.id}/used`, {}, { suppressErrorToast: true })
+                .catch(() => {});
+        }
         toast.success(`Applied "${t.name}" — click Generate Mockup`);
     };
     // CK-FIX Jul-22: Save to Client Profile — makes the mockup portal-visible
     // for the selected client without emailing them.
     // CK-FIX Jul-22: AI color-list import — upload up to 10 manufacturer
-    // files/images; AI extracts colors into an editable custom palette.
-    // TODO(backend): POST /mockup/colors/import (multipart, up to 10 files)
-    //   → returns [{ name, value }]. Wire Gemini vision on the API side.
+    // files/images; Gemini vision extracts the swatches into an editable
+    // custom palette. Backend: POST /mockup/colors/import (one file per
+    // request) → { data: { colors: [{ name, value }], manufacturer, ... } }.
     const [colorImportModal, setColorImportModal] = useState(false);
     const [colorImportFiles, setColorImportFiles] = useState([]);
     const [colorImportBusy, setColorImportBusy] = useState(false);
-    const [customColors, setCustomColors] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('ck_custom_colors') || '[]'); } catch { return []; }
-    });
-    const persistCustomColors = (list) => {
-        setCustomColors(list);
-        try { localStorage.setItem('ck_custom_colors', JSON.stringify(list)); } catch {}
+    const [colorImportProgress, setColorImportProgress] = useState(null);
+    // "My Colors" — the company's own palette, stored server-side (sql/73).
+    // Was localStorage, so a palette imported on the desktop didn't exist on
+    // the laptop or for anyone else on the crew.
+    const [customColors, setCustomColors] = useState([]);
+    const loadCustomColors = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/mockup/colors', { suppressErrorToast: true });
+            setCustomColors(res.data?.data ?? []);
+        } catch {
+            setCustomColors([]);   // the palette is additive; empty is a safe fallback
+        }
+    }, []);
+    useEffect(() => { loadCustomColors(); }, [loadCustomColors]);
+
+    /** Edit one swatch's hex. Optimistic — a colour picker that lags is unusable. */
+    const updateCustomColor = async (color, value) => {
+        setCustomColors((list) => list.map((c) => c.id === color.id ? { ...c, value } : c));
+        try {
+            await axiosInstance.patch(`/mockup/colors/${color.id}`, { value },
+                { suppressErrorToast: true });
+        } catch {
+            setCustomColors((list) => list.map((c) => c.id === color.id ? { ...c, value: color.value } : c));
+            toast.error('Could not save that colour');
+        }
+    };
+
+    const deleteCustomColor = async (color) => {
+        const prev = customColors;
+        setCustomColors((list) => list.filter((c) => c.id !== color.id));
+        try {
+            await axiosInstance.delete(`/mockup/colors/${color.id}`, { suppressErrorToast: true });
+        } catch {
+            setCustomColors(prev);
+            toast.error('Could not remove that colour');
+        }
     };
     const runColorImport = async () => {
         if (colorImportFiles.length === 0) { toast.error('Add at least one file'); return; }
         setColorImportBusy(true);
+        // Sequential, one request per file: a chart the AI can't read fails
+        // alone instead of taking the whole batch with it, and the progress
+        // counter stays honest.
+        const files = colorImportFiles.slice(0, 10);
+        const imported = [];
+        let failed = 0;
+        let firstError = null;
         try {
-            const fd = new FormData();
-            colorImportFiles.slice(0, 10).forEach((f) => fd.append('files', f));
-            const res = await axiosInstance.post('/mockup/colors/import', fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+            for (let i = 0; i < files.length; i++) {
+                setColorImportProgress(`Reading ${i + 1} / ${files.length}...`);
+                const fd = new FormData();
+                fd.append('file', files[i]);
+                try {
+                    const res = await axiosInstance.post('/mockup/colors/import', fd, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                        suppressErrorToast: true,
+                    });
+                    const payload = res?.data?.data ?? {};
+                    for (const c of payload.colors ?? []) {
+                        imported.push({
+                            name: c.name || 'Imported',
+                            value: c.value || '#cccccc',
+                            // Provenance travels with the swatch so the palette
+                            // can say where a colour came from later.
+                            manufacturer: payload.manufacturer || undefined,
+                            product_line: payload.product_line || undefined,
+                            source_file: payload.source_file || files[i]?.name,
+                        });
+                    }
+                } catch (e) {
+                    failed++;
+                    firstError = firstError || e?.userMessage;
+                }
+            }
+
+            if (imported.length === 0) {
+                toast.error(
+                    failed
+                        ? `Could not read ${failed === files.length ? 'those files' : 'some files'}`
+                        : 'No color swatches found in those files',
+                    { description: firstError || undefined },
+                );
+                return;
+            }
+
+            // The server upserts by name, so re-importing an updated chart
+            // refreshes a swatch instead of stacking a duplicate. Only the new
+            // rows are sent — untouched colours are left alone server-side.
+            try {
+                await axiosInstance.post('/mockup/colors', { colors: imported });
+            } catch {
+                return;   // interceptor already showed the error
+            }
+            await loadCustomColors();
+            toast.success(`Imported ${imported.length} colors — check "My Colors" and adjust any swatch`, {
+                description: failed ? `${failed} file(s) could not be read.` : undefined,
             });
-            const extracted = Array.isArray(res?.data) ? res.data : res?.data?.colors || [];
-            if (extracted.length === 0) { toast.info('No colors detected in those files'); return; }
-            persistCustomColors([...customColors, ...extracted.map((c) => ({ name: c.name || 'Imported', value: c.value || '#cccccc' }))]);
-            toast.success(`Imported ${extracted.length} colors — check "My Colors" and adjust any swatch`);
             setColorImportModal(false); setColorImportFiles([]);
-        } catch {
-            toast.error('Color import failed — is the AI endpoint configured? (API Settings)');
         } finally {
             setColorImportBusy(false);
+            setColorImportProgress(null);
         }
     };
 
@@ -2292,13 +2394,16 @@ const ThreeDMockup = () => {
                                 <>
                                     <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>My Colors (click swatch to adjust)</div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                        {customColors.map((c, ci) => (
-                                            <label key={ci} style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px', cursor: 'pointer' }}>
-                                                <input type="color" value={c.value}
-                                                    onChange={(e) => persistCustomColors(customColors.map((x, i) => i === ci ? { ...x, value: e.target.value } : x))}
+                                        {customColors.map((c) => (
+                                            <label key={c.id} title={c.manufacturer ? `${c.manufacturer}${c.product_line ? ` · ${c.product_line}` : ''}` : undefined}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: '4px 8px', cursor: 'pointer' }}>
+                                                {/* onBlur, not onChange — the native colour picker fires
+                                                    onChange on every drag, which would be a PATCH per pixel. */}
+                                                <input type="color" defaultValue={c.value} key={`${c.id}-${c.value}`}
+                                                    onBlur={(e) => { if (e.target.value !== c.value) updateCustomColor(c, e.target.value); }}
                                                     style={{ width: 26, height: 26, border: 'none', padding: 0, background: 'transparent' }} />
                                                 <span style={{ fontSize: 12 }}>{c.name}</span>
-                                                <button type="button" onClick={() => persistCustomColors(customColors.filter((_, i) => i !== ci))}
+                                                <button type="button" onClick={() => deleteCustomColor(c)}
                                                     style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', fontWeight: 700 }}>&times;</button>
                                             </label>
                                         ))}
@@ -2307,7 +2412,7 @@ const ThreeDMockup = () => {
                             )}
                             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                                 <button className="btn btn-primary" onClick={runColorImport} disabled={colorImportBusy}>
-                                    {colorImportBusy ? 'Analyzing...' : 'Extract Colors'}
+                                    {colorImportBusy ? (colorImportProgress || 'Analyzing...') : 'Extract Colors'}
                                 </button>
                                 <button className="btn btn-outline" onClick={() => setColorImportModal(false)}>Close</button>
                             </div>
@@ -2343,8 +2448,8 @@ const ThreeDMockup = () => {
                                 <>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: '18px 0 10px' }}>My Saved Templates</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-                                        {myTemplates.map((t, ti) => (
-                                            <div key={ti} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '0.9rem', background: '#fffef7' }}>
+                                        {myTemplates.map((t) => (
+                                            <div key={t.id} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: '0.9rem', background: '#fffef7' }}>
                                                 <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                                                     {['roofing','siding','trim','windows'].map((k) => t.colors?.[k] ? (
                                                         <span key={k} style={{ width: 22, height: 22, borderRadius: '50%', background: t.colors[k].value, border: '1px solid #d1d5db', display: 'inline-block' }} />
@@ -2352,8 +2457,8 @@ const ThreeDMockup = () => {
                                                 </div>
                                                 <div style={{ fontWeight: 700, fontSize: 13.5 }}>{t.name}</div>
                                                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                                    <button type="button" onClick={() => applyTemplate({ ...t.colors, name: t.name })} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #FDB813', background: '#FDB813', fontWeight: 700, cursor: 'pointer' }}>Apply</button>
-                                                    <button type="button" onClick={() => deleteMyTemplate(ti)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#dc2626', cursor: 'pointer' }}>Delete</button>
+                                                    <button type="button" onClick={() => applyTemplate({ ...t.colors, id: t.id, name: t.name, instructions: t.instructions })} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #FDB813', background: '#FDB813', fontWeight: 700, cursor: 'pointer' }}>Apply</button>
+                                                    <button type="button" onClick={() => deleteMyTemplate(t)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#dc2626', cursor: 'pointer' }}>Delete</button>
                                                 </div>
                                             </div>
                                         ))}

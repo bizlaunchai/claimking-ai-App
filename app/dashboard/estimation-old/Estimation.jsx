@@ -436,25 +436,7 @@ const Estimation = () => {
     const [overheadOn, setOverheadOn] = useState(true);
     const [taxOn, setTaxOn] = useState(true);
     const [taxName, setTaxName] = useState("Sales Tax");
-    // Fee spec (Jul-24): sales tax has NO default rate. It starts empty and the
-    // contractor types their jurisdiction's rate — an assumed 8% silently
-    // mis-prices every estimate outside an 8% county.
-    const [taxPercent, setTaxPercent] = useState("");
-
-    // ── CK-FIX Jul-22 + fee spec: discount / custom fees / card fee ───────
-    //   Subtotal → +O&P → −Discount → +Tax → +Custom fees → +Card fee → Total
-    const [discountType, setDiscountType] = useState("flat"); // flat | pct
-    const [discountValue, setDiscountValue] = useState("");
-    const [customFees, setCustomFees] = useState([]); // [{ name, amount }]
-    const [cardFeeOn, setCardFeeOn] = useState(false);
-    const [cardFeePct, setCardFeePct] = useState("3"); // matches our T&C
-
-    // ── CK-FIX Jul-22: free-text damage type when "Other" is chosen ───────
-    const [aiDamageTypeOther, setAiDamageTypeOther] = useState("");
-
-    // ── CK-FIX Jul-22: All Items modal (was a dead stub) ─────────────────
-    const [allItemsModal, setAllItemsModal] = useState(false);
-    const [allItemsSearch, setAllItemsSearch] = useState("");
+    const [taxPercent, setTaxPercent] = useState("8");
 
     // ── Photos master flag (Phase 5) — declared here because
     //    buildSavePayload below references it. The actual Photos-tab UI
@@ -704,20 +686,7 @@ const Estimation = () => {
                 setOverheadOn(!!e.overhead_on);
                 setTaxOn(!!e.tax_on);
                 setTaxName(e.tax_name ?? "Sales Tax");
-                // Empty string, not "0" — a saved 0% and an unset rate look the
-                // same in the DB, and showing "0" reads as a deliberate choice.
-                setTaxPercent(Number(e.tax_pct) ? String(e.tax_pct) : "");
-                // Fee spec (Jul-24)
-                setDiscountType(e.discount_type === "pct" ? "pct" : "flat");
-                setDiscountValue(Number(e.discount_value) ? String(e.discount_value) : "");
-                setCardFeeOn(!!e.card_fee_on);
-                setCardFeePct(String(e.card_fee_pct ?? 3));
-                setCustomFees(
-                    (e.custom_fees ?? []).map((f) => ({
-                        name: f.name ?? "",
-                        amount: String(f.amount ?? ""),
-                    })),
-                );
+                setTaxPercent(String(e.tax_pct ?? 8));
                 if (e.terms_html) {
                     setTermsState((prev) => ({ ...(prev ?? {}), full_terms: e.terms_html }));
                 }
@@ -908,17 +877,6 @@ const Estimation = () => {
      * Build the SaveEstimateDto payload from current React state. Returns
      * `null` if the estimate isn't ready to save yet (no client selected).
      */
-    // ── Fee rates, clamped to the SAME bounds the DTO enforces ────────────
-    // (@Min(0) discount_value, @Max(100) tax_pct, @Max(10) card_fee_pct.)
-    // `max=` on a number input does not stop typing, so an out-of-range value
-    // would otherwise (a) show a total the server never agrees with and, worse,
-    // (b) 400 every auto-save with a validation error nobody sees. Declared
-    // here because BOTH the payload and the totals block read them.
-    const clampNum = (v, lo, hi) => Math.min(Math.max(Number.isFinite(v) ? v : 0, lo), hi);
-    const discountValueNum = clampNum(parseFloat(discountValue), 0, Number.MAX_SAFE_INTEGER);
-    const taxPercentNum = clampNum(parseFloat(taxPercent), 0, 100);
-    const cardFeePctNum = clampNum(parseFloat(cardFeePct), 0, 10);
-
     const buildSavePayload = useCallback(() => {
         if (!client?.id) return null;
         return {
@@ -934,21 +892,7 @@ const Estimation = () => {
             overhead_pct: 20,
             tax_on: taxOn,
             tax_name: taxName,
-            tax_pct: taxPercentNum,
-            // Fee spec (Jul-24). `custom_fees` is always sent (even empty) so a
-            // deleted fee row actually disappears server-side — the backend
-            // treats an omitted key as "don't touch", an empty array as "clear".
-            discount_type: discountType,
-            discount_value: discountValueNum,
-            card_fee_on: cardFeeOn,
-            card_fee_pct: cardFeePctNum,
-            custom_fees: customFees
-                .filter((f) => (f.name ?? "").trim() || (parseFloat(f.amount) || 0))
-                .map((f, i) => ({
-                    name: (f.name ?? "").trim() || "Fee",
-                    amount: Math.max(parseFloat(f.amount) || 0, 0),
-                    sort_order: i,
-                })),
+            tax_pct: parseFloat(taxPercent) || 0,
             include_photos_in_pdf: includePhotosInPdf,
             terms_html: termsState?.full_terms ?? undefined,
             sections: sections.map((s, idx) => ({
@@ -970,8 +914,7 @@ const Estimation = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         client, linkedMeasurement, estimateTitle, mode, overheadOn,
-        taxOn, taxName, taxPercentNum, termsState, sections, includePhotosInPdf,
-        discountType, discountValueNum, cardFeeOn, cardFeePctNum, customFees,
+        taxOn, taxName, taxPercent, termsState, sections, includePhotosInPdf,
     ]);
 
     /**
@@ -1141,15 +1084,7 @@ const Estimation = () => {
             const payload = {
                 client_id: client.id,
                 measurement_id: resolvedMeasurementId ?? undefined,
-                // CK-FIX Jul-22: "Other" reveals a free-text box. The enum
-                // value still goes in `damage_type` (DB CHECK + DTO only allow
-                // the seven known values); the typed words ride along in
-                // `damage_type_other` and reach the AI prompt from there.
                 damage_type: aiDamageType || undefined,
-                damage_type_other:
-                    aiDamageType === "other" && aiDamageTypeOther.trim()
-                        ? aiDamageTypeOther.trim()
-                        : undefined,
                 storm_date: aiStormDate || undefined,
                 mode,
                 instructions: aiMessage?.trim() || undefined,
@@ -1804,39 +1739,11 @@ const Estimation = () => {
     };
 
     // ====================== TOTALS ======================
-    // Fee spec (Jul-24) — this ORDER is the contract, and it is mirrored
-    // server-side in EstimationService.computeTotals. Change one, change both.
-    //
-    //   Subtotal → +O&P → −Discount → +Tax → +Custom fees → +Card fee → Total
-    //
-    // Discount comes off BEFORE tax (no tax on money not paid); custom fees go
-    // on AFTER tax (a permit fee is never taxed) but are still inside the card
-    // fee base (the card is charged the full amount).
-    // Round at every step, exactly like the server does. Without this the UI
-    // can land a cent away from the saved total on quantities with 3 decimals,
-    // and "the PDF says something different" is not a conversation anyone wants
-    // to have with a homeowner.
-    const r2 = (n) => +(Number(n) || 0).toFixed(2);
-
-    const subtotal = r2(sections.reduce((acc, s) => acc + s.items.reduce((a, i) => a + i.qty * i.price, 0), 0));
-    const overhead = overheadOn ? r2(subtotal * 0.20) : 0;
-
-    const discountBase = subtotal + overhead;
-    const discountAmt = r2(Math.min(
-        discountType === "pct"
-            ? discountBase * (discountValueNum / 100)
-            : discountValueNum,
-        discountBase,     // never drives the total below $0
-    ));
-
-    const taxBase = discountBase - discountAmt;
-    const tax = taxOn ? r2(taxBase * (taxPercentNum / 100)) : 0;
-
-    const customFeesTotal = r2(customFees.reduce((a, f) => a + Math.max(parseFloat(f.amount) || 0, 0), 0));
-    const preCardTotal = r2(taxBase + tax + customFeesTotal);
-    const cardFee = cardFeeOn ? r2(preCardTotal * (cardFeePctNum / 100)) : 0;
-
-    const totalRCV = r2(preCardTotal + cardFee);
+    const subtotal = sections.reduce((acc, s) => acc + s.items.reduce((a, i) => a + i.qty * i.price, 0), 0);
+    const overhead = overheadOn ? subtotal * 0.20 : 0;
+    const taxBase = subtotal + overhead;
+    const tax = taxOn ? taxBase * ((parseFloat(taxPercent) || 0) / 100) : 0;
+    const totalRCV = subtotal + overhead + tax;
     const finalizeDisabled = !client || totalRCV <= 0;
 
     // ====================== PAYMENT ======================
@@ -2038,50 +1945,9 @@ const Estimation = () => {
         if (currentEstimateId) triggerSave();
     };
 
-    /**
-     * Adjuster-facing package — real PDF now (was a fake 1.5s setTimeout).
-     * Built server-side by the same puppeteer service that renders the estimate,
-     * so it carries the company branding AND the stamped S3 photos, neither of
-     * which a browser-side PDF builder can reach.
-     */
-    const generateSupportingDocs = async () => {
-        showLoading("Building supporting docs package...", "Code citations and stamped photos");
-        try {
-            clearTimeout(saveTimerRef.current);
-            const id = await saveEstimateNow();
-            if (!id) {
-                toast("Save the estimate before generating the package", "error");
-                return;
-            }
-            const clientPayload = client
-                ? {
-                    full_name: client.name ?? null,
-                    address: client.address ?? null,
-                    claim_number: client.claim ?? null,
-                }
-                : null;
-            const res = await axiosInstance.post(
-                `/estimates/${id}/supporting-docs`,
-                { company: companyState, terms: termsState, client: clientPayload },
-                { responseType: "blob" },
-            );
-            const blob = new Blob([res.data], { type: "application/pdf" });
-            const url = URL.createObjectURL(blob);
-            const disposition = res.headers?.["content-disposition"] || "";
-            const match = /filename="?([^"]+)"?/.exec(disposition);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = match?.[1] || `supporting-docs_${id.slice(0, 8)}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            toast("Supporting docs package downloaded", "success");
-        } catch (err) {
-            toast(err?.userMessage || "Could not build the package", "error");
-        } finally {
-            hideLoading();
-        }
+    const generateSupportingDocs = () => {
+        showLoading("Building supporting docs package...", "Code citations, mfr specs, stamped photos");
+        setTimeout(() => { hideLoading(); toast("Supporting docs package ready", "success"); }, 1500);
     };
 
     // ====================== SIGN / PAY ======================
@@ -2298,9 +2164,7 @@ const Estimation = () => {
 
     // ====================== MORE / MISC ======================
     const toggleMoreOptions = (e) => { e.stopPropagation(); setMoreOpen((p) => !p); };
-    // CK-FIX Jul-22: the "All" button was a toast stub — it now opens a real
-    // search-across-every-category modal.
-    const openItemLibrary = () => { setMoreOpen(false); setAllItemsSearch(""); setAllItemsModal(true); };
+    const openItemLibrary = () => { setMoreOpen(false); toast("Item library: full editor coming", "success"); };
     const openBundles = () => { setMoreOpen(false); toast("Manage bundles", "success"); };
     const openTemplates = () => { setMoreOpen(false); toast("Estimate templates", "success"); };
     const saveAsTemplate = () => { setMoreOpen(false); toast("Saved as template", "success"); };
@@ -2483,10 +2347,8 @@ const Estimation = () => {
         .filter((t) => !sections.find((s) => s.id === t.id));
 
     // ====================== RENDER ======================
-    // `estimation-page` scopes the CK-FIX light-input CSS block to this route —
-    // that block uses !important and would otherwise restyle the whole app.
     return (
-        <div className={`estimation-page mode-${mode}`}>
+        <div className={`mode-${mode}`}>
             <IconSprite />
 
             {/* ============ HEADER (mr-hero pattern, matches Measurement page) ============ */}
@@ -2689,9 +2551,8 @@ const Estimation = () => {
                     )}
                     selectedExtraActions={(
                         <>
-                            {/* CK-FIX Jul-22: both links were dead (preventDefault and nothing else) */}
-                            <a href="#" className="cs-action-link" onClick={(e) => { e.preventDefault(); setSavedEstimatesModal(true); }}>View Previous Estimates</a>
-                            <a href="#" className="cs-action-link" onClick={(e) => { e.preventDefault(); router.push(client?.id ? `/dashboard/client-portal?client=${client.id}` : "/dashboard/client-portal"); }}>Client Preferences</a>
+                            <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>View Previous Estimates</a>
+                            <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>Client Preferences</a>
                         </>
                     )}
                 />
@@ -2988,10 +2849,11 @@ const Estimation = () => {
                                                 ))}
                                             </tbody>
                                         </table>
-                                        {/* CK-FIX Jul-22: the duplicate "Add from library" button was
-                                            removed — the library pane on the right already does this,
-                                            and two buttons for one action confused contractors. */}
                                         <div className="add-item-area" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                                            <button className="add-item-btn" onClick={() => selectSection(s.id)}>
+                                                <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-plus" /></svg>
+                                                Add from library
+                                            </button>
                                             <button className="add-item-btn" onClick={() => openCustomItem(s.id)} style={{ background: "#fffef7", borderColor: "#FDB813", color: "#92400e" }}>
                                                 <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-edit" /></svg>
                                                 Add new item
@@ -3014,64 +2876,15 @@ const Estimation = () => {
                                     </span>
                                     <span className="total-value">${overhead.toFixed(2)}</span>
                                 </div>
-                                {/* Discount — flat $ or %, off (subtotal + O&P), before tax */}
-                                <div className="total-row">
-                                    <span className="toggle-input" style={{ gap: 6 }}>
-                                        <span>Discount</span>
-                                        <select value={discountType} onChange={(e) => setDiscountType(e.target.value)} style={{ padding: "2px 4px", borderRadius: 6 }}>
-                                            <option value="flat">$</option>
-                                            <option value="pct">%</option>
-                                        </select>
-                                        <input type="number" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} min="0" step="0.01" placeholder="0" style={{ width: 70, textAlign: "center" }} />
-                                    </span>
-                                    <span className="total-value" style={{ color: discountAmt > 0 ? "#16a34a" : undefined }}>
-                                        -${discountAmt.toFixed(2)}
-                                    </span>
-                                </div>
                                 <div className="total-row">
                                     <span className="toggle-input">
                                         <input type="checkbox" checked={taxOn} onChange={(e) => setTaxOn(e.target.checked)} />
                                         <input type="text" value={taxName} onChange={(e) => setTaxName(e.target.value)} style={{ width: 90 }} />
                                         <span>(</span>
-                                        {/* No default rate (spec) — placeholder, not a pre-filled 8 */}
-                                        <input type="number" value={taxPercent} onChange={(e) => setTaxPercent(e.target.value)} step="0.1" min="0" max="100" placeholder="0" title="Enter your state/city sales-tax rate — there is no default" style={{ width: 48, textAlign: "center" }} />
+                                        <input type="number" value={taxPercent} onChange={(e) => setTaxPercent(e.target.value)} step="0.1" min="0" max="100" style={{ width: 48, textAlign: "center" }} />
                                         <span>%)</span>
                                     </span>
                                     <span className="total-value">${tax.toFixed(2)}</span>
-                                </div>
-                                {/* Custom fees — flat dollars only, added AFTER tax so they aren't taxed */}
-                                {customFees.map((f, fi) => (
-                                    <div className="total-row" key={`fee-${fi}`}>
-                                        <span className="toggle-input" style={{ gap: 6 }}>
-                                            <input type="text" value={f.name} placeholder="Fee name (e.g. Permit Fee)"
-                                                onChange={(e) => setCustomFees(customFees.map((x, i) => i === fi ? { ...x, name: e.target.value } : x))}
-                                                style={{ width: 150 }} />
-                                            <input type="number" value={f.amount} placeholder="0.00" min="0" step="0.01"
-                                                onChange={(e) => setCustomFees(customFees.map((x, i) => i === fi ? { ...x, amount: e.target.value } : x))}
-                                                style={{ width: 80, textAlign: "center" }} />
-                                            <button type="button" title="Remove fee"
-                                                onClick={() => setCustomFees(customFees.filter((_, i) => i !== fi))}
-                                                style={{ border: "none", background: "transparent", color: "#dc2626", cursor: "pointer", fontWeight: 700 }}>&times;</button>
-                                        </span>
-                                        <span className="total-value">${(parseFloat(f.amount) || 0).toFixed(2)}</span>
-                                    </div>
-                                ))}
-                                <div className="total-row">
-                                    <button type="button" onClick={() => setCustomFees([...customFees, { name: "", amount: "" }])}
-                                        style={{ border: "1px dashed #d1d5db", background: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}>
-                                        + Add fee
-                                    </button>
-                                    <span />
-                                </div>
-                                {/* Card processing fee — on the full pre-card total */}
-                                <div className="total-row">
-                                    <span className="toggle-input">
-                                        <input type="checkbox" checked={cardFeeOn} onChange={(e) => setCardFeeOn(e.target.checked)} />
-                                        <span>Card processing fee (</span>
-                                        <input type="number" value={cardFeePct} onChange={(e) => setCardFeePct(e.target.value)} step="0.1" min="0" max="10" style={{ width: 48, textAlign: "center" }} />
-                                        <span>%)</span>
-                                    </span>
-                                    <span className="total-value">${cardFee.toFixed(2)}</span>
                                 </div>
                                 <div className="total-row final">
                                     <span>Total RCV</span>
@@ -3967,17 +3780,6 @@ const Estimation = () => {
                                         >{label}</button>
                                     ))}
                                 </div>
-                                {/* CK-FIX Jul-22: "Other" was a dead end — describe it instead */}
-                                {aiDamageType === "other" && (
-                                    <input
-                                        type="text"
-                                        value={aiDamageTypeOther}
-                                        onChange={(e) => setAiDamageTypeOther(e.target.value)}
-                                        placeholder="Describe the damage type (e.g. vandalism, hurricane debris)..."
-                                        maxLength={80}
-                                        style={{ marginTop: 8, width: "100%" }}
-                                    />
-                                )}
                             </div>
                             <div className="field" style={{ marginBottom: 14 }}>
                                 <label>Storm date <span style={{ color: "#9ca3af", fontWeight: 400 }}>(optional)</span></label>
@@ -4328,52 +4130,6 @@ const Estimation = () => {
                             <span>{s.name}</span>
                         </button>
                     ))}
-                </div>
-            )}
-
-            {/* ============ ALL LIBRARY ITEMS MODAL (CK-FIX Jul-22) ============ */}
-            {allItemsModal && (
-                <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-[rgba(15,18,42,0.55)] p-5"
-                    onClick={() => setAllItemsModal(false)}>
-                    <div className="bg-white rounded-xl w-full max-w-[640px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
-                        onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-between items-center px-[22px] py-[18px] border-b border-gray-200">
-                            <div className="text-base font-bold">All Library Items</div>
-                            <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]"
-                                onClick={() => setAllItemsModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
-                        </div>
-                        <div style={{ padding: "16px 22px 18px" }}>
-                            <input
-                                type="text" autoFocus value={allItemsSearch}
-                                onChange={(e) => setAllItemsSearch(e.target.value)}
-                                placeholder="Search all items across every category..."
-                                style={{ width: "100%", marginBottom: 10 }}
-                            />
-                            <div style={{ maxHeight: 420, overflowY: "auto" }}>
-                                {Object.entries(itemLibrary)
-                                    .flatMap(([cat, arr]) => (arr ?? []).map((it, idx) => ({ ...it, _cat: cat, _idx: idx })))
-                                    .filter((it) => {
-                                        const q = allItemsSearch.trim().toLowerCase();
-                                        if (!q) return true;
-                                        return (
-                                            it.name.toLowerCase().includes(q) ||
-                                            (it.meta || "").toLowerCase().includes(q) ||
-                                            it._cat.includes(q)
-                                        );
-                                    })
-                                    .map((it) => (
-                                        <div key={`all-${it._cat}-${it._idx}`} className="item-row library-row"
-                                            onClick={() => { addToEstimate(it.name, it.price, it.unit); toast(`Added "${it.name}"`, "success"); }}>
-                                            <div className="item-info">
-                                                <div className="item-name">{it.name}</div>
-                                                <div className="item-meta">{it._cat.toUpperCase()}{it.meta ? ` · ${it.meta}` : ""}</div>
-                                            </div>
-                                            <div className="item-price">${it.price}/{it.unit}</div>
-                                        </div>
-                                    ))}
-                            </div>
-                        </div>
-                    </div>
                 </div>
             )}
 

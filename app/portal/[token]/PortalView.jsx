@@ -8,6 +8,7 @@ import PortalPolicyAnalyses from './PortalPolicyAnalyses.jsx';
 import PortalTimeline from './PortalTimeline.jsx';
 import PortalMessages from './PortalMessages.jsx';
 import PortalMockups from './PortalMockups.jsx';
+import PortalDocuments from './PortalDocuments.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public homeowner-facing portal — single entry point.
@@ -412,6 +413,19 @@ export default function PortalView() {
                 subtitle="What your policy covers — explained in plain English"
             >
                 <PortalPolicyAnalyses clientId={c.id} analysisId={analysisId} embedded />
+            </SectionCard>
+
+            {/* ── Other Documents ──────────────────────────────────────────
+                 docs/Client-Portal.html → "Documents Library". Shows only the
+                 claim files the contractor has explicitly shared; sharing is
+                 opt-in per document (claim_uploads.is_visible_in_portal). */}
+            <SectionCard
+                icon={<Icon.Estimate width="18" height="18" />}
+                accent="indigo"
+                title="Other Documents"
+                subtitle="Contracts, reports and paperwork your contractor has shared"
+            >
+                <PortalDocuments />
             </SectionCard>
 
             {/* ── Messages ─────────────────────────────────────────────────── */}

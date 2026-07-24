@@ -120,6 +120,25 @@ const ClaimDetail = ({ id }) => {
         setUploads(u.data?.data || []);
     };
 
+    /**
+     * Share / hide one document on the homeowner portal. Optimistic: the
+     * checkbox flips immediately and reverts if the request fails — a toggle
+     * that lags behind the click reads as broken.
+     */
+    const toggleUploadVisibility = async (u) => {
+        const next = !u.is_visible_in_portal;
+        setUploads(list => list.map(x => x.id === u.id ? { ...x, is_visible_in_portal: next } : x));
+        try {
+            await axiosInstance.patch(
+                `/client-portal/${id}/uploads/${u.id}/visibility`,
+                { is_visible_in_portal: next },
+            );
+            toast.success(next ? 'Shared with client' : 'Hidden from client');
+        } catch {
+            setUploads(list => list.map(x => x.id === u.id ? { ...x, is_visible_in_portal: !next } : x));
+        }
+    };
+
     const removeUpload = async (uploadId) => {
         try {
             await axiosInstance.delete(`/client-portal/${id}/uploads/${uploadId}`);
@@ -204,6 +223,21 @@ const ClaimDetail = ({ id }) => {
                                         <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.file_name}</div>
                                         <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{u.upload_type} · {u.file_size ? `${Math.round(u.file_size / 1024)} KB` : ''}</div>
                                     </div>
+                                    {/* Documents are private until the contractor
+                                        shares them — a claim's files routinely
+                                        include carrier paperwork the homeowner
+                                        should not see. */}
+                                    <label
+                                        title="Show this document in the client's portal"
+                                        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.72rem', color: u.is_visible_in_portal ? '#15803d' : '#6b7280', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={!!u.is_visible_in_portal}
+                                            onChange={() => toggleUploadVisibility(u)}
+                                        />
+                                        {u.is_visible_in_portal ? 'Shared' : 'Share'}
+                                    </label>
                                     <button className="table-action-btn" onClick={() => removeUpload(u.id)}>Delete</button>
                                 </div>
                             ))}
