@@ -98,6 +98,16 @@ const Page = () => {
         if (activeModal === 'allReports') refreshReportList();
     }, [activeModal, refreshReportList]);
 
+    // Lock body scroll while any modal is open — driven by state so it ALWAYS
+    // cleans up, including when we navigate away (router.push to Estimation)
+    // straight from inside a modal without calling closeModal(). Setting it
+    // imperatively in openModal/closeModal leaked `overflow:hidden` onto the
+    // next page and killed scrolling there.
+    useEffect(() => {
+        document.body.style.overflow = activeModal ? 'hidden' : '';
+        return () => { document.body.style.overflow = ''; };
+    }, [activeModal]);
+
     // Load list on mount so the header badge shows the real count.
     useEffect(() => { refreshReportList(); }, [refreshReportList]);
 
@@ -318,14 +328,14 @@ const Page = () => {
     };
 
     // Modal functions
+    // Body scroll lock is handled by the activeModal effect above (so it also
+    // cleans up on navigation), not imperatively here.
     const openModal = (modal) => {
         setActiveModal(modal);
-        document.body.style.overflow = 'hidden';
     };
 
     const closeModal = () => {
         setActiveModal(null);
-        document.body.style.overflow = '';
     };
 
     // Settings functions
@@ -1065,7 +1075,7 @@ function SavedReportsList({ reports, loading, onSelect, onUseInEstimate, onDelet
                                     </div>
                                 )}
 
-                                <div style={{ display: 'flex', gap: 6 }}>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); onUseInEstimate(r); }}

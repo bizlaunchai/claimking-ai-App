@@ -1048,7 +1048,14 @@ input:checked + .toggle-slider:before {
 }
 
 /* Loading States */
-.loading-overlay {
+/* NOTE: these were named `.loading-overlay` / `.loading-spinner`, which are the
+   SAME class names the Estimation page uses — and because Next.js keeps a client
+   component's CSS loaded across client-side navigation, this file's rules leaked
+   onto the Estimation page (measurement → "Use in Estimate") and overrode its
+   overlay: position:absolute + a near-white backdrop hid the white spinner card
+   and pinned it mid-page. These classes aren't referenced anywhere here, so they
+   are namespaced to `mr-` to end the collision. */
+.mr-loading-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -1062,7 +1069,7 @@ input:checked + .toggle-slider:before {
     z-index: 100;
 }
 
-.loading-spinner {
+.mr-loading-spinner {
     width: 40px;
     height: 40px;
     border: 4px solid #e5e7eb;
@@ -1483,4 +1490,43 @@ input:checked + .toggle-slider:before {
     justify-content: space-between;
     padding-top: 1.5rem;
     border-top: 1px solid #e5e7eb;
+}
+
+/* ============================================================
+   Responsive polish — phones & small tablets
+   Targets the elements this page actually renders (hero + client
+   card handled in measurement-hero.css). Prevents horizontal
+   overflow and tightens spacing on small screens.
+   ============================================================ */
+
+@media (max-width: 900px) {
+    .main-container.mr-grid { padding: 1.25rem 1rem; }
+}
+
+@media (max-width: 640px) {
+    .main-container.mr-grid { padding: 1rem 0.85rem; }
+    .mr-grid > .column-card { padding: 1.15rem 1rem; }
+    .column-header { font-size: 0.95rem; }
+
+    /* Upload zone — trim the generous desktop padding. */
+    .upload-zone { padding: 1.4rem 1rem; }
+    .upload-icon { width: 40px; height: 40px; }
+
+    /* Input method tabs sit 3-across — keep them from overflowing. */
+    .input-tab { font-size: 0.68rem; padding: 0.45rem 0.2rem; }
+
+    /* Photo requirement checklist reads better single-column on phones. */
+    .photo-grid { grid-template-columns: 1fr; }
+
+    /* Uploaded photo thumbnails: 2-up instead of 3-up. */
+    .photo-thumbnails { grid-template-columns: repeat(2, 1fr); }
+
+    .provider-badges { gap: 0.4rem; }
+    .provider-badge { font-size: 0.65rem; }
+}
+
+@media (max-width: 400px) {
+    .main-container.mr-grid { padding: 0.75rem 0.6rem; }
+    .upload-actions { grid-template-columns: 1fr; }
+    .photo-thumbnails { grid-template-columns: repeat(2, 1fr); }
 }

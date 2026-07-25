@@ -4546,11 +4546,11 @@ const Estimation = () => {
 
             {/* ============ LOADING ============ */}
             {loading.active && (
-                <div className="loading-overlay active">
-                    <div className="loading-content">
-                        <div className="loader"></div>
-                        <div className="loading-text">{loading.text}</div>
-                        <div className="loading-sub">{loading.sub}</div>
+                <div className="est-loading-overlay active">
+                    <div className="est-loading-content">
+                        <div className="est-loader"></div>
+                        <div className="est-loading-text">{loading.text}</div>
+                        <div className="est-loading-sub">{loading.sub}</div>
                     </div>
                 </div>
             )}
@@ -4571,14 +4571,14 @@ const Estimation = () => {
                 console.log('!loading.active', loading.active)
             }
             {estimateLoading && !generatingEstimate && !loading.active && (
-                <div className="loading-overlay active">
-                    <div className="loading-content">
+                <div className="est-loading-overlay active">
+                    <div className="est-loading-content">
                         {
                             console.log('Inside loading estimate..')
                         }
-                        <div className="loader"></div>
-                        <div className="loading-text">Loading estimate…</div>
-                        <div className="loading-sub">Restoring sections, items, and client</div>
+                        <div className="est-loader"></div>
+                        <div className="est-loading-text">Loading estimate…</div>
+                        <div className="est-loading-sub">Restoring sections, items, and client</div>
                     </div>
                 </div>
             )}
@@ -4587,11 +4587,11 @@ const Estimation = () => {
                 is still building it on the server. Safe to leave the page. */}
             
             {generatingEstimate && (
-                <div className="loading-overlay active">
-                    <div className="loading-content">
-                        <div className="loader"></div>
-                        <div className="loading-text">AI is building your estimate…</div>
-                        <div className="loading-sub">This can take a couple of minutes. You can leave this page — it keeps running, and you'll find it in Saved Estimates.</div>
+                <div className="est-loading-overlay active">
+                    <div className="est-loading-content">
+                        <div className="est-loader"></div>
+                        <div className="est-loading-text">AI is building your estimate…</div>
+                        <div className="est-loading-sub">This can take a couple of minutes. You can leave this page — it keeps running, and you'll find it in Saved Estimates.</div>
                     </div>
                 </div>
             )}
