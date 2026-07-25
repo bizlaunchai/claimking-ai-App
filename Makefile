@@ -1,4 +1,4 @@
-.PHONY: help dev build start install clean lint format test
+.PHONY: help dev build start install clean lint format test push
 
 help: ## Show this help message
 	@echo "Available commands:"
