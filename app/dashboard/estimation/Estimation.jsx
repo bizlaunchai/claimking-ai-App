@@ -4551,9 +4551,16 @@ const Estimation = () => {
 
             {/* Saved-estimate hydration overlay — fires when ?estimate_id=
                 appears in the URL and stays until sections + client load. */}
+            {
+                console.log('before loading estimate..')
+            }
+
             {estimateLoading && !generatingEstimate && !loading.active && (
                 <div className="loading-overlay active">
                     <div className="loading-content">
+                        {
+                            console.log('Inside loading estimate..')
+                        }
                         <div className="loader"></div>
                         <div className="loading-text">Loading estimate…</div>
                         <div className="loading-sub">Restoring sections, items, and client</div>
