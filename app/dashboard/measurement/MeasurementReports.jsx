@@ -1,5 +1,6 @@
 "use client"
 import React, {useEffect, useRef, useState, useCallback, useMemo} from 'react';
+import { useRouter } from "next/navigation";
 import "./measurement.css"
 import "./measurement-hero.css"
 import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
@@ -8,6 +9,8 @@ import { toast } from "sonner";
 import ClientSelector from "@/components/clients/ClientSelector";
 
 const Page = () => {
+
+    const router = useRouter();
 
     // Client selection — internal state lives in <ClientSelector/>.
     const [selectedClient, setSelectedClient] = useState(null);
@@ -227,7 +230,9 @@ const Page = () => {
         const params = new URLSearchParams();
         params.set('measurement_id', extractResult.id);
         if (extractResult.client_id) params.set('client_id', extractResult.client_id);
-        window.location.href = `/dashboard/estimation?${params.toString()}`;
+        // Client-side nav — no full page reload; the estimation load effect
+        // picks up ?measurement_id from searchParams.
+        router.push(`/dashboard/estimation?${params.toString()}`);
     };
 
     // Legacy handler kept so existing inline file inputs still compile.
@@ -704,7 +709,7 @@ const Page = () => {
                                         const params = new URLSearchParams();
                                         params.set('measurement_id', row.id);
                                         if (row.client_id) params.set('client_id', row.client_id);
-                                        window.location.href = `/dashboard/estimation?${params.toString()}`;
+                                        router.push(`/dashboard/estimation?${params.toString()}`);
                                     }}
                                     onDelete={async (row) => {
                                         if (!window.confirm(`Delete "${row.title || 'Untitled measurement'}"?`)) return;
