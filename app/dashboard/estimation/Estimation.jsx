@@ -4553,8 +4553,17 @@ const Estimation = () => {
                 appears in the URL and stays until sections + client load. */}
             {
                 console.log('before loading estimate..')
-            }
 
+            }
+            {
+                console.log('estimateLoading',estimateLoading)
+            }
+            {
+                console.log('!generatingEstimate', generatingEstimate)
+            }
+            {
+                console.log('!loading.active', loading.active)
+            }
             {estimateLoading && !generatingEstimate && !loading.active && (
                 <div className="loading-overlay active">
                     <div className="loading-content">
