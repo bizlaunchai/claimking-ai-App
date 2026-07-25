@@ -1158,7 +1158,14 @@ const Estimation = () => {
             const res = await axiosInstance.post(
                 "/estimates/generate",
                 payload,
-                { suppressErrorToast: true }, // we render our own inline error
+                {
+                    suppressErrorToast: true, // we render our own inline error
+                    // Opus estimate generation regularly runs past the 60s
+                    // axios default — on live the request aborted mid-flight
+                    // while the backend still saved the estimate, so the UI
+                    // never navigated to it. Mirror the policy-analysis flow.
+                    timeout: 240_000,
+                },
             );
             const e = res.data?.data;
             if (e?.id) {
