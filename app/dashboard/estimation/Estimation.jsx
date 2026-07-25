@@ -742,8 +742,8 @@ const Estimation = () => {
                     setEstimateLoading(false);
                     setGeneratingEstimate(true);
                     e = await pollUntilReady(estimateId);
+                    setGeneratingEstimate(false); // clear before any early return
                     if (cancelled) return;
-                    setGeneratingEstimate(false);
                     if (!e) {
                         sonner.error("Generation is taking longer than expected. Check Saved Estimates in a minute.");
                         return;
@@ -1230,6 +1230,12 @@ const Estimation = () => {
             const e = res.data?.data;
             if (e?.id) {
                 setAiModal(false);
+                // Show the overlay THIS render — don't wait for the load effect
+                // to mount. Without this there's a gap after router.push where no
+                // overlay is up and the start screen flashes (worse under
+                // read-after-write lag), which is why the loader appeared only
+                // sometimes. The load effect takes over the moment it runs.
+                setEstimateLoading(true);
                 // Client-side nav — sidebar stays mounted, load effect re-fires.
                 router.push(`/dashboard/estimation?estimate_id=${e.id}`);
                 return;
@@ -4579,6 +4585,7 @@ const Estimation = () => {
 
             {/* Async AI generation overlay — the estimate row exists but Claude
                 is still building it on the server. Safe to leave the page. */}
+            
             {generatingEstimate && (
                 <div className="loading-overlay active">
                     <div className="loading-content">
