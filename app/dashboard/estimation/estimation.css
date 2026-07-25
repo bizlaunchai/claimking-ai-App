@@ -300,13 +300,16 @@ tr.drag-over-bottom td{border-bottom:2px solid #FDB813}
 .uploaded-row .remove-btn:hover{color:#dc2626}
 
 /* Loading */
-.loading-overlay{position:fixed;inset:0;background:rgba(15,18,42,.55);display:none;align-items:center;justify-content:center;z-index:3000}
-.loading-overlay.active{display:flex}
-.loading-content{background:#fff;border-radius:12px;padding:28px 32px;text-align:center;max-width:340px}
-.loader{width:42px;height:42px;border:3px solid #f3f4f6;border-top-color:#FDB813;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px}
+/* Namespaced `est-` so leaked global CSS from other pages (e.g. measurement's
+   position:absolute + white-backdrop `.loading-overlay`) can never override the
+   estimate builder's own overlay after a client-side navigation. */
+.est-loading-overlay{position:fixed;inset:0;background:rgba(15,18,42,.55);display:none;align-items:center;justify-content:center;z-index:3000}
+.est-loading-overlay.active{display:flex}
+.est-loading-content{background:#fff;border-radius:12px;padding:28px 32px;text-align:center;max-width:340px}
+.est-loader{width:42px;height:42px;border:3px solid #f3f4f6;border-top-color:#FDB813;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-text{font-size:14px;font-weight:600;margin-bottom:4px}
-.loading-sub{font-size:12px;color:#6b7280}
+.est-loading-text{font-size:14px;font-weight:600;margin-bottom:4px}
+.est-loading-sub{font-size:12px;color:#6b7280}
 
 /* Toast */
 .toast-container{position:fixed;bottom:20px;right:20px;z-index:4000;display:flex;flex-direction:column;gap:8px}
@@ -318,7 +321,7 @@ tr.drag-over-bottom td{border-bottom:2px solid #FDB813}
 
 /* Print styles - only show estimate */
 @media print{
-    .header,.left-panel,.right-rail,.ai-bar,.start-stage,.modal,.loading-overlay,.toast-container,.finalize-btn,.section-controls,.add-item-area,.line-actions,.line-action-btn,.item-edit-btn,.add-section-btn,.terms-toolbar,.drag-handle,.move-menu{display:none !important}
+    .header,.left-panel,.right-rail,.ai-bar,.start-stage,.modal,.est-loading-overlay,.toast-container,.finalize-btn,.section-controls,.add-item-area,.line-actions,.line-action-btn,.item-edit-btn,.add-section-btn,.terms-toolbar,.drag-handle,.move-menu{display:none !important}
     .estimate-table th:first-child,.estimate-table td:first-child{display:none}
     .estimate-table th:last-child,.estimate-table td:last-child{display:none}
     body{background:#fff}

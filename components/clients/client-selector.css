@@ -142,7 +142,13 @@
 
 /* ── Narrow screens ────────────────────────────────────────────────── */
 @media (max-width:768px){
-    .cs-selected-bar{flex-direction:column;align-items:stretch;padding:.875rem 1rem}
+    /* Column layout: stack tightly at the top. Without overriding these two,
+       `justify-content:space-between` (from the desktop row layout) spreads the
+       identity and the actions to opposite ends, and `.cs-selected-main`'s
+       `flex:1` grows VERTICALLY — together they blow the card up to a huge
+       height with a big empty gap in the middle. */
+    .cs-selected-bar{flex-direction:column;align-items:stretch;justify-content:flex-start;padding:.875rem 1rem}
+    .cs-selected-main{flex:0 0 auto}
     .cs-selected-details{flex-direction:column;align-items:flex-start;gap:.25rem}
     .cs-detail{max-width:100%}
     .cs-selected-actions{width:100%}

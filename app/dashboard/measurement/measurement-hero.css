@@ -245,7 +245,10 @@ body { background: #f6f7f9; }
    page. Other pages that share .main-container keep their own layout. */
 .mr-grid {
     display: grid;
-    grid-template-columns: 600px 1fr;
+    /* Flexible left column (client card) instead of a fixed 600px — the
+       dashboard sidebar eats ~250px, so a fixed 600px starved the right
+       (upload) column on laptops. minmax lets the right column breathe. */
+    grid-template-columns: minmax(340px, 460px) 1fr;
     gap: 1.25rem;
     align-items: start;
 }
@@ -462,8 +465,10 @@ body { background: #f6f7f9; }
     box-shadow: none !important;
 }
 
-/* ── Responsive: collapse to single column on tablets ──────────── */
-@media (max-width: 1024px) {
+/* ── Responsive: collapse to single column ──────────────────────
+   Breakpoint is 1180px (not 1024) because the dashboard sidebar shrinks
+   the usable content area — two columns get cramped well before 1024px. */
+@media (max-width: 1180px) {
     .mr-grid {
         grid-template-columns: 1fr;
     }
