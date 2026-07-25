@@ -1,5 +1,6 @@
 'use client'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from "next/navigation";
 import "./3d-mockup.css"
 import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
@@ -235,8 +236,12 @@ const AuthedImage = ({ src, alt = '', style, className }) => {
 //   Main component
 // ──────────────────────────────────────────────────────────────────────────────
 const ThreeDMockup = () => {
+    const router = useRouter();
     // Client selection — internal UI state lives in <ClientSelector/>.
     const [selectedClient, setSelectedClient] = useState(null);
+    // When the gallery is opened via a client's "View Previous Mockups" we
+    // filter server-side to that client; null = show the whole company gallery.
+    const [galleryClientId, setGalleryClientId] = useState(null);
 
     // ── Mockup configuration ────────────────────────────────────────────────
     const [materialTab, setMaterialTab] = useState('roofing');
@@ -369,7 +374,13 @@ const ThreeDMockup = () => {
         setGalleryLoading(true);
         (async () => {
             try {
-                const res = await axiosInstance.get('/mockup');
+                // Filter to a single client only for the gallery-opened-from-client
+                // flow; Recent Projects always shows the whole company.
+                const url =
+                    showGallery && galleryClientId
+                        ? `/mockup?client_id=${encodeURIComponent(galleryClientId)}`
+                        : '/mockup';
+                const res = await axiosInstance.get(url);
                 if (cancelled) return;
                 const items = res.data?.data ?? [];
                 setGalleryItems(items);
@@ -380,7 +391,7 @@ const ThreeDMockup = () => {
             }
         })();
         return () => { cancelled = true; };
-    }, [showGallery, showRecent]);
+    }, [showGallery, showRecent, galleryClientId]);
 
     // ── Gallery fullscreen split drag handler ────────────────────────────────
     const startGalleryFsSplitDrag = useCallback((e) => {
@@ -1365,8 +1376,8 @@ const ThreeDMockup = () => {
                         </div>
                     </div>
                     <div className="mockup-3d-header-actions">
-                        <button className="btn btn-outline" onClick={() => setShowGallery(true)}>View Mockup Gallery</button>
-                        <button className="btn btn-outline" onClick={() => setShowRecent(true)}>Recent Projects</button>
+                        <button className="btn btn-outline" onClick={() => { setGalleryClientId(null); setShowGallery(true); }}>View Mockup Gallery</button>
+                        <button className="btn btn-outline" onClick={() => { setGalleryClientId(null); setShowRecent(true); }}>Recent Projects</button>
                         <button className="btn btn-outline" onClick={() => setShowTemplates(true)}>Mockup Templates</button>
                         <button className="btn btn-outline" onClick={() => setColorImportModal(true)}>Import Colors (AI)</button>
                         <button className="btn btn-outline" onClick={() => setShowTutorial(true)}>Tutorial</button>
@@ -1382,8 +1393,8 @@ const ThreeDMockup = () => {
                     scrollId="mockupClientSection"
                     selectedExtraActions={(
                         <>
-                            <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>View Previous Mockups</a>
-                            <a href="#" className="cs-action-link" onClick={(e) => e.preventDefault()}>Client Preferences</a>
+                            <a href="#" className="cs-action-link" onClick={(e) => { e.preventDefault(); setGalleryClientId(selectedClient?.id ?? null); setShowGallery(true); }}>View Previous Mockups</a>
+                            <a href="#" className="cs-action-link" onClick={(e) => { e.preventDefault(); router.push(selectedClient?.id ? `/dashboard/client-portal?client=${selectedClient.id}` : "/dashboard/client-portal"); }}>Client Preferences</a>
                         </>
                     )}
                 />
@@ -2243,7 +2254,7 @@ const ThreeDMockup = () => {
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
                         <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
-                            <h2 className="text-xl font-bold text-gray-800">Mockup Gallery</h2>
+                            <h2 className="text-xl font-bold text-gray-800">{galleryClientId ? `Previous Mockups${selectedClient?.name ? ` — ${selectedClient.name}` : ''}` : 'Mockup Gallery'}</h2>
                             <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md transition-all duration-200" onClick={() => closeModal('gallery')}>×</button>
                         </div>
                         <div className="p-6">
@@ -2254,7 +2265,7 @@ const ThreeDMockup = () => {
                                 </div>
                             )}
                             <div className="gallery-grid">
-                                {!galleryLoading && galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>No mockups yet.</div>}
+                                {!galleryLoading && galleryItems.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>{galleryClientId ? 'No mockups for this client yet.' : 'No mockups yet.'}</div>}
                                 {!galleryLoading && galleryItems.map(m => {
                                     const hasBoth = !!m.current_version?.generated_image_url && !!m.source_photo_url;
                                     const pos = gallerySplitPos[m.id] ?? 50;
