@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import "./clientPortal.css"
 import dynamic from "next/dynamic.js";
+import Link from "next/link";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import Can from "@/lib/permissions/Can";
@@ -2399,7 +2400,7 @@ const SendLinkRow = ({ client, disabled }) => {
                 ? `Email sent successfully to ${dest}`
                 : `SMS sent successfully to ${dest}`;
             toast.success(msg);
-            setResult({ kind: 'success', text: msg });
+            setResult({ kind: 'success', text: msg, channel });
         } catch (e) {
             const status = e?.response?.status;
             const msg = e?.response?.data?.message || e?.userMessage;
@@ -2412,7 +2413,7 @@ const SendLinkRow = ({ client, disabled }) => {
                 friendly = msg || `Failed to send ${channel}. Please try again.`;
             }
             toast.error(friendly);
-            setResult({ kind: 'error', text: friendly });
+            setResult({ kind: 'error', text: friendly, channel });
         } finally {
             setSending(null);
         }
@@ -2479,7 +2480,26 @@ const SendLinkRow = ({ client, disabled }) => {
                     <span style={{ fontWeight: 700, flexShrink: 0 }}>
                         {result.kind === 'success' ? '✓' : '✕'}
                     </span>
-                    <span style={{ flex: 1 }}>{result.text}</span>
+                    <span style={{ flex: 1 }}>
+                        {result.text}
+                        {/* When an SMS send fails because the company has no
+                            provisioned number, deep-link straight to the SMS
+                            Setup tab so they can buy one without hunting. */}
+                        {result.kind === 'error' && result.channel === 'sms' && (
+                            <>
+                                {' '}
+                                <Link
+                                    href="/dashboard/email-sms?tab=sms"
+                                    style={{
+                                        color: 'inherit', fontWeight: 700,
+                                        textDecoration: 'underline', whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    Set up SMS →
+                                </Link>
+                            </>
+                        )}
+                    </span>
                     <button
                         onClick={() => setResult(null)}
                         aria-label="Dismiss"
