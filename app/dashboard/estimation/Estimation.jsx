@@ -487,6 +487,9 @@ const Estimation = () => {
     // ── Persistence (M4): track the saved estimate's id + last-save state ─
     const [currentEstimateId, setCurrentEstimateId] = useState(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
+    // True while a just-generated estimate is still status='generating' on the
+    // server and we're polling GET /estimates/:id waiting for it to finish.
+    const [generatingEstimate, setGeneratingEstimate] = useState(false);
     const skipNextAutoSave = useRef(false); // set true right after a load so
                                             // the freshly-loaded state doesn't
                                             // immediately trigger a save back.
@@ -686,13 +689,71 @@ const Estimation = () => {
         if (!estimateId) return;
         let cancelled = false;
         setEstimateLoading(true);
+        setGeneratingEstimate(false); // fresh load — clear any prior generating state
+
+        // Async generation: POST /estimates/generate now returns a placeholder
+        // row in status='generating' and finishes the slow Claude call in the
+        // background (it outlives the ALB/proxy 60s idle timeout). Poll the row
+        // until the backend flips it out of 'generating'.
+        const pollUntilReady = async (id) => {
+            const MAX_ATTEMPTS = 100; // ~5 min at 3s intervals
+            for (let i = 0; i < MAX_ATTEMPTS; i++) {
+                await new Promise((r) => setTimeout(r, 3000));
+                if (cancelled) return null;
+                try {
+                    const row = (await axiosInstance.get(`/estimates/${id}`, { suppressErrorToast: true })).data?.data;
+                    if (row && row.status !== "generating") return row;
+                } catch { /* transient network blip — keep polling */ }
+            }
+            return null; // timed out
+        };
+
+        // Initial fetch with a short retry loop. On live, a row created moments
+        // ago (esp. via POST /estimates/generate) can 404 for a beat due to
+        // read-after-write lag on the connection pooler — a single GET would
+        // then bail and leave the user staring at the start screen. Retry a few
+        // times before giving up. Errors are suppressed so we don't toast on
+        // each transient miss.
+        const fetchEstimateOnce = async () => {
+            for (let i = 0; i < 6; i++) {
+                if (cancelled) return null;
+                try {
+                    const row = (await axiosInstance.get(`/estimates/${estimateId}`, { suppressErrorToast: true })).data?.data;
+                    if (row) return row;
+                } catch { /* transient — retry */ }
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+            return null;
+        };
 
         (async () => {
             try {
-                const res = await axiosInstance.get(`/estimates/${estimateId}`);
+                let e = await fetchEstimateOnce();
                 if (cancelled) return;
-                const e = res.data?.data;
-                if (!e) return;
+                if (!e) {
+                    sonner.error("Couldn't load that estimate. Open it from Saved Estimates in a moment.");
+                    return;
+                }
+
+                // Still cooking on the server — show the generating overlay and
+                // wait it out before hydrating anything.
+                if (e.status === "generating") {
+                    setCurrentEstimateId(e.id);
+                    setEstimateLoading(false);
+                    setGeneratingEstimate(true);
+                    e = await pollUntilReady(estimateId);
+                    if (cancelled) return;
+                    setGeneratingEstimate(false);
+                    if (!e) {
+                        sonner.error("Generation is taking longer than expected. Check Saved Estimates in a minute.");
+                        return;
+                    }
+                }
+
+                if (e.status === "failed") {
+                    sonner.error(e.error_message || "Estimate generation failed. Please try again.");
+                    return;
+                }
 
                 // Block the immediate auto-save that would otherwise fire as
                 // we hydrate the React state below.
@@ -1160,11 +1221,10 @@ const Estimation = () => {
                 payload,
                 {
                     suppressErrorToast: true, // we render our own inline error
-                    // Opus estimate generation regularly runs past the 60s
-                    // axios default — on live the request aborted mid-flight
-                    // while the backend still saved the estimate, so the UI
-                    // never navigated to it. Mirror the policy-analysis flow.
-                    timeout: 240_000,
+                    // This call is now fast — it just creates a placeholder row
+                    // (status='generating') and returns; Claude runs in the
+                    // background. Generous timeout is only a safety margin.
+                    timeout: 120_000,
                 },
             );
             const e = res.data?.data;
@@ -4491,12 +4551,24 @@ const Estimation = () => {
 
             {/* Saved-estimate hydration overlay — fires when ?estimate_id=
                 appears in the URL and stays until sections + client load. */}
-            {estimateLoading && !loading.active && (
+            {estimateLoading && !generatingEstimate && !loading.active && (
                 <div className="loading-overlay active">
                     <div className="loading-content">
                         <div className="loader"></div>
                         <div className="loading-text">Loading estimate…</div>
                         <div className="loading-sub">Restoring sections, items, and client</div>
+                    </div>
+                </div>
+            )}
+
+            {/* Async AI generation overlay — the estimate row exists but Claude
+                is still building it on the server. Safe to leave the page. */}
+            {generatingEstimate && (
+                <div className="loading-overlay active">
+                    <div className="loading-content">
+                        <div className="loader"></div>
+                        <div className="loading-text">AI is building your estimate…</div>
+                        <div className="loading-sub">This can take a couple of minutes. You can leave this page — it keeps running, and you'll find it in Saved Estimates.</div>
                     </div>
                 </div>
             )}
