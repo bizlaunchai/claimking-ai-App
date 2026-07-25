@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react';
+import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import "./social-media.css"
 
 const SocialMedia = () => {
@@ -17,7 +18,7 @@ const SocialMedia = () => {
         {
             id: 'facebook',
             name: 'Facebook',
-            icon: 'f',
+            icon: <Facebook size={22} strokeWidth={2} />,
             iconClass: 'facebook-icon',
             connected: false,
             stats: {
@@ -29,7 +30,7 @@ const SocialMedia = () => {
         {
             id: 'instagram',
             name: 'Instagram',
-            icon: '📷',
+            icon: <Instagram size={22} strokeWidth={2} />,
             iconClass: 'instagram-icon',
             connected: false,
             stats: {
@@ -41,7 +42,7 @@ const SocialMedia = () => {
         {
             id: 'linkedin',
             name: 'LinkedIn',
-            icon: 'in',
+            icon: <Linkedin size={22} strokeWidth={2} />,
             iconClass: 'linkedin-icon',
             connected: false,
             stats: {
@@ -53,7 +54,7 @@ const SocialMedia = () => {
         {
             id: 'twitter',
             name: 'X (Twitter)',
-            icon: 'X',
+            icon: <Twitter size={22} strokeWidth={2} />,
             iconClass: 'twitter-icon',
             connected: false,
             stats: {

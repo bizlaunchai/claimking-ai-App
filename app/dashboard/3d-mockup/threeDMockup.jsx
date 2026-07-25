@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import ClientSelector from "@/components/clients/ClientSelector";
+import { Check, Maximize2, X } from "lucide-react";
 import { toClientShape } from "@/lib/clients/newClientForm";
 import LocalFileUploader from "../../../utiles/LocalFileUploader.jsx";
 
@@ -1450,9 +1451,9 @@ const ThreeDMockup = () => {
                                 <div className="analysis-box">
                                     <div className="analysis-title">Source ready for AI editing</div>
                                     <div className="analysis-items">
-                                        <div className="analysis-item">✓ Image stored securely</div>
-                                        <div className="analysis-item">✓ Ready for color & material edits</div>
-                                        <div className="analysis-item">✓ Will keep camera angle & lighting unchanged</div>
+                                        <div className="analysis-item"><Check size={14} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 5 }} />Image stored securely</div>
+                                        <div className="analysis-item"><Check size={14} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 5 }} />Ready for color & material edits</div>
+                                        <div className="analysis-item"><Check size={14} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 5 }} />Will keep camera angle & lighting unchanged</div>
                                     </div>
                                 </div>
                             </>
@@ -1854,7 +1855,7 @@ const ThreeDMockup = () => {
                                     title="Open fullscreen"
                                     style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                                 >
-                                    ⛶ Fullscreen
+                                    <Maximize2 size={13} strokeWidth={2.5} style={{ marginRight: 2 }} />Fullscreen
                                 </button>
                             )}
 
@@ -2115,7 +2116,7 @@ const ThreeDMockup = () => {
                         <button
                             onClick={(e) => { e.stopPropagation(); setShowFullscreen(false); }}
                             style={{ position: 'absolute', top: 16, right: 20, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
-                        >✕ Close</button>
+                        ><X size={15} strokeWidth={2.5} style={{ verticalAlign: '-3px', marginRight: 4 }} />Close</button>
                         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                             <button onClick={(e) => { e.stopPropagation(); setPreviewMode('original'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: previewMode === 'original' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: previewMode === 'original' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Original</button>
                             <button onClick={(e) => { e.stopPropagation(); setPreviewMode('result'); }} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: previewMode === 'result' ? '#FDB813' : 'rgba(255,255,255,0.15)', color: previewMode === 'result' ? '#1a1f3a' : '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Result</button>
@@ -2199,7 +2200,7 @@ const ThreeDMockup = () => {
                         <button
                             onClick={(e) => { e.stopPropagation(); setGalleryFullscreenItem(null); }}
                             style={{ position: 'absolute', top: 16, right: 20, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
-                        >✕ Close</button>
+                        ><X size={15} strokeWidth={2.5} style={{ verticalAlign: '-3px', marginRight: 4 }} />Close</button>
 
                         <div style={{ position: 'absolute', top: 18, left: 24, color: '#fff', fontSize: 14, fontWeight: 600, opacity: 0.85 }}>
                             {m.title || 'Untitled mockup'}
@@ -2325,7 +2326,7 @@ const ThreeDMockup = () => {
                                                         title="View fullscreen"
                                                         style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontWeight: 600, zIndex: 3, display: 'flex', alignItems: 'center', gap: 4 }}
                                                     >
-                                                        ⛶ Fullscreen
+                                                        <Maximize2 size={13} strokeWidth={2.5} style={{ marginRight: 2 }} />Fullscreen
                                                     </button>
                                                 )}
                                             </div>

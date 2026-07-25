@@ -4,6 +4,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '../../../lib/axiosInstance.js';
 import { createClient } from '@/lib/supabase/client';
+import {
+    Mail, MessageSquare, MessageSquareOff, RefreshCw, Loader2, Check, X,
+    Copy, ClipboardList, Link2, AlertTriangle, Inbox, Reply,
+    ArrowDownLeft, ArrowUpRight, Megaphone, Save, Sparkles,
+} from 'lucide-react';
 import './emails.css';
 
 const PROVIDERS = [
@@ -693,7 +698,7 @@ const EmailAssistant = () => {
             {/* Page Header */}
             <div className="page-header">
                 <div className="header-left">
-                    <div className="email-icon">✉</div>
+                    <div className="email-icon"><Mail size={22} strokeWidth={2} /></div>
                     <div className="header-content flex flex-col">
                         <h1>Email & SMS AI Assistant</h1>
                         <p>Connect Gmail or Outlook to automatically import insurance emails</p>
@@ -704,7 +709,9 @@ const EmailAssistant = () => {
                     onClick={handleSyncAll}
                     disabled={isSyncing || connectedCount === 0}
                 >
-                    {isSyncing ? '⏳ Syncing...' : '🔄 Sync All'}
+                    {isSyncing
+                        ? <><Loader2 size={15} className="ck-spin" style={{ verticalAlign: '-3px', marginRight: 6 }} />Syncing...</>
+                        : <><RefreshCw size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Sync All</>}
                 </button>
             </div>
 
@@ -728,7 +735,9 @@ const EmailAssistant = () => {
                                 }}
                                 style={{ background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}
                             >
-                                {replyCopied ? '✓ Copied' : 'Copy draft'}
+                                {replyCopied
+                                    ? <><Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copied</>
+                                    : 'Copy draft'}
                             </button>
                         </div>
                         <p style={{ fontSize: 11, color: '#92400e', marginTop: 8 }}>
@@ -742,35 +751,35 @@ const EmailAssistant = () => {
                         <div className="stat-label">Connected</div>
                         <div className="stat-value">
                             {summaryLoading ? '—' : `${connectedCount}/2`}
-                            <span className="stat-icon">🔗</span>
+                            <span className="stat-icon"><Link2 size={18} strokeWidth={2} /></span>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Scanned Today</div>
                         <div className="stat-value">
                             {summaryLoading ? '—' : (summary?.emailsScannedToday ?? 0)}
-                            <span className="stat-icon">📧</span>
+                            <span className="stat-icon"><Mail size={18} strokeWidth={2} /></span>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Auto-Logged</div>
                         <div className="stat-value">
                             {summaryLoading ? '—' : (summary?.claimsAutoLogged ?? 0)}
-                            <span className="stat-icon">📋</span>
+                            <span className="stat-icon"><ClipboardList size={18} strokeWidth={2} /></span>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Unassigned</div>
                         <div className="stat-value">
                             {summaryLoading ? '—' : (summary?.unassignedCount ?? 0)}
-                            <span className="stat-icon">⚠️</span>
+                            <span className="stat-icon"><AlertTriangle size={18} strokeWidth={2} /></span>
                         </div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Last Sync</div>
                         <div className="stat-value" style={{ fontSize: '1rem' }}>
                             {summaryLoading ? '—' : fmtRelative(summary?.lastSyncAt)}
-                            <span className="stat-icon">🔄</span>
+                            <span className="stat-icon"><RefreshCw size={18} strokeWidth={2} /></span>
                         </div>
                     </div>
                 </div>
@@ -832,7 +841,7 @@ const EmailAssistant = () => {
                             </div>
 
                             <div className="forward-box">
-                                <div className="forward-box-icon">✉</div>
+                                <div className="forward-box-icon"><Mail size={20} strokeWidth={2} /></div>
                                 <div className="forward-content">
                                     <div className="forward-label">Or forward emails directly</div>
                                     <div className="forward-label" style={{ fontWeight: 400 }}>
@@ -848,7 +857,9 @@ const EmailAssistant = () => {
                                     style={copied ? { background: '#dcfce7', borderColor: '#86efac' } : {}}
                                     disabled={!summary?.forwardingAddress}
                                 >
-                                    {copied ? '✅ Copied!' : '📋 Copy'}
+                                    {copied
+                                        ? <><Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copied!</>
+                                        : <><Copy size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copy</>}
                                 </button>
                             </div>
 
@@ -914,21 +925,21 @@ const EmailAssistant = () => {
 
                             <div className="benefits-grid">
                                 <div className="benefit-card">
-                                    <span className="benefit-icon">✓</span>
+                                    <span className="benefit-icon"><Check size={16} strokeWidth={3} /></span>
                                     <div className="benefit-text">
                                         <strong>Never miss a claim</strong><br />
                                         24/7 inbox scanning every {settings.sync_frequency_minutes ?? 15} minutes
                                     </div>
                                 </div>
                                 <div className="benefit-card">
-                                    <span className="benefit-icon">✓</span>
+                                    <span className="benefit-icon"><Check size={16} strokeWidth={3} /></span>
                                     <div className="benefit-text">
                                         <strong>Auto-matched to clients</strong><br />
                                         Linked by email, policy number, or address
                                     </div>
                                 </div>
                                 <div className="benefit-card">
-                                    <span className="benefit-icon">✓</span>
+                                    <span className="benefit-icon"><Check size={16} strokeWidth={3} /></span>
                                     <div className="benefit-text">
                                         <strong>Read-only access</strong><br />
                                         We never send or modify your emails
@@ -946,13 +957,13 @@ const EmailAssistant = () => {
                                     className={activityChannel === 'email' ? 'active' : ''}
                                     onClick={() => { setActivityChannel('email'); setStatusFilter('all'); }}
                                 >
-                                    📧 Email
+                                    <Mail size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Email
                                 </button>
                                 <button
                                     className={activityChannel === 'sms' ? 'active' : ''}
                                     onClick={() => { setActivityChannel('sms'); setStatusFilter('all'); setSmsMsgPage(1); }}
                                 >
-                                    💬 SMS
+                                    <MessageSquare size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />SMS
                                 </button>
                             </div>
                             <div className="activity-toolbar">
@@ -986,12 +997,12 @@ const EmailAssistant = () => {
 
                             {activityChannel === 'email' && (messagesLoading ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-icon"><Loader2 size={40} className="ck-spin" /></div>
                                     <div className="empty-title">Loading…</div>
                                 </div>
                             ) : messages.length === 0 ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">📥</div>
+                                    <div className="empty-icon"><Inbox size={40} strokeWidth={1.75} /></div>
                                     <div className="empty-title">No emails found</div>
                                     <div className="empty-text">
                                         {connectedCount === 0
@@ -1040,7 +1051,7 @@ const EmailAssistant = () => {
                                                         {m.matched_client ? (
                                                             <>
                                                                 <span className="status-pill status-matched">
-                                                                    ✓ {m.matched_client.full_name}
+                                                                    <Check size={12} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 3 }} />{m.matched_client.full_name}
                                                                 </span>
                                                                 <div className="meta-method">
                                                                     {matchMethodLabel[m.match_method] || 'Auto-matched'}
@@ -1048,7 +1059,7 @@ const EmailAssistant = () => {
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span className="status-pill status-unassigned">⚠ Unassigned</span>
+                                                                <span className="status-pill status-unassigned"><AlertTriangle size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Unassigned</span>
                                                                 <div className="meta-actions" onClick={e => e.stopPropagation()}>
                                                                     <button className="btn-assign" onClick={() => handleAssignPrompt(m.id)}>Assign</button>
                                                                     <button className="btn-ignore" onClick={() => handleIgnore(m.id)}>Ignore</button>
@@ -1109,7 +1120,7 @@ const EmailAssistant = () => {
                                                                     </div>
                                                                 </>
                                                             ) : (
-                                                                <button className="btn-assign" onClick={() => { setReplyOpenId(m.id); setReplyText(''); }}>↩ Reply</button>
+                                                                <button className="btn-assign" onClick={() => { setReplyOpenId(m.id); setReplyText(''); }}><Reply size={13} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 4 }} />Reply</button>
                                                             )}
                                                         </div>
                                                     </div>
@@ -1131,12 +1142,12 @@ const EmailAssistant = () => {
 
                             {activityChannel === 'sms' && (smsMsgLoading ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-icon"><Loader2 size={40} className="ck-spin" /></div>
                                     <div className="empty-title">Loading…</div>
                                 </div>
                             ) : smsMessages.length === 0 ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">💬</div>
+                                    <div className="empty-icon"><MessageSquare size={40} strokeWidth={1.75} /></div>
                                     <div className="empty-title">No texts found</div>
                                     <div className="empty-text">
                                         {!summary
@@ -1150,7 +1161,9 @@ const EmailAssistant = () => {
                                         {smsMessages.map(m => {
                                             const inbound = m.direction === 'inbound';
                                             const contact = inbound ? m.from_number : m.to_number;
-                                            const initial = inbound ? '↙' : '↗';
+                                            const initial = inbound
+                                                ? <ArrowDownLeft size={16} strokeWidth={2.5} />
+                                                : <ArrowUpRight size={16} strokeWidth={2.5} />;
                                             return (
                                                 <div
                                                     key={m.id}
@@ -1170,10 +1183,10 @@ const EmailAssistant = () => {
                                                         </div>
                                                         <div className="email-row-side">
                                                             {m.matched_client ? (
-                                                                <span className="status-pill status-matched">✓ {m.matched_client.full_name}</span>
+                                                                <span className="status-pill status-matched"><Check size={12} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 3 }} />{m.matched_client.full_name}</span>
                                                             ) : inbound ? (
                                                                 <>
-                                                                    <span className="status-pill status-unassigned">⚠ Unassigned</span>
+                                                                    <span className="status-pill status-unassigned"><AlertTriangle size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Unassigned</span>
                                                                     <div className="meta-actions">
                                                                         <button className="btn-assign" onClick={() => handleSmsAssignPrompt(m.id)}>Assign</button>
                                                                         <button className="btn-ignore" onClick={() => handleSmsIgnore(m.id)}>Ignore</button>
@@ -1206,7 +1219,7 @@ const EmailAssistant = () => {
                         <div className="tab-content active">
                             {!smsConfigured ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">📵</div>
+                                    <div className="empty-icon"><MessageSquareOff size={40} strokeWidth={1.75} /></div>
                                     <div className="empty-title">SMS not enabled on this server</div>
                                     <div className="empty-text">
                                         Twilio credentials aren&apos;t configured. Ask your administrator to set
@@ -1215,7 +1228,7 @@ const EmailAssistant = () => {
                                 </div>
                             ) : smsLoading ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-icon"><Loader2 size={40} className="ck-spin" /></div>
                                     <div className="empty-title">Loading…</div>
                                 </div>
                             ) : smsNumber ? (
@@ -1236,7 +1249,9 @@ const EmailAssistant = () => {
                                                     onClick={handleCopySmsNumber}
                                                     style={smsCopied ? { background: '#dcfce7', borderColor: '#86efac' } : {}}
                                                 >
-                                                    {smsCopied ? '✅ Copied!' : '📋 Copy'}
+                                                    {smsCopied
+                                                        ? <><Check size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copied!</>
+                                                        : <><Copy size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copy</>}
                                                 </button>
                                                 <button className="btn-release" onClick={releaseNumber} disabled={releasing}>
                                                     {releasing ? 'Releasing…' : 'Release'}
@@ -1268,7 +1283,7 @@ const EmailAssistant = () => {
                                             onClick={sendTestSms}
                                             disabled={sendingSms || !smsTo.trim() || !smsBody.trim()}
                                         >
-                                            <span>💬</span>
+                                            <MessageSquare size={16} strokeWidth={2} />
                                             {sendingSms ? 'Sending…' : 'Send SMS'}
                                         </button>
                                     </div>
@@ -1337,10 +1352,10 @@ const EmailAssistant = () => {
                             </div>
 
                             {campaignsLoading ? (
-                                <div className="empty-state"><div className="empty-icon">⏳</div><div className="empty-title">Loading…</div></div>
+                                <div className="empty-state"><div className="empty-icon"><Loader2 size={40} className="ck-spin" /></div><div className="empty-title">Loading…</div></div>
                             ) : campaigns.length === 0 ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">📣</div>
+                                    <div className="empty-icon"><Megaphone size={40} strokeWidth={1.75} /></div>
                                     <div className="empty-title">No campaigns yet</div>
                                     <div className="empty-text">Create a drip sequence, one-time blast, or claim-completed review request.</div>
                                 </div>
@@ -1382,7 +1397,7 @@ const EmailAssistant = () => {
                         <div className="tab-content active">
                             {settingsLoading ? (
                                 <div className="empty-state">
-                                    <div className="empty-icon">⏳</div>
+                                    <div className="empty-icon"><Loader2 size={40} className="ck-spin" /></div>
                                     <div className="empty-title">Loading settings…</div>
                                 </div>
                             ) : (
@@ -1559,7 +1574,7 @@ const EmailAssistant = () => {
                                         onClick={handleSaveSettings}
                                         disabled={savingSettings}
                                     >
-                                        <span>💾</span>
+                                        <Save size={16} strokeWidth={2} />
                                         {savingSettings ? 'Saving…' : 'Save Settings'}
                                     </button>
                                 </>
@@ -1658,7 +1673,7 @@ const EmailAssistant = () => {
                                 <div className="cmp-step-actions">
                                     <button onClick={addStep}>+ Add email</button>
                                     <button onClick={generateCopy} disabled={generatingCopy}>
-                                        {generatingCopy ? '✨ Generating…' : '✨ AI write last email'}
+                                        <Sparkles size={14} style={{ verticalAlign: '-2px', marginRight: 5 }} />{generatingCopy ? 'Generating…' : 'AI write last email'}
                                     </button>
                                 </div>
                             </div>

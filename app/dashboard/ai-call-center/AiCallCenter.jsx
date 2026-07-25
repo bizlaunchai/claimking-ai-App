@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { Phone, Target, Timer, BarChart3, Settings } from 'lucide-react';
 import IntegrationSettingsModal from './IntegrationSettingsModal';
 import "./ai-call-center.css"
 
@@ -120,7 +121,7 @@ const AICallCenter = () => {
 
     const stats = [
         {
-            icon: '📞',
+            icon: <Phone size={20} strokeWidth={2} />,
             label: 'Total Calls',
             value: summary ? summary.total_calls : 0,
             change: {
@@ -129,7 +130,7 @@ const AICallCenter = () => {
             },
         },
         {
-            icon: '🎯',
+            icon: <Target size={20} strokeWidth={2} />,
             label: 'Unassigned Leads',
             value: summary ? summary.unassigned_leads : 0,
             change: {
@@ -138,13 +139,13 @@ const AICallCenter = () => {
             },
         },
         {
-            icon: '⏱️',
+            icon: <Timer size={20} strokeWidth={2} />,
             label: 'Average Call Duration',
             value: summary ? formatDuration(summary.avg_duration_seconds) : '0:00',
             change: { text: 'answered calls only', type: 'neutral' },
         },
         {
-            icon: '📊',
+            icon: <BarChart3 size={20} strokeWidth={2} />,
             label: 'Answered / Missed',
             value: summary ? `${summary.answered_calls} / ${summary.missed_calls}` : '0 / 0',
             change: { text: 'last 30 days', type: 'neutral' },
@@ -282,7 +283,7 @@ const AICallCenter = () => {
                             className="refresh-btn"
                             title="Configure RingCentral &amp; Call Tracking Metrics"
                         >
-                            <span style={{ fontSize: '1rem' }}>⚙️</span>
+                            <Settings size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 4 }} />
                             Settings
                         </button>
                     </div>
@@ -316,7 +317,7 @@ const AICallCenter = () => {
 
             {(!summary || summary.total_calls === 0) && (
                 <div className="alert-banner">
-                    <div className="alert-icon">📞</div>
+                    <div className="alert-icon"><Phone size={22} strokeWidth={2} /></div>
                     <div className="alert-content">
                         <div className="alert-text">No calls yet</div>
                         <div className="alert-subtext">

@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { Upload, Sparkles } from 'lucide-react';
 import './rate-book.css';
 
 // Keep in sync with backend dto/rate-book.dto.ts
@@ -260,7 +261,7 @@ const RateBook = () => {
                 </div>
                 <div className="rb-header-actions">
                     <a href="/dashboard/estimation" className="btn btn-outline">← Back to Estimates</a>
-                    <button className="btn btn-outline" onClick={openUpload}>📤 Upload Prior Estimate</button>
+                    <button className="btn btn-outline" onClick={openUpload}><Upload size={15} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />Upload Prior Estimate</button>
                     <button className="btn btn-primary" onClick={addRow}>+ Add Rate</button>
                 </div>
             </div>
@@ -483,7 +484,7 @@ const RateBook = () => {
                                             onClick={runExtraction}
                                             disabled={!uploadFile || extracting}
                                         >
-                                            {extracting ? 'Extracting…' : '✨ Extract with AI'}
+                                            {extracting ? 'Extracting…' : <><Sparkles size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Extract with AI</>}
                                         </button>
                                     </div>
                                 </>

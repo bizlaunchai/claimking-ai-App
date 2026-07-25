@@ -1,6 +1,7 @@
 "use client";
 import "./purchase-credits.css"
 import {useEffect, useRef, useState} from "react";
+import { AlertTriangle, PartyPopper, Gem, RefreshCw, Check, Zap, Lightbulb, CreditCard } from "lucide-react";
 
 const BuyCreditsPage = () => {
 
@@ -753,7 +754,7 @@ const BuyCreditsPage = () => {
                             </div>
                         </div>
                         <div className="low-balance-warning" id="lowBalanceWarning">
-                            <span className="warning-icon">⚠️</span>
+                            <span className="warning-icon"><AlertTriangle size={18} strokeWidth={2.5} /></span>
                             <span
                                 className="warning-text">Low balance - Purchase more credits to avoid service interruption</span>
                         </div>
@@ -766,7 +767,7 @@ const BuyCreditsPage = () => {
                 {/* Promotional Banner */}
                 <div className="promo-banner" id="promoBanner">
                     <div className="promo-content">
-                        <div className="promo-icon">🎉</div>
+                        <div className="promo-icon"><PartyPopper size={24} strokeWidth={2} /></div>
                         <div className="promo-text">
                             <div className="promo-title">Limited Time Offer!</div>
                             <div className="promo-description">Use code <span className="promo-code">NEWCUSTOMER</span> for 20%
@@ -781,7 +782,7 @@ const BuyCreditsPage = () => {
                 {/* Bulk Discount Info */}
                 <div className="discount-info">
                     <div className="discount-title">
-                        <span>💎</span>
+                        <span style={{ display: 'inline-flex', verticalAlign: '-3px', marginRight: 6 }}><Gem size={18} strokeWidth={2} /></span>
                         <span>Automatic Bulk Discounts Applied</span>
                     </div>
                     <div className="discount-grid">
@@ -933,7 +934,7 @@ const BuyCreditsPage = () => {
                     <div className="custom-card">
                         <div className="custom-header">
                             <h2 className="custom-title">
-                                <span style={{marginRight: '0.5rem'}}>🔄</span>
+                                <span style={{marginRight: '0.5rem', display: 'inline-flex', verticalAlign: '-4px'}}><RefreshCw size={18} strokeWidth={2} /></span>
                                 Monthly Auto-Purchase
                             </h2>
                             <p className="custom-subtitle">Set up automatic monthly credit purchases at discounted rates</p>
@@ -993,13 +994,13 @@ const BuyCreditsPage = () => {
 
                         <div className="subscription-details">
                             <div className="detail-item">
-                                <span>✓</span> Charges on the same day each month
+                                <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> Charges on the same day each month
                             </div>
                             <div className="detail-item">
-                                <span>✓</span> Cancel or modify anytime
+                                <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> Cancel or modify anytime
                             </div>
                             <div className="detail-item">
-                                <span>✓</span> 5% extra discount on monthly plans
+                                <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> 5% extra discount on monthly plans
                             </div>
                         </div>
 
@@ -1012,7 +1013,7 @@ const BuyCreditsPage = () => {
                     <div className="custom-card">
                         <div className="custom-header">
                             <h2 className="custom-title">
-                                <span style={{marginRight: '0.5rem'}}>⚡</span>
+                                <span style={{marginRight: '0.5rem', display: 'inline-flex', verticalAlign: '-4px'}}><Zap size={18} strokeWidth={2} /></span>
                                 Auto-Recharge
                             </h2>
                             <p className="custom-subtitle">Automatically purchase credits when balance is low</p>
@@ -1055,7 +1056,7 @@ const BuyCreditsPage = () => {
                             </div>
 
                             <div className="recharge-example">
-                                <div className="example-icon">💡</div>
+                                <div className="example-icon"><Lightbulb size={22} strokeWidth={2} /></div>
                                 <div className="example-text">
                                     <strong>Example:</strong> When your balance drops below <span id="exampleThreshold">10</span> credits, we'll automatically purchase <span id="exampleAmount">10</span> credits for <span id="examplePrice">$1,800</span>
                                 </div>
@@ -1064,7 +1065,7 @@ const BuyCreditsPage = () => {
                             <div className="payment-method">
                                 <label className="input-label">Payment Method:</label>
                                 <div className="payment-card">
-                                    <div className="card-icon">💳</div>
+                                    <div className="card-icon"><CreditCard size={22} strokeWidth={2} /></div>
                                     <div className="card-details">
                                         <div className="card-type">Visa ****4242</div>
                                         <div className="card-expiry">Expires 12/2025</div>
@@ -1075,13 +1076,13 @@ const BuyCreditsPage = () => {
 
                             <div className="subscription-details">
                                 <div className="detail-item">
-                                    <span>✓</span> Never run out of credits
+                                    <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> Never run out of credits
                                 </div>
                                 <div className="detail-item">
-                                    <span>✓</span> Email notification before charging
+                                    <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> Email notification before charging
                                 </div>
                                 <div className="detail-item">
-                                    <span>✓</span> Same bulk discounts apply
+                                    <span style={{ display: 'inline-flex', verticalAlign: '-2px', color: '#16a34a' }}><Check size={14} strokeWidth={3} /></span> Same bulk discounts apply
                                 </div>
                             </div>
                         </div>
