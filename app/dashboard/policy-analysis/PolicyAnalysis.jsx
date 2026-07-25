@@ -824,14 +824,8 @@ const PolicyAnalysis = () => {
                     </div>
                 </div>
 
-                <div id="results-section" className={(showResults || isAnalyzing) ? '' : 'disabled-section'}>
-                    {!showResults && !isAnalyzing && (
-                        <div className="disabled-overlay"><div className="disabled-message">
-                            <p className="text-gray-700 font-medium mb-2">📄 No Document Analyzed Yet</p>
-                            <p className="text-sm text-gray-600">Attach a file and click “Analyze Document” to see results here.</p>
-                        </div></div>
-                    )}
-
+                {(showResults || isAnalyzing) && (
+                <div id="results-section">
                     {isAnalyzing && <AnalyzingSkeleton />}
 
                     {!isAnalyzing && analysisResult && (
@@ -855,6 +849,7 @@ const PolicyAnalysis = () => {
                         />
                     )}
                 </div>
+                )}
             </div>
         </div>
     );
