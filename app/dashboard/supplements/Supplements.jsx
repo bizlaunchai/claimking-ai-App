@@ -3,6 +3,7 @@ import React, {useState, useEffect, useRef, useMemo} from 'react';
 import Chart from 'chart.js/auto';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { X, FolderOpen } from 'lucide-react';
 import './supplement.css';
 import dynamic from "next/dynamic";
 import MetricCard from "@/app/dashboard/supplements/Components/MetricCard.js";
@@ -637,7 +638,7 @@ const SupplementsManagement = () => {
                             onClick={() => removeItem(item.id)}
                             style={{color: '#dc2626', cursor: 'pointer'}}
                         >
-                          ✕
+                          <X size={16} strokeWidth={2.5} style={{ verticalAlign: '-3px' }} />
                         </span>
                                         </div>
                                     </td>
@@ -970,7 +971,7 @@ const SupplementsManagement = () => {
                                 onDragLeave={handleMainDragLeave}
                                 onClick={() => document.getElementById('fileInput').click()}
                             >
-                                <div className="upload-icon">📁</div>
+                                <div className="upload-icon"><FolderOpen size={40} strokeWidth={1.75} /></div>
                                 <div className="upload-text">Drag and drop files here or click to browse</div>
                                 <div className="upload-hint">Supports: JPG, PNG, PDF (Max 10MB per file)</div>
                                 <input

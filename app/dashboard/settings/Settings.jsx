@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useEffect } from 'react';
+import { Cloud, Hexagon, Home, Hammer, Target, BarChart3, CreditCard, Square, Wallet, Smartphone } from 'lucide-react';
 import "./settings.css"
 import dynamic from "next/dynamic";
 
@@ -943,7 +944,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.salesforce ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('salesforce')}
                                         >
-                                            <div className="integration-icon">☁️</div>
+                                            <div className="integration-icon"><Cloud size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">Salesforce</div>
                                             <div className="integration-status">{integrations.salesforce ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -951,7 +952,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.hubspot ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('hubspot')}
                                         >
-                                            <div className="integration-icon">🔶</div>
+                                            <div className="integration-icon"><Hexagon size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">HubSpot</div>
                                             <div className="integration-status">{integrations.hubspot ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -959,7 +960,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.acculynx ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('acculynx')}
                                         >
-                                            <div className="integration-icon">🏠</div>
+                                            <div className="integration-icon"><Home size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">AccuLynx</div>
                                             <div className="integration-status">{integrations.acculynx ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -967,7 +968,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.jobber ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('jobber')}
                                         >
-                                            <div className="integration-icon">🔨</div>
+                                            <div className="integration-icon"><Hammer size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">Jobber</div>
                                             <div className="integration-status">{integrations.jobber ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -975,7 +976,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.pipedrive ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('pipedrive')}
                                         >
-                                            <div className="integration-icon">🎯</div>
+                                            <div className="integration-icon"><Target size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">Pipedrive</div>
                                             <div className="integration-status">{integrations.pipedrive ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -983,7 +984,7 @@ const Settings = () => {
                                             className={`integration-card ${integrations.zoho ? 'connected' : ''}`}
                                             onClick={() => handleIntegrationClick('zoho')}
                                         >
-                                            <div className="integration-icon">📊</div>
+                                            <div className="integration-icon"><BarChart3 size={28} strokeWidth={1.75} /></div>
                                             <div className="integration-name">Zoho CRM</div>
                                             <div className="integration-status">{integrations.zoho ? 'Connected' : 'Not Connected'}</div>
                                         </div>
@@ -1439,22 +1440,22 @@ const Settings = () => {
                                         <label className="form-label">Payment Processor</label>
                                         <div className="integration-grid">
                                             <div className="integration-card">
-                                                <div className="integration-icon">💳</div>
+                                                <div className="integration-icon"><CreditCard size={28} strokeWidth={1.75} /></div>
                                                 <div className="integration-name">Stripe</div>
                                                 <div className="integration-status">Not Connected</div>
                                             </div>
                                             <div className="integration-card">
-                                                <div className="integration-icon">🟦</div>
+                                                <div className="integration-icon"><Square size={28} strokeWidth={1.75} /></div>
                                                 <div className="integration-name">Square</div>
                                                 <div className="integration-status">Not Connected</div>
                                             </div>
                                             <div className="integration-card">
-                                                <div className="integration-icon">🅿️</div>
+                                                <div className="integration-icon"><Wallet size={28} strokeWidth={1.75} /></div>
                                                 <div className="integration-name">PayPal</div>
                                                 <div className="integration-status">Not Connected</div>
                                             </div>
                                             <div className="integration-card">
-                                                <div className="integration-icon">📱</div>
+                                                <div className="integration-icon"><Smartphone size={28} strokeWidth={1.75} /></div>
                                                 <div className="integration-name">QuickBooks Payments</div>
                                                 <div className="integration-status">Not Connected</div>
                                             </div>

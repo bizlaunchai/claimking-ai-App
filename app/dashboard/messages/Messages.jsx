@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
+import { X } from 'lucide-react';
 import {
     refreshUnreadMessages,
     setActiveMessageThread,
@@ -760,7 +761,7 @@ const Messages = () => {
                         <div className="mi-modal-head">
                             <h2>New message</h2>
                             <button type="button" className="mi-modal-close"
-                                onClick={() => setPickerOpen(false)} aria-label="Close">✕</button>
+                                onClick={() => setPickerOpen(false)} aria-label="Close"><X size={18} strokeWidth={2.5} /></button>
                         </div>
                         <input
                             className="mi-input"

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Flame, Sun, Snowflake, Check } from 'lucide-react';
 import './new-leads.css';
 
 // ─── Lead source breakdown (this month) ──────────────────────────────
@@ -378,7 +379,12 @@ export default function NewLeads() {
 // LeadRow
 // ====================================================================
 const LeadRow = ({ lead, onClaim }) => {
-    const scoreLabel = lead.score === 'hot' ? '🔥 HOT' : lead.score === 'warm' ? '☀ WARM' : '❄ COLD';
+    const scoreIconStyle = { verticalAlign: '-2px', marginRight: 3 };
+    const scoreLabel = lead.score === 'hot'
+        ? <><Flame size={12} strokeWidth={2.5} style={scoreIconStyle} />HOT</>
+        : lead.score === 'warm'
+            ? <><Sun size={12} strokeWidth={2.5} style={scoreIconStyle} />WARM</>
+            : <><Snowflake size={12} strokeWidth={2.5} style={scoreIconStyle} />COLD</>;
     const channelIcon = lead.channel === 'phone' ? <PhoneIcon /> : <FormIcon />;
 
     return (
@@ -464,7 +470,7 @@ const LeadRow = ({ lead, onClaim }) => {
                     <span className="lead-status new">New</span>
                 ) : (
                     <>
-                        <span className="claimed-pill">✓ Claimed</span>
+                        <span className="claimed-pill"><Check size={12} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 3 }} />Claimed</span>
                         <div className="claimed-meta">by <strong>{lead.claimed.by}</strong></div>
                         <div className="claimed-meta">{lead.claimed.when}</div>
                         <div className={`response-time-pill ${lead.claimed.slow ? 'slow' : ''}`}>

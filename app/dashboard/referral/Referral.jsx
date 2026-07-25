@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react';
+import { Target, Check, Facebook, Twitter, Linkedin, Mail, QrCode, DollarSign, Banknote, Gem, RefreshCw, Copy, Share2 } from 'lucide-react';
 import "./referral.css"
 
 const Referral = () => {
@@ -134,7 +135,7 @@ const Referral = () => {
 
                 {/* Referral Link Section */}
                 <div className="referral-link-section">
-                    <h2 className="referral-link-title">🎯 Your Referral Link</h2>
+                    <h2 className="referral-link-title"><Target size={20} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 8 }} />Your Referral Link</h2>
                     <div className="referral-link-container">
                         <input 
                             type="text" 
@@ -146,24 +147,24 @@ const Referral = () => {
                             className={`copy-btn ${copied ? 'copied' : ''}`}
                             onClick={handleCopyLink}
                         >
-                            {copied ? '✓ Copied!' : 'Copy Link'}
+                            {copied ? <><Check size={14} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copied!</> : 'Copy Link'}
                         </button>
                     </div>
                     <div className="share-buttons">
                         <button className="share-btn" onClick={() => handleShare('facebook')}>
-                            📘 Facebook
+                            <Facebook size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />Facebook
                         </button>
                         <button className="share-btn" onClick={() => handleShare('twitter')}>
-                            🐦 Twitter
+                            <Twitter size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />Twitter
                         </button>
                         <button className="share-btn" onClick={() => handleShare('linkedin')}>
-                            💼 LinkedIn
+                            <Linkedin size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />LinkedIn
                         </button>
                         <button className="share-btn" onClick={() => handleShare('email')}>
-                            📧 Email
+                            <Mail size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />Email
                         </button>
                         <button className="share-btn" onClick={() => setShowQR(true)}>
-                            📱 QR Code
+                            <QrCode size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 6 }} />QR Code
                         </button>
                     </div>
                 </div>
@@ -255,22 +256,22 @@ const Referral = () => {
 
                 {/* Commission Structure */}
                 <div className="commission-structure-section">
-                    <h3 className="chart-title" style={{ marginBottom: '1rem' }}>💰 How Commissions Work</h3>
+                    <h3 className="chart-title" style={{ marginBottom: '1rem' }}><DollarSign size={18} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 8 }} />How Commissions Work</h3>
                     <div className="commission-grid">
                         <div className="commission-card">
-                            <div className="commission-card-icon">💵</div>
+                            <div className="commission-card-icon"><Banknote size={28} strokeWidth={1.75} /></div>
                             <div className="commission-card-title">Base Plan Bonus</div>
                             <div className="commission-card-value">$150</div>
                             <div className="commission-card-desc">When referral uses base plan for 3 months</div>
                         </div>
                         <div className="commission-card">
-                            <div className="commission-card-icon">💎</div>
+                            <div className="commission-card-icon"><Gem size={28} strokeWidth={1.75} /></div>
                             <div className="commission-card-title">Upgraded Plan Bonus</div>
                             <div className="commission-card-value">$300</div>
                             <div className="commission-card-desc">When referral uses pro/enterprise for 3 months</div>
                         </div>
                         <div className="commission-card">
-                            <div className="commission-card-icon">🔄</div>
+                            <div className="commission-card-icon"><RefreshCw size={28} strokeWidth={1.75} /></div>
                             <div className="commission-card-title">Recurring Commission</div>
                             <div className="commission-card-value">5-20%</div>
                             <div className="commission-card-desc">On all claim points purchased</div>
@@ -340,7 +341,7 @@ const Referral = () => {
                                         onClick={() => handleCopyCoupon(coupon.code)}
                                         style={{ background: 'white', border: '1px solid #e5e7eb' }}
                                     >
-                                        📋 Copy
+                                        <Copy size={14} strokeWidth={2} style={{ verticalAlign: '-2px', marginRight: 5 }} />Copy
                                     </button>
                                     <button
                                         style={{
@@ -349,7 +350,7 @@ const Referral = () => {
                                             border: 'none'
                                         }}
                                     >
-                                        📢 Share
+                                        <Share2 size={14} strokeWidth={2} style={{ verticalAlign: '-2px', marginRight: 5 }} />Share
                                     </button>
                                 </div>
                             </div>
@@ -404,7 +405,7 @@ const Referral = () => {
                         <h3 style={{ marginBottom: '1rem' }}>QR Code for Your Referral Link</h3>
                         <div className="qr-modal-box">
                             <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: '3rem' }}>📱</div>
+                                <div style={{ color: '#1a1f3a' }}><QrCode size={48} strokeWidth={1.75} /></div>
                                 <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>QR Code Here</div>
                             </div>
                         </div>

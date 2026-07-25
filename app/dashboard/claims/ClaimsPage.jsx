@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
+import { Flame, Clock, DollarSign, AlertTriangle } from 'lucide-react';
 import "./claims.css"
 import MapView from "@/app/dashboard/claims/MapView.jsx";
 import StatCard from "@/app/dashboard/claims/Components/StatCard.js";
@@ -356,9 +357,9 @@ const ClaimsManagement = () => {
                 <div className="claim-amount">${claim.amount.toLocaleString()}</div>
                 <div className="claim-tags">
                     {claim.damageType && claim.damageType !== '—' && <span className="claim-tag">{claim.damageType}</span>}
-                    {claim.urgent && <span className="claim-tag tag-urgent">🔥 Urgent</span>}
-                    {claim.overdue && <span className="claim-tag tag-urgent">⏰ Overdue</span>}
-                    {claim.stage === 8 && <span className="claim-tag tag-urgent">💰 Supplement</span>}
+                    {claim.urgent && <span className="claim-tag tag-urgent"><Flame size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Urgent</span>}
+                    {claim.overdue && <span className="claim-tag tag-urgent"><Clock size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Overdue</span>}
+                    {claim.stage === 8 && <span className="claim-tag tag-urgent"><DollarSign size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Supplement</span>}
                 </div>
                 {claim.updatedAt && <div style={{fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.5rem'}}>Updated {timeAgo(claim.updatedAt)}</div>}
                 <div className="claim-actions" onClick={(e) => e.stopPropagation()}>
@@ -1332,7 +1333,7 @@ const ClaimsManagement = () => {
                     >
                         <div className="action-breakdown">
                             <div className="action-item urgent">
-                                <span className="action-icon">⚠️</span>
+                                <span className="action-icon"><AlertTriangle size={15} strokeWidth={2.5} /></span>
                                 <span className="action-text">{analyticsData?.needAction?.overdue || 0} Overdue</span>
                             </div>
                         </div>

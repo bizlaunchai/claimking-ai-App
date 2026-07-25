@@ -6,6 +6,7 @@ import "./measurement-hero.css"
 import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
+import { Check, AlertCircle, Zap, FolderOpen } from "lucide-react";
 import ClientSelector from "@/components/clients/ClientSelector";
 
 const Page = () => {
@@ -414,7 +415,7 @@ const Page = () => {
 
                         <div className="mr-hero-stats">
                             <div className={`mr-stat ${aiReady ? 'mr-stat-ok' : 'mr-stat-warn'}`}>
-                                <div className="mr-stat-icon">{aiReady ? '✓' : '!'}</div>
+                                <div className="mr-stat-icon">{aiReady ? <Check size={18} strokeWidth={3} /> : <AlertCircle size={18} strokeWidth={2.5} />}</div>
                                 <div>
                                     <div className="mr-stat-label">AI Status</div>
                                     <div className="mr-stat-value">{aiReady ? 'Ready' : 'Not configured'}</div>
@@ -423,7 +424,7 @@ const Page = () => {
 
                             {creditsKnown && (
                                 <div className={`mr-stat ${insufficientCredits ? 'mr-stat-warn' : 'mr-stat-ok'}`}>
-                                    <div className="mr-stat-icon">⚡</div>
+                                    <div className="mr-stat-icon"><Zap size={18} strokeWidth={2} /></div>
                                     <div>
                                         <div className="mr-stat-label">Credits</div>
                                         <div className="mr-stat-value">
@@ -442,7 +443,7 @@ const Page = () => {
                                 onClick={() => openModal('allReports')}
                                 title="Open saved measurement reports"
                             >
-                                <div className="mr-stat-icon">📁</div>
+                                <div className="mr-stat-icon"><FolderOpen size={18} strokeWidth={2} /></div>
                                 <div style={{ textAlign: 'left' }}>
                                     <div className="mr-stat-label">View Reports</div>
                                     <div className="mr-stat-value">
@@ -833,7 +834,7 @@ function ExtractedPanel({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 <div>
                     <div style={{ fontWeight: 700, color: '#1a1f3a', fontSize: 14 }}>
-                        {isConfirmed ? '✓ Confirmed measurements' : 'Review & confirm extracted measurements'}
+                        {isConfirmed ? <><Check size={14} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 4 }} />Confirmed measurements</> : 'Review & confirm extracted measurements'}
                     </div>
                     <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
                         {REPORT_TYPE_LABEL[reportType] ?? REPORT_TYPE_LABEL.roof}
@@ -1010,7 +1011,7 @@ function SavedReportsList({ reports, loading, onSelect, onUseInEstimate, onDelet
                     padding: '3rem 1rem', textAlign: 'center',
                     background: '#f9fafb', borderRadius: 10, border: '1px dashed #e5e7eb',
                 }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
+                    <div style={{ marginBottom: 8, color: '#9ca3af' }}><FolderOpen size={32} strokeWidth={1.75} /></div>
                     <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>No reports yet</div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
                         Upload a measurement PDF to extract your first report.

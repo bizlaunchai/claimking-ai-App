@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import "./clientPortal.css"
 import dynamic from "next/dynamic.js";
 import Link from "next/link";
+import { Check, X, Users, Activity, DollarSign } from "lucide-react";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import Can from "@/lib/permissions/Can";
@@ -637,12 +638,7 @@ const ClientPortal = () => {
                 <div className="metrics-row">
                     <div className="metric-card">
                         <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #FDB813, #ffc947)' }}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a1f3a" strokeWidth="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
+                            <Users size={24} strokeWidth={2} color="#1a1f3a" />
                         </div>
                         <div className="metric-content">
                             <div className="metric-label">Total Clients</div>
@@ -653,9 +649,7 @@ const ClientPortal = () => {
 
                     <div className="metric-card">
                         <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #dcfce7, #86efac)' }}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                            </svg>
+                            <Activity size={24} strokeWidth={2} color="#16a34a" />
                         </div>
                         <div className="metric-content">
                             <div className="metric-label">Active Claims</div>
@@ -666,9 +660,7 @@ const ClientPortal = () => {
 
                     <div className="metric-card">
                         <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #dbeafe, #93c5fd)' }}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
+                            <Check size={24} strokeWidth={2.5} color="#2563eb" />
                         </div>
                         <div className="metric-content">
                             <div className="metric-label">Completed</div>
@@ -679,10 +671,7 @@ const ClientPortal = () => {
 
                     <div className="metric-card">
                         <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #fef3c7, #fcd34d)' }}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
-                                <line x1="12" y1="1" x2="12" y2="23"></line>
-                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                            </svg>
+                            <DollarSign size={24} strokeWidth={2} color="#d97706" />
                         </div>
                         <div className="metric-content">
                             <div className="metric-label">Total Value</div>
@@ -2477,8 +2466,10 @@ const SendLinkRow = ({ client, disabled }) => {
                         border:     `1px solid ${result.kind === 'success' ? '#a7f3d0' : '#fecaca'}`,
                     }}
                 >
-                    <span style={{ fontWeight: 700, flexShrink: 0 }}>
-                        {result.kind === 'success' ? '✓' : '✕'}
+                    <span style={{ fontWeight: 700, flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                        {result.kind === 'success'
+                            ? <Check size={16} strokeWidth={3} />
+                            : <X size={16} strokeWidth={3} />}
                     </span>
                     <span style={{ flex: 1 }}>
                         {result.text}

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
+import { Check } from 'lucide-react';
 import './team.css';
 
 // Map a role slug to the badge label rendered in the table.
@@ -684,7 +685,7 @@ const Team = () => {
 
             {toast && (
                 <div className="toast success">
-                    <span className="toast-icon">✓</span>
+                    <span className="toast-icon"><Check size={16} strokeWidth={3} /></span>
                     {toast}
                 </div>
             )}
@@ -965,7 +966,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
             return <td className="perm-cell perm-cross" onClick={() => togglePerm(role, key)}>—</td>;
         }
         if (v === true) {
-            return <td className="perm-cell perm-check" onClick={() => togglePerm(role, key)}>✓</td>;
+            return <td className="perm-cell perm-check" onClick={() => togglePerm(role, key)}><Check size={15} strokeWidth={3} /></td>;
         }
         return <td className="perm-cell" onClick={() => togglePerm(role, key)}><span className="perm-scope">{v}</span></td>;
     };
@@ -1090,7 +1091,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
                                                             title={`Grant all ${group.group} permissions to ${ROLE_LABELS[r]}`}
                                                             onClick={() => applyGroupForRole(group, r, true)}
                                                             disabled={allOn}
-                                                        >✓</button>
+                                                        ><Check size={14} strokeWidth={3} /></button>
                                                         <button
                                                             type="button"
                                                             className="bulk-btn deny"

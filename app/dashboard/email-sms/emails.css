@@ -42,7 +42,15 @@
     width: 24px;
     height: 24px;
     opacity: 0.5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
 }
+
+/* Spin utility for lucide <Loader2> icons used as loading indicators */
+@keyframes ck-spin { to { transform: rotate(360deg); } }
+.ck-spin { animation: ck-spin 0.8s linear infinite; }
 
 /* Tabs */
 .tabs-container {
