@@ -194,6 +194,16 @@ const EmailAssistant = () => {
         }
     }, [roleLoading, isAdmin, activeTab]);
 
+    // Deep-link a specific tab via ?tab=sms (used by the "Set up SMS" link in
+    // the Client Portal share modal). Only honor known tab keys; 'settings' is
+    // admin-only so the bounce effect above will still guard it.
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        const KNOWN = ['connect', 'activity', 'sms', 'campaigns', 'settings'];
+        if (tab && KNOWN.includes(tab)) setActiveTab(tab);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
     useEffect(() => {
         const gmail = searchParams.get('gmail');
         const outlook = searchParams.get('outlook');

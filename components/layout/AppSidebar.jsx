@@ -128,6 +128,22 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
         return () => window.removeEventListener("resize", check);
     }, []);
 
+    // When the route changes, bring the active nav-link into view. On tall
+    // menus the active item can sit below the fold, so we smooth-scroll the
+    // sidebar (the overflow-y:auto container) to it. Keyed on permsLoading too,
+    // since links render conditionally only after permissions resolve. rAF lets
+    // the DOM paint the freshly-active link before we measure it.
+    useEffect(() => {
+        if (permsLoading) return;
+        const raf = requestAnimationFrame(() => {
+            const el = sidebarRef.current?.querySelector('.nav-link.active');
+            if (!el) return;
+            const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+            el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [pathname, permsLoading]);
+
     // Function to expand the sidebar if it's collapsed
     const expandSidebarIfCollapsed = useCallback(() => {
         if (isCollapsed && sidebarRef.current) {
