@@ -128,6 +128,19 @@ const Icon = {
             <path d="M8 8h5"/>
         </svg>
     ),
+    Folder: (p) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+             strokeLinecap="round" strokeLinejoin="round" {...p}>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+    ),
+    Home: (p) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+             strokeLinecap="round" strokeLinejoin="round" {...p}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+    ),
 };
 
 export default function PortalView() {
@@ -139,6 +152,9 @@ export default function PortalView() {
     const estimateId = search?.get('estimate') || undefined;
 
     const [state, setState] = useState({ loading: true, client: null, error: null });
+    // Which section group is on screen. Tabs keep the page short and scannable
+    // instead of a single very long scroll — homeowners open this on phones.
+    const [activeTab, setActiveTab] = useState('overview');
 
     useEffect(() => {
         if (!token) return;
@@ -217,35 +233,47 @@ export default function PortalView() {
     const stageLabel = STAGE_LABEL[stage] || `Stage ${stage}`;
 
     /**
-     * Jump to the message box and put the cursor in it, so one tap gets the
-     * homeowner from "I have a question" to typing.
-     *
-     * `scrollIntoView` is smooth, but focusing a field mid-scroll makes the
-     * browser snap the page — so the focus waits for the scroll to settle.
-     * On `prefers-reduced-motion` the jump is instant and focus is immediate.
+     * Switch to the Messages tab and drop the cursor in the box, so one tap
+     * gets the homeowner from "I have a question" to typing — no matter which
+     * tab they were on. The tab has to render first, so the scroll + focus
+     * wait a tick. On `prefers-reduced-motion` the jump is instant.
      */
-    const scrollToMessages = () => {
-        const section = document.getElementById('pv-messages');
-        if (!section) return;
-
+    const goToMessages = () => {
         const reduceMotion =
             typeof window !== 'undefined' &&
             window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
-        section.scrollIntoView({
-            behavior: reduceMotion ? 'auto' : 'smooth',
-            block: 'start',
-        });
-        section.classList.add('pv-flash');
-        setTimeout(() => section.classList.remove('pv-flash'), 1400);
+        setActiveTab('messages');
 
-        const focusInput = () => section.querySelector('textarea')?.focus();
-        if (reduceMotion) focusInput();
-        else setTimeout(focusInput, 650);
+        const run = () => {
+            const section = document.getElementById('pv-messages');
+            if (!section) return;
+            section.scrollIntoView({
+                behavior: reduceMotion ? 'auto' : 'smooth',
+                block: 'start',
+            });
+            const focusInput = () => section.querySelector('textarea')?.focus();
+            if (reduceMotion) focusInput();
+            else setTimeout(focusInput, 500);
+        };
+        // Let React paint the newly-active tab before we scroll to it.
+        setTimeout(run, reduceMotion ? 0 : 60);
     };
     const stageStyleObj = stageStyle(stage);
     const progressPct = Math.max(0, Math.min(100, c.progress ?? 0));
     const firstName = c?.first_name || c?.full_name?.split(' ')[0] || 'there';
+
+    // Tab groups. Each bundles the related sections so the page reads as a few
+    // clean views rather than one endless scroll. Order mirrors how a homeowner
+    // thinks about their claim: where it stands → the money → the carrier back-
+    // and-forth → their files → talk to us.
+    const TABS = [
+        { key: 'overview',  label: 'Overview',  icon: <Icon.Home width="16" height="16" /> },
+        { key: 'estimate',  label: 'Estimate',  icon: <Icon.Estimate width="16" height="16" /> },
+        { key: 'insurance', label: 'Insurance', icon: <Icon.Insurance width="16" height="16" /> },
+        { key: 'documents', label: 'Documents', icon: <Icon.Folder width="16" height="16" /> },
+        { key: 'messages',  label: 'Messages',  icon: <Icon.Message width="16" height="16" /> },
+    ];
 
     return (
         <PageShell>
@@ -300,7 +328,7 @@ export default function PortalView() {
                         <button
                             type="button"
                             className="pv-hero-msg-btn"
-                            onClick={scrollToMessages}
+                            onClick={goToMessages}
                         >
                             <Icon.Message width="16" height="16" />
                             Message {contractorName}
@@ -379,89 +407,112 @@ export default function PortalView() {
                 </div>
             </section>
 
-            {/* ── Activity timeline ────────────────────────────────────────── */}
-            <SectionCard
-                icon={<Icon.Timeline width="18" height="18" />}
-                accent="indigo"
-                title="Activity Timeline"
-                subtitle="Every update from your contractor, in one place"
-            >
-                <PortalTimeline />
-            </SectionCard>
+            {/* ── Sticky tab navigation ────────────────────────────────────
+                 Breaks the page into a few scannable views. Sticks to the top
+                 on scroll so the homeowner can always jump between sections.
+                 Horizontally scrollable on narrow phones. */}
+            <div className="pv-tabnav-outer" role="navigation" aria-label="Portal sections">
+                <div className="pv-container">
+                    <div className="pv-tabnav" role="tablist">
+                        {TABS.map((t) => (
+                            <button
+                                key={t.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={activeTab === t.key}
+                                className={`pv-tab${activeTab === t.key ? ' active' : ''}`}
+                                onClick={() => setActiveTab(t.key)}
+                            >
+                                <span className="pv-tab-ico">{t.icon}</span>
+                                <span className="pv-tab-label">{t.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
 
-            {/* ── 3D Mockups Gallery ─────────────────────────────────────
-                 Only shows mockups the contractor has explicitly shared
-                 (mockups.is_visible_in_portal = true). Empty state is
-                 friendly when nothing's shared yet — much better than
-                 hiding the section entirely (homeowner discovers it
-                 exists for later). */}
-            <SectionCard
-                icon={<Icon.Spark width="18" height="18" />}
-                accent="amber"
-                title="3D Mockups"
-                subtitle="Color and material previews of your finished roof"
-            >
-                <PortalMockups />
-            </SectionCard>
+            {/* ── Tab panels. `key={activeTab}` replays the fade-in on switch. */}
+            <div className="pv-tabpanel" key={activeTab}>
+                {activeTab === 'overview' && (
+                    <SectionCard
+                        icon={<Icon.Timeline width="18" height="18" />}
+                        accent="indigo"
+                        title="Activity Timeline"
+                        subtitle="Every update from your contractor, in one place"
+                    >
+                        <PortalTimeline />
+                    </SectionCard>
+                )}
 
-            {/* ── Estimates ────────────────────────────────────────────────── */}
-            <SectionCard
-                icon={<Icon.Estimate width="18" height="18" />}
-                accent="green"
-                title="Estimates"
-                subtitle="Your roofing estimates with full breakdowns"
-            >
-                <PortalEstimates clientId={c.id} estimateId={estimateId} />
-            </SectionCard>
+                {activeTab === 'estimate' && (
+                    <>
+                        <SectionCard
+                            icon={<Icon.Estimate width="18" height="18" />}
+                            accent="green"
+                            title="Estimates"
+                            subtitle="Your roofing estimates with full breakdowns"
+                        >
+                            <PortalEstimates clientId={c.id} estimateId={estimateId} />
+                        </SectionCard>
+                        <SectionCard
+                            icon={<Icon.Policy width="18" height="18" />}
+                            accent="purple"
+                            title="Policy Analyses"
+                            subtitle="What your policy covers — explained in plain English"
+                        >
+                            <PortalPolicyAnalyses clientId={c.id} analysisId={analysisId} embedded />
+                        </SectionCard>
+                    </>
+                )}
 
-            {/* ── Policy analyses ──────────────────────────────────────────── */}
-            <SectionCard
-                icon={<Icon.Policy width="18" height="18" />}
-                accent="purple"
-                title="Policy Analyses"
-                subtitle="What your policy covers — explained in plain English"
-            >
-                <PortalPolicyAnalyses clientId={c.id} analysisId={analysisId} embedded />
-            </SectionCard>
+                {activeTab === 'insurance' && (
+                    <SectionCard
+                        icon={<Icon.Insurance width="18" height="18" />}
+                        accent="purple"
+                        title="Insurance Communication"
+                        subtitle={`Updates on what's happening with your claim and ${contractorName}'s carrier contact`}
+                    >
+                        <PortalInsuranceComm />
+                    </SectionCard>
+                )}
 
-            {/* ── Insurance Communication ──────────────────────────────────
-                 docs/new/Portal-Sections-Reference.html. Read-only feed of
-                 what the contractor sent to / received from the carrier, plus
-                 call logs and notes (claim_communications, sql/75). */}
-            <SectionCard
-                icon={<Icon.Insurance width="18" height="18" />}
-                accent="purple"
-                title="Insurance Communication"
-                subtitle={`Updates on what's happening with your claim and ${contractorName}'s carrier contact`}
-            >
-                <PortalInsuranceComm />
-            </SectionCard>
+                {activeTab === 'documents' && (
+                    <>
+                        <SectionCard
+                            icon={<Icon.Folder width="18" height="18" />}
+                            accent="indigo"
+                            title="Other Documents"
+                            subtitle="Contracts, reports and paperwork your contractor has shared"
+                        >
+                            <PortalDocuments />
+                        </SectionCard>
+                        <SectionCard
+                            icon={<Icon.Spark width="18" height="18" />}
+                            accent="amber"
+                            title="3D Mockups"
+                            subtitle="Color and material previews of your finished roof"
+                        >
+                            <PortalMockups />
+                        </SectionCard>
+                    </>
+                )}
 
-            {/* ── Other Documents ──────────────────────────────────────────
-                 docs/Client-Portal.html → "Documents Library". Shows only the
-                 claim files the contractor has explicitly shared; sharing is
-                 opt-in per document (claim_uploads.is_visible_in_portal). */}
-            <SectionCard
-                icon={<Icon.Estimate width="18" height="18" />}
-                accent="indigo"
-                title="Other Documents"
-                subtitle="Contracts, reports and paperwork your contractor has shared"
-            >
-                <PortalDocuments />
-            </SectionCard>
+                {activeTab === 'messages' && (
+                    <SectionCard
+                        id="pv-messages"
+                        icon={<Icon.Message width="18" height="18" />}
+                        accent="amber"
+                        title={`Message ${contractorName}`}
+                        subtitle="Replies go straight to your contractor's inbox"
+                    >
+                        <PortalMessages contractorName={contractorName} />
+                    </SectionCard>
+                )}
+            </div>
 
-            {/* ── Messages ─────────────────────────────────────────────────── */}
-            <SectionCard
-                id="pv-messages"
-                icon={<Icon.Message width="18" height="18" />}
-                accent="amber"
-                title={`Message ${contractorName}`}
-                subtitle="Replies go straight to your contractor's inbox"
-            >
-                <PortalMessages contractorName={contractorName} />
-            </SectionCard>
-
-            <MessagesFab onClick={scrollToMessages} label="Message us" />
+            {activeTab !== 'messages' && (
+                <MessagesFab onClick={goToMessages} label="Message us" />
+            )}
 
             {/* ── Footer ──────────────────────────────────────────────────
                  Three-tier layout:
@@ -532,29 +583,15 @@ function StatCard({ icon, label, value, sub, accent = 'blue' }) {
 /**
  * Floating "message us" shortcut.
  *
- * Its own component (rather than state on PortalView) because PortalView has
- * early returns for the loading / error states — a hook added down there would
- * break the rules of hooks.
- *
- * It hides itself once the message box is actually on screen: a button that
- * scrolls you to something you are already looking at is just clutter.
+ * The parent only mounts it when the Messages tab is NOT active — a shortcut to
+ * a view you're already on is just clutter. A short mount delay lets the
+ * entrance transition play instead of the button popping in.
  */
 function MessagesFab({ onClick, label }) {
     const [show, setShow] = useState(false);
-
     useEffect(() => {
-        const section = document.getElementById('pv-messages');
-        if (!section || typeof IntersectionObserver === 'undefined') {
-            // No section or no observer support — always offer the shortcut.
-            setShow(!!section);
-            return;
-        }
-        const io = new IntersectionObserver(
-            ([entry]) => setShow(!entry.isIntersecting),
-            { threshold: 0.15 },
-        );
-        io.observe(section);
-        return () => io.disconnect();
+        const t = setTimeout(() => setShow(true), 50);
+        return () => clearTimeout(t);
     }, []);
 
     return (
@@ -562,8 +599,6 @@ function MessagesFab({ onClick, label }) {
             type="button"
             className={`pv-msg-fab${show ? ' is-visible' : ''}`}
             onClick={onClick}
-            aria-hidden={!show}
-            tabIndex={show ? 0 : -1}
         >
             <Icon.Message width="18" height="18" />
             <span className="pv-msg-fab-label">{label}</span>
@@ -1067,10 +1102,76 @@ function PortalStyles() {
                 margin: 0;
                 letter-spacing: -0.02em;
             }
+            /* ── Sticky tab navigation ──────────────────────────────────── */
+            .pv-tabnav-outer {
+                position: sticky;
+                top: 0;
+                z-index: 30;
+                margin-top: 1.75rem;
+                background: rgba(248,250,252,0.85);
+                backdrop-filter: saturate(180%) blur(12px);
+                -webkit-backdrop-filter: saturate(180%) blur(12px);
+                border-bottom: 1px solid #eef0f4;
+            }
+            .pv-tabnav {
+                display: flex;
+                gap: 0.35rem;
+                padding: 0.6rem 0;
+                overflow-x: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+                scroll-snap-type: x proximity;
+            }
+            .pv-tabnav::-webkit-scrollbar { display: none; }
+            .pv-tab {
+                flex: 0 0 auto;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                padding: 0.6rem 1rem;
+                border: 1px solid transparent;
+                border-radius: 11px;
+                background: transparent;
+                color: #64748b;
+                font-family: inherit;
+                font-size: 0.85rem;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                cursor: pointer;
+                white-space: nowrap;
+                scroll-snap-align: start;
+                transition: background 0.18s ease, color 0.18s ease,
+                            border-color 0.18s ease, transform 0.12s ease,
+                            box-shadow 0.18s ease;
+            }
+            .pv-tab:hover {
+                color: #1a1f3a;
+                background: #ffffff;
+                border-color: #eef0f4;
+            }
+            .pv-tab:active { transform: translateY(1px); }
+            .pv-tab .pv-tab-ico {
+                display: inline-flex;
+                color: #94a3b8;
+                transition: color 0.18s ease;
+            }
+            .pv-tab:hover .pv-tab-ico { color: #64748b; }
+            .pv-tab.active {
+                background: #1a1f3a;
+                color: #ffffff;
+                border-color: #1a1f3a;
+                box-shadow: 0 6px 16px rgba(26,31,58,0.22);
+            }
+            .pv-tab.active .pv-tab-ico { color: #FDB813; }
+
+            .pv-tabpanel { animation: pv-fade-up 0.4s ease both; }
+
             .pv-section {
                 margin-top: 1.75rem;
                 animation: pv-fade-up 0.5s ease both;
             }
+            /* First section inside a tab panel sits closer to the tab bar. */
+            .pv-tabpanel .pv-section:first-child { margin-top: 1.5rem; }
             .pv-section-title-row {
                 display: flex; align-items: center; gap: 0.75rem;
                 margin-bottom: 0.875rem;
