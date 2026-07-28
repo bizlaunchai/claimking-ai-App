@@ -76,7 +76,10 @@ export default function PortalDocuments() {
         return () => { cancelled = true; };
     }, [token]);
 
-    const download = async (doc) => {
+    // `mode` — 'download' forces a save, 'view' opens the file inline in a new
+    // tab. The server sends Content-Disposition: attachment, but we drive the
+    // browser from a client-side blob URL, so a PDF/image opens inline on view.
+    const fetchDoc = async (doc, mode) => {
         setDownloadingId(doc.id);
         setError(null);
         try {
@@ -84,14 +87,20 @@ export default function PortalDocuments() {
                 `/portal-public/${token}/documents/${doc.id}/file`,
                 { responseType: 'blob', suppressErrorToast: true },
             );
-            const url = URL.createObjectURL(new Blob([res.data]));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = doc.portal_label || doc.file_name || 'document';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            const type = res.data?.type || doc.content_type || 'application/octet-stream';
+            const url = URL.createObjectURL(new Blob([res.data], { type }));
+            if (mode === 'view') {
+                window.open(url, '_blank', 'noopener,noreferrer');
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            } else {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = doc.portal_label || doc.file_name || 'document';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
         } catch {
             // Most likely the contractor un-shared it since this list loaded.
             setError('That document is no longer available. Please refresh.');
@@ -139,14 +148,24 @@ export default function PortalDocuments() {
                             {` · ${fmtDate(d.shared_at || d.created_at)}`}
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => download(d)}
-                        disabled={downloadingId === d.id}
-                        className="px-3 py-1.5 border border-gray-300 text-gray-800 text-sm font-medium rounded hover:bg-gray-50 disabled:opacity-60 whitespace-nowrap"
-                    >
-                        {downloadingId === d.id ? 'Downloading…' : 'Download'}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => fetchDoc(d, 'view')}
+                            disabled={downloadingId === d.id}
+                            className="px-3 py-1.5 border border-gray-300 text-gray-800 text-sm font-medium rounded hover:bg-gray-50 disabled:opacity-60 whitespace-nowrap"
+                        >
+                            View
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => fetchDoc(d, 'download')}
+                            disabled={downloadingId === d.id}
+                            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
+                        >
+                            {downloadingId === d.id ? 'Working…' : 'Download'}
+                        </button>
+                    </div>
                 </div>
             ))}
         </div>
