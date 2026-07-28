@@ -9,6 +9,7 @@ import PortalTimeline from './PortalTimeline.jsx';
 import PortalMessages from './PortalMessages.jsx';
 import PortalMockups from './PortalMockups.jsx';
 import PortalDocuments from './PortalDocuments.jsx';
+import PortalInsuranceComm from './PortalInsuranceComm.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public homeowner-facing portal — single entry point.
@@ -117,6 +118,14 @@ const Icon = {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
              strokeLinecap="round" strokeLinejoin="round" {...p}>
             <polygon points="12 2 15 9 22 12 15 15 12 22 9 15 2 12 9 9 12 2"/>
+        </svg>
+    ),
+    Insurance: (p) => (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+             strokeLinecap="round" strokeLinejoin="round" {...p}>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M8 11h8"/>
+            <path d="M8 8h5"/>
         </svg>
     ),
 };
@@ -413,6 +422,19 @@ export default function PortalView() {
                 subtitle="What your policy covers — explained in plain English"
             >
                 <PortalPolicyAnalyses clientId={c.id} analysisId={analysisId} embedded />
+            </SectionCard>
+
+            {/* ── Insurance Communication ──────────────────────────────────
+                 docs/new/Portal-Sections-Reference.html. Read-only feed of
+                 what the contractor sent to / received from the carrier, plus
+                 call logs and notes (claim_communications, sql/75). */}
+            <SectionCard
+                icon={<Icon.Insurance width="18" height="18" />}
+                accent="purple"
+                title="Insurance Communication"
+                subtitle={`Updates on what's happening with your claim and ${contractorName}'s carrier contact`}
+            >
+                <PortalInsuranceComm />
             </SectionCard>
 
             {/* ── Other Documents ──────────────────────────────────────────

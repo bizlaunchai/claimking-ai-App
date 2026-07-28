@@ -51,6 +51,16 @@ const AuthedThumb = ({ s3Key, name }) => {
 
 const fmtMoney = (n) => `$${Number(n || 0).toLocaleString()}`;
 
+// Insurance-communication entry types — the client sees these as a read-only
+// feed (see PortalInsuranceComm.jsx). Labels/colors mirror the portal badges.
+const COMM_TYPES = [
+    { key: 'sent',     label: 'We Sent',  badge: { bg: '#eef2ff', fg: '#3730a3' } },
+    { key: 'received', label: 'Received', badge: { bg: '#fef3c7', fg: '#92400e' } },
+    { key: 'call',     label: 'Call',     badge: { bg: '#dcfce7', fg: '#166534' } },
+    { key: 'note',     label: 'Note',     badge: { bg: '#f3f4f6', fg: '#374151' } },
+];
+const COMM_BADGE = Object.fromEntries(COMM_TYPES.map(t => [t.key, t]));
+
 const ClaimDetail = ({ id }) => {
     const [claim, setClaim] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -59,17 +69,27 @@ const ClaimDetail = ({ id }) => {
     const [uploadingType, setUploadingType] = useState(null);
     const fileRefs = { estimate: useRef(null), measurement: useRef(null), photo: useRef(null) };
 
+    // Insurance Communication feed
+    const [comms, setComms] = useState([]);
+    const [commModalOpen, setCommModalOpen] = useState(false);
+    const [commForm, setCommForm] = useState({ type: 'sent', title: '', body: '' });
+    const [commFile, setCommFile] = useState(null);
+    const [commSubmitting, setCommSubmitting] = useState(false);
+    const commFileRef = useRef(null);
+
     const load = async () => {
         try {
             setLoading(true);
-            const [c, u, a] = await Promise.all([
+            const [c, u, a, m] = await Promise.all([
                 axiosInstance.get(`/client-portal/${id}`),
                 axiosInstance.get(`/client-portal/${id}/uploads`),
                 axiosInstance.get(`/client-portal/${id}/activity`),
+                axiosInstance.get(`/client-portal/${id}/communications`),
             ]);
             setClaim(c.data?.data || null);
             setUploads(u.data?.data || []);
             setActivity(a.data?.data || []);
+            setComms(m.data?.data || []);
         } catch {
             // axiosInstance toasts
         } finally {
@@ -144,6 +164,43 @@ const ClaimDetail = ({ id }) => {
             await axiosInstance.delete(`/client-portal/${id}/uploads/${uploadId}`);
             setUploads(list => list.filter(x => x.id !== uploadId));
             toast.success('Document removed.');
+        } catch { /* toasted */ }
+    };
+
+    // ── Insurance Communication ─────────────────────────────────────────
+    const openCommModal = () => {
+        setCommForm({ type: 'sent', title: '', body: '' });
+        setCommFile(null);
+        setCommModalOpen(true);
+    };
+
+    const submitComm = async () => {
+        const title = commForm.title.trim();
+        if (!title) { toast.error('Add a title for this entry.'); return; }
+        setCommSubmitting(true);
+        try {
+            const fd = new FormData();
+            fd.append('type', commForm.type);
+            fd.append('title', title);
+            if (commForm.body.trim()) fd.append('body', commForm.body.trim());
+            if (commFile) fd.append('file', commFile);
+            const res = await axiosInstance.post(`/client-portal/${id}/communications`, fd);
+            const created = res.data?.data;
+            if (created) setComms(list => [created, ...list]);
+            setCommModalOpen(false);
+            toast.success('Entry added — the client can see it now.');
+        } catch {
+            /* toasted */
+        } finally {
+            setCommSubmitting(false);
+        }
+    };
+
+    const removeComm = async (commId) => {
+        try {
+            await axiosInstance.delete(`/client-portal/${id}/communications/${commId}`);
+            setComms(list => list.filter(x => x.id !== commId));
+            toast.success('Entry removed.');
         } catch { /* toasted */ }
     };
 
@@ -243,6 +300,41 @@ const ClaimDetail = ({ id }) => {
                             ))}
                         </div>
                     </div>
+
+                    {/* Insurance Communication — read-only feed the client sees
+                        on their portal. Contractor logs what was sent to /
+                        received from the carrier, calls, and notes. */}
+                    <div className="current-stage-info" style={{ marginBottom: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                            <h3 className="current-stage-title" style={{ marginBottom: 0 }}>Insurance Communication ({comms.length})</h3>
+                            <button className="show-more-btn" style={{ padding: '0.5rem 1rem' }} onClick={openCommModal}>+ Add Entry</button>
+                        </div>
+                        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '0.4rem 0 0.9rem' }}>
+                            Everything you add here appears on the client's portal, newest first.
+                        </p>
+                        {comms.length === 0 && <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No entries yet.</p>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            {comms.map(m => {
+                                const t = COMM_BADGE[m.type] || COMM_BADGE.note;
+                                return (
+                                    <div key={m.id} style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem 0.75rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                                        <span style={{ flexShrink: 0, alignSelf: 'flex-start', fontSize: '0.62rem', fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', padding: '0.25rem 0.5rem', borderRadius: 6, background: t.badge.bg, color: t.badge.fg, whiteSpace: 'nowrap' }}>
+                                            {t.label}
+                                        </span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{m.title}</div>
+                                            {m.body && <div style={{ fontSize: '0.78rem', color: '#4b5563', marginTop: 2 }}>{m.body}</div>}
+                                            <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 4 }}>
+                                                {new Date(m.created_at).toLocaleString()}
+                                                {m.attachment_name ? ` · 📎 ${m.attachment_name}` : ''}
+                                            </div>
+                                        </div>
+                                        <button className="table-action-btn" style={{ alignSelf: 'flex-start' }} onClick={() => removeComm(m.id)}>Delete</button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Right column — activity timeline */}
@@ -261,6 +353,79 @@ const ClaimDetail = ({ id }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Add-Entry modal for the Insurance Communication feed */}
+            {commModalOpen && (
+                <div
+                    onClick={() => !commSubmitting && setCommModalOpen(false)}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, padding: '1.5rem', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}
+                    >
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.25rem' }}>Add Communication Entry</h3>
+                        <p style={{ fontSize: '0.78rem', color: '#6b7280', marginBottom: '1rem' }}>This appears on the client's portal feed.</p>
+
+                        <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Type</label>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
+                            {COMM_TYPES.map(t => {
+                                const active = commForm.type === t.key;
+                                return (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        onClick={() => setCommForm(f => ({ ...f, type: t.key }))}
+                                        style={{ padding: '0.4rem 0.8rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: active ? '2px solid #1a1f3a' : '1px solid #d1d5db', background: active ? t.badge.bg : '#fff', color: active ? t.badge.fg : '#374151' }}
+                                    >
+                                        {t.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Title</label>
+                        <input
+                            type="text"
+                            value={commForm.title}
+                            onChange={(e) => setCommForm(f => ({ ...f, title: e.target.value }))}
+                            placeholder="e.g. Supplement package submitted to Westfield"
+                            style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #d1d5db', borderRadius: 8, fontSize: '0.85rem', marginBottom: '1rem' }}
+                        />
+
+                        <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Details <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span></label>
+                        <textarea
+                            value={commForm.body}
+                            onChange={(e) => setCommForm(f => ({ ...f, body: e.target.value }))}
+                            rows={3}
+                            placeholder="What happened, in plain English for the homeowner."
+                            style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #d1d5db', borderRadius: 8, fontSize: '0.85rem', marginBottom: '1rem', resize: 'vertical', fontFamily: 'inherit' }}
+                        />
+
+                        <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Attachment <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span></label>
+                        <input ref={commFileRef} type="file" style={{ display: 'none' }}
+                            onChange={(e) => setCommFile(e.target.files?.[0] || null)} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem' }}>
+                            <button type="button" className="show-more-btn" style={{ padding: '0.45rem 0.9rem' }} onClick={() => commFileRef.current?.click()}>
+                                Choose file
+                            </button>
+                            <span style={{ fontSize: '0.78rem', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {commFile ? commFile.name : 'No file selected'}
+                            </span>
+                            {commFile && (
+                                <button type="button" onClick={() => { setCommFile(null); if (commFileRef.current) commFileRef.current.value = ''; }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.78rem' }}>Remove</button>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button type="button" className="table-action-btn" disabled={commSubmitting} onClick={() => setCommModalOpen(false)}>Cancel</button>
+                            <button type="button" className="table-action-btn primary" disabled={commSubmitting} onClick={submitComm}>
+                                {commSubmitting ? 'Adding…' : 'Add Entry'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
