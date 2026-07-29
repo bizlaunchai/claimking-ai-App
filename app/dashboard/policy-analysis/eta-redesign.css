@@ -1,0 +1,245 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   ETA Policy Analysis — visual redesign (imported from Claude Design project
+   "ETA page redesign"). This is a presentation layer ONLY: all React state,
+   handlers, and data flow live in PolicyAnalysis.jsx and are untouched.
+   Everything is scoped under .policy-analysis so it can't leak elsewhere.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.policy-analysis {
+    background: #eef1f4;
+    font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+    color: #1f2937;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+/* The dashboard shell sets `overflow-x: hidden` on .dashboard-content-wrapper.
+   Per the overflow spec that makes overflow-y compute to `auto`, turning the
+   wrapper into a scroll container — which silently disables `position: sticky`
+   on our results sidebar. `overflow-x: clip` prevents the same horizontal
+   scroll WITHOUT creating a scroll container, so the sticky sidebar works.
+   Scoped with :has() so it only applies on the Policy Analysis page. */
+.dashboard-content-wrapper:has(.policy-analysis) { overflow-x: clip; }
+
+.eta-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.eta-card {
+    background: #ffffff;
+    border: 1px solid #e6e9ee;
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+.eta-hero { padding: 24px 26px; }
+.eta-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fdf3d9; color: #b7791f;
+    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 5px 10px; border-radius: 999px;
+}
+.eta-hero-title {
+    margin: 12px 0 6px;
+    font-size: 26px; font-weight: 800; letter-spacing: -.01em; color: #1f2937;
+}
+.eta-hero-title .accent { color: #e8930c; }
+.eta-hero-sub {
+    margin: 0 0 18px; max-width: 720px;
+    font-size: 14px; line-height: 1.55; color: #5b6472;
+}
+.eta-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+.eta-stat {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid #e6e9ee; border-radius: 10px; padding: 9px 14px;
+    text-decoration: none; color: inherit; transition: border-color .15s;
+}
+a.eta-stat:hover { border-color: #cfd6e0; }
+.eta-stat-ic {
+    width: 24px; height: 24px; border-radius: 7px; flex: none;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.eta-stat-ic.ok { background: #e7f6ec; color: #1fa463; }
+.eta-stat-ic.warn { background: #fdeaea; color: #c0392b; }
+.eta-stat-ic.gold { background: #fdf3d9; color: #b7791f; }
+.eta-stat-ic.neutral { background: #eef1f6; color: #5b6472; }
+.eta-stat-txt { line-height: 1.2; text-align: left; }
+.eta-stat-k { font-size: 10px; color: #9aa3b0; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.eta-stat-v { font-size: 14px; font-weight: 700; }
+.eta-stat-sub { font-weight: 500; color: #9aa3b0; font-size: 12px; }
+
+/* ── Disclaimer ───────────────────────────────────────────────────────── */
+.eta-disclaimer {
+    display: flex; gap: 12px;
+    background: #fdfaef; border: 1px solid #f3e5b8; border-left: 4px solid #e8b109;
+    border-radius: 12px; padding: 16px 18px;
+}
+.eta-disclaimer-ic { font-size: 18px; line-height: 1.2; }
+.eta-disclaimer-title { font-size: 13px; font-weight: 700; color: #8a6410; margin-bottom: 3px; }
+.eta-disclaimer-body { font-size: 12.5px; line-height: 1.55; color: #7a6a3f; }
+
+/* ── Stepper ──────────────────────────────────────────────────────────── */
+.eta-stepper { padding: 26px 34px; }
+.eta-stepper-track { display: flex; align-items: flex-start; justify-content: space-between; position: relative; }
+.eta-stepper-line {
+    position: absolute; top: 17px; left: 8%; right: 8%; height: 3px;
+    background: #e7eaef; border-radius: 2px; z-index: 0;
+}
+.eta-stepper-fill {
+    position: absolute; top: 17px; left: 8%; height: 3px;
+    background: #1fa463; border-radius: 2px; z-index: 0; transition: width .3s ease;
+}
+.eta-step {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 9px; width: 120px;
+}
+.eta-step-dot {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #fff;
+    background: #cfd6e0; box-shadow: 0 0 0 4px #ffffff; transition: background .3s ease;
+}
+.eta-step.done .eta-step-dot { background: #1fa463; }
+.eta-step.current .eta-step-dot { background: #e8b109; }
+.eta-step-label { font-size: 12.5px; font-weight: 600; color: #3a424f; text-align: center; }
+
+/* ── Upload ───────────────────────────────────────────────────────────── */
+.eta-upload { padding: 24px 26px; position: relative; }
+.eta-h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+.eta-sub { margin: 0 0 18px; font-size: 13px; color: #6b7280; }
+.eta-upload-grid { display: grid; grid-template-columns: 1fr 260px; gap: 22px; align-items: stretch; }
+.eta-detect { background: #f7f9fb; border: 1px solid #e6e9ee; border-radius: 12px; padding: 16px 18px; }
+.eta-detect-title { font-size: 12px; font-weight: 700; color: #4a5361; margin-bottom: 10px; }
+.eta-detect ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.eta-detect li { font-size: 12.5px; color: #5b6472; display: flex; gap: 8px; }
+.eta-detect li::before { content: "•"; color: #1fa463; }
+.eta-analyze-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 20px; }
+.eta-analyze-hint { font-size: 12px; color: #9aa3b0; }
+.eta-error {
+    margin-top: 12px; max-width: 560px;
+    padding: 8px 16px; background: #fdecec; border: 1px solid #f6d0d0;
+    color: #c0392b; font-size: 13px; border-radius: 8px; text-align: center;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.eta-btn-primary {
+    background: #f0a500; color: #3a2c00; border: none; font-family: inherit;
+    font-size: 14px; font-weight: 700; padding: 12px 26px; border-radius: 10px;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background .15s;
+}
+.eta-btn-primary:hover:not(:disabled) { background: #e2990a; }
+.eta-btn-primary:disabled { background: #e7eaef; color: #9aa3b0; cursor: not-allowed; }
+
+/* ── Results header ───────────────────────────────────────────────────── */
+.eta-results-head { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.eta-results-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.eta-badge-status { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px; text-transform: capitalize; }
+.eta-badge-status.completed { background: #e7f6ec; color: #1fa463; }
+.eta-badge-status.failed { background: #fdecec; color: #c0392b; }
+.eta-badge-status.processing,
+.eta-badge-status.pending { background: #eef1f6; color: #5b6472; }
+
+.eta-results-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+.eta-results-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ── Summary card ─────────────────────────────────────────────────────── */
+.eta-summary { background: #f2f7fd; border: 1px solid #d9e6f7; border-radius: 14px; padding: 20px 22px; }
+.eta-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.eta-summary-type { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; }
+.eta-conf-pill { background: #e7f6ec; color: #1fa463; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.eta-view-btn {
+    background: #fff; border: 1px solid #d9e6f7; color: #2f6fed; font-family: inherit;
+    font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.eta-view-btn:hover { background: #f7fbff; }
+.eta-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 16px; }
+.eta-sg-k { font-size: 11px; color: #8a94a4; margin-bottom: 2px; }
+.eta-sg-v { font-size: 14px; font-weight: 700; word-break: break-word; }
+.eta-sg-v.danger { color: #c0392b; }
+.eta-summary-text { margin: 0; font-size: 13px; line-height: 1.6; color: #3a424f; }
+.eta-summary-fail { margin-top: 12px; font-size: 13px; color: #c0392b; background: #fdecec; border: 1px solid #f6d0d0; border-radius: 8px; padding: 10px 12px; }
+
+/* ── Collapsible section ──────────────────────────────────────────────── */
+.eta-sec { background: #fff; border: 1px solid #e6e9ee; border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.eta-sec-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; cursor: pointer; }
+.eta-sec-title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; }
+.eta-sec-count { font-weight: 600; opacity: .75; }
+.eta-sec-caret { font-size: 13px; }
+.eta-sec.green .eta-sec-head { background: #eef8f1; border-bottom: 1px solid #dcefe2; color: #177a49; }
+.eta-sec.red .eta-sec-head { background: #fdeeee; border-bottom: 1px solid #f6d9d9; color: #c0392b; }
+.eta-sec.amber .eta-sec-head { background: #fdf7e6; border-bottom: 1px solid #f3e5b8; color: #b7791f; }
+.eta-sec-body { padding: 22px 24px; }
+
+/* ── Deadlines ────────────────────────────────────────────────────────── */
+.eta-dl-list { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; }
+.eta-dl { border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid; }
+.eta-dl-title { font-size: 13.5px; font-weight: 700; margin-bottom: 3px; }
+.eta-dl-due { font-size: 12px; color: #9aa3b0; }
+.eta-dl-badge { flex: none; font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; white-space: nowrap; }
+
+/* ── Suggested actions ────────────────────────────────────────────────── */
+.eta-actions-body { padding: 18px 20px; }
+.eta-actions-done { font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px; display: block; }
+.eta-actions-bar { height: 7px; background: #eef1f5; border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+.eta-actions-fill { height: 100%; background: #1fa463; border-radius: 999px; transition: width .25s ease; }
+.eta-action-list { display: flex; flex-direction: column; gap: 10px; }
+.eta-action { display: flex; gap: 12px; padding: 13px 15px; border: 1px solid #eef1f5; border-radius: 11px; cursor: pointer; background: #fff; transition: background .15s, border-color .15s; }
+.eta-action:hover { border-color: #e0e4ea; }
+.eta-action.done { background: #f6fbf8; }
+.eta-action-box {
+    flex: none; width: 19px; height: 19px; border-radius: 5px; margin-top: 1px;
+    border: 1.5px solid #cfd6e0; background: #fff; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+}
+.eta-action.done .eta-action-box { border-color: #1fa463; background: #1fa463; }
+.eta-action-title { font-size: 13.5px; font-weight: 700; color: #2a3340; }
+.eta-action.done .eta-action-title { text-decoration: line-through; }
+.eta-action-desc { font-size: 12.5px; color: #6b7280; line-height: 1.55; margin-top: 4px; }
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+.eta-sidebar { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
+.eta-qa { background: #fff; border: 1px solid #e6e9ee; border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.eta-qa-title { font-size: 14px; font-weight: 800; margin-bottom: 14px; }
+.eta-qa-list { display: flex; flex-direction: column; gap: 9px; }
+.eta-qa-btn {
+    background: #fff; border: 1px solid #e0e4ea; color: #2a3340; font-family: inherit;
+    font-size: 13.5px; font-weight: 600; padding: 11px; border-radius: 9px; cursor: pointer;
+    text-align: center; transition: background .15s;
+}
+.eta-qa-btn:hover:not(:disabled) { background: #f7f9fb; }
+.eta-qa-btn:disabled { color: #b6bdc7; cursor: not-allowed; }
+.eta-qa-btn.primary { background: #f0a500; border-color: #f0a500; color: #3a2c00; font-weight: 700; }
+.eta-qa-btn.primary:hover:not(:disabled) { background: #e2990a; }
+.eta-qa-btn.primary:disabled { background: #e7eaef; border-color: #e7eaef; color: #9aa3b0; }
+.eta-qa-btn.flagged { background: #fdf3e6; border-color: #f0c98a; color: #b7791f; }
+.eta-qa-toggle { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #6b7280; padding: 4px 2px; cursor: pointer; }
+.eta-qa-toggle input { width: 15px; height: 15px; accent-color: #f0a500; }
+.eta-conf { background: #f2f7fd; border: 1px solid #d9e6f7; border-radius: 14px; padding: 16px 18px; }
+.eta-conf-k { font-size: 12px; font-weight: 700; color: #2f6fed; margin-bottom: 6px; }
+.eta-conf-v { font-size: 30px; font-weight: 800; color: #2f6fed; line-height: 1; }
+.eta-conf-note { font-size: 12px; color: #6b7280; margin-top: 6px; line-height: 1.5; }
+.eta-foot { font-size: 11px; color: #9aa3b0; line-height: 1.5; padding: 0 4px; }
+.eta-foot-model { margin-bottom: 8px; }
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+    .eta-upload-grid { grid-template-columns: 1fr; }
+    .eta-results-grid { grid-template-columns: 1fr; }
+    .eta-sidebar { position: static; }
+}
+@media (max-width: 560px) {
+    .eta-shell { padding: 14px 12px 40px; }
+    .eta-hero, .eta-upload, .eta-summary { padding: 18px 16px; }
+    .eta-summary-grid { grid-template-columns: 1fr; }
+    .eta-stepper { padding: 20px 8px; }
+    .eta-step { width: auto; flex: 1 1 0; }
+    .eta-step-label { font-size: 11px; }
+    .eta-hero-title { font-size: 22px; }
+}

@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import "./policy-analysis.css"
-import "../measurement/measurement-hero.css"  // reuse hero + stat-chip styles
+import "./eta-redesign.css"  // ETA visual redesign (Claude Design import) — presentation only
 
 import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
@@ -16,6 +16,7 @@ import {
 import { openAnalysisReport } from "./report-builder";
 import ClientSelector from "@/components/clients/ClientSelector";
 import { toClientShape } from "@/lib/clients/newClientForm";
+import { createClient } from "@/lib/supabase/client";
 
 const FileUploader = dynamic(
     () => import("@/utiles/LocalFileUploader"),
@@ -35,13 +36,11 @@ const DOCUMENT_TYPE_LABELS = {
 const docTypeLabel = (t) => DOCUMENT_TYPE_LABELS[t] || t || 'Document';
 
 const LegalDisclaimerBanner = () => (
-    <div role="note" aria-label="Legal disclaimer" className="px-6 pt-4">
-        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex gap-3">
-            <div className="text-amber-600 text-xl leading-none">⚠</div>
-            <div>
-                <p className="font-semibold text-amber-900 text-sm">{LEGAL_DISCLAIMER_HEADLINE}</p>
-                <p className="text-amber-900 text-xs mt-1">{LEGAL_DISCLAIMER_BODY}</p>
-            </div>
+    <div role="note" aria-label="Legal disclaimer" className="eta-disclaimer">
+        <span className="eta-disclaimer-ic">⚠️</span>
+        <div>
+            <div className="eta-disclaimer-title">{LEGAL_DISCLAIMER_HEADLINE}</div>
+            <div className="eta-disclaimer-body">{LEGAL_DISCLAIMER_BODY}</div>
         </div>
     </div>
 );
@@ -219,27 +218,27 @@ const ExtractedDetails = ({ data }) => {
     );
 };
 
-const deadlineTone = (days) => {
-    if (days == null) return { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
-    if (days < 0) return { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300' };
-    if (days <= 30) return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' };
-    if (days <= 90) return { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' };
-    return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' };
+// Urgency-based colours for a deadline card (redesign palette). Keeps the same
+// day-threshold logic the old Tailwind tone helper used.
+const etaDeadlineTone = (days) => {
+    if (days == null) return { bg: '#f7f9fb', border: '#e6e9ee', text: '#3a424f', badgeBg: '#eef1f6', badgeText: '#5b6472' };
+    if (days < 0) return { bg: '#fdecec', border: '#f6d0d0', text: '#2a3340', badgeBg: '#f6d0d0', badgeText: '#c0392b' };
+    if (days <= 30) return { bg: '#fdf2ec', border: '#f6ddc9', text: '#2a3340', badgeBg: '#f6ddc9', badgeText: '#c0651f' };
+    if (days <= 90) return { bg: '#fdf7e6', border: '#f3e5b8', text: '#2a3340', badgeBg: '#f3e5b8', badgeText: '#b7791f' };
+    return { bg: '#eef8f1', border: '#dcefe2', text: '#2a3340', badgeBg: '#dcefe2', badgeText: '#177a49' };
 };
 
-// Collapsible section matching the spec mockup's accordion design.
-const Accordion = ({ title, count, accent, open, onToggle, children }) => (
-    <div className={`border ${accent.border} rounded-lg mb-4`}>
-        <div className={`accordion-header ${accent.bg} p-4 flex justify-between items-center`} onClick={onToggle}>
-            <h3 className={`font-semibold ${accent.text}`}>
+// Collapsible section — mockup style (coloured header bar + caret).
+const EtaSection = ({ tone, title, count, open, onToggle, children }) => (
+    <div className={`eta-sec ${tone}`}>
+        <div className="eta-sec-head" onClick={onToggle}>
+            <span className="eta-sec-title">
                 {title}
-                {typeof count === 'number' && <span className="ml-2 text-xs font-normal opacity-70">({count})</span>}
-            </h3>
-            <span className={accent.text}>{open ? '▲' : '▼'}</span>
+                {typeof count === 'number' && <span className="eta-sec-count">({count})</span>}
+            </span>
+            <span className="eta-sec-caret">{open ? '▲' : '▼'}</span>
         </div>
-        <div className={`accordion-content ${open ? 'open' : ''}`}>
-            <div className="p-4">{children}</div>
-        </div>
+        {open && children}
     </div>
 );
 
@@ -285,211 +284,179 @@ const ResultsView = ({
     const actionPct = actionList.length ? Math.round((doneCount / actionList.length) * 100) : 0;
     const hasDetails = Object.keys(ed).length > 0;
 
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main Results */}
-            <div className="lg:col-span-2">
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-semibold text-gray-900">Policy Analysis Results</h2>
-                        <span className={`text-xs font-medium px-2 py-1 rounded ${
-                            result.status === 'completed' ? 'bg-green-100 text-green-700' :
-                            result.status === 'failed' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-700'
-                        }`}>{result.status}</span>
-                    </div>
+    const statusClass = ['completed', 'failed', 'processing', 'pending'].includes(result.status) ? result.status : '';
 
-                    {/* Document Summary (mockup "Coverage Summary" blue box) */}
-                    <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                        <div className="flex justify-between items-start gap-3 mb-3">
-                            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+    return (
+        <>
+            <div className="eta-results-head">
+                <h2 className="eta-results-title">Policy Analysis Results</h2>
+                <span className={`eta-badge-status ${statusClass}`}>{result.status}</span>
+            </div>
+
+            <div className="eta-results-grid" style={{ marginTop: 16 }}>
+                {/* Main column */}
+                <div className="eta-results-main">
+
+                    {/* Document summary */}
+                    <div className="eta-summary">
+                        <div className="eta-summary-head">
+                            <span className="eta-summary-type">
                                 <span>{docIcon}</span> {docTypeLabel(result.document_type)}
                                 {confidencePct != null && (
-                                    <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{confidencePct}% confidence</span>
+                                    <span className="eta-conf-pill">{confidencePct}% confidence</span>
                                 )}
-                            </h3>
+                            </span>
                             {result.file_key && (
-                                <button type="button" onClick={() => setDocOpen(true)} className="pa-view-btn shrink-0">
-                                    <span>📄</span> View original
+                                <button type="button" onClick={() => setDocOpen(true)} className="eta-view-btn">
+                                    ⧉ View original
                                 </button>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div><span className="text-gray-600">Carrier:</span><strong className="block">{result.detected_carrier || '—'}</strong></div>
-                            <div><span className="text-gray-600">Claim / Policy #:</span><strong className="block">{claimNo || '—'}</strong></div>
-                            <div><span className="text-gray-600">Document date:</span><strong className="block">{result.document_date || '—'}</strong></div>
-                            <div><span className="text-gray-600">Critical deadlines:</span><strong className={`block ${deadlines.length ? 'text-red-600' : ''}`}>{deadlines.length || '—'}</strong></div>
+                        <div className="eta-summary-grid">
+                            <div><div className="eta-sg-k">Carrier</div><div className="eta-sg-v">{result.detected_carrier || '—'}</div></div>
+                            <div><div className="eta-sg-k">Claim / Policy #</div><div className="eta-sg-v">{claimNo || '—'}</div></div>
+                            <div><div className="eta-sg-k">Document date</div><div className="eta-sg-v">{result.document_date || '—'}</div></div>
+                            <div><div className="eta-sg-k">Critical deadlines</div><div className={`eta-sg-v ${deadlines.length ? 'danger' : ''}`}>{deadlines.length || '—'}</div></div>
                         </div>
-                        {result.summary && <p className="text-sm text-gray-700 mt-3 pt-3 border-t border-blue-100">{result.summary}</p>}
+                        {result.summary && <p className="eta-summary-text">{result.summary}</p>}
                         {result.status === 'failed' && result.error_message && (
-                            <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">{result.error_message}</p>
+                            <p className="eta-summary-fail">{result.error_message}</p>
                         )}
                     </div>
 
-                    {/* Extracted Details accordion (green) — kept at top */}
-                    <Accordion
-                        title="📋 Extracted Details"
-                        accent={{ border: 'border-green-200', bg: 'bg-green-50', text: 'text-green-800' }}
-                        open={open.details}
-                        onToggle={() => toggle('details')}
-                    >
-                        {hasDetails
-                            ? <ExtractedDetails data={ed} />
-                            : <p className="text-sm text-gray-500 italic">No structured data extracted.</p>}
-                    </Accordion>
+                    {/* Extracted Details (green) */}
+                    <EtaSection tone="green" title={<><span>🧾</span> Extracted Details</>} open={open.details} onToggle={() => toggle('details')}>
+                        <div className="eta-sec-body">
+                            {hasDetails
+                                ? <ExtractedDetails data={ed} />
+                                : <p className="text-sm text-gray-500 italic">No structured data extracted.</p>}
+                        </div>
+                    </EtaSection>
 
-                    {/* Critical Deadlines accordion (red) */}
+                    {/* Critical Deadlines (red) */}
                     {deadlines.length > 0 && (
-                        <Accordion
-                            title="⏱ Critical Deadlines"
-                            count={deadlines.length}
-                            accent={{ border: 'border-red-200', bg: 'bg-red-50', text: 'text-red-800' }}
-                            open={open.deadlines}
-                            onToggle={() => toggle('deadlines')}
-                        >
-                            <div className="space-y-2">
+                        <EtaSection tone="red" title={<><span>⏰</span> Critical Deadlines</>} count={deadlines.length} open={open.deadlines} onToggle={() => toggle('deadlines')}>
+                            <div className="eta-dl-list">
                                 {deadlines.map((d, i) => {
-                                    const tone = deadlineTone(d.days_remaining);
+                                    const tone = etaDeadlineTone(d.days_remaining);
                                     return (
-                                        <div key={i} className={`rounded-lg border p-3 ${tone.bg} ${tone.border}`}>
-                                            <div className="flex justify-between items-center gap-3">
-                                                <p className={`text-sm font-medium ${tone.text}`}>{d.description}</p>
-                                                {typeof d.days_remaining === 'number' && (
-                                                    <span className={`text-xs font-bold whitespace-nowrap ${tone.text}`}>
-                                                        {d.days_remaining < 0 ? `${Math.abs(d.days_remaining)}d overdue` : `${d.days_remaining}d left`}
-                                                    </span>
-                                                )}
+                                        <div key={i} className="eta-dl" style={{ background: tone.bg, borderColor: tone.border }}>
+                                            <div>
+                                                <div className="eta-dl-title" style={{ color: tone.text }}>{d.description}</div>
+                                                {d.date && <div className="eta-dl-due">Due {d.date}</div>}
                                             </div>
-                                            {d.date && <p className={`text-xs mt-0.5 ${tone.text}`}>Due {d.date}</p>}
+                                            {typeof d.days_remaining === 'number' && (
+                                                <span className="eta-dl-badge" style={{ background: tone.badgeBg, color: tone.badgeText }}>
+                                                    {d.days_remaining < 0 ? `${Math.abs(d.days_remaining)}d overdue` : `${d.days_remaining}d left`}
+                                                </span>
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
-                        </Accordion>
+                        </EtaSection>
                     )}
 
-                    {/* Suggested Actions accordion (yellow) */}
-                    <Accordion
-                        title="⚡ Suggested Actions"
-                        count={actionList.length || undefined}
-                        accent={{ border: 'border-yellow-400', bg: 'bg-yellow-50', text: 'text-yellow-800' }}
-                        open={open.actions}
-                        onToggle={() => toggle('actions')}
-                    >
-                        {actionList.length === 0 ? (
-                            <p className="text-sm text-gray-500 italic">No suggested actions.</p>
-                        ) : (
-                            <>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-medium text-gray-600">{doneCount}/{actionList.length} done</span>
-                                </div>
-                                <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4">
-                                    <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${actionPct}%` }} />
-                                </div>
-                                <ul className="pa-action-list">
-                                    {actionList.map((a, i) => (
-                                        <li key={i} className={`pa-action ${a.done ? 'pa-action-done' : ''}`} onClick={() => onToggleAction(i)}>
-                                            <input
-                                                type="checkbox"
-                                                checked={!!a.done}
-                                                onChange={() => onToggleAction(i)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="mt-0.5 rounded text-yellow-500 shrink-0"
-                                            />
-                                            <div>
-                                                <p className="pa-action-title">{a.title}</p>
-                                                {a.detail && <p className="pa-action-detail">{a.detail}</p>}
+                    {/* Suggested Actions (amber) */}
+                    <EtaSection tone="amber" title={<><span>⚡</span> Suggested Actions</>} count={actionList.length || undefined} open={open.actions} onToggle={() => toggle('actions')}>
+                        <div className="eta-actions-body">
+                            {actionList.length === 0 ? (
+                                <p className="text-sm text-gray-500 italic">No suggested actions.</p>
+                            ) : (
+                                <>
+                                    <span className="eta-actions-done">{doneCount}/{actionList.length} done</span>
+                                    <div className="eta-actions-bar">
+                                        <div className="eta-actions-fill" style={{ width: `${actionPct}%` }} />
+                                    </div>
+                                    <div className="eta-action-list">
+                                        {actionList.map((a, i) => (
+                                            <div key={i} className={`eta-action ${a.done ? 'done' : ''}`} onClick={() => onToggleAction(i)}>
+                                                <span className="eta-action-box">{a.done ? '✓' : ''}</span>
+                                                <div>
+                                                    <div className="eta-action-title">{a.title}</div>
+                                                    {a.detail && <div className="eta-action-desc">{a.detail}</div>}
+                                                </div>
                                             </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        )}
-                    </Accordion>
-
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </EtaSection>
                 </div>
 
-                {/* Original-document modal */}
-                {docOpen && (
-                    <div className="pa-doc-modal" onClick={() => setDocOpen(false)}>
-                        <div className="pa-doc-modal-inner" onClick={(e) => e.stopPropagation()}>
-                            <div className="pa-doc-modal-head">
-                                <span className="text-sm font-semibold text-gray-800 truncate">{result.file_name || 'Original document'}</span>
-                                <div className="flex items-center gap-2">
-                                    <button type="button" onClick={() => window.open(`/s3/file?key=${encodeURIComponent(result.file_key)}`, '_blank')} className="pa-view-btn">
-                                        Open in new tab ↗
-                                    </button>
-                                    <button type="button" onClick={() => setDocOpen(false)} className="pa-doc-modal-close" aria-label="Close">×</button>
-                                </div>
-                            </div>
-                            <div className="pa-doc-modal-body">
-                                <AuthedDocPreview fileKey={result.file_key} fileMime={result.file_mime} />
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Side Panel */}
-            <div>
-                <div className="bg-white rounded-lg border border-gray-200 p-6 sticky top-4">
-                    <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                    <div className="space-y-3">
-                        <button type="button" onClick={onGenerateReport} disabled={!completed}
-                            className={`w-full py-2 rounded-lg font-medium transition ${completed ? 'bg-yellow-400 text-gray-900 hover:bg-yellow-500' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}>
-                            Generate Report
-                        </button>
-                        <button type="button" onClick={onCreateEstimate} disabled={!completed || !client?.id}
-                            className={`w-full py-2 rounded-lg font-medium transition ${completed && client?.id ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-white border border-gray-300 text-gray-400 cursor-not-allowed'}`}>
-                            Create Estimate
-                        </button>
-                        {isReplyType && (
-                            <button type="button" onClick={onGenerateReply} disabled={!completed}
-                                className={`w-full py-2 rounded-lg font-medium transition ${completed ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-white border border-gray-300 text-gray-400 cursor-not-allowed'}`}>
-                                Generate Reply →
+                {/* Sidebar */}
+                <div className="eta-sidebar">
+                    <div className="eta-qa">
+                        <div className="eta-qa-title">Quick Actions</div>
+                        <div className="eta-qa-list">
+                            <button type="button" onClick={onGenerateReport} disabled={!completed} className="eta-qa-btn primary">
+                                Generate Report
                             </button>
-                        )}
-                        <button type="button" onClick={onPushToClaim} disabled={!completed || !client?.id}
-                            className={`w-full py-2 rounded-lg font-medium transition ${completed && client?.id ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-white border border-gray-300 text-gray-400 cursor-not-allowed'}`}>
-                            Push to Claim
-                        </button>
-                        <button type="button" onClick={onNotifyClient} disabled={!completed || !client?.id}
-                            className={`w-full py-2 rounded-lg font-medium transition ${completed && client?.id ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-white border border-gray-300 text-gray-400 cursor-not-allowed'}`}>
-                            Share with Client
-                        </button>
+                            <button type="button" onClick={onCreateEstimate} disabled={!completed || !client?.id} className="eta-qa-btn">
+                                Create Estimate
+                            </button>
+                            {isReplyType && (
+                                <button type="button" onClick={onGenerateReply} disabled={!completed} className="eta-qa-btn">
+                                    Generate Reply →
+                                </button>
+                            )}
+                            <button type="button" onClick={onPushToClaim} disabled={!completed || !client?.id} className="eta-qa-btn">
+                                Push to Claim
+                            </button>
+                            <button type="button" onClick={onNotifyClient} disabled={!completed || !client?.id} className="eta-qa-btn">
+                                Share with Client
+                            </button>
 
-                        <label className="flex items-center justify-between gap-2 py-2 px-3 border border-gray-200 rounded-lg">
-                            <span className="text-sm text-gray-700">Visible in client portal</span>
-                            <input type="checkbox" checked={!!result.is_visible_in_portal} onChange={(e) => onToggleVisibility(e.target.checked)} className="rounded text-yellow-500" />
-                        </label>
+                            <label className="eta-qa-toggle">
+                                Visible in client portal
+                                <input type="checkbox" checked={!!result.is_visible_in_portal} onChange={(e) => onToggleVisibility(e.target.checked)} />
+                            </label>
 
-                        <button type="button" onClick={onReanalyze}
-                            className="w-full py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
-                            Re-analyze
-                        </button>
-                        <button type="button" onClick={onFlag}
-                            className={`w-full py-2 rounded-lg font-medium transition border ${result.flagged_for_review ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
-                            {result.flagged_for_review ? '🚩 Flagged for review' : 'Looks wrong? Flag for review'}
-                        </button>
+                            <button type="button" onClick={onReanalyze} className="eta-qa-btn">
+                                Re-analyze
+                            </button>
+                            <button type="button" onClick={onFlag} className={`eta-qa-btn ${result.flagged_for_review ? 'flagged' : ''}`}>
+                                {result.flagged_for_review ? '🚩 Flagged for review' : 'Looks wrong? Flag for review'}
+                            </button>
+                        </div>
                     </div>
 
                     {confidencePct != null && (
-                        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                            <h4 className="text-sm font-semibold text-blue-900 mb-2">AI Confidence</h4>
-                            <div className="text-3xl font-bold text-blue-600">{confidencePct}%</div>
-                            <p className="text-xs text-blue-700 mt-1">How sure Claude is about this extraction</p>
+                        <div className="eta-conf">
+                            <div className="eta-conf-k">AI Confidence</div>
+                            <div className="eta-conf-v">{confidencePct}%</div>
+                            <div className="eta-conf-note">How sure Claude is about this extraction</div>
                         </div>
                     )}
 
-                    {result.ai_model && (
-                        <p className="text-xs text-gray-400 mt-4">{result.ai_provider} · {result.ai_model}</p>
-                    )}
-                    <p className="text-[11px] leading-tight text-gray-500 mt-4 border-t border-gray-200 pt-3">
+                    <div className="eta-foot">
+                        {result.ai_model && <div className="eta-foot-model">{result.ai_provider} · {result.ai_model}</div>}
                         <strong>Disclaimer:</strong> {LEGAL_DISCLAIMER_SHORT}
-                    </p>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {/* Original-document modal */}
+            {docOpen && (
+                <div className="pa-doc-modal" onClick={() => setDocOpen(false)}>
+                    <div className="pa-doc-modal-inner" onClick={(e) => e.stopPropagation()}>
+                        <div className="pa-doc-modal-head">
+                            <span className="text-sm font-semibold text-gray-800 truncate">{result.file_name || 'Original document'}</span>
+                            <div className="flex items-center gap-2">
+                                <button type="button" onClick={() => window.open(`/s3/file?key=${encodeURIComponent(result.file_key)}`, '_blank')} className="pa-view-btn">
+                                    Open in new tab ↗
+                                </button>
+                                <button type="button" onClick={() => setDocOpen(false)} className="pa-doc-modal-close" aria-label="Close">×</button>
+                            </div>
+                        </div>
+                        <div className="pa-doc-modal-body">
+                            <AuthedDocPreview fileKey={result.file_key} fileMime={result.file_mime} />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 
@@ -509,6 +476,42 @@ const PolicyAnalysis = () => {
     const [historyCount, setHistoryCount] = useState(0);
 
     const [files, setFiles] = useState([]);
+
+    // Contractor company branding for the printable report header (name + logo).
+    // logo is stored as an S3 key; we fetch it as a blob and inline it as a
+    // data: URI so it survives into the print popup window.
+    const [company, setCompany] = useState({ name: '', logo: null });
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user || cancelled) return;
+                const res = await axiosInstance.get(`/profile/${user.id}`, { suppressErrorToast: true });
+                if (cancelled) return;
+                const p = res.data ?? {};
+                let logo = null;
+                if (p.business_logo) {
+                    try {
+                        const imgRes = await axiosInstance.get(
+                            `/s3/file?key=${encodeURIComponent(p.business_logo)}`,
+                            { responseType: 'blob', suppressErrorToast: true },
+                        );
+                        logo = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(imgRes.data);
+                        });
+                    } catch { /* missing logo — fall back to name only */ }
+                }
+                if (!cancelled) setCompany({ name: p.business_name || '', logo });
+            } catch { /* non-fatal — report falls back to ClaimKing.AI branding */ }
+        })();
+        return () => { cancelled = true; };
+    }, []);
 
     // Keep the editable suggested-actions checklist synced with the loaded row.
     useEffect(() => {
@@ -711,100 +714,97 @@ const PolicyAnalysis = () => {
     const progressWidth = ((currentStep - 1) / 3) * 100;
 
     return (
-        <div className="policy-analysis bg-gray-50 min-h-screen">
-            <div className="mr-hero">
-                <div className="mr-hero-inner">
-                    <div className="mr-hero-left">
-                        <div className="mr-hero-eyebrow"><span className="mr-hero-dot" />Policy Analysis</div>
-                        <h1 className="mr-hero-title">Decode any insurance doc <span className="mr-hero-title-accent">in one read</span></h1>
-                        <p className="mr-hero-subtitle">
-                            Upload a policy, denial, claim acknowledgment, adjuster estimate, scope, or carrier email — Claude detects the document type automatically, extracts the key data, flags critical deadlines, and suggests next steps.
-                        </p>
-                        <div className="mr-hero-stats">
-                            <div className={`mr-stat ${aiReady ? "mr-stat-ok" : "mr-stat-warn"}`}>
-                                <div className="mr-stat-icon">{aiReady ? "✓" : "!"}</div>
-                                <div>
-                                    <div className="mr-stat-label">AI Status</div>
-                                    <div className="mr-stat-value">{featureDisabledByAdmin ? "Disabled" : insufficientCredits ? "Low credits" : "Ready"}</div>
+        <div className="policy-analysis">
+            <div className="eta-shell">
+
+                {/* Hero */}
+                <div className="eta-card eta-hero">
+                    <span className="eta-badge">⚡ Policy Analysis</span>
+                    <h1 className="eta-hero-title">Decode any insurance doc <span className="accent">in one read</span></h1>
+                    <p className="eta-hero-sub">
+                        Upload a policy, denial, claim acknowledgment, adjuster estimate, scope, or carrier email — Claude detects the document type automatically, extracts the key data, flags critical deadlines, and suggests next steps.
+                    </p>
+                    <div className="eta-stats">
+                        <div className="eta-stat">
+                            <span className={`eta-stat-ic ${aiReady ? 'ok' : 'warn'}`}>{aiReady ? '✓' : '!'}</span>
+                            <div className="eta-stat-txt">
+                                <div className="eta-stat-k">AI Status</div>
+                                <div className="eta-stat-v">{featureDisabledByAdmin ? 'Disabled' : insufficientCredits ? 'Low credits' : 'Ready'}</div>
+                            </div>
+                        </div>
+                        {creditsKnown && (
+                            <div className="eta-stat">
+                                <span className={`eta-stat-ic ${insufficientCredits ? 'warn' : 'gold'}`}>◈</span>
+                                <div className="eta-stat-txt">
+                                    <div className="eta-stat-k">Credits</div>
+                                    <div className="eta-stat-v">{totalCredits.toLocaleString()}{requiredCredits > 0 && <span className="eta-stat-sub"> · {requiredCredits}/run</span>}</div>
                                 </div>
                             </div>
-                            {creditsKnown && (
-                                <div className={`mr-stat ${insufficientCredits ? "mr-stat-warn" : "mr-stat-ok"}`}>
-                                    <div className="mr-stat-icon">⚡</div>
-                                    <div>
-                                        <div className="mr-stat-label">Credits</div>
-                                        <div className="mr-stat-value">{totalCredits.toLocaleString()}{requiredCredits > 0 && <span className="mr-stat-sub"> · {requiredCredits}/run</span>}</div>
-                                    </div>
-                                </div>
-                            )}
-                            <Link href="/dashboard/policy-analysis/history" className="mr-stat mr-stat-link" title="View past analyses">
-                                <div className="mr-stat-icon">📋</div>
-                                <div style={{ textAlign: "left" }}>
-                                    <div className="mr-stat-label">History</div>
-                                    <div className="mr-stat-value">{historyCount}<span className="mr-stat-sub"> analyses</span></div>
-                                </div>
-                            </Link>
-                        </div>
+                        )}
+                        <Link href="/dashboard/policy-analysis/history" className="eta-stat" title="View past analyses">
+                            <span className="eta-stat-ic neutral">🕘</span>
+                            <div className="eta-stat-txt">
+                                <div className="eta-stat-k">History</div>
+                                <div className="eta-stat-v">{historyCount}<span className="eta-stat-sub"> analyses</span></div>
+                            </div>
+                        </Link>
                     </div>
                 </div>
-            </div>
 
-            <LegalDisclaimerBanner />
+                <LegalDisclaimerBanner />
 
-            <div className="px-6 py-6">
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <div className="progress-steps">
-                        <div id="progress-line" className="progress-line" style={{ width: `${progressWidth}%` }}></div>
-                        <div className={`step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
-                            <div className="step-circle">1</div><div className="step-label">Select Client</div>
-                        </div>
-                        <div className={`step ${currentStep >= 2 ? 'active' : ''} ${currentStep > 2 ? 'completed' : ''}`}>
-                            <div className="step-circle">2</div><div className="step-label">Upload Document</div>
-                        </div>
-                        <div className={`step ${currentStep >= 3 ? 'active' : ''} ${currentStep > 3 ? 'completed' : ''}`}>
-                            <div className="step-circle">3</div><div className="step-label">Auto-Analyze</div>
-                        </div>
-                        <div className={`step ${currentStep >= 4 ? 'active' : ''}`}>
-                            <div className="step-circle">4</div><div className="step-label">View Results</div>
-                        </div>
+                {/* Stepper */}
+                <div className="eta-card eta-stepper">
+                    <div className="eta-stepper-track">
+                        <div className="eta-stepper-line" />
+                        <div className="eta-stepper-fill" style={{ width: `${progressWidth * 0.84}%` }} />
+                        {[
+                            { n: 1, label: 'Select Client' },
+                            { n: 2, label: 'Upload Document' },
+                            { n: 3, label: 'Auto-Analyze' },
+                            { n: 4, label: 'View Results' },
+                        ].map((s) => (
+                            <div key={s.n} className={`eta-step ${currentStep > s.n ? 'done' : ''} ${currentStep === s.n ? 'current' : ''}`}>
+                                <span className="eta-step-dot">{s.n}</span>
+                                <span className="eta-step-label">{s.label}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
-            </div>
 
-            <div className="px-6 pb-6">
-                <ClientSelector client={selectedClient} onChange={handleClientChange} scrollId="client-section" />
+                <div id="client-section-anchor">
+                    <ClientSelector client={selectedClient} onChange={handleClientChange} scrollId="client-section" />
+                </div>
 
-                <div id="upload-section" className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${selectedClient ? '' : 'disabled-section'}`}>
+                {/* Upload */}
+                <div id="upload-section" className={`eta-card eta-upload ${selectedClient ? '' : 'disabled-section'}`}>
                     {!selectedClient && (
                         <div className="disabled-overlay"><div className="disabled-message">
                             <p className="text-gray-700 font-medium">Please select a client first</p>
                         </div></div>
                     )}
-                    <h2 className="text-lg font-semibold text-gray-900 mb-2">Step 2: Upload Document</h2>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Drop any insurance document — Claude figures out what it is. No need to pick a type.
-                    </p>
+                    <h2 className="eta-h2">Step 2: Upload Document</h2>
+                    <p className="eta-sub">Drop any insurance document — Claude figures out what it is. No need to pick a type.</p>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="eta-upload-grid">
                         <div>
                             <FileUploader label='Drag & drop an insurance document here' files={files} setFiles={setFiles} allowedExtensions={['.pdf', '.jpg', '.png', '.doc', '.docx']} maxSizeMB={50} />
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                            <h3 className="text-sm font-semibold text-gray-700 mb-3">Auto-detects:</h3>
-                            <ul className="text-sm text-gray-600 space-y-1">
-                                <li>• Homeowner's Policy (HO-3)</li>
-                                <li>• Claim Acknowledgment</li>
-                                <li>• Denial Letter</li>
-                                <li>• Adjuster's Estimate (Xactimate)</li>
-                                <li>• Scope of Work</li>
-                                <li>• Carrier Email Thread</li>
+                        <div className="eta-detect">
+                            <div className="eta-detect-title">Auto-detects:</div>
+                            <ul>
+                                <li>Homeowner's Policy (HO-3)</li>
+                                <li>Claim Acknowledgment</li>
+                                <li>Denial Letter</li>
+                                <li>Adjuster's Estimate (Xactimate)</li>
+                                <li>Scope of Work</li>
+                                <li>Carrier Email Thread</li>
                             </ul>
                         </div>
                     </div>
 
-                    <div className="mt-6 text-center">
-                        <button id="analyze-button" onClick={handleAnalyze} disabled={files.length === 0 || isAnalyzing}
-                            className={`px-8 py-3 rounded-lg font-medium text-lg transition inline-flex items-center justify-center gap-3 ${files.length === 0 || isAnalyzing ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'}`}>
+                    <div className="eta-analyze-wrap">
+                        <button id="analyze-button" onClick={handleAnalyze} disabled={files.length === 0 || isAnalyzing} className="eta-btn-primary">
                             {isAnalyzing ? (
                                 <>
                                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -817,10 +817,8 @@ const PolicyAnalysis = () => {
                                 <span>{files.length === 0 ? 'Select a file to enable analysis' : showResults ? 'Re-analyze Document' : 'Analyze Document'}</span>
                             )}
                         </button>
-                        <p className="text-xs text-gray-500 mt-2">Analysis typically takes 30-60 seconds</p>
-                        {analyzeError && (
-                            <div className="mt-3 mx-auto max-w-xl px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded">{analyzeError}</div>
-                        )}
+                        <p className="eta-analyze-hint">Analysis typically takes 30–60 seconds</p>
+                        {analyzeError && <div className="eta-error">{analyzeError}</div>}
                     </div>
                 </div>
 
@@ -837,6 +835,7 @@ const PolicyAnalysis = () => {
                             onGenerateReport={() => openAnalysisReport({
                                 analysis: { ...analysisResult, suggested_actions: actions },
                                 client: selectedClient,
+                                company,
                                 onPopupBlocked: () => alert('Pop-up blocked. Allow pop-ups for this site to print as PDF.'),
                             })}
                             onCreateEstimate={handleCreateEstimate}

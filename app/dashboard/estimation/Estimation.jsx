@@ -204,13 +204,12 @@ const ICON_MAP = { success: "i-check-circle", warn: "i-warning", error: "i-warni
 // policy info as context — that's the right level of abstraction.
 // ─────────────────────────────────────────────────────────────────────────────
 const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
-    const claimArgs = analysis.claim_arguments?.items ?? [];
-    const matching = analysis.matching_issues?.items ?? [];
-    const codeUp = analysis.code_upgrade_potential;
-    const codeUpEligible = !!(codeUp && codeUp.available);
+    const actions = Array.isArray(analysis.suggested_actions) ? analysis.suggested_actions : [];
+    const deadlines = Array.isArray(analysis.critical_deadlines) ? analysis.critical_deadlines : [];
+    const confidencePct = typeof analysis.ai_confidence === 'number'
+        ? Math.round(analysis.ai_confidence * 100) : null;
 
-    const totalSuggestions =
-        claimArgs.length + matching.length + (codeUpEligible ? 1 : 0);
+    const totalSuggestions = actions.length + deadlines.length;
 
     if (totalSuggestions === 0) {
         return (
@@ -219,9 +218,8 @@ const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
                 background: "#f9fafb", border: "1px solid #e5e7eb",
                 borderRadius: 8, fontSize: 13, color: "#4b5563",
             }}>
-                <strong>Policy analysis linked</strong> — but the AI did not flag
-                any supplement-ready items. Score:
-                <strong> {analysis.coverage_score ?? "—"}/100</strong>.
+                <strong>Policy analysis linked</strong> — the AI didn't surface any
+                scope findings for this document{confidencePct != null ? ` (AI confidence ${confidencePct}%)` : ""}.
                 <a href="#" onClick={(e) => { e.preventDefault(); onDismiss(); }}
                    style={{ color: "#1d4ed8", marginLeft: 10, fontSize: 12 }}>
                     Dismiss
@@ -262,9 +260,9 @@ const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
                         Policy analysis linked · {totalSuggestions} scope finding{totalSuggestions === 1 ? "" : "s"}
                     </div>
                     <div style={{ fontSize: 12, color: "#1e3a8a", opacity: 0.85, marginTop: 2 }}>
-                        Findings below are AI arguments — not line items. Click <strong>Use as AI scope hints</strong> to feed them into the Auto-Build, where Claude generates real line items with measurements + rates.
-                        {analysis.op_potential?.applicable && (
-                            <> O&amp;P auto-enabled (AI flagged {analysis.op_potential.trades_count ?? "multiple"} trades).</>
+                        Findings below are AI arguments — not line items. Click <strong>Build estimate from these findings</strong> to feed them into the AI builder, where Claude generates real line items with measurements + rates.
+                        {confidencePct != null && (
+                            <> AI confidence {confidencePct}%.</>
                         )}
                     </div>
                 </div>
@@ -275,32 +273,24 @@ const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 6, marginBottom: 12 }}>
-                {claimArgs.map((it, i) => (
+                {actions.map((a, i) => (
                     <FindingRow
-                        key={`ca-${i}`}
-                        icon="⚖"
-                        title={it.title}
-                        subtitle={it.argument}
+                        key={`sa-${i}`}
+                        icon="⚡"
+                        title={a.title}
+                        subtitle={a.detail}
                         accent={{ border: "#bfdbfe", bg: "#fff", text: "#1d4ed8" }}
                     />
                 ))}
-                {matching.map((it, i) => (
+                {deadlines.map((d, i) => (
                     <FindingRow
-                        key={`mi-${i}`}
-                        icon="⤢"
-                        title={it.title}
-                        subtitle={it.detail}
-                        accent={{ border: "#fed7aa", bg: "#fff", text: "#c2410c" }}
+                        key={`dl-${i}`}
+                        icon="⏰"
+                        title={d.description}
+                        subtitle={d.date ? `Due ${d.date}${typeof d.days_remaining === "number" ? ` · ${d.days_remaining}d` : ""}` : undefined}
+                        accent={{ border: "#fecaca", bg: "#fff", text: "#b91c1c" }}
                     />
                 ))}
-                {codeUpEligible && (
-                    <FindingRow
-                        icon="🛠"
-                        title={`Code upgrade${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ""}`}
-                        subtitle={codeUp.detail}
-                        accent={{ border: "#bbf7d0", bg: "#fff", text: "#15803d" }}
-                    />
-                )}
             </div>
 
             <button
@@ -312,7 +302,7 @@ const PolicyAnalysisSupplementPanel = ({ analysis, onApply, onDismiss }) => {
                     fontSize: 13, cursor: "pointer",
                 }}
             >
-                Use as AI scope hints →
+                Build estimate from these findings →
             </button>
             <span style={{ fontSize: 11.5, color: "#6b7280", marginLeft: 10 }}>
                 Opens Auto-Build with these findings pre-loaded.
@@ -913,9 +903,9 @@ const Estimation = () => {
     // surface findings as one-click supplement line items.
     //
     // We intentionally do NOT auto-create line items — the contractor stays
-    // in control. O&P toggle IS auto-checked when the AI says op_potential
-    // applies, because that's a per-estimate setting (not a per-item one)
-    // and forcing the user to re-tick it every time is hostile UX.
+    // in control. The panel surfaces the analysis's suggested_actions +
+    // critical_deadlines as read-only findings; "Build estimate from these
+    // findings" feeds them into Auto-Build where Claude generates the line items.
     useEffect(() => {
         const analysisId = searchParams?.get('policy_analysis_id');
         if (!analysisId) return;
@@ -928,11 +918,6 @@ const Estimation = () => {
                 const analysis = res.data?.data;
                 if (cancelled || !analysis) return;
                 setLinkedPolicyAnalysis(analysis);
-
-                // Auto-tick O&P if AI flagged it.
-                if (analysis.op_potential?.applicable === true) {
-                    setOverheadOn(true);
-                }
 
                 // Pre-select client (prefer analysis.client_id, fall back to URL).
                 const clientIdParam = searchParams?.get('client_id');
@@ -1625,57 +1610,46 @@ const Estimation = () => {
         const a = linkedPolicyAnalysis;
         if (!a) return;
 
-        const claimArgs = a.claim_arguments?.items ?? [];
-        const matching = a.matching_issues?.items ?? [];
-        const codeUp = a.code_upgrade_potential;
-        const codeUpEligible = !!(codeUp && codeUp.available);
+        const actions = Array.isArray(a.suggested_actions) ? a.suggested_actions : [];
+        const deadlines = Array.isArray(a.critical_deadlines) ? a.critical_deadlines : [];
+        const confidencePct = typeof a.ai_confidence === 'number'
+            ? Math.round(a.ai_confidence * 100) : null;
 
         // Build short, action-oriented hint chips. Claude has been prompted
         // (in the estimate-generator) to read these as scope-shaping rules,
         // not as line item titles.
         const newChips = [];
-        for (const it of claimArgs) {
-            if (it.title) newChips.push(`Supplement: ${it.title}`);
-        }
-        for (const it of matching) {
-            if (it.title) newChips.push(`Matching: ${it.title}`);
-        }
-        if (codeUpEligible) {
-            newChips.push(
-                `Code upgrades${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ''}`,
-            );
+        for (const act of actions) {
+            if (act.title) newChips.push(`Policy: ${act.title}`);
         }
         // Merge with whatever the user had already selected — never overwrite.
         setSelectedChips((prev) => Array.from(new Set([...prev, ...newChips])));
 
         // Compose a longer-form instructions block with the AI's full
-        // reasoning, so Claude can quote the supporting clauses in each
+        // reasoning, so Claude can quote the supporting policy language in each
         // generated line item's `reason` field (Brief Section 8 audit trail).
         const lines = [];
         lines.push(
-            `Use the linked policy analysis (ID ${a.id}, doc type "${a.document_type}", score ${a.coverage_score ?? '—'}/100) as scope-shaping context.`,
+            `Use the linked policy analysis (ID ${a.id}, doc type "${a.document_type}"${a.detected_carrier ? `, carrier ${a.detected_carrier}` : ''}${confidencePct != null ? `, AI confidence ${confidencePct}%` : ''}) as scope-shaping context.`,
         );
-        if (claimArgs.length) {
-            lines.push('', 'Claim arguments to address as supplements:');
-            for (const it of claimArgs) {
-                lines.push(`- ${it.title}: ${it.argument || ''}${it.supporting_clause ? ` [clause: "${it.supporting_clause}"]` : ''}`);
+        if (a.summary) {
+            lines.push('', `Analysis summary: ${a.summary}`);
+        }
+        if (actions.length) {
+            lines.push('', 'AI-suggested actions — reflect any that map to billable scope:');
+            for (const act of actions) {
+                lines.push(`- ${act.title}${act.detail ? `: ${act.detail}` : ''}`);
             }
         }
-        if (matching.length) {
-            lines.push('', 'Matching issues that require full-area scope:');
-            for (const it of matching) {
-                lines.push(`- ${it.title}: ${it.detail || ''}${it.line_of_argument ? ` (argument: ${it.line_of_argument})` : ''}`);
+        if (deadlines.length) {
+            lines.push('', 'Critical deadlines to be aware of:');
+            for (const d of deadlines) {
+                lines.push(`- ${d.description}${d.date ? ` (due ${d.date})` : ''}`);
             }
-        }
-        if (codeUpEligible) {
-            lines.push('', `Code upgrades available${codeUp.percent_or_amount ? ` (${codeUp.percent_or_amount})` : ''}: ${codeUp.detail || ''}`);
-        }
-        if (a.op_potential?.applicable) {
-            lines.push('', `Apply O&P (AI flagged ${a.op_potential.trades_count ?? 'multiple'} trades).`);
         }
         lines.push(
             '',
-            'For every line item you generate, set `source_field` referencing the matching policy analysis finding and cite the supporting clause in `reason`.',
+            'For every line item you generate, set `source_field` referencing the matching policy analysis finding and cite the supporting policy language in `reason`.',
         );
 
         // Append to whatever the user already typed; don't clobber.
