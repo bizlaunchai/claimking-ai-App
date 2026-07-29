@@ -224,7 +224,12 @@ export default function PortalView() {
     const c = state.client;
     const branding = c?.branding ?? {};
     const contractorName = branding.name || 'Your Contractor';
-    const logoUrl = branding.logo_url;
+    // `branding.logo_url` is an S3 key, not a loadable URL — the homeowner has
+    // no auth to fetch it directly. Route it through the token-scoped proxy
+    // (GET /portal-public/:token/logo), same as the mockup images.
+    const logoSrc = branding.logo_url
+        ? `${apiOrigin()}/portal-public/${token}/logo`
+        : null;
     const initials = (contractorName || '')
         .split(/\s+/).filter(Boolean).slice(0, 2)
         .map((s) => s[0].toUpperCase()).join('') || 'C';
@@ -270,7 +275,7 @@ export default function PortalView() {
     const TABS = [
         { key: 'overview',  label: 'Overview',  icon: <Icon.Home width="16" height="16" /> },
         { key: 'estimate',  label: 'Estimate',  icon: <Icon.Estimate width="16" height="16" /> },
-        { key: 'insurance', label: 'Insurance', icon: <Icon.Insurance width="16" height="16" /> },
+        { key: 'insurance', label: 'Insurance Communication', icon: <Icon.Insurance width="16" height="16" /> },
         { key: 'documents', label: 'Documents', icon: <Icon.Folder width="16" height="16" /> },
         { key: 'messages',  label: 'Messages',  icon: <Icon.Message width="16" height="16" /> },
     ];
@@ -286,12 +291,13 @@ export default function PortalView() {
                 <div className="pv-hero-accent" />
                 <div className="pv-container pv-hero-inner">
                     <div className="pv-brand-row">
-                        {logoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={logoUrl} alt={contractorName} className="pv-logo" />
-                        ) : (
-                            <div className="pv-logo pv-logo-fallback">{initials}</div>
-                        )}
+                        <BrandLogo
+                            src={logoSrc}
+                            alt={contractorName}
+                            initials={initials}
+                            className="pv-logo"
+                            fallbackClassName="pv-logo-fallback"
+                        />
                         <div className="pv-brand-meta">
                             <div className="pv-brand-name">{contractorName}</div>
                             <div className="pv-brand-tag">
@@ -325,14 +331,6 @@ export default function PortalView() {
                         {/* The message box lives at the bottom of a long page —
                             without this, a homeowner with a question has to
                             scroll past everything to find it. */}
-                        <button
-                            type="button"
-                            className="pv-hero-msg-btn"
-                            onClick={goToMessages}
-                        >
-                            <Icon.Message width="16" height="16" />
-                            Message {contractorName}
-                        </button>
                     </div>
                 </div>
             </section>
@@ -524,12 +522,13 @@ export default function PortalView() {
             <footer className="pv-footer">
                 <div className="pv-container pv-footer-inner">
                     <div className="pv-footer-brand-row">
-                        {logoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={logoUrl} alt={contractorName} className="pv-footer-logo" />
-                        ) : (
-                            <div className="pv-footer-logo pv-footer-logo-fallback">{initials}</div>
-                        )}
+                        <BrandLogo
+                            src={logoSrc}
+                            alt={contractorName}
+                            initials={initials}
+                            className="pv-footer-logo"
+                            fallbackClassName="pv-footer-logo-fallback"
+                        />
                         <div className="pv-footer-brand">{contractorName}</div>
                     </div>
 
@@ -564,6 +563,32 @@ function PageShell({ children }) {
         <div className="pv-shell">
             {children}
         </div>
+    );
+}
+
+// Absolute API origin for <img src> proxies (same base axiosInstance uses),
+// so token-scoped image URLs resolve across dev / staging / prod.
+function apiOrigin() {
+    return (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+}
+
+/**
+ * Contractor logo with a graceful fallback to their initials.
+ *
+ * `src` is the token-scoped proxy URL (or null when the company has no logo).
+ * If the image fails to load — no logo on file, S3 miss, expired link — we drop
+ * to the initials chip instead of leaving a broken-image icon in the header.
+ */
+function BrandLogo({ src, alt, initials, className, fallbackClassName }) {
+    const [broken, setBroken] = useState(!src);
+    useEffect(() => { setBroken(!src); }, [src]);
+
+    if (broken || !src) {
+        return <div className={`${className} ${fallbackClassName}`}>{initials}</div>;
+    }
+    return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} className={className} onError={() => setBroken(true)} />
     );
 }
 
