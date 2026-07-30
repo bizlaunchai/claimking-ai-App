@@ -2226,6 +2226,11 @@ const Estimation = () => {
     const [deposits, setDeposits] = useState([]);
     const [depositTotalPaid, setDepositTotalPaid] = useState(0);
     const [manualNote, setManualNote] = useState('');
+    // Remote Stripe payment-link delivery — the homeowner pays on their own
+    // device. Email on by default; SMS optional (needs a provisioned number).
+    const [depositSendEmail, setDepositSendEmail] = useState(true);
+    const [depositSendSms, setDepositSendSms] = useState(false);
+    const [lastPayLink, setLastPayLink] = useState('');
 
     const reloadDeposits = useCallback(async () => {
         if (!currentEstimateId) return;
@@ -2247,9 +2252,15 @@ const Estimation = () => {
         return () => window.removeEventListener('focus', onFocus);
     }, [reloadDeposits]);
 
-    const startStripeCheckout = async () => {
+    // Create a Stripe payment link for this estimate's deposit and (optionally)
+    // send it to the homeowner via email / SMS so they pay remotely. Whatever
+    // happens, the checkout_url is shown below with a Copy button as a fallback.
+    const sendPaymentLink = async () => {
         if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
         if (!(paymentAmount > 0)) { toast('Enter a deposit amount', 'error'); return; }
+        const channels = [];
+        if (depositSendEmail) channels.push('email');
+        if (depositSendSms) channels.push('sms');
         setDepositLoading(true);
         try {
             const res = await axiosInstance.post(`/estimates/${currentEstimateId}/deposits`, {
@@ -2258,21 +2269,40 @@ const Estimation = () => {
                 payment_method: 'stripe',
                 customer_email: signerEmail?.trim() || undefined,
                 customer_name: signerName?.trim() || undefined,
+                send_channels: channels.length ? channels : undefined,
             });
-            const url = res.data?.data?.checkout_url;
-            if (url) {
-                // Open in a new tab so the contractor keeps the estimate open.
-                window.open(url, '_blank', 'noopener');
-                toast('Stripe Checkout opened in a new tab — finish payment there', 'success');
-                reloadDeposits();
-            } else {
-                toast('Stripe did not return a checkout URL', 'error');
+            const data = res.data?.data ?? {};
+            const url = data.checkout_url;
+            if (!url) {
+                toast('Stripe did not return a payment URL', 'error');
+                return;
             }
+            setLastPayLink(url);
+
+            const deliveries = data.delivery ?? [];
+            const okCh = deliveries.filter((d) => d.sent).map((d) => d.channel);
+            const failCh = deliveries.filter((d) => !d.sent);
+            if (okCh.length) {
+                toast(`Payment link sent to homeowner via ${okCh.join(' + ')}`, 'success');
+            }
+            if (failCh.length) {
+                toast(`Couldn't send via ${failCh.map((d) => d.channel).join(', ')} — copy the link below and send it manually`, 'error');
+            }
+            if (!channels.length) {
+                toast('Payment link ready — copy it below to share with the homeowner', 'success');
+            }
+            reloadDeposits();
         } catch (err) {
-            toast(err?.userMessage ?? 'Could not start Stripe checkout', 'error');
+            toast(err?.userMessage ?? 'Could not create payment link', 'error');
         } finally {
             setDepositLoading(false);
         }
+    };
+
+    const copyPayLink = () => {
+        if (!lastPayLink) return;
+        navigator.clipboard?.writeText(lastPayLink);
+        toast('Payment link copied', 'success');
     };
 
     const recordManualDeposit = async () => {
@@ -2299,7 +2329,7 @@ const Estimation = () => {
     // Kept the old name working so any stale handlers don't crash.
     const generateInvoice = () => {
         if (depositMethod === 'manual') recordManualDeposit();
-        else startStripeCheckout();
+        else sendPaymentLink();
     };
 
     // ====================== RATE LEARNING ======================
@@ -3592,10 +3622,27 @@ const Estimation = () => {
                                             />
                                         )}
 
+                                        {depositMethod === 'stripe' && (
+                                            <div style={{ marginTop: 8, padding: 8, background: '#f6f5ff', border: '1px solid #e0ddff', borderRadius: 6 }}>
+                                                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#3b3560', marginBottom: 6 }}>Send secure payment link to homeowner</div>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', marginBottom: 4 }}>
+                                                    <input type="checkbox" checked={depositSendEmail} onChange={(e) => setDepositSendEmail(e.target.checked)} />
+                                                    📧 Email {signerEmail?.trim() ? <span style={{ color: '#6b7280' }}>({signerEmail.trim()})</span> : <span style={{ color: '#9ca3af' }}>(client email on file)</span>}
+                                                </label>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                                                    <input type="checkbox" checked={depositSendSms} onChange={(e) => setDepositSendSms(e.target.checked)} />
+                                                    💬 Text (SMS to client phone on file)
+                                                </label>
+                                                <div style={{ fontSize: 10.5, color: '#9ca3af', marginTop: 6 }}>
+                                                    Homeowner pays on their own device. Payment shows as paid here once Stripe confirms. Uncheck both to just copy the link.
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button
                                             className="sig-action"
                                             style={{ background: depositMethod === 'manual' ? '#1a1f3a' : '#635bff', marginTop: 8 }}
-                                            onClick={depositMethod === 'manual' ? recordManualDeposit : startStripeCheckout}
+                                            onClick={depositMethod === 'manual' ? recordManualDeposit : sendPaymentLink}
                                             disabled={depositLoading || !currentEstimateId}
                                         >
                                             <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-card" /></svg>
@@ -3603,8 +3650,21 @@ const Estimation = () => {
                                                 ? 'Working…'
                                                 : depositMethod === 'manual'
                                                     ? 'Record manual deposit'
-                                                    : `Collect $${paymentAmount.toFixed(2)} via Stripe`}
+                                                    : (depositSendEmail || depositSendSms)
+                                                        ? `Send $${paymentAmount.toFixed(2)} payment link`
+                                                        : `Create $${paymentAmount.toFixed(2)} payment link`}
                                         </button>
+
+                                        {depositMethod === 'stripe' && lastPayLink && (
+                                            <div style={{ marginTop: 8, padding: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11.5 }}>
+                                                <div style={{ color: '#166534', fontWeight: 600, marginBottom: 4 }}>Payment link (valid 24h)</div>
+                                                <div style={{ fontFamily: 'ui-monospace, monospace', color: '#374151', wordBreak: 'break-all', marginBottom: 4 }}>{lastPayLink}</div>
+                                                <div style={{ display: 'flex', gap: 12 }}>
+                                                    <button type="button" onClick={copyPayLink} style={{ background: 'transparent', border: 'none', color: '#1a1f3a', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}>Copy link</button>
+                                                    <a href={lastPayLink} target="_blank" rel="noopener noreferrer" style={{ color: '#635bff', fontWeight: 600, fontSize: 11 }}>Open here (in person) ↗</a>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Deposit history */}
                                         {deposits.length > 0 && (
