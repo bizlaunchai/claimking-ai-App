@@ -156,6 +156,15 @@ export default function PortalView() {
     // instead of a single very long scroll — homeowners open this on phones.
     const [activeTab, setActiveTab] = useState('overview');
 
+    // Deep link (?estimate=<id>) — open straight to the Estimate tab so the
+    // shared estimate is what the client sees first, instead of landing on
+    // Overview and having to hunt for it. Done in an effect (not the initial
+    // useState) so the server-rendered 'overview' and the client's first
+    // render agree — flipping the tab post-mount avoids a hydration mismatch.
+    useEffect(() => {
+        if (estimateId) setActiveTab('estimate');
+    }, [estimateId]);
+
     useEffect(() => {
         if (!token) return;
         let cancelled = false;
