@@ -2496,8 +2496,13 @@ const Estimation = () => {
                 { suppressErrorToast: true },
             );
             // Notify the client by email that the estimate is on their portal.
-            // Best-effort: a missing email / SMTP config shouldn't fail the share.
+            // Best-effort for the SHARE (a mail failure must not block publishing
+            // to the portal) — but the failure reason is surfaced to the
+            // contractor instead of being swallowed, so "no email arrived" is
+            // never silent. Root causes we make visible: client has no email on
+            // file, or SMTP/Resend isn't configured (backend 503).
             let emailed = false;
+            let emailError = "";
             if (client?.email) {
                 try {
                     await axiosInstance.post(
@@ -2506,17 +2511,48 @@ const Estimation = () => {
                         { suppressErrorToast: true },
                     );
                     emailed = true;
-                } catch { /* email is best-effort on portal share */ }
+                } catch (e) {
+                    emailError = e?.userMessage || "The estimate email could not be sent";
+                }
+            } else {
+                emailError = "This client has no email on file — add one to email the estimate";
             }
-            const portalUrl = `${window.location.origin}/portal/${client.id}?estimate=${id}`;
-            try { await navigator.clipboard?.writeText(portalUrl); } catch { /* clipboard not available */ }
+            // The portal is TOKEN-gated. The link must use the client's
+            // unguessable portal token — NOT client.id. The old
+            // `/portal/${client.id}` model was removed (see ClientPortal.jsx
+            // SharePortalModal): resolve_portal_token() treats client.id as a
+            // token, finds no match, and 404s — that was the dead link.
+            // POST /tokens is idempotent: returns the existing active token or
+            // mints one, so we never rotate an existing link on share.
+            let portalUrl = "";
+            try {
+                const tokRes = await axiosInstance.post(
+                    `/client-portal/${client.id}/tokens`,
+                    {},
+                    { suppressErrorToast: true },
+                );
+                const tokenStr = tokRes?.data?.token;
+                if (tokenStr) {
+                    portalUrl = `${window.location.origin}/portal/${tokenStr}?estimate=${id}`;
+                }
+            } catch { /* token issue is best-effort — the share itself succeeded */ }
+            let copied = false;
+            if (portalUrl) {
+                try { await navigator.clipboard?.writeText(portalUrl); copied = true; } catch { /* clipboard not available */ }
+            }
             setFinalizeModal(false);
+            const shareParts = [];
+            if (copied) shareParts.push("link copied");
+            if (emailed) shareParts.push("client emailed");
             toast(
-                emailed
-                    ? "Shared to client portal — link copied & client emailed"
-                    : "Shared to client portal — link copied",
+                shareParts.length
+                    ? `Shared to client portal — ${shareParts.join(" & ")}`
+                    : "Shared to client portal",
                 "success",
             );
+            // Surface why the client wasn't emailed (config / no address) so the
+            // "gets an email" promise on the button isn't silently broken.
+            if (emailError) toast(`Client not emailed — ${emailError}`, "error");
         } catch (err) {
             toast(err?.userMessage || "Failed to share estimate", "error");
         } finally {
