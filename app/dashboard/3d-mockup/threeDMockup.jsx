@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import ClientSelector from "@/components/clients/ClientSelector";
-import { Check, Maximize2, X } from "lucide-react";
+import { Check, Maximize2, X, Mail, MessageSquare } from "lucide-react";
 import { toClientShape } from "@/lib/clients/newClientForm";
 import LocalFileUploader from "../../../utiles/LocalFileUploader.jsx";
 
@@ -291,6 +291,12 @@ const ThreeDMockup = () => {
 
     // ── Download progress state per type ────────────────────────────────────
     const [downloading, setDownloading] = useState({ png: false, watermark: false, pdf: false });
+
+    // ── Share-with-client in-flight flag (disables button + shows "Sharing…") ─
+    const [sharingBusy, setSharingBusy] = useState(false);
+    // ── Confirm + email-share in-flight flags (button loaders) ──────────────
+    const [confirming, setConfirming] = useState(false);
+    const [emailSharing, setEmailSharing] = useState(false);
 
     // ── Credits (cost per generation + user's current balance) ─────────────
     const [mockupCost, setMockupCost] = useState(null);     // { credits_cost, is_active, label } | null
@@ -718,6 +724,8 @@ const ThreeDMockup = () => {
     // ────────────────────────────────────────────────────────────────────────
     const confirmMockup = async () => {
         if (!currentMockup) { toast.error('Generate a mockup first'); return; }
+        if (confirming) return;
+        setConfirming(true);
         try {
             await axiosInstance.patch(`/mockup/${currentMockup.id}`, { status: 'approved' });
             toast.success('Mockup approved & saved to client file');
@@ -726,6 +734,7 @@ const ThreeDMockup = () => {
                 document.getElementById('sharingSection')?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
         } catch { /* toasted */ }
+        finally { setConfirming(false); }
     };
 
     // Flip mockup.is_visible_in_portal. Backend keeps the timeline event
@@ -737,6 +746,7 @@ const ThreeDMockup = () => {
         const next = !(currentMockup.is_visible_in_portal === true);
         // Optimistic update so the button label changes instantly.
         setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: next } : m));
+        setSharingBusy(true);
         try {
             await axiosInstance.patch(
                 `/mockup/${currentMockup.id}/visibility`,
@@ -749,6 +759,8 @@ const ThreeDMockup = () => {
         } catch {
             // Roll back optimistic change on failure
             setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: !next } : m));
+        } finally {
+            setSharingBusy(false);
         }
     };
 
@@ -836,8 +848,6 @@ const ThreeDMockup = () => {
         }
         toast.success(`Applied "${t.name}" — click Generate Mockup`);
     };
-    // CK-FIX Jul-22: Save to Client Profile — makes the mockup portal-visible
-    // for the selected client without emailing them.
     // CK-FIX Jul-22: AI color-list import — upload up to 10 manufacturer
     // files/images; Gemini vision extracts the swatches into an editable
     // custom palette. Backend: POST /mockup/colors/import (one file per
@@ -949,17 +959,10 @@ const ThreeDMockup = () => {
         }
     };
 
-    const saveToClientProfile = async () => {
-        if (!currentMockup) { toast.error('Generate a mockup first'); return; }
-        if (!selectedClient) { toast.error('Pick a client first'); return; }
-        try {
-            await axiosInstance.patch(`/mockup/${currentMockup.id}/visibility`, { visible: true });
-            setCurrentMockup((m) => (m ? { ...m, is_visible_in_portal: true } : m));
-            toast.success(`Saved to ${selectedClient.name}'s profile — visible in their portal`);
-        } catch {
-            toast.error('Could not save to client profile');
-        }
-    };
+    // NOTE: "Save to Client Profile" was removed — it duplicated the
+    // "Share with Client" (togglePortalVisibility) action exactly, so the
+    // extra button just confused contractors. Portal-visibility is now the
+    // single control.
     const shareViaSMS   = () => toast.info('SMS sharing: coming soon.');
 
     // ────────────────────────────────────────────────────────────────────────
@@ -968,6 +971,8 @@ const ThreeDMockup = () => {
     const shareViaEmail = async () => {
         if (!currentMockup) { toast.error('Generate a mockup first'); return; }
         if (!selectedClient) { toast.error('Pick a client first'); return; }
+        if (emailSharing) return;
+        setEmailSharing(true);
         try {
             await axiosInstance.post(`/mockup/${currentMockup.id}/share-email`, {
                 client_id: selectedClient.id,
@@ -983,6 +988,8 @@ const ThreeDMockup = () => {
             if (err?.response?.status === 404) {
                 toast.info('Email sharing endpoint not yet available — share the portal link manually for now.');
             }
+        } finally {
+            setEmailSharing(false);
         }
     };
 
@@ -2014,7 +2021,15 @@ const ThreeDMockup = () => {
                         )}
 
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
-                            <button className="btn btn-primary" onClick={confirmMockup} disabled={!currentMockup}>Confirm This Mockup</button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={confirmMockup}
+                                disabled={!currentMockup || confirming}
+                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                            >
+                                {confirming && <span className="btn-spinner" aria-hidden="true" />}
+                                {confirming ? 'Confirming…' : 'Confirm This Mockup'}
+                            </button>
 
                             {/* Share with client — explicit opt-in. Spec
                                 wants the contractor to review + curate
@@ -2024,7 +2039,7 @@ const ThreeDMockup = () => {
                                 when toggled on (badge: green dot live). */}
                             <button
                                 onClick={togglePortalVisibility}
-                                disabled={!currentMockup}
+                                disabled={!currentMockup || sharingBusy}
                                 style={{
                                     padding: '0.625rem 1rem',
                                     background: currentMockup?.is_visible_in_portal
@@ -2037,8 +2052,8 @@ const ThreeDMockup = () => {
                                     borderRadius: 8,
                                     fontWeight: 700,
                                     fontSize: 14,
-                                    cursor: currentMockup ? 'pointer' : 'not-allowed',
-                                    opacity: currentMockup ? 1 : 0.5,
+                                    cursor: (!currentMockup || sharingBusy) ? 'not-allowed' : 'pointer',
+                                    opacity: (!currentMockup || sharingBusy) ? 0.6 : 1,
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -2052,14 +2067,14 @@ const ThreeDMockup = () => {
                                     boxShadow: currentMockup?.is_visible_in_portal
                                         ? '0 0 0 3px rgba(167,243,208,0.3)' : 'none',
                                 }} />
-                                {currentMockup?.is_visible_in_portal
-                                    ? 'Shared with Client · Click to Hide'
-                                    : 'Share with Client'}
+                                {sharingBusy
+                                    ? (currentMockup?.is_visible_in_portal ? 'Sharing…' : 'Hiding…')
+                                    : (currentMockup?.is_visible_in_portal
+                                        ? 'Shared with Client · Click to Hide'
+                                        : 'Share with Client')}
                             </button>
 
                             <button className="btn btn-secondary" onClick={refineMore} disabled={!currentMockup}>Refine Further</button>
-                            {/* CK-FIX Jul-22: new Save to Client Profile action */}
-                            <button className="btn btn-secondary" onClick={saveToClientProfile} disabled={!currentMockup || !selectedClient}>Save to Client Profile</button>
                             <button className="btn btn-outline" onClick={startOver}>Start Over</button>
                             <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
                         </div>
@@ -2160,17 +2175,35 @@ const ThreeDMockup = () => {
 
                 {showSharing && (
                     <div className="sharing-section" id="sharingSection">
-                        <h3 className="sharing-title">Share Your Mockup</h3>
+                        <div className="sharing-head">
+                            <span className="sharing-check"><Check size={16} strokeWidth={3} /></span>
+                            <div>
+                                <h3 className="sharing-title">Share Your Mockup</h3>
+                                <p className="sharing-subtitle">
+                                    Approved and saved{selectedClient?.name ? ` to ${selectedClient.name}` : ''}. Send it over below.
+                                </p>
+                            </div>
+                        </div>
                         <div className="share-buttons">
                             <button className="share-btn" onClick={shareViaSMS}>
-                                <div className="share-icon" />
-                                <div className="share-label">Send via SMS</div>
-                                <div className="share-sublabel">Text to client's phone</div>
+                                <span className="share-icon share-icon--sms">
+                                    <MessageSquare size={20} strokeWidth={2.2} />
+                                </span>
+                                <span className="share-label">Send via SMS</span>
+                                <span className="share-sublabel">Text to client's phone</span>
                             </button>
-                            <button className="share-btn" onClick={shareViaEmail}>
-                                <div className="share-icon" />
-                                <div className="share-label">Send via Email</div>
-                                <div className="share-sublabel">Professional presentation</div>
+                            <button
+                                className="share-btn"
+                                onClick={shareViaEmail}
+                                disabled={emailSharing}
+                            >
+                                <span className="share-icon share-icon--email">
+                                    {emailSharing
+                                        ? <span className="share-spinner" aria-hidden="true" />
+                                        : <Mail size={20} strokeWidth={2.2} />}
+                                </span>
+                                <span className="share-label">{emailSharing ? 'Sending…' : 'Send via Email'}</span>
+                                <span className="share-sublabel">Professional presentation</span>
                             </button>
                         </div>
                     </div>
