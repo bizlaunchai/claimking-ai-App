@@ -397,6 +397,9 @@ const Estimation = () => {
     // even when they didn't enter via the Measurement → "Use in Estimate" handoff.
     const [savedMeasurements, setSavedMeasurements] = useState([]);
     const [savedMeasurementsLoading, setSavedMeasurementsLoading] = useState(false);
+    // 2.0b — client-scoped measurement reports for the "attach to this estimate" selector
+    const [clientMeasurements, setClientMeasurements] = useState([]);
+    const [clientMeasurementsLoading, setClientMeasurementsLoading] = useState(false);
 
     // ── Add section / custom item modals ─────────────────────────────────
     const [addSectionModal, setAddSectionModal] = useState(false);
@@ -656,6 +659,20 @@ const Estimation = () => {
             });
         return () => { cancelled = true; };
     }, [aiModal]);
+
+    // 2.0b — client-scoped measurement reports for the attach-to-estimate selector.
+    // Uses the existing GET /measurement?client_id= endpoint.
+    useEffect(() => {
+        if (!client?.id) { setClientMeasurements([]); return; }
+        let cancelled = false;
+        setClientMeasurementsLoading(true);
+        axiosInstance
+            .get("/measurement", { params: { client_id: client.id }, suppressErrorToast: true })
+            .then((res) => { if (!cancelled) setClientMeasurements(res.data?.data ?? []); })
+            .catch(() => { if (!cancelled) setClientMeasurements([]); })
+            .finally(() => { if (!cancelled) setClientMeasurementsLoading(false); });
+        return () => { cancelled = true; };
+    }, [client?.id]);
 
     // ── Saved estimates list (TODO: wire to /estimates endpoint when built) ─
     const refreshSavedEstimates = useCallback(async () => {
@@ -2861,6 +2878,51 @@ const Estimation = () => {
                                 }
                             }}
                         >Detach measurement</a>
+                    </div>
+                )}
+
+                {/* 2.0b — attach a measurement report on file to THIS estimate.
+                    Shows once the estimate has a client; feeds the PDF attach (2.6). */}
+                {currentEstimateId && client?.id && (
+                    <div style={{
+                        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                        padding: "8px 14px", margin: "0 auto 1rem", maxWidth: 1600,
+                        background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13,
+                    }}>
+                        <label style={{ fontWeight: 600, color: "#374151" }}>Measurement report:</label>
+                        {clientMeasurementsLoading ? (
+                            <span style={{ color: "#9ca3af" }}>Loading…</span>
+                        ) : clientMeasurements.length === 0 ? (
+                            <span style={{ color: "#6b7280" }}>
+                                No measurement reports on file ·{" "}
+                                <a href="/dashboard/measurement" style={{ color: "#1d4ed8", fontWeight: 600 }}>Measurement Reports →</a>
+                            </span>
+                        ) : (
+                            <select
+                                value={linkedMeasurement?.id ?? ""}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    if (!id) { setLinkedMeasurement(null); return; }
+                                    const picked = clientMeasurements.find((m) => m.id === id);
+                                    if (picked) setLinkedMeasurement(picked);
+                                }}
+                                style={{
+                                    padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 8,
+                                    fontSize: 13, background: "white", minWidth: 260,
+                                }}
+                            >
+                                <option value="">— None (not attached) —</option>
+                                {clientMeasurements.map((m) => {
+                                    const sq = m.extracted_data?.squares;
+                                    return (
+                                        <option key={m.id} value={m.id}>
+                                            {(m.title || m.source_file_name || "Untitled")}
+                                            {sq != null ? ` — ${sq} sq` : ""}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        )}
                     </div>
                 )}
 
