@@ -1290,6 +1290,15 @@ const Estimation = () => {
     const [reviewModal, setReviewModal] = useState(false);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [reviewData, setReviewData] = useState(null);
+    // 2.3 — "Ask AI to Make Changes"
+    const [changesOpen, setChangesOpen] = useState(false);
+    const [changesInstruction, setChangesInstruction] = useState('');
+    const [changesFiles, setChangesFiles] = useState([]);      // File[]
+    const [changesLoading, setChangesLoading] = useState(false);
+    const [changesResult, setChangesResult] = useState(null);  // { summary, changes[] }
+    const [changesChecked, setChangesChecked] = useState({});  // index -> bool
+    const [changesError, setChangesError] = useState(null);
+    const changesFileInputRef = useRef(null);
     const [reviewError, setReviewError] = useState(null);
 
     const askAIToReview = async () => {
@@ -1373,6 +1382,106 @@ const Estimation = () => {
         } else {
             toast(`Could not find "${pc.item_name}" in current items`, 'error');
         }
+    };
+
+    // ====================== 2.3 — ASK AI TO MAKE CHANGES ======================
+    const runAiChanges = async () => {
+        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
+        if (!changesInstruction.trim() && changesFiles.length === 0) {
+            toast('Describe the change or attach a file', 'error'); return;
+        }
+        await saveEstimateNow();
+        setChangesLoading(true); setChangesError(null); setChangesResult(null); setChangesChecked({});
+        try {
+            const fd = new FormData();
+            fd.append('instruction', changesInstruction.trim());
+            changesFiles.forEach((f) => fd.append('files', f));
+            const res = await axiosInstance.post(
+                `/estimates/${currentEstimateId}/ai-changes`, fd,
+                { headers: { 'Content-Type': 'multipart/form-data' } },
+            );
+            const data = res.data?.data ?? null;
+            setChangesResult(data);
+            const checked = {};
+            (data?.changes ?? []).forEach((_, i) => { checked[i] = true; });
+            setChangesChecked(checked);
+        } catch (err) {
+            setChangesError(err?.userMessage ?? err?.response?.data?.message ?? 'Could not get AI changes');
+        } finally {
+            setChangesLoading(false);
+        }
+    };
+
+    // Apply ONLY the checked proposals to local `sections`, then autosave.
+    // Nothing is touched until the contractor clicks Apply.
+    const applyAiChanges = () => {
+        const list = (changesResult?.changes ?? []).filter((_, i) => changesChecked[i]);
+        if (!list.length) { toast('Check at least one change to apply', 'error'); return; }
+        let applied = 0, skipped = 0;
+
+        setSections((prev) => {
+            const next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+            const findItem = (name) => {
+                const n = (name || '').toLowerCase();
+                for (const s of next) {
+                    const idx = s.items.findIndex((it) => (it.name || '').toLowerCase() === n);
+                    if (idx >= 0) return { s, idx };
+                }
+                return null;
+            };
+            for (const ch of list) {
+                if (ch.action === 'add') {
+                    const key = (ch.section_key || '').toLowerCase();
+                    const target =
+                        next.find((s) => (s.section_key || '').toLowerCase() === key) ||
+                        next.find((s) => (s.name || '').toLowerCase() === key) ||
+                        next.find((s) => s.id === activeSection) ||
+                        next[0];
+                    if (!target) { skipped++; continue; }
+                    target.items.push({
+                        name: ch.name || 'New item',
+                        qty: Number(ch.qty) || 1,
+                        unit: ch.unit || 'EA',
+                        price: Number(ch.price) || 0,
+                        reason: ch.reason || ch.rationale || undefined,
+                        code_ref: ch.code_ref ?? undefined,
+                        source_field: 'ai_change',
+                    });
+                    applied++;
+                } else if (ch.action === 'remove') {
+                    const hit = findItem(ch.target_item_name);
+                    if (!hit) { skipped++; continue; }
+                    hit.s.items.splice(hit.idx, 1);
+                    applied++;
+                } else if (ch.action === 'reprice') {
+                    const hit = findItem(ch.target_item_name);
+                    if (!hit) { skipped++; continue; }
+                    hit.s.items[hit.idx] = { ...hit.s.items[hit.idx], price: Number(ch.price) || hit.s.items[hit.idx].price };
+                    applied++;
+                } else if (ch.action === 'edit') {
+                    const hit = findItem(ch.target_item_name);
+                    if (!hit) { skipped++; continue; }
+                    const cur = hit.s.items[hit.idx];
+                    hit.s.items[hit.idx] = {
+                        ...cur,
+                        name: ch.name != null ? ch.name : cur.name,
+                        qty: ch.qty != null ? Number(ch.qty) : cur.qty,
+                        unit: ch.unit != null ? ch.unit : cur.unit,
+                        price: ch.price != null ? Number(ch.price) : cur.price,
+                        reason: ch.reason != null ? ch.reason : cur.reason,
+                    };
+                    applied++;
+                } else { skipped++; }
+            }
+            return next;
+        });
+
+        triggerSave();
+        setChangesOpen(false);
+        setChangesResult(null);
+        setChangesInstruction('');
+        setChangesFiles([]);
+        toast(`Applied ${applied} change${applied === 1 ? '' : 's'}${skipped ? ` · ${skipped} skipped (not found)` : ''}`, applied ? 'success' : 'error');
     };
 
     // ====================== TEMPLATES & BUNDLES (Phase 7) ======================
@@ -2992,6 +3101,13 @@ const Estimation = () => {
                                 <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-refresh" /></svg>
                                 AI Review
                             </button>
+                            <button
+                                className="btn-ai"
+                                onClick={() => setChangesOpen(true)}
+                                style={{ background: '#FDB813', color: '#1a1f3a', fontWeight: 700 }}
+                            >
+                                ✨ Ask AI to Make Changes
+                            </button>
                         </div>
                     </div>
                 )}
@@ -3929,6 +4045,103 @@ const Estimation = () => {
                                 disabled={saveTplSaving}
                                 style={{ padding: '8px 14px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: saveTplSaving ? 'wait' : 'pointer', opacity: saveTplSaving ? 0.6 : 1 }}
                             >{saveTplSaving ? 'Saving…' : 'Save template'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ 2.3 ASK AI TO MAKE CHANGES MODAL ============ */}
+            {changesOpen && (
+                <div
+                    onClick={() => !changesLoading && setChangesOpen(false)}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 2000 }}
+                >
+                    <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, maxHeight: '88vh', background: '#fff', borderRadius: 12, boxShadow: '0 20px 50px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eef0f3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontWeight: 800, fontSize: 16, color: '#1a1f3a' }}>✨ Ask AI to Make Changes</div>
+                            <button onClick={() => setChangesOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#6b7280' }}><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+
+                        <div style={{ padding: 20, overflowY: 'auto' }}>
+                            {!changesResult ? (
+                                <>
+                                    <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Describe what to add or change</label>
+                                    <textarea
+                                        value={changesInstruction}
+                                        onChange={(e) => setChangesInstruction(e.target.value)}
+                                        rows={4}
+                                        placeholder="e.g. Add gutter replacement on the rear elevation (120 LF) and bump the steep charge to $85"
+                                        style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                                    />
+                                    <div style={{ marginTop: 10 }}>
+                                        <input
+                                            ref={changesFileInputRef}
+                                            type="file"
+                                            multiple
+                                            accept="image/*,application/pdf"
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => setChangesFiles([...e.target.files].slice(0, 6))}
+                                        />
+                                        <button type="button" onClick={() => changesFileInputRef.current?.click()} style={{ padding: '7px 12px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 12.5, cursor: 'pointer', fontWeight: 600 }}>
+                                            📎 Attach docs / photos (optional)
+                                        </button>
+                                        {changesFiles.length > 0 && (
+                                            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                {changesFiles.map((f, i) => (
+                                                    <span key={i} style={{ fontSize: 11, background: '#eef2ff', color: '#3730a3', padding: '3px 8px', borderRadius: 12 }}>
+                                                        {f.name}
+                                                        <button onClick={() => setChangesFiles(changesFiles.filter((_, j) => j !== i))} style={{ marginLeft: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: '#3730a3' }}>×</button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {changesError && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 12.5 }}>{changesError}</div>}
+                                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                        <button onClick={() => setChangesOpen(false)} style={{ padding: '9px 14px', background: '#f3f4f6', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                                        <button onClick={runAiChanges} disabled={changesLoading} style={{ padding: '9px 16px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: changesLoading ? 'wait' : 'pointer', opacity: changesLoading ? 0.7 : 1 }}>
+                                            {changesLoading ? 'Thinking…' : 'Ask AI'}
+                                        </button>
+                                    </div>
+                                    <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af' }}>Nothing changes on your estimate until you review and Apply.</div>
+                                </>
+                            ) : (
+                                <>
+                                    {changesResult.summary && (
+                                        <div style={{ padding: '10px 12px', background: '#fffef7', border: '1px solid #FDB813', borderRadius: 8, fontSize: 12.5, color: '#374151', marginBottom: 14 }}>{changesResult.summary}</div>
+                                    )}
+                                    {(changesResult.changes ?? []).length === 0 ? (
+                                        <div style={{ color: '#6b7280', fontSize: 13 }}>AI didn&apos;t propose any changes. Try rephrasing your request.</div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {changesResult.changes.map((ch, i) => {
+                                                const badge = { add: ['#dcfce7', '#166534', 'Add'], edit: ['#dbeafe', '#1e40af', 'Edit'], reprice: ['#fef3c7', '#92400e', 'Reprice'], remove: ['#fee2e2', '#991b1b', 'Remove'] }[ch.action] || ['#f3f4f6', '#374151', ch.action];
+                                                return (
+                                                    <label key={i} style={{ display: 'flex', gap: 10, padding: 10, background: changesChecked[i] ? '#f9fafb' : '#fff', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', alignItems: 'flex-start' }}>
+                                                        <input type="checkbox" checked={!!changesChecked[i]} onChange={(e) => setChangesChecked((p) => ({ ...p, [i]: e.target.checked }))} style={{ marginTop: 3 }} />
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: badge[0], color: badge[1] }}>{badge[2]}</span>
+                                                                <strong style={{ fontSize: 13, color: '#1a1f3a' }}>{ch.label}</strong>
+                                                            </div>
+                                                            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{ch.rationale}</div>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                        <button onClick={() => setChangesResult(null)} style={{ padding: '8px 12px', background: 'transparent', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>← Edit request</button>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <button onClick={() => setChangesOpen(false)} style={{ padding: '9px 14px', background: '#f3f4f6', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                                            <button onClick={applyAiChanges} style={{ padding: '9px 16px', background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                                                Apply {Object.values(changesChecked).filter(Boolean).length} change{Object.values(changesChecked).filter(Boolean).length === 1 ? '' : 's'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
