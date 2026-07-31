@@ -113,7 +113,7 @@ a.eta-stat:hover { border-color: #cfd6e0; }
 .eta-upload { padding: 24px 26px; position: relative; }
 .eta-h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
 .eta-sub { margin: 0 0 18px; font-size: 13px; color: #6b7280; }
-.eta-upload-grid { display: grid; grid-template-columns: 1fr 260px; gap: 22px; align-items: stretch; }
+.eta-upload-grid { display: grid; grid-template-columns: minmax(0,1fr) 260px; gap: 22px; align-items: stretch; }
 .eta-detect { background: #f7f9fb; border: 1px solid #e6e9ee; border-radius: 12px; padding: 16px 18px; }
 .eta-detect-title { font-size: 12px; font-weight: 700; color: #4a5361; margin-bottom: 10px; }
 .eta-detect ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -146,7 +146,7 @@ a.eta-stat:hover { border-color: #cfd6e0; }
 .eta-badge-status.processing,
 .eta-badge-status.pending { background: #eef1f6; color: #5b6472; }
 
-.eta-results-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+.eta-results-grid { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 16px; align-items: start; }
 .eta-results-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
 /* ── Summary card ─────────────────────────────────────────────────────── */

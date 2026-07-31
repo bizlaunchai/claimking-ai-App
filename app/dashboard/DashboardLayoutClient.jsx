@@ -82,7 +82,10 @@ const DashboardLayout = ({ children }) => {
     const closeMobile = () => setIsMobileOpen(false);
     const toggleMobile = () => setIsMobileOpen((p) => !p);
 
-    const mainMargin = isMobile ? 0 : isCollapsed ? 70 : 250;
+    // Must match the sidebar's rendered width (.sidebar 280px / collapsed 70px
+    // in sidebar.css). A smaller value than the sidebar leaves the content
+    // tucked under it on the left; a larger value wastes space on the right.
+    const mainMargin = isMobile ? 0 : isCollapsed ? 70 : 280;
 
     return (
         <PermissionsProvider>
