@@ -21,6 +21,7 @@ import axiosInstance from '@/lib/axiosInstance';
 const TABS = [
     { key: 'all',                       label: 'All Activity',     types: null },
     { key: 'estimate_created',          label: 'Estimates',        types: ['estimate_created', 'estimate_sent', 'estimate_revised', 'estimate_signed'] },
+    { key: 'deposit_paid',              label: 'Payments',         types: ['deposit_requested', 'deposit_paid', 'deposit_recorded_manual'] },
     { key: 'mockup_generated',          label: '3D Mockups',       types: ['mockup_generated', 'mockup_shared'] },
     { key: 'policy_analysis_completed', label: 'Policy Analyses',  types: ['policy_analysis_run', 'policy_analysis_completed'] },
     { key: 'claim_status_changed',      label: 'Status Changes',   types: ['claim_status_changed'] },
@@ -33,6 +34,9 @@ const EVENT_META = {
     estimate_sent:              { dot: '#16a34a', badge: 'Estimate sent',    badgeBg: '#dcfce7',  badgeFg: '#15803d' },
     estimate_revised:           { dot: '#16a34a', badge: 'Estimate revised', badgeBg: '#dcfce7',  badgeFg: '#15803d' },
     estimate_signed:            { dot: '#0ea5e9', badge: 'Signed',           badgeBg: '#dbeafe',  badgeFg: '#1e40af' },
+    deposit_requested:          { dot: '#d97706', badge: 'Payment pending',  badgeBg: '#fef3c7',  badgeFg: '#92400e' },
+    deposit_paid:               { dot: '#059669', badge: 'Payment received', badgeBg: '#d1fae5',  badgeFg: '#065f46' },
+    deposit_recorded_manual:    { dot: '#059669', badge: 'Payment recorded', badgeBg: '#d1fae5',  badgeFg: '#065f46' },
     mockup_generated:           { dot: '#FDB813', badge: 'Mockup',           badgeBg: '#fef3c7',  badgeFg: '#92400e' },
     mockup_shared:              { dot: '#FDB813', badge: 'Mockup shared',    badgeBg: '#fef3c7',  badgeFg: '#92400e' },
     policy_analysis_run:        { dot: '#a855f7', badge: 'Policy analysis',  badgeBg: '#f3e8ff',  badgeFg: '#7e22ce' },

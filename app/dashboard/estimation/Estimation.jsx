@@ -2231,14 +2231,18 @@ const Estimation = () => {
     const [depositSendEmail, setDepositSendEmail] = useState(true);
     const [depositSendSms, setDepositSendSms] = useState(false);
     const [lastPayLink, setLastPayLink] = useState('');
+    const [depositsRefreshing, setDepositsRefreshing] = useState(false);
+    const [depositsLoading, setDepositsLoading] = useState(false);
 
     const reloadDeposits = useCallback(async () => {
-        if (!currentEstimateId) return;
+        if (!currentEstimateId) { setDepositsLoading(false); return; }
+        setDepositsLoading(true);
         try {
             const res = await axiosInstance.get(`/estimates/${currentEstimateId}/deposits`, { suppressErrorToast: true });
             setDeposits(res.data?.data ?? []);
             setDepositTotalPaid(Number(res.data?.meta?.total_paid ?? 0));
         } catch { /* ignore */ }
+        finally { setDepositsLoading(false); }
     }, [currentEstimateId]);
 
     useEffect(() => { reloadDeposits(); }, [reloadDeposits]);
@@ -2303,6 +2307,18 @@ const Estimation = () => {
         if (!lastPayLink) return;
         navigator.clipboard?.writeText(lastPayLink);
         toast('Payment link copied', 'success');
+    };
+
+    // Manual refresh — pull the latest deposit statuses (e.g. pending → paid
+    // once the Stripe webhook lands) without waiting for the focus listener.
+    const refreshDeposits = async () => {
+        if (depositsRefreshing) return;
+        setDepositsRefreshing(true);
+        try {
+            await reloadDeposits();
+        } finally {
+            setDepositsRefreshing(false);
+        }
     };
 
     const recordManualDeposit = async () => {
@@ -3667,9 +3683,34 @@ const Estimation = () => {
                                         )}
 
                                         {/* Deposit history */}
-                                        {deposits.length > 0 && (
+                                        {(deposits.length > 0 || depositsLoading) && (
                                             <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
-                                                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Deposit history</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280' }}>Deposit history</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={refreshDeposits}
+                                                        disabled={depositsRefreshing}
+                                                        title="Refresh deposit status"
+                                                        aria-label="Refresh deposit status"
+                                                        style={{ background: 'transparent', border: 'none', cursor: depositsRefreshing ? 'default' : 'pointer', color: '#635bff', padding: 2, display: 'inline-flex', alignItems: 'center' }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={depositsRefreshing ? 'ck-spin' : undefined}>
+                                                            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                                                            <path d="M21 3v6h-6" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                {depositsLoading && deposits.length === 0 && (
+                                                    <>
+                                                        {[0, 1, 2].map(i => (
+                                                            <div key={`skel-${i}`} style={{ padding: 6, background: '#fafbfc', borderRadius: 5, marginBottom: 4 }}>
+                                                                <div className="ck-skel" style={{ height: 12, width: '55%', borderRadius: 4, marginBottom: 6 }} />
+                                                                <div className="ck-skel" style={{ height: 9, width: '38%', borderRadius: 4 }} />
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )}
                                                 {deposits.map(d => (
                                                     <div key={d.id} style={{ fontSize: 11.5, padding: 6, background: '#fafbfc', borderRadius: 5, marginBottom: 4 }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
