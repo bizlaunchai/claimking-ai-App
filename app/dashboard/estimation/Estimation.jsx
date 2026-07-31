@@ -453,6 +453,7 @@ const Estimation = () => {
     //    buildSavePayload below references it. The actual Photos-tab UI
     //    state lives further down with the rest of the Docs pane state.
     const [includePhotosInPdf, setIncludePhotosInPdf] = useState(true);
+    const [includeMeasurementInPdf, setIncludeMeasurementInPdf] = useState(true);
 
     // ── Payment / signature pane ─────────────────────────────────────────
     const [paymentType, setPaymentType] = useState("percentage");
@@ -1013,6 +1014,7 @@ const Estimation = () => {
                     sort_order: i,
                 })),
             include_photos_in_pdf: includePhotosInPdf,
+            include_measurement_in_pdf: includeMeasurementInPdf,
             terms_html: termsState?.full_terms ?? undefined,
             sections: sections.map((s, idx) => ({
                 section_key: s.id,                              // "dwelling-roof"
@@ -1033,7 +1035,7 @@ const Estimation = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         client, linkedMeasurement, estimateTitle, mode, overheadOn,
-        taxOn, taxName, taxPercentNum, termsState, sections, includePhotosInPdf,
+        taxOn, taxName, taxPercentNum, termsState, sections, includePhotosInPdf, includeMeasurementInPdf,
         discountType, discountValueNum, cardFeeOn, cardFeePctNum, customFees,
     ]);
 
@@ -2024,6 +2026,9 @@ const Estimation = () => {
                 if (e && typeof e.include_photos_in_pdf === 'boolean') {
                     setIncludePhotosInPdf(e.include_photos_in_pdf);
                 }
+                if (e && typeof e.include_measurement_in_pdf === 'boolean') {
+                    setIncludeMeasurementInPdf(e.include_measurement_in_pdf);
+                }
             } catch { /* ignore */ }
         })();
     }, [currentEstimateId]);
@@ -2099,6 +2104,12 @@ const Estimation = () => {
         // The next debounced save will pick it up via buildSavePayload (which
         // reads includePhotosInPdf), so we just nudge triggerSave.
         setIncludePhotosInPdf(checked);
+        if (currentEstimateId) triggerSave();
+    };
+
+    const toggleMeasurementMasterPdf = (checked) => {
+        // Same optimistic + debounced-save pattern as photos (2.6).
+        setIncludeMeasurementInPdf(checked);
         if (currentEstimateId) triggerSave();
     };
 
@@ -3374,6 +3385,10 @@ const Estimation = () => {
                                         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={includePhotosInPdf} onChange={(e) => togglePhotosMasterPdf(e.target.checked)} />
                                             <span><strong>Include photos in PDF</strong></span>
+                                        </label>
+                                        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={includeMeasurementInPdf} onChange={(e) => toggleMeasurementMasterPdf(e.target.checked)} />
+                                            <span><strong>Include measurement report in PDF</strong> <span style={{ color: '#9ca3af' }}>(appended at the bottom)</span></span>
                                         </label>
                                     </div>
 
