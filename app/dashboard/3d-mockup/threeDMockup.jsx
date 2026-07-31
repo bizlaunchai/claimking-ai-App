@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import axiosInstance from "@/lib/axiosInstance";
 import { toast } from "sonner";
 import ClientSelector from "@/components/clients/ClientSelector";
-import { Check, Maximize2, X, Mail, MessageSquare } from "lucide-react";
+import { Check, Maximize2, X, Mail, MessageSquare, RefreshCw } from "lucide-react";
 import { toClientShape } from "@/lib/clients/newClientForm";
 import LocalFileUploader from "../../../utiles/LocalFileUploader.jsx";
 
@@ -274,6 +274,10 @@ const ThreeDMockup = () => {
     const sourcePhotoKey = files?.[0]?.preview || null;
 
     const [currentMockup, setCurrentMockup] = useState(null);
+    // 2.7 — "Something's wrong" regenerate
+    const [regenOpen, setRegenOpen] = useState(false);
+    const [regenNote, setRegenNote] = useState('');
+    const [regenLoading, setRegenLoading] = useState(false);
     const [versions, setVersions] = useState([]);
     const [activeVersionId, setActiveVersionId] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -719,6 +723,42 @@ const ThreeDMockup = () => {
         } catch { /* toasted */ }
     };
 
+    // 2.7 — regenerate from the ORIGINAL source + saved selections + a
+    // correction note. Backend adds a new version (first correction is free).
+    const regenerateMockup = async () => {
+        if (!currentMockup?.id) { toast.error('Generate a mockup first'); return; }
+        if (!regenNote.trim()) { toast.error('Describe what looks wrong'); return; }
+        setRegenLoading(true);
+        try {
+            const res = await axiosInstance.post(
+                `/mockup/${currentMockup.id}/regenerate`,
+                { correction_note: regenNote.trim() },
+            );
+            const version = res.data?.data?.version;
+            const credits = res.data?.data?.credits;
+            if (version) {
+                setVersions(prev => {
+                    const filtered = prev.filter(v => v.id !== version.id).map(v => ({ ...v, is_current: false }));
+                    return [...filtered, version];
+                });
+                setActiveVersionId(version.id);
+                setPreviewMode('result');
+            }
+            if (credits?.balance_after) {
+                setCreditBalance(prev => ({ ...(prev ?? {}), monthly_credits: credits.balance_after.monthly, bonus_credits: credits.balance_after.bonus }));
+            } else {
+                refreshCreditsState();
+            }
+            setRegenNote('');
+            setRegenOpen(false);
+            toast.success(credits?.cost ? `Regenerated — ${credits.cost} credits used` : 'Regenerated');
+        } catch (err) {
+            toast.error(err?.userMessage ?? err?.response?.data?.message ?? 'Could not regenerate');
+        } finally {
+            setRegenLoading(false);
+        }
+    };
+
     // ────────────────────────────────────────────────────────────────────────
     //   Confirm / start-over
     // ────────────────────────────────────────────────────────────────────────
@@ -765,16 +805,6 @@ const ThreeDMockup = () => {
     };
 
     // CK-FIX Jul-22: Refine Further now jumps you into the AI instructions box
-    const refineMore = () => {
-        const el = document.querySelector('textarea[placeholder*="instruction" i], textarea[placeholder*="AI" i], #ai-instructions');
-        if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => el.focus(), 350);
-            toast.info('Describe your changes, then click Generate Mockup for a new version.');
-        } else {
-            toast.info('Tweak materials or AI instructions, then click Generate Mockup again.');
-        }
-    };
 
     const startOver = () => {
         if (!confirm('Discard this mockup and start over?')) return;
@@ -880,6 +910,37 @@ const ThreeDMockup = () => {
             setCustomColors((list) => list.map((c) => c.id === color.id ? { ...c, value: color.value } : c));
             toast.error('Could not save that colour');
         }
+    };
+
+    // 2.0 — Color-adjust board. Fine-tune the SELECTED color for a category via
+    // the native colour picker. The adjusted hex flows into buildMaterialSettings
+    // (so generation uses it) and, if the selected swatch is a saved custom
+    // colour, the tweak is persisted back to the palette.
+    const adjustSelectedColor = (cat, hex) => {
+        const cur = selectedColors[cat];
+        if (!cur) return;
+        setSelectedColors((prev) => ({ ...prev, [cat]: { ...prev[cat], value: hex } }));
+        if (cur.id) updateCustomColor(cur, hex);
+    };
+
+    const renderColorAdjuster = (cat) => {
+        const sel = selectedColors[cat];
+        if (!sel || !sel.value || sel.value === '__other__') return null;
+        const hex = /^#[0-9a-fA-F]{6}$/.test(sel.value) ? sel.value : '#cccccc';
+        return (
+            <div className="color-adjuster" style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Fine-tune “{sel.name}”:</span>
+                <input
+                    type="color"
+                    value={hex}
+                    onChange={(e) => adjustSelectedColor(cat, e.target.value)}
+                    title="Adjust this color"
+                    style={{ width: 40, height: 30, border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', padding: 0, background: 'none' }}
+                />
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: '#6b7280' }}>{sel.value}</span>
+                <span style={{ fontSize: 11, color: '#9ca3af' }}>· generation uses this exact color{sel.id ? ' (saved to My Colors)' : ''}</span>
+            </div>
+        );
     };
 
     const deleteCustomColor = async (color) => {
@@ -1574,6 +1635,8 @@ const ThreeDMockup = () => {
                                     )}
                                 </div>
 
+                                {renderColorAdjuster('roofing')}
+
                                 <div className="advanced-section">
                                     <div className="advanced-title">Advanced Options</div>
                                     <div className="checkbox-group">
@@ -1642,6 +1705,7 @@ const ThreeDMockup = () => {
                                             style={{ width: '100%', marginTop: '0.5rem' }}
                                         />
                                     )}
+                                    {renderColorAdjuster('siding')}
                                 </div>
                             </div>
                         )}
@@ -1678,6 +1742,7 @@ const ThreeDMockup = () => {
                                                 style={{ width: '100%', marginTop: '0.5rem' }}
                                             />
                                         )}
+                                        {renderColorAdjuster(cat)}
                                     </div>
                                 </div>
                             );
@@ -2020,6 +2085,7 @@ const ThreeDMockup = () => {
                             </div>
                         )}
 
+                        {/* ── Finalize (primary actions) ─────────────── */}
                         <div style={{ display: 'grid', gap: '0.5rem' }}>
                             <button
                                 className="btn btn-primary"
@@ -2031,23 +2097,14 @@ const ThreeDMockup = () => {
                                 {confirming ? 'Confirming…' : 'Confirm This Mockup'}
                             </button>
 
-                            {/* Share with client — explicit opt-in. Spec
-                                wants the contractor to review + curate
-                                before the homeowner sees anything, so the
-                                default is hidden (badge: red dot off) and
-                                this button flips to "Hide from Client"
-                                when toggled on (badge: green dot live). */}
+                            {/* Share with client — explicit opt-in (contractor curates first). */}
                             <button
                                 onClick={togglePortalVisibility}
                                 disabled={!currentMockup || sharingBusy}
                                 style={{
                                     padding: '0.625rem 1rem',
-                                    background: currentMockup?.is_visible_in_portal
-                                        ? '#16a34a'
-                                        : '#1a1f3a',
-                                    color: currentMockup?.is_visible_in_portal
-                                        ? '#fff'
-                                        : '#FDB813',
+                                    background: currentMockup?.is_visible_in_portal ? '#16a34a' : '#1a1f3a',
+                                    color: currentMockup?.is_visible_in_portal ? '#fff' : '#FDB813',
                                     border: 'none',
                                     borderRadius: 8,
                                     fontWeight: 700,
@@ -2062,10 +2119,8 @@ const ThreeDMockup = () => {
                             >
                                 <span style={{
                                     width: 8, height: 8, borderRadius: '50%',
-                                    background: currentMockup?.is_visible_in_portal
-                                        ? '#a7f3d0' : '#9ca3af',
-                                    boxShadow: currentMockup?.is_visible_in_portal
-                                        ? '0 0 0 3px rgba(167,243,208,0.3)' : 'none',
+                                    background: currentMockup?.is_visible_in_portal ? '#a7f3d0' : '#9ca3af',
+                                    boxShadow: currentMockup?.is_visible_in_portal ? '0 0 0 3px rgba(167,243,208,0.3)' : 'none',
                                 }} />
                                 {sharingBusy
                                     ? (currentMockup?.is_visible_in_portal ? 'Sharing…' : 'Hiding…')
@@ -2073,12 +2128,51 @@ const ThreeDMockup = () => {
                                         ? 'Shared with Client · Click to Hide'
                                         : 'Share with Client')}
                             </button>
-
-                            <button className="btn btn-secondary" onClick={refineMore} disabled={!currentMockup}>Refine Further</button>
-                            <button className="btn btn-outline" onClick={startOver}>Start Over</button>
-                            <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
                         </div>
 
+                        {/* ── Improve this version ───────────────────── */}
+                        {generatedImageSrc && (
+                            <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9ca3af' }}>Not quite right?</div>
+                                {!regenOpen ? (
+                                    <button
+                                        className="btn btn-outline"
+                                        onClick={() => setRegenOpen(true)}
+                                        style={{ width: '100%', justifyContent: 'center' }}
+                                    >
+                                        <RefreshCw size={15} strokeWidth={2.2} />
+                                        Regenerate with feedback
+                                    </button>
+                                ) : (
+                                    <div>
+                                        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Tell us what to fix — we&apos;ll regenerate this mockup with your original selections.
+                                        </div>
+                                        <textarea
+                                            value={regenNote}
+                                            onChange={(e) => setRegenNote(e.target.value)}
+                                            rows={3}
+                                            placeholder="e.g. the chimney color did not change, or the front windows look warped"
+                                            style={{ width: '100%', padding: '9px 11px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 8, resize: 'vertical', fontFamily: 'inherit' }}
+                                        />
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                            <button className="btn btn-outline" onClick={() => { setRegenOpen(false); setRegenNote(''); }} disabled={regenLoading}>Cancel</button>
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={regenerateMockup}
+                                                disabled={regenLoading}
+                                                style={{ flex: 1, opacity: regenLoading ? 0.7 : 1, cursor: regenLoading ? 'wait' : 'pointer' }}
+                                            >
+                                                {regenLoading ? 'Regenerating…' : 'Regenerate mockup'}
+                                            </button>
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 6 }}>Uses one mockup credit, same as a fresh generation.</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Download ───────────────────────────────── */}
                         {generatedImageSrc && (
                             <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -2115,6 +2209,12 @@ const ThreeDMockup = () => {
                                 </div>
                             </div>
                         )}
+
+                        {/* ── Save / start over ──────────────────────── */}
+                        <div style={{ display: 'grid', gap: '0.5rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                            <button className="btn btn-outline" onClick={saveTemplate}>Save as Template</button>
+                            <button className="btn btn-outline" onClick={startOver} style={{ color: '#6b7280' }}>Start Over</button>
+                        </div>
                     </div>
                 </div>
 
