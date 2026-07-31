@@ -97,6 +97,23 @@
   width: 100%;
 }
 
+/* Dashboard shell — the content column must never let a wide child (a right
+   rail, a grid, a table) push the page off the right edge. `min-width:0` lets
+   flex/grid descendants shrink to fit instead of forcing the track wider;
+   `overflow-x:clip` is a last-resort clamp that — unlike `hidden` — does NOT
+   create a scroll container or break `position:sticky` (the estimation Docs
+   rail uses sticky). This fixes the global right-overflow on every dashboard
+   page, not just per-page. */
+.dashboard-main {
+  min-width: 0;
+  box-sizing: border-box;
+}
+.dashboard-content-wrapper {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 /* KPI Grid */
 .kpi-grid {
   display: grid;

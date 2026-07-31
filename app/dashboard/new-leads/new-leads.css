@@ -360,7 +360,7 @@
     font-size: 0.8rem; color: #6b7280; margin-top: 0.15rem;
 }
 .new-leads-page .scheduling-grid {
-    display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem;
+    display: grid; grid-template-columns: 280px minmax(0,1fr); gap: 1.5rem;
 }
 @media (max-width: 900px) {
     .new-leads-page .scheduling-grid { grid-template-columns: 1fr; }

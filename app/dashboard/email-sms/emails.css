@@ -657,7 +657,7 @@
 
 .email-row {
     display: grid;
-    grid-template-columns: 44px 1fr 220px;
+    grid-template-columns: 44px minmax(0,1fr) 220px;
     gap: 1rem;
     padding: 0.875rem 1.125rem;
     align-items: flex-start;
