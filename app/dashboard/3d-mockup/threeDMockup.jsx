@@ -650,7 +650,10 @@ const ThreeDMockup = () => {
     // ────────────────────────────────────────────────────────────────────────
     const generateMockup = async () => {
         const localFile = files?.[0]?.file ?? null;
-        if (!localFile) { toast.error('Upload a property photo first'); return; }
+        // New mockup → need the uploaded file. Existing/reopened mockup → the
+        // source photo already lives on the server, so reuse it (no re-upload).
+        const hasStoredSource = !!currentMockup?.id && !!sourcePhotoKey;
+        if (!localFile && !hasStoredSource) { toast.error('Upload a property photo first'); return; }
         if (isGenerating) return;
 
         // Low-balance confirm gate (spec: warn when < 25 credits remaining)
@@ -666,7 +669,7 @@ const ThreeDMockup = () => {
         setGenerationError(null);
         try {
             const formData = new FormData();
-            formData.append('source_photo', localFile);
+            if (localFile) formData.append('source_photo', localFile);
             if (currentMockup?.id) formData.append('mockup_id', currentMockup.id);
             if (selectedClient?.id) formData.append('client_id', selectedClient.id);
             formData.append('material_settings', JSON.stringify(buildMaterialSettings()));
