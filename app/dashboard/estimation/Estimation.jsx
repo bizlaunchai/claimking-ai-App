@@ -351,6 +351,79 @@ const IconSprite = () => (
     </svg>
 );
 
+// ====================== CSV BULK UPLOAD (feature 2.4) ======================
+// Quote-aware CSV → array of cell-rows. Handles "quoted, commas" and "" escapes.
+function parseCsvRows(text) {
+    const s = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const rows = [];
+    let row = [], cell = "", inQ = false;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (inQ) {
+            if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+            else cell += ch;
+        } else if (ch === '"') inQ = true;
+        else if (ch === ",") { row.push(cell); cell = ""; }
+        else if (ch === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+        else cell += ch;
+    }
+    if (cell.length || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((c) => (c ?? "").trim() !== ""));
+}
+
+const LIBRARY_CSV_HEADERS = ["category", "name", "unit", "price"];
+const CODE_CSV_HEADERS = ["name", "reference", "unit", "price"];
+
+function headerMatches(rowCells, expected) {
+    const h = (rowCells ?? []).map((c) => (c ?? "").trim().toLowerCase());
+    return expected.every((e, i) => h[i] === e);
+}
+
+// Validate + split into { valid, errors }. errors: [{ line, msg }] (1-indexed).
+function parseLibraryCsv(text) {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return { kind: "library", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
+    if (!headerMatches(rows[0], LIBRARY_CSV_HEADERS)) {
+        return { kind: "library", valid: [], errors: [{ line: 1, msg: `Header must be: ${LIBRARY_CSV_HEADERS.join(",")}` }] };
+    }
+    const valid = [], errors = [];
+    for (let i = 1; i < rows.length; i++) {
+        const [category, name, unit, priceRaw] = rows[i].map((c) => (c ?? "").trim());
+        const line = i + 1;
+        if (!category || !name || !unit || !priceRaw) { errors.push({ line, msg: "Missing required field(s)" }); continue; }
+        const price = parseFloat(priceRaw);
+        if (!(price > 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
+        valid.push({ category: category.toLowerCase(), name, unit, price });
+    }
+    return { kind: "library", valid, errors };
+}
+
+function parseCodeCsv(text) {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return { kind: "code", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
+    if (!headerMatches(rows[0], CODE_CSV_HEADERS)) {
+        return { kind: "code", valid: [], errors: [{ line: 1, msg: `Header must be: ${CODE_CSV_HEADERS.join(",")}` }] };
+    }
+    const valid = [], errors = [];
+    for (let i = 1; i < rows.length; i++) {
+        const [name, reference, unit, priceRaw] = rows[i].map((c) => (c ?? "").trim());
+        const line = i + 1;
+        if (!name || !unit || !priceRaw) { errors.push({ line, msg: "Missing required field(s)" }); continue; }
+        const price = parseFloat(priceRaw);
+        if (!(price > 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
+        valid.push({ name, ref: reference, unit, price });
+    }
+    return { kind: "code", valid, errors };
+}
+
+function downloadCsvFile(filename, content) {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ====================== MAIN COMPONENT ======================
 const Estimation = () => {
     // ── Query params (Measurement → Estimate handoff) ─────────────────────
@@ -399,6 +472,10 @@ const Estimation = () => {
     const [editCdbName, setEditCdbName] = useState('');
     const [editCdbMeta, setEditCdbMeta] = useState('');
     const [editCdbPrice, setEditCdbPrice] = useState('');
+    // 2.4 — CSV bulk upload (frontend-only, session)
+    const bulkFileRef = useRef(null);
+    const bulkKindRef = useRef(null); // 'library' | 'code'
+    const [bulkResult, setBulkResult] = useState(null); // { kind, valid, errors }
     const [activeCategory, setActiveCategory] = useState("roofing");
     const [itemSearch, setItemSearch] = useState("");
 
@@ -1882,6 +1959,57 @@ const Estimation = () => {
         cancelEditCodeDb();
     };
 
+    // ── 2.4 CSV bulk upload handlers ──
+    const openBulkUpload = (kind) => {
+        bulkKindRef.current = kind;
+        setBulkResult(null);
+        if (bulkFileRef.current) { bulkFileRef.current.value = ''; bulkFileRef.current.click(); }
+    };
+    const onBulkFile = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const kind = bulkKindRef.current;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const text = String(reader.result || '');
+            setBulkResult(kind === 'library' ? parseLibraryCsv(text) : parseCodeCsv(text));
+        };
+        reader.readAsText(file);
+    };
+    const importBulk = () => {
+        if (!bulkResult || !bulkResult.valid.length) return;
+        if (bulkResult.kind === 'library') {
+            setItemLibrary((prev) => {
+                const next = { ...prev };
+                for (const it of bulkResult.valid) {
+                    const cat = it.category;
+                    const list = next[cat] ? [...next[cat]] : [];
+                    const idx = list.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
+                    if (idx >= 0) list[idx] = { ...list[idx], price: it.price, unit: it.unit };
+                    else list.push({ name: it.name, price: it.price, unit: it.unit });
+                    next[cat] = list;
+                }
+                return next;
+            });
+        } else {
+            setCodeItems((prev) => {
+                const next = [...prev];
+                bulkResult.valid.forEach((it, k) => {
+                    const idx = next.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
+                    if (idx >= 0) next[idx] = { ...next[idx], price: it.price, unit: it.unit, ref: it.ref };
+                    else next.push({ id: `csv-${Date.now()}-${k}`, name: it.name, ref: it.ref, price: it.price, unit: it.unit });
+                });
+                return next;
+            });
+        }
+        toast(`Imported ${bulkResult.valid.length} item${bulkResult.valid.length === 1 ? '' : 's'}`, 'success');
+        setBulkResult(null);
+    };
+    const downloadLibraryTemplate = () => downloadCsvFile('item-library-template.csv',
+        'category,name,unit,price\nroofing,30yr Architectural Shingles,SQ,125\nsiding,Vinyl Siding,SQ,85\n');
+    const downloadCodeTemplate = () => downloadCsvFile('code-requirements-template.csv',
+        'name,reference,unit,price\nIce & Water Shield,IRC R905.1.2 - valleys & eaves,SQ,125\nDrip Edge,IRC R905.2.8.5,LF,3.75\n');
+
     const moveItem = (secId, idx, direction) => {
         setSections((prev) => prev.map((s) => {
             if (s.id !== secId) return s;
@@ -2234,8 +2362,11 @@ const Estimation = () => {
     }, [currentEstimateId]);
 
     const uploadBulkPhotos = () => {
-        if (!currentEstimateId) {
-            toast('Save the estimate first', 'error');
+        // Photos attach to the estimate — all we need is a client. The estimate
+        // itself is created on the fly in onPhotoFilesPicked if it hasn't been
+        // saved yet (so this works on from-scratch estimates, no measurement).
+        if (!currentEstimateId && !client?.id) {
+            toast('Select a client first — photos attach to the estimate.', 'error');
             return;
         }
         photoInputRef.current?.click();
@@ -2245,7 +2376,16 @@ const Estimation = () => {
         const files = Array.from(e.target.files ?? []);
         // Reset the input so picking the same file again still triggers onChange
         e.target.value = '';
-        if (!files.length || !currentEstimateId) return;
+        if (!files.length) return;
+
+        // Ensure the estimate exists. From-scratch estimates may not be saved
+        // yet — create one now (needs only a client, NOT a measurement).
+        let estId = currentEstimateId;
+        if (!estId) {
+            if (!client?.id) { toast('Select a client first', 'error'); return; }
+            estId = await saveEstimateNow();
+            if (!estId) { toast('Could not save the estimate — try again.', 'error'); return; }
+        }
 
         setUploadProgress({ active: 0, total: files.length });
         for (let i = 0; i < files.length; i++) {
@@ -2254,7 +2394,7 @@ const Estimation = () => {
             fd.append('file', files[i]);
             fd.append('auto_stamp', photoAutoStamp ? 'true' : 'false');
             try {
-                await axiosInstance.post(`/estimates/${currentEstimateId}/photos`, fd);
+                await axiosInstance.post(`/estimates/${estId}/photos`, fd);
             } catch (err) {
                 toast(err?.userMessage ?? `Photo ${i + 1} failed`, 'error');
             }
@@ -2369,6 +2509,14 @@ const Estimation = () => {
     const [signerName, setSignerName] = useState('');
     const [signerEmail, setSignerEmail] = useState('');
     const [signMessage, setSignMessage] = useState('');
+    // Pre-fill the homeowner name/email from the selected client (also feeds the
+    // Stripe deposit recipient). Runs when the client changes; the contractor
+    // can still edit the fields afterward.
+    useEffect(() => {
+        if (!client?.id) return;
+        setSignerName(client.name || '');
+        setSignerEmail(client.email || '');
+    }, [client?.id]);
     const [signing, setSigning] = useState(false);
     const [signHistory, setSignHistory] = useState([]);
     const [lastSignLink, setLastSignLink] = useState(null);
@@ -3234,6 +3382,11 @@ const Estimation = () => {
                                         All
                                     </button>
                                 </div>
+                                <input ref={bulkFileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={onBulkFile} />
+                                <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center" }}>
+                                    <button type="button" onClick={() => openBulkUpload("library")} style={{ background: "#fffef7", border: "1px dashed #FDB813", color: "#92400e", padding: "4px 9px", borderRadius: 6, fontWeight: 600, cursor: "pointer" }}>📤 Bulk Upload</button>
+                                    <button type="button" onClick={downloadLibraryTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Download template</button>
+                                </div>
                                 <input type="text" className="search-input" placeholder="Search items..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} />
                                 <div className="category-tabs">
                                     {["roofing", "siding", "gutters", "windows", "general"].map((cat) => (
@@ -3583,6 +3736,10 @@ const Estimation = () => {
                                 <div className={`rail-pane ${railTab === "code" ? "active" : ""}`}>
                                     <h3>Code requirements</h3>
                                     <p className="desc">Check the boxes for items required by code, then tap "Add to Estimate" below.</p>
+                                    <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center" }}>
+                                        <button type="button" onClick={() => openBulkUpload("code")} style={{ background: "#fffef7", border: "1px dashed #FDB813", color: "#92400e", padding: "4px 9px", borderRadius: 6, fontWeight: 600, cursor: "pointer" }}>📤 Bulk Upload</button>
+                                        <button type="button" onClick={downloadCodeTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Download template</button>
+                                    </div>
                                     <div>
                                         {codeItems.map((item) => {
                                             if (editingCode === item.id) {
@@ -5039,6 +5196,46 @@ const Estimation = () => {
                             <span>{s.name}</span>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {/* ============ 2.4 CSV BULK UPLOAD RESULT MODAL ============ */}
+            {bulkResult && (
+                <div onClick={() => setBulkResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid #eef0f3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1f3a" }}>
+                                Bulk upload — {bulkResult.kind === "library" ? "item library" : "code requirements"}
+                            </div>
+                            <button onClick={() => setBulkResult(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+                        <div style={{ padding: 20, overflowY: "auto" }}>
+                            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                                <span style={{ background: "#dcfce7", color: "#166534", padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 12.5 }}>{bulkResult.valid.length} valid</span>
+                                {bulkResult.errors.length > 0 && <span style={{ background: "#fee2e2", color: "#991b1b", padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 12.5 }}>{bulkResult.errors.length} error{bulkResult.errors.length === 1 ? "" : "s"}</span>}
+                            </div>
+                            {bulkResult.errors.length > 0 && (
+                                <div style={{ marginBottom: 12, maxHeight: 220, overflowY: "auto", border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2" }}>
+                                    {bulkResult.errors.map((er, i) => (
+                                        <div key={i} style={{ padding: "6px 10px", fontSize: 12, color: "#991b1b", borderBottom: i < bulkResult.errors.length - 1 ? "1px solid #fecaca" : "none" }}>
+                                            {er.line ? `Row ${er.line}: ` : ""}{er.msg}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {bulkResult.valid.length === 0 ? (
+                                <div style={{ fontSize: 13, color: "#6b7280" }}>No valid rows to import. Fix the file (use the template) and try again.</div>
+                            ) : (
+                                <div style={{ fontSize: 12.5, color: "#374151" }}>{bulkResult.valid.length} row{bulkResult.valid.length === 1 ? "" : "s"} ready to import{bulkResult.errors.length > 0 ? " (invalid rows skipped)" : ""}.</div>
+                            )}
+                        </div>
+                        <div style={{ padding: "14px 20px", borderTop: "1px solid #eef0f3", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                            <button onClick={() => setBulkResult(null)} style={{ padding: "9px 14px", background: "#f3f4f6", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                            <button onClick={importBulk} disabled={!bulkResult.valid.length} style={{ padding: "9px 16px", background: bulkResult.valid.length ? "#1a1f3a" : "#9ca3af", color: "#FDB813", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: bulkResult.valid.length ? "pointer" : "not-allowed" }}>
+                                Import {bulkResult.valid.length} item{bulkResult.valid.length === 1 ? "" : "s"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
