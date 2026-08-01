@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toast as sonner } from 'sonner';
 import './jobs-ready.css';
 
 /* =========================================================================
@@ -292,7 +293,7 @@ function CreateJobModal({ reps, subs, onClose, onSave, toast }) {
         const jobCost = parseInt(form.jobCost, 10) || 0;
         const pay = parseInt(form.pay, 10) || 0;
         if (!form.address.trim() || !form.scope.trim() || !pay || !jobCost) {
-            toast('Address, scope, job cost, and sub payout are required.');
+            toast('Address, scope, job cost, and sub payout are required.', 'error');
             return;
         }
         onSave({ ...form, jobCost, pay, materials, ourPhotos, customItems });
@@ -689,7 +690,7 @@ function AddSubModal({ onClose, onSave, toast }) {
     const [f, setF] = useState({ name: '', contact: '', phone: '', email: '' });
     const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
     const save = () => {
-        if (!f.name.trim() || !f.phone.trim()) { toast('Name and phone are required.'); return; }
+        if (!f.name.trim() || !f.phone.trim()) { toast('Name and phone are required.', 'error'); return; }
         onSave(f);
     };
     return (
@@ -729,15 +730,16 @@ export default function JobsReady() {
     const [layout, setLayout] = useState('grid');
 
     const [modal, setModal] = useState(null); // { type, id }
-    const [toastMsg, setToastMsg] = useState(null);
-    const toastTimer = useRef(null);
 
-    const toast = (msg, ms) => {
-        setToastMsg(msg);
-        clearTimeout(toastTimer.current);
-        toastTimer.current = setTimeout(() => setToastMsg(null), ms || 3200);
+    // Route all in-page feedback through the central sonner Toaster (top-center,
+    // richColors) so it matches every other screen. `type` picks the matching
+    // sonner method; anything else falls back to a neutral info toast.
+    const toast = (msg, type = "") => {
+        if (type === "success") sonner.success(msg);
+        else if (type === "error") sonner.error(msg);
+        else if (type === "warn" || type === "warning") sonner.warning(msg);
+        else sonner.info(msg);
     };
-    useEffect(() => () => clearTimeout(toastTimer.current), []);
 
     const getRep = (id) => reps.find((r) => r.id === id) || null;
     const repName = (id) => { const r = getRep(id); return r ? r.name : 'Unassigned'; };
@@ -761,7 +763,7 @@ export default function JobsReady() {
         const j = getJob(id); if (!j) return;
         const nv = j.visibility === 'published' ? 'hidden' : 'published';
         patchJob(id, { visibility: nv });
-        toast(nv === 'published' ? 'Job is now visible to subs.' : 'Job hidden from subs.');
+        toast(nv === 'published' ? 'Job is now visible to subs.' : 'Job hidden from subs.', 'success');
     };
 
     const assignToCrew = (id, subId) => {
@@ -769,27 +771,27 @@ export default function JobsReady() {
         const s = subs.find((x) => x.id === subId);
         if (!subId || !s) {
             patchJob(id, { claimedBy: null, claimedByName: null, claimedAt: null, status: j.status === 'claimed' ? 'available' : j.status });
-            toast('Job unassigned — back in the open pool.');
+            toast('Job unassigned — back in the open pool.', 'success');
         } else {
             patchJob(id, {
                 claimedBy: s.id, claimedByName: s.name, claimedAt: Date.now(),
                 status: j.status === 'available' ? 'claimed' : j.status,
                 visibility: j.visibility !== 'published' ? 'published' : j.visibility,
             });
-            toast(`Assigned to ${s.name}.`);
+            toast(`Assigned to ${s.name}.`, 'success');
         }
     };
 
     const saveJobDetails = (id, patch) => {
-        if (!patch.address || !patch.scope) { toast('Address and scope are required.'); return; }
+        if (!patch.address || !patch.scope) { toast('Address and scope are required.', 'error'); return; }
         patchJob(id, patch);
-        toast('Job details saved.');
+        toast('Job details saved.', 'success');
     };
 
     const deleteJob = (id) => {
         setJobs((js) => js.filter((j) => j.id !== id));
         setModal(null);
-        toast('Job removed.');
+        toast('Job removed.', 'success');
     };
 
     const saveNewJob = (data) => {
@@ -809,7 +811,7 @@ export default function JobsReady() {
         setModal(null);
         toast(assignSub ? `Job created and assigned to ${assignSub.name}.`
             : job.visibility === 'published' ? 'Job published — visible to subs.'
-                : 'Job saved as hidden draft.');
+                : 'Job saved as hidden draft.', 'success');
     };
 
     const sendNotify = (ids) => {
@@ -817,19 +819,19 @@ export default function JobsReady() {
         const now = Date.now();
         setJobs((js) => js.map((j) => ids.includes(j.id) ? { ...j, lastNotifiedAt: now, notifyCount: n } : j));
         setModal(null);
-        toast(`📣 Sent to ${n} subs — ${ids.length} job(s) broadcast as available.`, 4500);
+        toast(`📣 Sent to ${n} subs — ${ids.length} job(s) broadcast as available.`, 'success');
     };
 
     const openNotifyJob = (id) => {
         const j = getJob(id); if (!j) return;
-        if (j.status !== 'available' || j.claimedBy) { toast('Only unclaimed jobs can be broadcast.'); return; }
-        if (j.visibility !== 'published') { toast('Publish this job to subs before broadcasting it.'); return; }
+        if (j.status !== 'available' || j.claimedBy) { toast('Only unclaimed jobs can be broadcast.', 'warn'); return; }
+        if (j.visibility !== 'published') { toast('Publish this job to subs before broadcasting it.', 'warn'); return; }
         setModal({ type: 'notifyJob', id });
     };
 
     const openNotifyAll = () => {
         const available = jobs.filter((j) => j.status === 'available' && j.visibility === 'published' && !j.claimedBy);
-        if (!available.length) { toast('No published, unassigned jobs to broadcast right now.'); return; }
+        if (!available.length) { toast('No published, unassigned jobs to broadcast right now.', 'warn'); return; }
         setModal({ type: 'notifyAll' });
     };
 
@@ -837,12 +839,12 @@ export default function JobsReady() {
         const initials = f.name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
         setSubs((ss) => [...ss, { id: uid('sub'), name: f.name.trim(), contact: f.contact.trim(), phone: f.phone.trim(), email: f.email.trim(), initials, active: true }]);
         setModal(null);
-        toast(`${f.name.trim()} added and invite sent.`);
+        toast(`${f.name.trim()} added and invite sent.`, 'success');
     };
 
     const messageSub = (subId) => {
         const s = subs.find((x) => x.id === subId); if (!s) return;
-        toast(`Message sent to ${s.name} (${s.phone}).`);
+        toast(`Message sent to ${s.name} (${s.phone}).`, 'success');
     };
 
     /* ---- Subs derived ---- */
@@ -1071,9 +1073,6 @@ export default function JobsReady() {
             {modal?.type === 'addSub' && (
                 <AddSubModal onClose={() => setModal(null)} onSave={saveNewSub} toast={toast} />
             )}
-
-            {/* TOAST */}
-            <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
         </div>
     );
 }

@@ -183,8 +183,6 @@ const TERMS_DEFAULT = {
 <strong>ENTIRE AGREEMENT.</strong> This Agreement together with the written estimate constitutes the entire agreement, superseding all prior negotiations.`,
 };
 
-const ICON_MAP = { success: "i-check-circle", warn: "i-warning", error: "i-warning" };
-
 // Client form + selector logic now lives in `components/clients/ClientSelector.jsx`
 // (with shared helpers in `lib/clients/newClientForm.js`), so the same
 // UI + shape + rules apply across Estimation, Measurement, Mockup, and Policy Analysis.
@@ -571,7 +569,6 @@ const Estimation = () => {
 
     // ── Loading overlay + toasts + save indicator ────────────────────────
     const [loading, setLoading] = useState({ active: false, text: "", sub: "" });
-    const [toasts, setToasts] = useState([]);
     const [saveIndicator, setSaveIndicator] = useState({ saving: false, text: "Saved" });
 
     // ── Persistence (M4): track the saved estimate's id + last-save state ─
@@ -1055,10 +1052,15 @@ const Estimation = () => {
     }, [searchParams]);
 
     // ====================== UTIL ======================
+    // Route all in-page toasts through the central sonner Toaster (top-center,
+    // richColors) so they match every other screen. Map the legacy type strings
+    // ("warn"/"success"/"error") to the matching sonner method; anything else
+    // falls back to a neutral info toast.
     const toast = useCallback((msg, type = "") => {
-        const id = Date.now() + Math.random();
-        setToasts((prev) => [...prev, { id, msg, type }]);
-        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2800);
+        if (type === "success") sonner.success(msg);
+        else if (type === "error") sonner.error(msg);
+        else if (type === "warn" || type === "warning") sonner.warning(msg);
+        else sonner.info(msg);
     }, []);
 
     const showLoading = (text, sub = "") => setLoading({ active: true, text, sub });
@@ -5431,15 +5433,6 @@ const Estimation = () => {
                 </div>
             )}
 
-            {/* ============ TOASTS ============ */}
-            <div className="toast-container">
-                {toasts.map((t) => (
-                    <div key={t.id} className={`toast ${t.type}`}>
-                        <svg className="icon icon-sm"><use href={`#${ICON_MAP[t.type] || "i-check"}`} /></svg>
-                        <span>{t.msg}</span>
-                    </div>
-                ))}
-            </div>
         </div>
     );
 };
