@@ -387,6 +387,18 @@ const Estimation = () => {
     // Inline estimate line-item editing (edit icon → name/qty/unit/price inputs → save icon)
     const [editingItem, setEditingItem] = useState(null); // { secId, idx }
     const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
+    // Editable code-requirements checklist (session-only, like the item library)
+    const [codeItems, setCodeItems] = useState(CODE_ITEMS);
+    const [editingCode, setEditingCode] = useState(null); // item.id
+    const [editCodeName, setEditCodeName] = useState('');
+    const [editCodePrice, setEditCodePrice] = useState('');
+    const [editCodeRef, setEditCodeRef] = useState('');
+    // Editable code & manufacturer database (session-only). Items get a stable id.
+    const [codeDb, setCodeDb] = useState(() => CODE_DB.map((c, i) => ({ ...c, id: `cdb-${i}` })));
+    const [editingCodeDb, setEditingCodeDb] = useState(null); // item.id
+    const [editCdbName, setEditCdbName] = useState('');
+    const [editCdbMeta, setEditCdbMeta] = useState('');
+    const [editCdbPrice, setEditCdbPrice] = useState('');
     const [activeCategory, setActiveCategory] = useState("roofing");
     const [itemSearch, setItemSearch] = useState("");
 
@@ -1832,6 +1844,44 @@ const Estimation = () => {
         setEditingItem(null);
     };
 
+    // Inline edit for a code-requirement item (name + unit price).
+    const startEditCode = (item) => {
+        setEditingCode(item.id);
+        setEditCodeName(item.name);
+        setEditCodePrice(String(item.price));
+        setEditCodeRef(item.ref || '');
+    };
+    const cancelEditCode = () => { setEditingCode(null); setEditCodeName(''); setEditCodePrice(''); setEditCodeRef(''); };
+    const saveEditCode = () => {
+        if (!editingCode) return;
+        const name = editCodeName.trim();
+        const price = parseFloat(editCodePrice);
+        if (!name) { toast('Item name is required', 'error'); return; }
+        if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
+        setCodeItems((prev) => prev.map((c) => c.id === editingCode ? { ...c, name, price, ref: editCodeRef.trim() } : c));
+        toast('Code item updated', 'success');
+        cancelEditCode();
+    };
+
+    // Inline edit for a code & manufacturer database entry (name + meta + price).
+    const startEditCodeDb = (item) => {
+        setEditingCodeDb(item.id);
+        setEditCdbName(item.name);
+        setEditCdbMeta(item.meta || '');
+        setEditCdbPrice(String(item.price));
+    };
+    const cancelEditCodeDb = () => { setEditingCodeDb(null); setEditCdbName(''); setEditCdbMeta(''); setEditCdbPrice(''); };
+    const saveEditCodeDb = () => {
+        if (!editingCodeDb) return;
+        const name = editCdbName.trim();
+        const price = parseFloat(editCdbPrice);
+        if (!name) { toast('Item name is required', 'error'); return; }
+        if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
+        setCodeDb((prev) => prev.map((c) => c.id === editingCodeDb ? { ...c, name, meta: editCdbMeta.trim(), price } : c));
+        toast('Code item updated', 'success');
+        cancelEditCodeDb();
+    };
+
     const moveItem = (secId, idx, direction) => {
         setSections((prev) => prev.map((s) => {
             if (s.id !== secId) return s;
@@ -2086,7 +2136,7 @@ const Estimation = () => {
     // ====================== CODE COMPLIANCE ======================
     const addAllCheckedCodes = () => {
         if (!ensureClient()) return;
-        const checkedItems = CODE_ITEMS.filter((c) => codeChecked[c.id]);
+        const checkedItems = codeItems.filter((c) => codeChecked[c.id]);
         if (checkedItems.length === 0) {
             toast("Tap items to check them, then add", "warn");
             return;
@@ -2125,7 +2175,7 @@ const Estimation = () => {
         toast(`Added ${checkedItems.length} code item${checkedItems.length > 1 ? "s" : ""} to estimate`, "success");
     };
 
-    const filteredCodeDb = CODE_DB.filter((it) => {
+    const filteredCodeDb = codeDb.filter((it) => {
         const q = codeDbSearch.toLowerCase().trim();
         const showC = codeDbCode === "all" || it.code === "all" || it.code === codeDbCode;
         const showM = codeDbMfr === "all" || it.mfr === "all" || it.mfr === codeDbMfr;
@@ -3534,16 +3584,60 @@ const Estimation = () => {
                                     <h3>Code requirements</h3>
                                     <p className="desc">Check the boxes for items required by code, then tap "Add to Estimate" below.</p>
                                     <div>
-                                        {CODE_ITEMS.map((item) => (
-                                            <label key={item.id} className="compact-item" style={{ cursor: "pointer" }}>
-                                                <input type="checkbox" className="code-cb" checked={!!codeChecked[item.id]} onChange={(e) => setCodeChecked((prev) => ({ ...prev, [item.id]: e.target.checked }))} />
-                                                <div className="ci-body">
-                                                    <div className="ci-name">{item.name}</div>
-                                                    <div className="ci-meta">{item.ref}</div>
-                                                </div>
-                                                <div className="ci-price">${item.price}/{item.unit}</div>
-                                            </label>
-                                        ))}
+                                        {codeItems.map((item) => {
+                                            if (editingCode === item.id) {
+                                                return (
+                                                    <div key={item.id} className="compact-item" style={{ cursor: "default", display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch" }}>
+                                                        <input
+                                                            value={editCodeName}
+                                                            onChange={(e) => setEditCodeName(e.target.value)}
+                                                            placeholder="Item name"
+                                                            autoFocus
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditCode(); if (e.key === "Escape") cancelEditCode(); }}
+                                                            style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                        />
+                                                        <input
+                                                            value={editCodeRef}
+                                                            onChange={(e) => setEditCodeRef(e.target.value)}
+                                                            placeholder="Code reference / description (optional)"
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditCode(); if (e.key === "Escape") cancelEditCode(); }}
+                                                            style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px", fontSize: 11.5, border: "1px solid #d1d5db", borderRadius: 5, color: "#374151" }}
+                                                        />
+                                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                            <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>$</span>
+                                                            <input
+                                                                type="number" min="0" step="0.01"
+                                                                value={editCodePrice}
+                                                                onChange={(e) => setEditCodePrice(e.target.value)}
+                                                                onKeyDown={(e) => { if (e.key === "Enter") saveEditCode(); if (e.key === "Escape") cancelEditCode(); }}
+                                                                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                            />
+                                                            <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>/{item.unit}</span>
+                                                        </div>
+                                                        <div style={{ display: "flex", gap: 6 }}>
+                                                            <button onClick={saveEditCode} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                                                            <button onClick={cancelEditCode} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <label key={item.id} className="compact-item" style={{ cursor: "pointer" }}>
+                                                    <input type="checkbox" className="code-cb" checked={!!codeChecked[item.id]} onChange={(e) => setCodeChecked((prev) => ({ ...prev, [item.id]: e.target.checked }))} />
+                                                    <div className="ci-body">
+                                                        <div className="ci-name">{item.name}</div>
+                                                        <div className="ci-meta">{item.ref}</div>
+                                                    </div>
+                                                    <div className="ci-price">${item.price}/{item.unit}</div>
+                                                    <button
+                                                        type="button"
+                                                        className="library-edit"
+                                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditCode(item); }}
+                                                        style={{ marginLeft: 6, padding: "3px 8px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#374151" }}
+                                                    >Edit</button>
+                                                </label>
+                                            );
+                                        })}
                                     </div>
                                     <button className="rail-action-btn" onClick={addAllCheckedCodes}>
                                         <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-plus" /></svg>
@@ -3571,15 +3665,59 @@ const Estimation = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        {filteredCodeDb.map((item, idx) => (
-                                            <div key={idx} className="compact-item codedb-row" onClick={() => addToEstimate(item.name, item.price, item.unit)} style={{ cursor: "pointer" }}>
-                                                <div className="ci-body" style={{ marginLeft: 0 }}>
-                                                    <div className="ci-name">{item.star ? "★ " : ""}{item.name}</div>
-                                                    <div className="ci-meta">{item.meta}</div>
+                                        {filteredCodeDb.map((item) => {
+                                            if (editingCodeDb === item.id) {
+                                                return (
+                                                    <div key={item.id} className="compact-item codedb-row" style={{ cursor: "default", display: "flex", flexDirection: "column", gap: 6, alignItems: "stretch" }}>
+                                                        <input
+                                                            value={editCdbName}
+                                                            onChange={(e) => setEditCdbName(e.target.value)}
+                                                            placeholder="Item name"
+                                                            autoFocus
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditCodeDb(); if (e.key === "Escape") cancelEditCodeDb(); }}
+                                                            style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                        />
+                                                        <input
+                                                            value={editCdbMeta}
+                                                            onChange={(e) => setEditCdbMeta(e.target.value)}
+                                                            placeholder="Code / description (optional)"
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditCodeDb(); if (e.key === "Escape") cancelEditCodeDb(); }}
+                                                            style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px", fontSize: 11.5, border: "1px solid #d1d5db", borderRadius: 5, color: "#374151" }}
+                                                        />
+                                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                            <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>$</span>
+                                                            <input
+                                                                type="number" min="0" step="0.01"
+                                                                value={editCdbPrice}
+                                                                onChange={(e) => setEditCdbPrice(e.target.value)}
+                                                                onKeyDown={(e) => { if (e.key === "Enter") saveEditCodeDb(); if (e.key === "Escape") cancelEditCodeDb(); }}
+                                                                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                            />
+                                                            <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>/{item.unit}</span>
+                                                        </div>
+                                                        <div style={{ display: "flex", gap: 6 }}>
+                                                            <button onClick={saveEditCodeDb} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                                                            <button onClick={cancelEditCodeDb} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <div key={item.id} className="compact-item codedb-row" onClick={() => addToEstimate(item.name, item.price, item.unit)} style={{ cursor: "pointer" }}>
+                                                    <div className="ci-body" style={{ marginLeft: 0 }}>
+                                                        <div className="ci-name">{item.star ? "★ " : ""}{item.name}</div>
+                                                        <div className="ci-meta">{item.meta}</div>
+                                                    </div>
+                                                    <div className="ci-price">${item.price}/{item.unit}</div>
+                                                    <button
+                                                        type="button"
+                                                        className="library-edit"
+                                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditCodeDb(item); }}
+                                                        style={{ marginLeft: 6, padding: "3px 8px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#374151" }}
+                                                    >Edit</button>
                                                 </div>
-                                                <div className="ci-price">${item.price}/{item.unit}</div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                     {filteredCodeDb.length === 0 && (
                                         <div style={{ display: "block", textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 12, fontStyle: "italic" }}>No matches. Try a different search.</div>
