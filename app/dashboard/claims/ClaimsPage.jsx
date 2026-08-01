@@ -798,13 +798,13 @@ const ClaimsManagement = () => {
 
     const bulkUpdate = () => {
         setCurrentView('list');
-        toast('Tick the checkboxes in the list to reassign or export multiple claims.');
+        toast.info('Tick the checkboxes in the list to reassign or export multiple claims.');
     };
 
     const generateReport = () => {
         const totalValue = filteredClaims.reduce((sum, c) => sum + c.amount, 0);
         const avgValue = filteredClaims.length ? totalValue / filteredClaims.length : 0;
-        toast(`Revenue: ${filteredClaims.length} claims · $${totalValue.toLocaleString()} total · $${Math.round(avgValue).toLocaleString()} avg`);
+        toast.info(`Revenue: ${filteredClaims.length} claims · $${totalValue.toLocaleString()} total · $${Math.round(avgValue).toLocaleString()} avg`);
     };
 
     const createNewClaim = () => {

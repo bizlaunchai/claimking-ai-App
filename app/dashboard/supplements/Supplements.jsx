@@ -283,7 +283,7 @@ const SupplementsManagement = () => {
         setAdditionalNotes('');
         setCurrentSupplementId(null);
         ['clientName','propertyAddress','claimNumber','policyNumber','adjusterName','adjusterPhone','dateOfLoss','supplementDetails'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-        toast('Form cleared');
+        toast.success('Form cleared');
     };
 
     // Persist current line items to a supplement id
@@ -391,7 +391,7 @@ const SupplementsManagement = () => {
     };
 
     // Show notification (legacy helper)
-    const showNotification = (message) => toast(message);
+    const showNotification = (message) => toast.success(message);
 
     // Filter supplements table
     const filterSupplements = (status) => {
