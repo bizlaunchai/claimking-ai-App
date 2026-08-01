@@ -788,7 +788,7 @@ const PolicyAnalysis = () => {
 
                     <div className="eta-upload-grid">
                         <div>
-                            <FileUploader label='Drag & drop an insurance document here' files={files} setFiles={setFiles} allowedExtensions={['.pdf', '.jpg', '.png', '.doc', '.docx']} maxSizeMB={50} />
+                            <FileUploader label='Drag & drop an insurance document here, or click/tap to browse' files={files} setFiles={setFiles} allowedExtensions={['.pdf', '.jpg', '.png', '.doc', '.docx']} maxSizeMB={50} />
                         </div>
                         <div className="eta-detect">
                             <div className="eta-detect-title">Auto-detects:</div>

@@ -547,8 +547,8 @@ const SupplementsManagement = () => {
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <p className="upload-text">Drag and drop estimate files and any other documents for this
-                            supplement</p>
+                        <p className="upload-text">Drag &amp; drop estimate files and any other documents for this
+                            supplement, or click/tap to browse</p>
                         <p className="upload-hint">Supports: JPG, PNG, PDF, DOC, DOCX (Max 10MB per file)</p>
                         <input
                             type="file"
@@ -571,7 +571,7 @@ const SupplementsManagement = () => {
 
                 <div className="upload-estimates-section">
                     <h3 className="section-header">Upload Insurance Estimates and/or Other Documents</h3>
-                    <FileUploader label='Drag and drop estimate files and any other documents for this supplement' files={files} setFiles={setFiles} />
+                    <FileUploader label='Drag & drop estimate files and any other documents for this supplement, or click/tap to browse' files={files} setFiles={setFiles} />
                 </div>
 
                 {/* Supplement Items Section */}
