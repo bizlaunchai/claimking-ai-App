@@ -32,7 +32,7 @@ export default function FileUploader({
                                          allowedExtensions = DEFAULT_ALLOWED,
                                          maxSizeMB = 5,
                                          maxFiles = 1,
-                                         label = "Drop your files here...",
+                                         label = "Drag & drop files here, or click/tap to browse",
                                          labelStyle = { fontSize: 16, marginBottom: 2 },
                                          enforceRecommendedSize = false,
                                          recommendedSize = null,

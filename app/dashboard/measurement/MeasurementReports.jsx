@@ -514,7 +514,7 @@ const Page = () => {
                                 </div>*/}
 
                                 <LocalFileUploader
-                                    label="Drop measurement report here (PDF or image)"
+                                    label="Drag & drop measurement report here, or click/tap to browse (PDF or image)"
                                     files={measurementReportsFiles}
                                     setFiles={setMeasurementReportsFiles}
                                     allowedExtensions={['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']}
