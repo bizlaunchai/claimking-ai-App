@@ -380,6 +380,13 @@ const Estimation = () => {
 
     // ── Item library (mutable - user can edit prices / add custom) ───────
     const [itemLibrary, setItemLibrary] = useState(INITIAL_ITEM_LIBRARY);
+    // Inline library-item editing (name + price, no modal)
+    const [editingLib, setEditingLib] = useState(null); // { cat, idx }
+    const [editLibName, setEditLibName] = useState('');
+    const [editLibPrice, setEditLibPrice] = useState('');
+    // Inline estimate line-item editing (edit icon → name/qty/unit/price inputs → save icon)
+    const [editingItem, setEditingItem] = useState(null); // { secId, idx }
+    const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
     const [activeCategory, setActiveCategory] = useState("roofing");
     const [itemSearch, setItemSearch] = useState("");
 
@@ -1791,19 +1798,38 @@ const Estimation = () => {
         toast('Policy findings loaded into AI builder. Add damage type + click Generate.', 'success');
     };
 
-    const updateItemQty = (secId, idx, val) => {
-        const qty = parseFloat(val) || 0;
-        setSections((prev) => prev.map((s) => s.id === secId
-            ? { ...s, items: s.items.map((it, i) => i === idx ? { ...it, qty } : it) }
-            : s));
-        triggerSave();
-    };
-
     const removeItem = (secId, idx) => {
         setSections((prev) => prev.map((s) => s.id === secId
             ? { ...s, items: s.items.filter((_, i) => i !== idx) }
             : s));
         triggerSave();
+    };
+
+    // Inline row edit — pencil enters edit mode (name/qty/unit/price), check saves.
+    const startEditItem = (secId, idx) => {
+        const sec = sections.find((s) => s.id === secId);
+        const it = sec?.items?.[idx];
+        if (!it) return;
+        setEditingItem({ secId, idx });
+        setItemDraft({ name: it.name ?? '', qty: String(it.qty ?? ''), unit: it.unit ?? '', price: String(it.price ?? '') });
+    };
+    const cancelEditItem = () => setEditingItem(null);
+    const saveEditItem = () => {
+        if (!editingItem) return;
+        const { secId, idx } = editingItem;
+        const name = itemDraft.name.trim();
+        const qty = parseFloat(itemDraft.qty);
+        const unit = itemDraft.unit.trim();
+        const price = parseFloat(itemDraft.price);
+        if (!name) { toast('Item name is required', 'error'); return; }
+        if (!(qty > 0)) { toast('Quantity must be greater than 0', 'error'); return; }
+        if (isNaN(price) || price < 0) { toast('Enter a valid price', 'error'); return; }
+        setSections((prev) => prev.map((s) => s.id === secId
+            ? { ...s, items: s.items.map((it, i) => i === idx ? { ...it, name, qty, unit: unit || it.unit, price } : it) }
+            : s));
+        triggerSave();
+        toast('Item updated', 'success');
+        setEditingItem(null);
     };
 
     const moveItem = (secId, idx, direction) => {
@@ -1900,17 +1926,32 @@ const Estimation = () => {
     };
 
     // ====================== ITEM LIBRARY ======================
-    const editItemPrice = (cat, idx) => {
+    // Inline edit — click Edit turns the row into name + price inputs (no modal).
+    const startEditLibItem = (cat, idx) => {
         const item = (itemLibrary[cat] || [])[idx];
         if (!item) return;
-        const newPrice = window.prompt(`Edit price for "${item.name}" (per ${item.unit})`, item.price);
-        if (newPrice && !isNaN(newPrice) && parseFloat(newPrice) > 0) {
-            setItemLibrary((prev) => ({
-                ...prev,
-                [cat]: prev[cat].map((it, i) => i === idx ? { ...it, price: parseFloat(newPrice) } : it),
-            }));
-            toast(`Updated ${item.name} to $${parseFloat(newPrice).toFixed(2)}/${item.unit}`, "success");
-        }
+        setEditingLib({ cat, idx });
+        setEditLibName(item.name);
+        setEditLibPrice(String(item.price));
+    };
+    const cancelEditLibItem = () => {
+        setEditingLib(null);
+        setEditLibName('');
+        setEditLibPrice('');
+    };
+    const saveEditLibItem = () => {
+        if (!editingLib) return;
+        const { cat, idx } = editingLib;
+        const name = editLibName.trim();
+        const price = parseFloat(editLibPrice);
+        if (!name) { toast('Item name is required', 'error'); return; }
+        if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
+        setItemLibrary((prev) => ({
+            ...prev,
+            [cat]: (prev[cat] || []).map((it, i) => i === idx ? { ...it, name, price } : it),
+        }));
+        toast('Item updated', 'success');
+        cancelEditLibItem();
     };
 
     const visibleItems = (() => {
@@ -3154,18 +3195,54 @@ const Estimation = () => {
                                 <div className="items-list">
                                     {visibleItems.length === 0 ? (
                                         <div className="empty-list">{itemSearch ? "No matches" : "No items in this category"}</div>
-                                    ) : visibleItems.map((it) => (
-                                        <div key={`${it._cat}-${it._idx}`} className="item-row library-row" onClick={(e) => {
-                                            if (e.target.closest(".library-edit")) return;
-                                            addToEstimate(it.name, it.price, it.unit);
-                                        }}>
-                                            <div className="item-info">
-                                                <div className="item-name">{it.name}</div>
-                                                <div className="item-price">${it.price.toFixed(2)}/{it.unit}{itemSearch && <span style={{ color: "#9ca3af", fontWeight: 400 }}> · {it._cat}</span>}</div>
-                                            </div>
-                                            <button className="item-edit-btn library-edit" onClick={(e) => { e.stopPropagation(); editItemPrice(it._cat, it._idx); }}>Edit</button>
+                                    ) : visibleItems.map((it) => {
+                                        const isEditing = editingLib && editingLib.cat === it._cat && editingLib.idx === it._idx;
+                                        return (
+                                        <div key={`${it._cat}-${it._idx}`} className="item-row library-row"
+                                            style={isEditing ? { cursor: "default" } : undefined}
+                                            onClick={(e) => {
+                                                if (isEditing) return;
+                                                if (e.target.closest(".library-edit")) return;
+                                                addToEstimate(it.name, it.price, it.unit);
+                                            }}>
+                                            {isEditing ? (
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        value={editLibName}
+                                                        onChange={(e) => setEditLibName(e.target.value)}
+                                                        placeholder="Item name"
+                                                        autoFocus
+                                                        onKeyDown={(e) => { if (e.key === "Enter") saveEditLibItem(); if (e.key === "Escape") cancelEditLibItem(); }}
+                                                        style={{ width: "100%", boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                    />
+                                                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                        <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>$</span>
+                                                        <input
+                                                            type="number" min="0" step="0.01"
+                                                            value={editLibPrice}
+                                                            onChange={(e) => setEditLibPrice(e.target.value)}
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditLibItem(); if (e.key === "Escape") cancelEditLibItem(); }}
+                                                            style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "6px 8px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                        />
+                                                        <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>/{it.unit}</span>
+                                                    </div>
+                                                    <div style={{ display: "flex", gap: 6 }}>
+                                                        <button onClick={saveEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                                                        <button onClick={cancelEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="item-info">
+                                                        <div className="item-name">{it.name}</div>
+                                                        <div className="item-price">${it.price.toFixed(2)}/{it.unit}{itemSearch && <span style={{ color: "#9ca3af", fontWeight: 400 }}> · {it._cat}</span>}</div>
+                                                    </div>
+                                                    <button className="item-edit-btn library-edit" onClick={(e) => { e.stopPropagation(); startEditLibItem(it._cat, it._idx); }}>Edit</button>
+                                                </>
+                                            )}
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 <button onClick={() => openCustomItem()} style={{ width: "100%", marginTop: 10, padding: 9, background: "#fffef7", border: "1px dashed #FDB813", borderRadius: 7, color: "#92400e", fontSize: 12.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                                     <svg className="icon icon-sm"><use href="#i-plus" /></svg>
@@ -3238,9 +3315,11 @@ const Estimation = () => {
                                             <tbody>
                                                 {s.items.length === 0 ? (
                                                     <tr><td colSpan="7" className="empty-section">No items yet. Click items in the left panel to add.</td></tr>
-                                                ) : s.items.map((it, idx) => (
+                                                ) : s.items.map((it, idx) => {
+                                                    const isItemEditing = editingItem && editingItem.secId === s.id && editingItem.idx === idx;
+                                                    return (
                                                     <tr key={idx}
-                                                        draggable="true"
+                                                        draggable={!isItemEditing}
                                                         data-section-id={s.id}
                                                         data-idx={idx}
                                                         onDragStart={(e) => handleDragStart(e, s.id, idx)}
@@ -3249,61 +3328,81 @@ const Estimation = () => {
                                                         onDrop={(e) => handleDrop(e, s.id, idx)}>
                                                         <td><span className="drag-handle" title="Drag to reorder"><svg className="icon icon-sm"><use href="#i-grip" /></svg></span></td>
                                                         <td>
-                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                                {it.name}
-                                                                {/* Brief Sec 8: "user should see WHY each line item is included
-                                                                    and where the data came from." */}
-                                                                {it.reason && (
-                                                                    <span
-                                                                        title={[
-                                                                            it.reason,
-                                                                            it.source_field ? `Source: ${it.source_field}` : null,
-                                                                            it.code_ref ? `Code: ${it.code_ref}` : null,
-                                                                        ].filter(Boolean).join("\n\n")}
-                                                                        style={{
-                                                                            display: "inline-flex",
-                                                                            alignItems: "center",
-                                                                            justifyContent: "center",
-                                                                            width: 16, height: 16,
-                                                                            borderRadius: "50%",
-                                                                            background: "#fef3c7",
-                                                                            color: "#92400e",
-                                                                            fontSize: 10,
-                                                                            fontWeight: 700,
-                                                                            cursor: "help",
-                                                                            border: "1px solid #fde68a",
-                                                                        }}
-                                                                    >?</span>
-                                                                )}
-                                                                {it.code_ref && (
-                                                                    <span
-                                                                        title={`Required by ${it.code_ref}`}
-                                                                        style={{
-                                                                            fontSize: 10, fontWeight: 600,
-                                                                            padding: "1px 6px",
-                                                                            borderRadius: 4,
-                                                                            background: "#dbeafe",
-                                                                            color: "#1e40af",
-                                                                            cursor: "help",
-                                                                        }}
-                                                                    >CODE</span>
-                                                                )}
-                                                            </span>
+                                                            {isItemEditing ? (
+                                                                <input
+                                                                    value={itemDraft.name}
+                                                                    onChange={(e) => setItemDraft((d) => ({ ...d, name: e.target.value }))}
+                                                                    placeholder="Item name"
+                                                                    autoFocus
+                                                                    onKeyDown={(e) => { if (e.key === "Enter") saveEditItem(); if (e.key === "Escape") cancelEditItem(); }}
+                                                                    style={{ width: "100%", boxSizing: "border-box", padding: "5px 7px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                                    {it.name}
+                                                                    {it.reason && (
+                                                                        <span
+                                                                            title={[
+                                                                                it.reason,
+                                                                                it.source_field ? `Source: ${it.source_field}` : null,
+                                                                                it.code_ref ? `Code: ${it.code_ref}` : null,
+                                                                            ].filter(Boolean).join("\n\n")}
+                                                                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: "50%", background: "#fef3c7", color: "#92400e", fontSize: 10, fontWeight: 700, cursor: "help", border: "1px solid #fde68a" }}
+                                                                        >?</span>
+                                                                    )}
+                                                                    {it.code_ref && (
+                                                                        <span title={`Required by ${it.code_ref}`} style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: "#dbeafe", color: "#1e40af", cursor: "help" }}>CODE</span>
+                                                                    )}
+                                                                </span>
+                                                            )}
                                                         </td>
-                                                        <td><input type="number" className="qty-input" value={it.qty} min="0" step="0.01" onChange={(e) => updateItemQty(s.id, idx, e.target.value)} /></td>
-                                                        <td>{it.unit}</td>
-                                                        <td>${it.price.toFixed(2)}</td>
-                                                        <td><strong>${(it.qty * it.price).toFixed(2)}</strong></td>
+                                                        <td>{isItemEditing ? (
+                                                            <input type="number" min="0" step="0.01" className="qty-input" value={itemDraft.qty}
+                                                                onChange={(e) => setItemDraft((d) => ({ ...d, qty: e.target.value }))}
+                                                                onKeyDown={(e) => { if (e.key === "Enter") saveEditItem(); if (e.key === "Escape") cancelEditItem(); }} />
+                                                        ) : it.qty}</td>
+                                                        <td>{isItemEditing ? (
+                                                            <input value={itemDraft.unit}
+                                                                onChange={(e) => setItemDraft((d) => ({ ...d, unit: e.target.value }))}
+                                                                onKeyDown={(e) => { if (e.key === "Enter") saveEditItem(); if (e.key === "Escape") cancelEditItem(); }}
+                                                                style={{ width: 50, boxSizing: "border-box", padding: "5px 6px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }} />
+                                                        ) : it.unit}</td>
+                                                        <td>{isItemEditing ? (
+                                                            <input type="number" min="0" step="0.01" value={itemDraft.price}
+                                                                onChange={(e) => setItemDraft((d) => ({ ...d, price: e.target.value }))}
+                                                                onKeyDown={(e) => { if (e.key === "Enter") saveEditItem(); if (e.key === "Escape") cancelEditItem(); }}
+                                                                style={{ width: 75, boxSizing: "border-box", padding: "5px 6px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }} />
+                                                        ) : `$${it.price.toFixed(2)}`}</td>
+                                                        <td><strong>${isItemEditing
+                                                            ? ((parseFloat(itemDraft.qty) || 0) * (parseFloat(itemDraft.price) || 0)).toFixed(2)
+                                                            : (it.qty * it.price).toFixed(2)}</strong></td>
                                                         <td>
                                                             <div className="line-actions">
-                                                                <button className="line-action-btn" onClick={() => moveItem(s.id, idx, -1)} title="Move up" disabled={idx === 0}><svg className="icon icon-sm"><use href="#i-arrow-up" /></svg></button>
-                                                                <button className="line-action-btn" onClick={() => moveItem(s.id, idx, 1)} title="Move down" disabled={idx === s.items.length - 1}><svg className="icon icon-sm"><use href="#i-arrow-down" /></svg></button>
-                                                                <button className="line-action-btn" onClick={(e) => openMoveMenu(e, s.id, idx)} title="Move to section"><svg className="icon icon-sm"><use href="#i-move" /></svg></button>
-                                                                <button className="line-action-btn danger" onClick={() => removeItem(s.id, idx)} title="Remove"><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
+                                                                {isItemEditing ? (
+                                                                    <>
+                                                                        <button className="line-action-btn" onClick={saveEditItem} title="Save" style={{ color: "#059669" }}>
+                                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                                        </button>
+                                                                        <button className="line-action-btn" onClick={cancelEditItem} title="Cancel">
+                                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className="line-action-btn" onClick={() => startEditItem(s.id, idx)} title="Edit">
+                                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                                                                        </button>
+                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, -1)} title="Move up" disabled={idx === 0}><svg className="icon icon-sm"><use href="#i-arrow-up" /></svg></button>
+                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, 1)} title="Move down" disabled={idx === s.items.length - 1}><svg className="icon icon-sm"><use href="#i-arrow-down" /></svg></button>
+                                                                        <button className="line-action-btn" onClick={(e) => openMoveMenu(e, s.id, idx)} title="Move to section"><svg className="icon icon-sm"><use href="#i-move" /></svg></button>
+                                                                        <button className="line-action-btn danger" onClick={() => removeItem(s.id, idx)} title="Remove"><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ))}
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                         {/* CK-FIX Jul-22: the duplicate "Add from library" button was
