@@ -283,9 +283,10 @@ export default function PortalView() {
     // and-forth → their files → talk to us.
     const TABS = [
         { key: 'overview',  label: 'Overview',  icon: <Icon.Home width="16" height="16" /> },
-        { key: 'estimate',  label: 'Estimate',  icon: <Icon.Estimate width="16" height="16" /> },
+        { key: 'estimate',  label: 'My Estimate',  icon: <Icon.Estimate width="16" height="16" /> },
         { key: 'insurance', label: 'Insurance Communication', icon: <Icon.Insurance width="16" height="16" /> },
         { key: 'documents', label: 'Documents', icon: <Icon.Folder width="16" height="16" /> },
+        { key: 'mockups',   label: '3D Mockups', icon: <Icon.Spark width="16" height="16" /> },
         { key: 'messages',  label: 'Messages',  icon: <Icon.Message width="16" height="16" /> },
     ];
 
@@ -484,24 +485,25 @@ export default function PortalView() {
                 )}
 
                 {activeTab === 'documents' && (
-                    <>
-                        <SectionCard
-                            icon={<Icon.Folder width="18" height="18" />}
-                            accent="indigo"
-                            title="Other Documents"
-                            subtitle="Contracts, reports and paperwork your contractor has shared"
-                        >
-                            <PortalDocuments />
-                        </SectionCard>
-                        <SectionCard
-                            icon={<Icon.Spark width="18" height="18" />}
-                            accent="amber"
-                            title="3D Mockups"
-                            subtitle="Color and material previews of your finished roof"
-                        >
-                            <PortalMockups />
-                        </SectionCard>
-                    </>
+                    <SectionCard
+                        icon={<Icon.Folder width="18" height="18" />}
+                        accent="indigo"
+                        title="Other Documents"
+                        subtitle="Contracts, reports and paperwork your contractor has shared"
+                    >
+                        <PortalDocuments />
+                    </SectionCard>
+                )}
+
+                {activeTab === 'mockups' && (
+                    <SectionCard
+                        icon={<Icon.Spark width="18" height="18" />}
+                        accent="amber"
+                        title="3D Mockups"
+                        subtitle="Color and material previews of your finished roof"
+                    >
+                        <PortalMockups />
+                    </SectionCard>
                 )}
 
                 {activeTab === 'messages' && (
