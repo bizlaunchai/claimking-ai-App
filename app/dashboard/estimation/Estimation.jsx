@@ -422,6 +422,20 @@ function downloadCsvFile(filename, content) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ====================== CATEGORIES (feature 2.5) ======================
+// The 5 built-ins stay hard-coded here; custom categories come from the DB
+// (GET /estimate-categories) and merge into the same chip row / dropdowns.
+const BUILTIN_CATEGORIES = [
+    { slug: "roofing", label: "Roofing" },
+    { slug: "siding", label: "Siding" },
+    { slug: "gutters", label: "Gutters" },
+    { slug: "windows", label: "Windows" },
+    { slug: "general", label: "General" },
+];
+function slugifyCat(name) {
+    return String(name ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
 // ====================== MAIN COMPONENT ======================
 const Estimation = () => {
     // ── Query params (Measurement → Estimate handoff) ─────────────────────
@@ -474,6 +488,10 @@ const Estimation = () => {
     const bulkFileRef = useRef(null);
     const bulkKindRef = useRef(null); // 'library' | 'code'
     const [bulkResult, setBulkResult] = useState(null); // { kind, valid, errors }
+    // 2.5 — custom categories (company-wide, from DB). Built-ins stay hard-coded.
+    const [customCategories, setCustomCategories] = useState([]);
+    const [catModalOpen, setCatModalOpen] = useState(false);
+    const [newCatName, setNewCatName] = useState('');
     const [activeCategory, setActiveCategory] = useState("roofing");
     const [itemSearch, setItemSearch] = useState("");
 
@@ -1786,7 +1804,7 @@ const Estimation = () => {
     };
 
     // ====================== ITEMS ======================
-    const addToEstimate = (name, price, unit) => {
+    const addToEstimate = (name, price, unit, catSlug) => {
         if (!ensureClient()) return;
         if (!hasStarted) showBuilder();
 
@@ -1801,8 +1819,17 @@ const Estimation = () => {
             setActiveSection(def.id);
         }
 
+        // Route to the section that matches the item's category (a section added
+        // from that chip), if one exists — otherwise the active/first section.
+        let targetId = targetActive || curSections[0].id;
+        if (catSlug) {
+            const catLabel = (activeCategories.find((c) => c.slug === catSlug)?.label || "").toLowerCase();
+            const match = curSections.find((s) => s.id === `cat-${catSlug}`)
+                || (catLabel && curSections.find((s) => (s.name || "").toLowerCase() === catLabel));
+            if (match) targetId = match.id;
+        }
+
         setSections(() => {
-            const targetId = targetActive || curSections[0].id;
             return curSections.map((s) => {
                 if (s.id !== targetId) return s;
                 const existing = s.items.find((i) => i.name === name);
@@ -1981,18 +2008,34 @@ const Estimation = () => {
     const importBulk = () => {
         if (!bulkResult || !bulkResult.valid.length) return;
         if (bulkResult.kind === 'library') {
+            const bySlug = {};
+            for (const it of bulkResult.valid) {
+                const cat = slugifyCat(it.category);
+                (bySlug[cat] = bySlug[cat] || []).push(it);
+            }
+            // Built-in categories → session merge.
             setItemLibrary((prev) => {
                 const next = { ...prev };
-                for (const it of bulkResult.valid) {
-                    const cat = it.category;
+                for (const [cat, items] of Object.entries(bySlug)) {
+                    if (customCategories.find((c) => c.slug === cat)) continue; // custom → DB below
                     const list = next[cat] ? [...next[cat]] : [];
-                    const idx = list.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
-                    if (idx >= 0) list[idx] = { ...list[idx], price: it.price, unit: it.unit };
-                    else list.push({ name: it.name, price: it.price, unit: it.unit });
+                    for (const it of items) {
+                        const idx = list.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
+                        if (idx >= 0) list[idx] = { ...list[idx], price: it.price, unit: it.unit };
+                        else list.push({ name: it.name, price: it.price, unit: it.unit });
+                    }
                     next[cat] = list;
                 }
                 return next;
             });
+            // Custom categories → persist to DB, then refresh from the server.
+            const customImports = Object.entries(bySlug).filter(([cat]) => customCategories.find((c) => c.slug === cat));
+            if (customImports.length) {
+                Promise.all(customImports.map(([cat, items]) => {
+                    const custom = customCategories.find((c) => c.slug === cat);
+                    return axiosInstance.post(`/estimate-categories/${custom.id}/items/bulk`, { items: items.map((i) => ({ name: i.name, unit: i.unit, price: i.price })) });
+                })).then(() => reloadCategories()).catch((err) => toast(err?.userMessage ?? 'Some items could not import', 'error'));
+            }
         } else {
             setCodeItems((prev) => {
                 const next = [...prev];
@@ -2011,6 +2054,90 @@ const Estimation = () => {
         'category,name,unit,price\nroofing,30yr Architectural Shingles,SQ,125\nsiding,Vinyl Siding,SQ,85\n');
     const downloadCodeTemplate = () => downloadCsvFile('code-requirements-template.csv',
         'name,reference,unit,price\nIce & Water Shield,IRC R905.1.2 - valleys & eaves,SQ,125\nDrip Edge,IRC R905.2.8.5,LF,3.75\n');
+
+    // ── 2.5 custom categories ──
+    const reloadCategories = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/estimate-categories', { suppressErrorToast: true });
+            const cats = res.data?.data ?? [];
+            setCustomCategories(cats);
+            // Custom-category items are persisted — hydrate the item panel from
+            // the DB (built-in categories keep their session items untouched).
+            setItemLibrary((prev) => {
+                const next = { ...prev };
+                for (const c of cats) {
+                    next[c.slug] = (c.items || []).map((i) => ({
+                        name: i.name, price: Number(i.price), unit: i.unit, _libId: i.id,
+                    }));
+                }
+                return next;
+            });
+        } catch { setCustomCategories([]); }
+    }, []);
+    useEffect(() => { reloadCategories(); }, [reloadCategories]);
+
+    // Built-ins + active custom categories — powers the chip row and dropdowns.
+    const activeCategories = [
+        ...BUILTIN_CATEGORIES.map((c) => ({ ...c, builtin: true })),
+        ...customCategories.filter((c) => c.is_active).map((c) => ({ slug: c.slug, label: c.name, builtin: false, id: c.id })),
+    ];
+
+    const addCategory = async () => {
+        const name = newCatName.trim();
+        if (!name) return;
+        try {
+            const res = await axiosInstance.post('/estimate-categories', { name });
+            const cat = res.data?.data;
+            if (cat) setCustomCategories((prev) => [...prev, cat]);
+            setNewCatName('');
+            toast(`Category "${name}" added`, 'success');
+        } catch (err) {
+            toast(err?.userMessage ?? err?.response?.data?.message ?? 'Could not add category', 'error');
+        }
+    };
+    const toggleCategoryActive = async (cat) => {
+        try {
+            const res = await axiosInstance.patch(`/estimate-categories/${cat.id}`, { is_active: !cat.is_active });
+            setCustomCategories((prev) => prev.map((c) => c.id === cat.id ? (res.data?.data ?? { ...c, is_active: !c.is_active }) : c));
+        } catch (err) { toast(err?.userMessage ?? 'Could not update category', 'error'); }
+    };
+    const renameCategory = async (cat, name) => {
+        const nm = (name ?? '').trim();
+        if (!nm || nm === cat.name) return;
+        try {
+            const res = await axiosInstance.patch(`/estimate-categories/${cat.id}`, { name: nm });
+            const updated = res.data?.data;
+            if (updated && updated.slug !== cat.slug) {
+                // carry any session library items over to the new slug
+                setItemLibrary((prev) => {
+                    if (!prev[cat.slug]) return prev;
+                    const next = { ...prev };
+                    next[updated.slug] = [...(next[updated.slug] || []), ...next[cat.slug]];
+                    delete next[cat.slug];
+                    return next;
+                });
+                if (activeCategory === cat.slug) setActiveCategory(updated.slug);
+            }
+            setCustomCategories((prev) => prev.map((c) => c.id === cat.id ? (updated ?? { ...c, name: nm }) : c));
+            toast('Category renamed', 'success');
+        } catch (err) { toast(err?.userMessage ?? 'Could not rename category', 'error'); }
+    };
+    const deleteCategory = async (cat) => {
+        try {
+            await axiosInstance.delete(`/estimate-categories/${cat.id}`);
+            // Move this category's LIBRARY items to General (don't delete them).
+            setItemLibrary((prev) => {
+                if (!prev[cat.slug]?.length) return prev;
+                const next = { ...prev };
+                next.general = [...(next.general || []), ...next[cat.slug]];
+                delete next[cat.slug];
+                return next;
+            });
+            setCustomCategories((prev) => prev.filter((c) => c.id !== cat.id));
+            if (activeCategory === cat.slug) setActiveCategory('roofing');
+            toast(`"${cat.name}" deleted — its items moved to General`, 'success');
+        } catch (err) { toast(err?.userMessage ?? 'Could not delete category', 'error'); }
+    };
 
     const moveItem = (secId, idx, direction) => {
         setSections((prev) => prev.map((s) => {
@@ -2126,11 +2253,30 @@ const Estimation = () => {
         const price = parseFloat(editLibPrice);
         if (!name) { toast('Item name is required', 'error'); return; }
         if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
+        const target = (itemLibrary[cat] || [])[idx];
         setItemLibrary((prev) => ({
             ...prev,
             [cat]: (prev[cat] || []).map((it, i) => i === idx ? { ...it, name, price } : it),
         }));
+        // Persist to DB when this is a custom-category (library) item.
+        if (target?._libId) {
+            axiosInstance.patch(`/estimate-categories/items/${target._libId}`, { name, price })
+                .catch((err) => toast(err?.userMessage ?? 'Saved locally, but could not sync', 'error'));
+        }
         toast('Item updated', 'success');
+        cancelEditLibItem();
+    };
+    const deleteLibItem = () => {
+        if (!editingLib) return;
+        const { cat, idx } = editingLib;
+        const target = (itemLibrary[cat] || [])[idx];
+        setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
+        // Custom-category item → remove from DB; built-in session item → local only.
+        if (target?._libId) {
+            axiosInstance.delete(`/estimate-categories/items/${target._libId}`)
+                .catch((err) => toast(err?.userMessage ?? 'Removed locally, but could not sync', 'error'));
+        }
+        toast('Item removed', 'success');
         cancelEditLibItem();
     };
 
@@ -2164,7 +2310,7 @@ const Estimation = () => {
         }
         setCustomItem({
             name: "", qty: "1", unit: "EA", price: "",
-            section: secId, saveToLib: true, category: "general",
+            section: secId, saveToLib: true, category: activeCategory || "general",
         });
         setCustomItemModal(true);
     };
@@ -2186,12 +2332,28 @@ const Estimation = () => {
         setActiveSection(customItem.section);
 
         if (customItem.saveToLib) {
-            setItemLibrary((prev) => {
-                const cat = customItem.category;
-                const list = prev[cat] || [];
-                if (list.find((i) => i.name === name)) return prev;
-                return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit }] };
-            });
+            const cat = customItem.category;
+            const custom = customCategories.find((c) => c.slug === cat);
+            if (custom) {
+                // Custom category → persist the library item to the DB.
+                axiosInstance.post(`/estimate-categories/${custom.id}/items`, { name, unit: customItem.unit, price })
+                    .then((res) => {
+                        const it = res.data?.data;
+                        setItemLibrary((prev) => {
+                            const list = prev[cat] || [];
+                            if (list.find((i) => (i.name ?? '').toLowerCase() === name.toLowerCase())) return prev;
+                            return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit, _libId: it?.id }] };
+                        });
+                    })
+                    .catch((err) => toast(err?.userMessage ?? 'Could not save to library', 'error'));
+            } else {
+                // Built-in category → session-only, as before.
+                setItemLibrary((prev) => {
+                    const list = prev[cat] || [];
+                    if (list.find((i) => i.name === name)) return prev;
+                    return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit }] };
+                });
+            }
         }
 
         setCustomItemModal(false);
@@ -3391,11 +3553,14 @@ const Estimation = () => {
                                 </div>
                                 <input type="text" className="search-input" placeholder="Search items..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} />
                                 <div className="category-tabs">
-                                    {["roofing", "siding", "gutters", "windows", "general"].map((cat) => (
-                                        <button key={cat} className={`category-tab ${activeCategory === cat ? "active" : ""}`} onClick={() => { setActiveCategory(cat); setItemSearch(""); }}>
-                                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                                    {activeCategories.map((cat) => (
+                                        <button key={cat.slug} className={`category-tab ${activeCategory === cat.slug ? "active" : ""}`} onClick={() => { setActiveCategory(cat.slug); setItemSearch(""); }}>
+                                            {cat.label}
                                         </button>
                                     ))}
+                                    <button className="category-tab" onClick={() => setCatModalOpen(true)} title="Add or manage categories" style={{ fontWeight: 700, color: "#92400e" }}>
+                                        + Category
+                                    </button>
                                 </div>
                                 <div className="items-list">
                                     {visibleItems.length === 0 ? (
@@ -3408,7 +3573,7 @@ const Estimation = () => {
                                             onClick={(e) => {
                                                 if (isEditing) return;
                                                 if (e.target.closest(".library-edit")) return;
-                                                addToEstimate(it.name, it.price, it.unit);
+                                                addToEstimate(it.name, it.price, it.unit, it._cat);
                                             }}>
                                             {isEditing ? (
                                                 <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
@@ -3434,6 +3599,7 @@ const Estimation = () => {
                                                     <div style={{ display: "flex", gap: 6 }}>
                                                         <button onClick={saveEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
                                                         <button onClick={cancelEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                                        <button onClick={deleteLibItem} title="Delete item" style={{ padding: "6px 9px", background: "#fff", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -4996,6 +5162,16 @@ const Estimation = () => {
                             <button className="w-[30px] h-[30px] bg-transparent border-0 cursor-pointer text-gray-500 rounded-md flex items-center justify-center hover:bg-gray-100 hover:text-[#1a1f3a]" onClick={() => setAddSectionModal(false)}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
                         <div className="p-[22px]">
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#9ca3af", marginBottom: 8 }}>By category</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+                                {activeCategories.map((cat) => (
+                                    <button key={cat.slug} type="button" className="category-tab" style={{ cursor: "pointer" }}
+                                        onClick={() => { addSection({ id: `cat-${cat.slug}`, name: cat.label }); setAddSectionModal(false); }}>
+                                        + {cat.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#9ca3af", marginBottom: 8 }}>Templates</div>
                             <div>
                                 {availableTemplates.length === 0 ? (
                                     <p style={{ color: "#6b7280", fontSize: 13 }}>All templates already added. Use custom name below.</p>
@@ -5060,11 +5236,9 @@ const Estimation = () => {
                             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: 10, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 7, cursor: "pointer" }}>
                                 <input type="checkbox" checked={customItem.saveToLib} onChange={(e) => setCustomItem({ ...customItem, saveToLib: e.target.checked })} />
                                 <span>Save to my item library for next time (under <select value={customItem.category} onChange={(e) => setCustomItem({ ...customItem, category: e.target.value })} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 4px", fontSize: 12 }}>
-                                    <option value="roofing">Roofing</option>
-                                    <option value="siding">Siding</option>
-                                    <option value="gutters">Gutters</option>
-                                    <option value="windows">Windows</option>
-                                    <option value="general">General</option>
+                                    {activeCategories.map((c) => (
+                                        <option key={c.slug} value={c.slug}>{c.label}</option>
+                                    ))}
                                 </select>)</span>
                             </label>
                             {customItem.name && parseFloat(customItem.price) > 0 && (
@@ -5201,6 +5375,51 @@ const Estimation = () => {
                 </div>
             )}
 
+            {/* ============ 2.5 CATEGORY MANAGER MODAL ============ */}
+            {catModalOpen && (
+                <div onClick={() => setCatModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 520, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid #eef0f3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1f3a" }}>Item categories</div>
+                            <button onClick={() => setCatModalOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+                        <div style={{ padding: 20, overflowY: "auto" }}>
+                            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                                <input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="New category name (e.g. Fencing)" onKeyDown={(e) => { if (e.key === "Enter") addCategory(); }}
+                                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 7 }} />
+                                <button onClick={addCategory} style={{ padding: "8px 16px", background: "#1a1f3a", color: "#FDB813", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Add</button>
+                            </div>
+                            <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700 }}>Built-in</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+                                {BUILTIN_CATEGORIES.map((c) => (
+                                    <span key={c.slug} style={{ fontSize: 12, background: "#f3f4f6", color: "#374151", padding: "4px 10px", borderRadius: 12, fontWeight: 600 }}>{c.label}</span>
+                                ))}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700 }}>Custom</div>
+                            {customCategories.length === 0 ? (
+                                <div style={{ fontSize: 12.5, color: "#6b7280" }}>No custom categories yet. Add one above.</div>
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    {customCategories.map((c) => (
+                                        <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: c.is_active ? "#fff" : "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                                            <input defaultValue={c.name} onBlur={(e) => renameCategory(c, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                                                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "5px 8px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 5, background: "transparent", color: c.is_active ? "#1a1f3a" : "#9ca3af" }} />
+                                            <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "#6b7280", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                                <input type="checkbox" checked={c.is_active} onChange={() => toggleCategoryActive(c)} /> Active
+                                            </label>
+                                            <button onClick={() => deleteCategory(c)} title="Delete" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#dc2626", padding: 4 }}>
+                                                <svg className="icon icon-sm"><use href="#i-trash" /></svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 14, lineHeight: 1.5 }}>Categories are shared with your whole team on every estimate. Deleting one moves its library items to General (items aren&apos;t lost); built-ins can&apos;t be deleted. Inactive categories are hidden from the item panel but kept.</div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ============ 2.4 CSV BULK UPLOAD RESULT MODAL ============ */}
             {bulkResult && (
                 <div onClick={() => setBulkResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
@@ -5273,7 +5492,7 @@ const Estimation = () => {
                                     })
                                     .map((it) => (
                                         <div key={`all-${it._cat}-${it._idx}`} className="item-row library-row"
-                                            onClick={() => { addToEstimate(it.name, it.price, it.unit); toast(`Added "${it.name}"`, "success"); }}>
+                                            onClick={() => { addToEstimate(it.name, it.price, it.unit, it._cat); toast(`Added "${it.name}"`, "success"); }}>
                                             <div className="item-info">
                                                 <div className="item-name">{it.name}</div>
                                                 <div className="item-meta">{it._cat.toUpperCase()}{it.meta ? ` · ${it.meta}` : ""}</div>
