@@ -281,6 +281,7 @@ const ThreeDMockup = () => {
     const [versions, setVersions] = useState([]);
     const [activeVersionId, setActiveVersionId] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generatingStatus, setGeneratingStatus] = useState(''); // sub-message shown on the generating overlay (queue/build state)
     const [previewMode, setPreviewMode] = useState('original'); // original | result | split
     const [generationError, setGenerationError] = useState(null); // { title, message, hint } | null
     const [splitPos, setSplitPos] = useState(50); // 0-100, position of split view divider
@@ -648,6 +649,45 @@ const ThreeDMockup = () => {
     // ────────────────────────────────────────────────────────────────────────
     //   Generate / re-generate
     // ────────────────────────────────────────────────────────────────────────
+    // Generation is now ASYNC on the backend: POST returns a version row with
+    // status='generating' immediately (so we never hit the ALB 60s timeout while
+    // the request waits in the shared-key queue), and we poll GET /mockup/:id
+    // until the version leaves 'generating'. `onTick` lets the caller update the
+    // overlay message (e.g. reassure on long queue waits). Returns the settled
+    // version ({ status: 'completed' | 'failed', ... }).
+    const pollMockupVersion = async (mockupId, versionId, onTick) => {
+        const MAX_MS = 5 * 60 * 1000; // give up after ~5 min
+        const INTERVAL = 3000;
+        const started = Date.now();
+        let ticks = 0;
+        while (Date.now() - started < MAX_MS) {
+            await new Promise(r => setTimeout(r, INTERVAL));
+            ticks += 1;
+            const elapsed = Date.now() - started;
+            onTick?.(ticks, elapsed);
+            try {
+                const res = await axiosInstance.get(`/mockup/${mockupId}`);
+                const data = res.data?.data;
+                const list = data?.versions ?? [];
+                const v = list.find(x => x.id === versionId) ?? data?.current_version;
+                if (v && v.status !== 'generating') return v;
+            } catch {
+                // Transient network/read-after-write hiccup — keep polling.
+            }
+        }
+        return {
+            status: 'failed',
+            error_message: 'Timed out waiting for the mockup. It may still be processing — refresh in a minute.',
+        };
+    };
+
+    // Progressive overlay copy: reassure the user their request is queued when a
+    // wait runs long (we can't see real queue position over a polled request).
+    const buildingMessage = (verb, elapsed) =>
+        elapsed > 20000
+            ? 'High demand right now — your mockup is in line. Hang tight…'
+            : `AI is ${verb} your mockup…`;
+
     const generateMockup = async () => {
         const localFile = files?.[0]?.file ?? null;
         // New mockup → need the uploaded file. Existing/reopened mockup → the
@@ -680,8 +720,7 @@ const ThreeDMockup = () => {
 
             const res = await axiosInstance.post('/mockup/generate', formData);
             const mockup = res.data?.data?.mockup;
-            const version = res.data?.data?.version;
-            const credits = res.data?.data?.credits;
+            let version = res.data?.data?.version;
 
             setCurrentMockup(mockup);
             setVersions(prev => {
@@ -689,24 +728,32 @@ const ThreeDMockup = () => {
                 return [...filtered, version];
             });
             setActiveVersionId(version.id);
-            setPreviewMode('result');
 
-            // Sync local credit balance from the server response (saves a round-trip).
-            if (credits?.balance_after) {
-                setCreditBalance(prev => ({
-                    ...(prev ?? {}),
-                    monthly_credits: credits.balance_after.monthly,
-                    bonus_credits:   credits.balance_after.bonus,
-                }));
-            } else {
-                refreshCreditsState();
+            // Async backend — the version starts as 'generating'. Poll to completion.
+            if (version?.status === 'generating') {
+                setGeneratingStatus(buildingMessage('building', 0));
+                version = await pollMockupVersion(mockup.id, version.id, (t, elapsed) => {
+                    setGeneratingStatus(buildingMessage('building', elapsed));
+                });
             }
 
-            toast.success(
-                credits?.cost
-                    ? `Mockup generated — ${credits.cost} credits used`
-                    : 'Mockup generated',
-            );
+            if (version?.status === 'failed') {
+                setGenerationError(buildGenerationError({ userMessage: version.error_message }));
+                refreshCreditsState();
+                return;
+            }
+
+            // Completed — swap in the finished version (now carries the image URL).
+            setVersions(prev => {
+                const filtered = prev.filter(v => v.id !== version.id).map(v => ({ ...v, is_current: false }));
+                return [...filtered, version];
+            });
+            setActiveVersionId(version.id);
+            setPreviewMode('result');
+
+            // Credits are consumed in the background now, so refresh from server.
+            refreshCreditsState();
+            toast.success('Mockup generated');
         } catch (err) {
             setGenerationError(buildGenerationError(err));
             // 402 changed nothing on the server, but other errors might have —
@@ -714,6 +761,7 @@ const ThreeDMockup = () => {
             if (err?.response?.status !== 402) refreshCreditsState();
         } finally {
             setIsGenerating(false);
+            setGeneratingStatus('');
         }
     };
 
@@ -737,8 +785,7 @@ const ThreeDMockup = () => {
                 `/mockup/${currentMockup.id}/regenerate`,
                 { correction_note: regenNote.trim() },
             );
-            const version = res.data?.data?.version;
-            const credits = res.data?.data?.credits;
+            let version = res.data?.data?.version;
             if (version) {
                 setVersions(prev => {
                     const filtered = prev.filter(v => v.id !== version.id).map(v => ({ ...v, is_current: false }));
@@ -747,18 +794,44 @@ const ThreeDMockup = () => {
                 setActiveVersionId(version.id);
                 setPreviewMode('result');
             }
-            if (credits?.balance_after) {
-                setCreditBalance(prev => ({ ...(prev ?? {}), monthly_credits: credits.balance_after.monthly, bonus_credits: credits.balance_after.bonus }));
-            } else {
-                refreshCreditsState();
-            }
             setRegenNote('');
             setRegenOpen(false);
-            toast.success(credits?.cost ? `Regenerated — ${credits.cost} credits used` : 'Regenerated');
+
+            // Async backend — poll the new version to completion, showing the
+            // same generating overlay a fresh generation uses.
+            if (version?.status === 'generating') {
+                setRegenLoading(false);
+                setIsGenerating(true);
+                setGeneratingStatus(buildingMessage('rebuilding', 0));
+                version = await pollMockupVersion(currentMockup.id, version.id, (t, elapsed) => {
+                    setGeneratingStatus(buildingMessage('rebuilding', elapsed));
+                });
+                setIsGenerating(false);
+                setGeneratingStatus('');
+            }
+
+            if (version?.status === 'failed') {
+                setGenerationError(buildGenerationError({ userMessage: version.error_message }));
+                refreshCreditsState();
+                return;
+            }
+
+            // Completed — swap in the finished version.
+            if (version) {
+                setVersions(prev => {
+                    const filtered = prev.filter(v => v.id !== version.id).map(v => ({ ...v, is_current: false }));
+                    return [...filtered, version];
+                });
+                setActiveVersionId(version.id);
+            }
+            refreshCreditsState();
+            toast.success('Regenerated');
         } catch (err) {
             toast.error(err?.userMessage ?? err?.response?.data?.message ?? 'Could not regenerate');
         } finally {
             setRegenLoading(false);
+            setIsGenerating(false);
+            setGeneratingStatus('');
         }
     };
 
@@ -1937,8 +2010,10 @@ const ThreeDMockup = () => {
                             {isGenerating && (
                                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
                                     <div style={{ width: 40, height: 40, border: '3px solid #e5e7eb', borderTopColor: '#4f46e5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                    <div style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>Generating mockup…</div>
-                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Quality: {selectedQuality}</div>
+                                    <div style={{ fontSize: 14, color: '#374151', fontWeight: 600, textAlign: 'center', maxWidth: 260, padding: '0 12px' }}>
+                                        {generatingStatus || 'Generating mockup…'}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#6b7280' }}>Quality: {selectedQuality} · you can keep this tab open</div>
                                 </div>
                             )}
                         </div>
