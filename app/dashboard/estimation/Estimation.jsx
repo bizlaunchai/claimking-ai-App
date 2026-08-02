@@ -2017,7 +2017,7 @@ const Estimation = () => {
             setItemLibrary((prev) => {
                 const next = { ...prev };
                 for (const [cat, items] of Object.entries(bySlug)) {
-                    if (customCategories.find((c) => c.slug === cat)) continue; // custom → DB below
+                    if (customCategories.find((c) => c.slug === cat && c.slug !== 'general')) continue; // custom → DB below
                     const list = next[cat] ? [...next[cat]] : [];
                     for (const it of items) {
                         const idx = list.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
@@ -2029,7 +2029,7 @@ const Estimation = () => {
                 return next;
             });
             // Custom categories → persist to DB, then refresh from the server.
-            const customImports = Object.entries(bySlug).filter(([cat]) => customCategories.find((c) => c.slug === cat));
+            const customImports = Object.entries(bySlug).filter(([cat]) => customCategories.find((c) => c.slug === cat && c.slug !== 'general'));
             if (customImports.length) {
                 Promise.all(customImports.map(([cat, items]) => {
                     const custom = customCategories.find((c) => c.slug === cat);
@@ -2066,9 +2066,15 @@ const Estimation = () => {
             setItemLibrary((prev) => {
                 const next = { ...prev };
                 for (const c of cats) {
-                    next[c.slug] = (c.items || []).map((i) => ({
+                    const dbItems = (c.items || []).map((i) => ({
                         name: i.name, price: Number(i.price), unit: i.unit, _libId: i.id,
                     }));
+                    if (c.slug === 'general') {
+                        // General = hard-coded session defaults + reassigned DB items.
+                        next.general = [...INITIAL_ITEM_LIBRARY.general, ...dbItems];
+                    } else {
+                        next[c.slug] = dbItems;
+                    }
                 }
                 return next;
             });
@@ -2079,7 +2085,7 @@ const Estimation = () => {
     // Built-ins + active custom categories — powers the chip row and dropdowns.
     const activeCategories = [
         ...BUILTIN_CATEGORIES.map((c) => ({ ...c, builtin: true })),
-        ...customCategories.filter((c) => c.is_active).map((c) => ({ slug: c.slug, label: c.name, builtin: false, id: c.id })),
+        ...customCategories.filter((c) => c.is_active && c.slug !== 'general').map((c) => ({ slug: c.slug, label: c.name, builtin: false, id: c.id })),
     ];
 
     const addCategory = async () => {
@@ -2123,19 +2129,21 @@ const Estimation = () => {
         } catch (err) { toast(err?.userMessage ?? 'Could not rename category', 'error'); }
     };
     const deleteCategory = async (cat) => {
+        // Session-only items (no _libId) can't be reassigned server-side — carry
+        // them to General locally so they aren't lost. DB items (with _libId) are
+        // reassigned by the backend and come back via reloadCategories.
+        const sessionItems = (itemLibrary[cat.slug] || []).filter((it) => !it._libId);
         try {
             await axiosInstance.delete(`/estimate-categories/${cat.id}`);
-            // Move this category's LIBRARY items to General (don't delete them).
+            if (activeCategory === cat.slug) setActiveCategory('general');
+            await reloadCategories();
             setItemLibrary((prev) => {
-                if (!prev[cat.slug]?.length) return prev;
                 const next = { ...prev };
-                next.general = [...(next.general || []), ...next[cat.slug]];
-                delete next[cat.slug];
+                if (sessionItems.length) next.general = [...(next.general || []), ...sessionItems];
+                delete next[cat.slug]; // drop the deleted category's stale entry
                 return next;
             });
-            setCustomCategories((prev) => prev.filter((c) => c.id !== cat.id));
-            if (activeCategory === cat.slug) setActiveCategory('roofing');
-            toast(`"${cat.name}" deleted — its items moved to General`, 'success');
+            toast(`"${cat.name}" deleted — items moved to General`, 'success');
         } catch (err) { toast(err?.userMessage ?? 'Could not delete category', 'error'); }
     };
 
@@ -2333,7 +2341,9 @@ const Estimation = () => {
 
         if (customItem.saveToLib) {
             const cat = customItem.category;
-            const custom = customCategories.find((c) => c.slug === cat);
+            // General stays session-only for NEW saves (built-in rule); only the
+            // reassigned-on-delete items persist in the General DB bucket.
+            const custom = customCategories.find((c) => c.slug === cat && c.slug !== 'general');
             if (custom) {
                 // Custom category → persist the library item to the DB.
                 axiosInstance.post(`/estimate-categories/${custom.id}/items`, { name, unit: customItem.unit, price })
@@ -5396,11 +5406,11 @@ const Estimation = () => {
                                 ))}
                             </div>
                             <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700 }}>Custom</div>
-                            {customCategories.length === 0 ? (
+                            {customCategories.filter((c) => c.slug !== 'general').length === 0 ? (
                                 <div style={{ fontSize: 12.5, color: "#6b7280" }}>No custom categories yet. Add one above.</div>
                             ) : (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    {customCategories.map((c) => (
+                                    {customCategories.filter((c) => c.slug !== 'general').map((c) => (
                                         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: c.is_active ? "#fff" : "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
                                             <input defaultValue={c.name} onBlur={(e) => renameCategory(c, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
                                                 style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "5px 8px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 5, background: "transparent", color: c.is_active ? "#1a1f3a" : "#9ca3af" }} />
