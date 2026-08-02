@@ -1152,13 +1152,19 @@ function PortalStyles() {
             .pv-tabnav {
                 display: flex;
                 gap: 0.35rem;
-                padding: 0.6rem 0;
+                padding: 0.6rem 0 0.35rem;
                 overflow-x: auto;
-                scrollbar-width: none;
-                -ms-overflow-style: none;
+                scrollbar-width: thin;
+                scrollbar-color: #cbd2dc transparent;
                 scroll-snap-type: x proximity;
             }
-            .pv-tabnav::-webkit-scrollbar { display: none; }
+            .pv-tabnav::-webkit-scrollbar { height: 6px; }
+            .pv-tabnav::-webkit-scrollbar-track { background: transparent; }
+            .pv-tabnav::-webkit-scrollbar-thumb {
+                background: #cbd2dc;
+                border-radius: 999px;
+            }
+            .pv-tabnav::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
             .pv-tab {
                 flex: 0 0 auto;
                 display: inline-flex;
