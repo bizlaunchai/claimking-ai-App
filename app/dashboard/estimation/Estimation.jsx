@@ -3682,6 +3682,12 @@ const Estimation = () => {
                                         <div className="empty-list">{itemSearch ? "No matches" : "No items in this category"}</div>
                                     ) : visibleItems.map((it) => {
                                         const isEditing = editingLib && editingLib.cat === it._cat && editingLib.idx === it._idx;
+                                        // Delete only for General + custom categories. The 4 hard-coded
+                                        // built-ins (roofing/siding/gutters/windows) keep their default
+                                        // items un-deletable so a teammate can't wipe the shared defaults.
+                                        const canDeleteLibItem =
+                                            it._cat === "general" ||
+                                            !BUILTIN_CATEGORIES.some((c) => c.slug === it._cat);
                                         return (
                                         <div key={`${it._cat}-${it._idx}`} className="item-row library-row"
                                             style={isEditing ? { cursor: "default" } : undefined}
@@ -3714,7 +3720,9 @@ const Estimation = () => {
                                                     <div style={{ display: "flex", gap: 6 }}>
                                                         <button onClick={saveEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
                                                         <button onClick={cancelEditLibItem} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                                                        <button onClick={deleteLibItem} title="Delete item" style={{ padding: "6px 9px", background: "#fff", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                                                        {canDeleteLibItem && (
+                                                            <button onClick={deleteLibItem} title="Delete item" style={{ padding: "6px 9px", background: "#fff", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (
