@@ -6,6 +6,7 @@ import { toast as sonner } from "sonner";
 import SignaturePad from "@/components/signature/SignaturePad";
 import ClientSelector from "@/components/clients/ClientSelector";
 import { toClientShape } from "@/lib/clients/newClientForm";  // used to hydrate client from API rows
+import Swal from "sweetalert2";
 
 import "./estimation.css";
 import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
@@ -16,6 +17,26 @@ import "../measurement/measurement-hero.css";  // reuse hero + stat-chip styles
 // auth bearer header, so we fetch as blob via axiosInstance and turn into
 // a blob URL. Module-level cache avoids re-fetching on rerender.
 // ──────────────────────────────────────────────────────────────────────────────
+// ── SweetAlert2 helpers — brand-styled (navy/gold) confirm + loading, so users
+//    can see exactly what's happening during custom-category / library actions.
+const swalLoading = (title, text) =>
+    Swal.fire({
+        title,
+        text,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => Swal.showLoading(),
+    });
+const swalToast = Swal.mixin({
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 1900,
+    timerProgressBar: true,
+});
+const swalError = (text, title = "Something went wrong") =>
+    Swal.fire({ icon: "error", title, text, confirmButtonColor: "#1a1f3a" });
+
 const _photoBlobCache = new Map();
 function AuthedPhotoThumb({ src, imgStyle }) {
     const [url, setUrl] = useState(() => (src ? _photoBlobCache.get(src) ?? null : null));
@@ -2091,14 +2112,15 @@ const Estimation = () => {
     const addCategory = async () => {
         const name = newCatName.trim();
         if (!name) return;
+        swalLoading('Creating category…', `Adding "${name}" for your whole team`);
         try {
             const res = await axiosInstance.post('/estimate-categories', { name });
             const cat = res.data?.data;
             if (cat) setCustomCategories((prev) => [...prev, cat]);
             setNewCatName('');
-            toast(`Category "${name}" added`, 'success');
+            swalToast.fire({ icon: 'success', title: `Category "${name}" added` });
         } catch (err) {
-            toast(err?.userMessage ?? err?.response?.data?.message ?? 'Could not add category', 'error');
+            swalError(err?.userMessage ?? err?.response?.data?.message ?? 'Could not add category', 'Could not add category');
         }
     };
     const toggleCategoryActive = async (cat) => {
@@ -2129,10 +2151,26 @@ const Estimation = () => {
         } catch (err) { toast(err?.userMessage ?? 'Could not rename category', 'error'); }
     };
     const deleteCategory = async (cat) => {
+        const itemCount = (itemLibrary[cat.slug] || []).length;
+        const result = await Swal.fire({
+            title: `Delete "${cat.name}"?`,
+            html: itemCount > 0
+                ? `This removes the category from the chip row for your <b>whole team</b>, on every estimate.<br/><br/>Its <b>${itemCount} library item${itemCount === 1 ? '' : 's'}</b> won't be deleted — they'll be moved to the <b>General</b> category.`
+                : `This removes the category from the chip row for your <b>whole team</b>, on every estimate.<br/><br/>It has no library items, so nothing will be lost.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete & move to General',
+            cancelButtonText: 'Cancel',
+        });
+        if (!result.isConfirmed) return;
+
         // Session-only items (no _libId) can't be reassigned server-side — carry
         // them to General locally so they aren't lost. DB items (with _libId) are
         // reassigned by the backend and come back via reloadCategories.
         const sessionItems = (itemLibrary[cat.slug] || []).filter((it) => !it._libId);
+        swalLoading('Deleting category…', 'Moving its items to General');
         try {
             await axiosInstance.delete(`/estimate-categories/${cat.id}`);
             if (activeCategory === cat.slug) setActiveCategory('general');
@@ -2143,8 +2181,15 @@ const Estimation = () => {
                 delete next[cat.slug]; // drop the deleted category's stale entry
                 return next;
             });
-            toast(`"${cat.name}" deleted — items moved to General`, 'success');
-        } catch (err) { toast(err?.userMessage ?? 'Could not delete category', 'error'); }
+            Swal.fire({
+                icon: 'success',
+                title: 'Deleted!',
+                text: `"${cat.name}" removed — its items are now in the General category.`,
+                confirmButtonColor: '#1a1f3a',
+            });
+        } catch (err) {
+            swalError(err?.userMessage ?? 'Could not delete category', 'Could not delete category');
+        }
     };
 
     const moveItem = (secId, idx, direction) => {
@@ -2254,7 +2299,7 @@ const Estimation = () => {
         setEditLibName('');
         setEditLibPrice('');
     };
-    const saveEditLibItem = () => {
+    const saveEditLibItem = async () => {
         if (!editingLib) return;
         const { cat, idx } = editingLib;
         const name = editLibName.trim();
@@ -2262,28 +2307,64 @@ const Estimation = () => {
         if (!name) { toast('Item name is required', 'error'); return; }
         if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
         const target = (itemLibrary[cat] || [])[idx];
+
+        // Custom-category (DB) item → persist with a visible loading state.
+        if (target?._libId) {
+            swalLoading('Saving item…', 'Updating your item library');
+            try {
+                await axiosInstance.patch(`/estimate-categories/items/${target._libId}`, { name, price });
+                setItemLibrary((prev) => ({
+                    ...prev,
+                    [cat]: (prev[cat] || []).map((it, i) => i === idx ? { ...it, name, price } : it),
+                }));
+                swalToast.fire({ icon: 'success', title: 'Item updated' });
+                cancelEditLibItem();
+            } catch (err) {
+                swalError(err?.userMessage ?? 'Could not update item', 'Could not update item');
+            }
+            return;
+        }
+
+        // Built-in session item → local only.
         setItemLibrary((prev) => ({
             ...prev,
             [cat]: (prev[cat] || []).map((it, i) => i === idx ? { ...it, name, price } : it),
         }));
-        // Persist to DB when this is a custom-category (library) item.
-        if (target?._libId) {
-            axiosInstance.patch(`/estimate-categories/items/${target._libId}`, { name, price })
-                .catch((err) => toast(err?.userMessage ?? 'Saved locally, but could not sync', 'error'));
-        }
         toast('Item updated', 'success');
         cancelEditLibItem();
     };
-    const deleteLibItem = () => {
+    const deleteLibItem = async () => {
         if (!editingLib) return;
         const { cat, idx } = editingLib;
         const target = (itemLibrary[cat] || [])[idx];
-        setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
-        // Custom-category item → remove from DB; built-in session item → local only.
+
+        // Custom-category (DB) item → confirm (it's permanent), then remove with loading.
         if (target?._libId) {
-            axiosInstance.delete(`/estimate-categories/items/${target._libId}`)
-                .catch((err) => toast(err?.userMessage ?? 'Removed locally, but could not sync', 'error'));
+            const result = await Swal.fire({
+                title: 'Delete this item?',
+                html: `<b>${target.name}</b> will be permanently removed from your item library.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Yes, delete it',
+                cancelButtonText: 'Cancel',
+            });
+            if (!result.isConfirmed) return;
+            swalLoading('Deleting item…', 'Removing from your item library');
+            try {
+                await axiosInstance.delete(`/estimate-categories/items/${target._libId}`);
+                setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
+                swalToast.fire({ icon: 'success', title: 'Item removed' });
+                cancelEditLibItem();
+            } catch (err) {
+                swalError(err?.userMessage ?? 'Could not remove item', 'Could not remove item');
+            }
+            return;
         }
+
+        // Built-in session item → local only.
+        setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
         toast('Item removed', 'success');
         cancelEditLibItem();
     };
@@ -2323,7 +2404,7 @@ const Estimation = () => {
         setCustomItemModal(true);
     };
 
-    const saveCustomItem = () => {
+    const saveCustomItem = async () => {
         const name = customItem.name.trim();
         const qty = parseFloat(customItem.qty);
         const price = parseFloat(customItem.price);
@@ -2339,31 +2420,44 @@ const Estimation = () => {
             : s));
         setActiveSection(customItem.section);
 
-        if (customItem.saveToLib) {
-            const cat = customItem.category;
-            // General stays session-only for NEW saves (built-in rule); only the
-            // reassigned-on-delete items persist in the General DB bucket.
-            const custom = customCategories.find((c) => c.slug === cat && c.slug !== 'general');
-            if (custom) {
-                // Custom category → persist the library item to the DB.
-                axiosInstance.post(`/estimate-categories/${custom.id}/items`, { name, unit: customItem.unit, price })
-                    .then((res) => {
-                        const it = res.data?.data;
-                        setItemLibrary((prev) => {
-                            const list = prev[cat] || [];
-                            if (list.find((i) => (i.name ?? '').toLowerCase() === name.toLowerCase())) return prev;
-                            return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit, _libId: it?.id }] };
-                        });
-                    })
-                    .catch((err) => toast(err?.userMessage ?? 'Could not save to library', 'error'));
-            } else {
-                // Built-in category → session-only, as before.
+        const cat = customItem.category;
+        // General stays session-only for NEW saves (built-in rule); only the
+        // reassigned-on-delete items persist in the General DB bucket.
+        const custom = customItem.saveToLib
+            ? customCategories.find((c) => c.slug === cat && c.slug !== 'general')
+            : null;
+
+        if (custom) {
+            // Custom category → persist the library item to the DB with a visible
+            // loading state so the user knows it's being saved.
+            swalLoading('Saving item…', 'Adding to your item library');
+            try {
+                const res = await axiosInstance.post(`/estimate-categories/${custom.id}/items`, { name, unit: customItem.unit, price });
+                const it = res.data?.data;
                 setItemLibrary((prev) => {
                     const list = prev[cat] || [];
-                    if (list.find((i) => i.name === name)) return prev;
-                    return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit }] };
+                    if (list.find((i) => (i.name ?? '').toLowerCase() === name.toLowerCase())) return prev;
+                    return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit, _libId: it?.id }] };
                 });
+                setCustomItemModal(false);
+                triggerSave();
+                swalToast.fire({ icon: 'success', title: `Added "${name}" & saved to library` });
+            } catch (err) {
+                // The item is already on the estimate — only the library save failed.
+                setCustomItemModal(false);
+                triggerSave();
+                swalError(err?.userMessage ?? 'Added to estimate, but could not save to library', 'Could not save to library');
             }
+            return;
+        }
+
+        if (customItem.saveToLib) {
+            // Built-in category → session-only, as before.
+            setItemLibrary((prev) => {
+                const list = prev[cat] || [];
+                if (list.find((i) => i.name === name)) return prev;
+                return { ...prev, [cat]: [...list, { name, price, unit: customItem.unit }] };
+            });
         }
 
         setCustomItemModal(false);
