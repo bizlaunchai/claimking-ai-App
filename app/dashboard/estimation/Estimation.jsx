@@ -1795,8 +1795,19 @@ const Estimation = () => {
         setAddSectionModal(false);
     };
 
-    const deleteSection = (id) => {
-        if (!window.confirm("Delete this section and all its items?")) return;
+    const deleteSection = async (id) => {
+        const result = await Swal.fire({
+            title: "Delete section?",
+            text: "This section and all its items will be removed.",
+            icon: "warning",
+            width: "340px",
+            showCancelButton: true,
+            confirmButtonColor: "#dc2626",
+            cancelButtonColor: "#6b7280",
+            confirmButtonText: "Yes, delete",
+            cancelButtonText: "Cancel",
+        });
+        if (!result.isConfirmed) return;
         setSections((prev) => {
             const next = prev.filter((s) => s.id !== id);
             if (activeSection === id) setActiveSection(next[0]?.id || null);
@@ -3995,7 +4006,7 @@ const Estimation = () => {
                         {/* RIGHT RAIL */}
                         <aside className="right-rail">
                             <div className="rail-tabs" role="tablist">
-                                {[["code", "i-shield", "Code"], ["library", "i-book", "Library"], ["docs", "i-camera", "Docs"], ["sign", "i-pen", "Sign"]].map(([id, icon, label]) => (
+                                {[["code", "i-shield", "Code Checklist"], ["library", "i-book", "Item Library"], ["docs", "i-camera", "Docs"], ["sign", "i-pen", "Sign"]].map(([id, icon, label]) => (
                                     <button key={id} className={`rail-tab ${railTab === id ? "active" : ""}`} onClick={() => setRailTab(id)} role="tab">
                                         <svg className="icon icon-sm"><use href={`#${icon}`} /></svg>
                                         {label}
@@ -4076,8 +4087,8 @@ const Estimation = () => {
 
                                 {/* LIBRARY PANE */}
                                 <div className={`rail-pane ${railTab === "library" ? "active" : ""}`}>
-                                    <h3>Code &amp; manufacturer database</h3>
-                                    <p className="desc">Search IRC/IBC codes and manufacturer-required items. Tap an item to add it.</p>
+                                    <h3>Searchable Item Library</h3>
+                                    <p className="desc">Search-able list of code &amp; manufacturer items — tap any item to add it to your estimate.</p>
                                     <input type="text" className="search-input" placeholder="Search codes, materials, manufacturers..." value={codeDbSearch} onChange={(e) => setCodeDbSearch(e.target.value)} style={{ marginBottom: 8 }} />
                                     <div className="filter-row">
                                         <select className="filter-select" value={codeDbCode} onChange={(e) => setCodeDbCode(e.target.value)}>
