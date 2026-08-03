@@ -598,6 +598,7 @@ const Estimation = () => {
 
     // ── Credits + provider status (header display, like measurement page) ─
     const [estimateCost, setEstimateCost] = useState(null);   // { credits_cost, is_active, label }
+    const [reviewCost, setReviewCost] = useState(null);       // estimate_review cost — also used by "Ask AI to Make Changes"
     const [creditBalance, setCreditBalance] = useState(null); // { monthly_credits, bonus_credits }
     const [providerStatus, setProviderStatus] = useState({ gemini: false, claude: false });
 
@@ -748,11 +749,13 @@ const Estimation = () => {
     // ── Credits: cost per generation + user's balance + AI provider status ─
     const refreshCreditsState = useCallback(async () => {
         try {
-            const [costRes, balanceRes] = await Promise.all([
+            const [costRes, reviewCostRes, balanceRes] = await Promise.all([
                 axiosInstance.get('/credits/feature-costs/estimate_generate', { suppressErrorToast: true }),
+                axiosInstance.get('/credits/feature-costs/estimate_review', { suppressErrorToast: true }),
                 axiosInstance.get('/credits/me', { suppressErrorToast: true }),
             ]);
             setEstimateCost(costRes.data ?? null);
+            setReviewCost(reviewCostRes.data ?? null);
             setCreditBalance(balanceRes.data ?? null);
         } catch { /* free-tier installs may 404 — leave null */ }
     }, []);
@@ -1443,16 +1446,21 @@ const Estimation = () => {
             toast('Save the estimate first', 'error');
             return;
         }
-        // Make sure the latest edits are persisted before review runs.
-        await saveEstimateNow();
+        // Show the loading state (button + modal) from the very first click —
+        // saveEstimateNow() below can take a beat and used to give no feedback.
         setReviewModal(true);
         setReviewLoading(true);
         setReviewError(null);
         setReviewData(null);
         try {
+            // Make sure the latest edits are persisted before review runs.
+            await saveEstimateNow();
             const res = await axiosInstance.post(`/estimates/${currentEstimateId}/ai-review`, {});
             setReviewData(res.data?.data ?? null);
-            toast('AI review complete', 'success');
+            // Refresh balance/cost so the header reflects the credits just spent.
+            refreshCreditsState();
+            const spent = res.data?.credits?.cost;
+            toast(spent ? `AI review complete — ${spent} credits used` : 'AI review complete', 'success');
         } catch (err) {
             const msg = err?.userMessage ?? err?.response?.data?.message ?? 'AI review failed';
             setReviewError(msg);
@@ -1527,9 +1535,11 @@ const Estimation = () => {
         if (!changesInstruction.trim() && changesFiles.length === 0) {
             toast('Describe the change or attach a file', 'error'); return;
         }
-        await saveEstimateNow();
+        // Show loading from the first click — saveEstimateNow() below can take a
+        // beat, and the button used to stay idle until after it finished.
         setChangesLoading(true); setChangesError(null); setChangesResult(null); setChangesChecked({});
         try {
+            await saveEstimateNow();
             const fd = new FormData();
             fd.append('instruction', changesInstruction.trim());
             changesFiles.forEach((f) => fd.append('files', f));
@@ -1542,6 +1552,10 @@ const Estimation = () => {
             const checked = {};
             (data?.changes ?? []).forEach((_, i) => { checked[i] = true; });
             setChangesChecked(checked);
+            // Credits were spent on this call — refresh the header balance.
+            refreshCreditsState();
+            const spent = res.data?.credits?.cost;
+            if (spent) toast(`AI reviewed your request — ${spent} credits used`, 'success');
         } catch (err) {
             setChangesError(err?.userMessage ?? err?.response?.data?.message ?? 'Could not get AI changes');
         } finally {
@@ -1556,8 +1570,10 @@ const Estimation = () => {
         if (!list.length) { toast('Check at least one change to apply', 'error'); return; }
         let applied = 0, skipped = 0;
 
-        setSections((prev) => {
-            const next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+        // Build the new sections + count synchronously (NOT inside the setSections
+        // updater — React runs that later, so the toast below would read a stale 0).
+        const next = sections.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+        {
             const findItem = (name) => {
                 const n = (name || '').toLowerCase();
                 for (const s of next) {
@@ -1568,9 +1584,12 @@ const Estimation = () => {
             };
             for (const ch of list) {
                 if (ch.action === 'add') {
+                    // Local sections keep the server's section_key in `s.id`
+                    // (see the load mapping: `id: s.section_key`). The AI echoes
+                    // that same key back in ch.section_key, so match on `s.id`.
                     const key = (ch.section_key || '').toLowerCase();
                     const target =
-                        next.find((s) => (s.section_key || '').toLowerCase() === key) ||
+                        next.find((s) => (s.id || '').toLowerCase() === key) ||
                         next.find((s) => (s.name || '').toLowerCase() === key) ||
                         next.find((s) => s.id === activeSection) ||
                         next[0];
@@ -1610,8 +1629,8 @@ const Estimation = () => {
                     applied++;
                 } else { skipped++; }
             }
-            return next;
-        });
+        }
+        setSections(next);
 
         triggerSave();
         setChangesOpen(false);
@@ -3615,9 +3634,17 @@ const Estimation = () => {
                                 <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-upload" /></svg>
                                 Upload &amp; Build
                             </button>
-                            <button className="btn-ai" onClick={askAIToReview}>
+                            <button
+                                className="btn-ai"
+                                onClick={askAIToReview}
+                                disabled={reviewLoading}
+                                style={{ cursor: reviewLoading ? 'wait' : 'pointer', opacity: reviewLoading ? 0.7 : 1 }}
+                            >
                                 <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-refresh" /></svg>
-                                AI Review
+                                {reviewLoading ? 'Reviewing…' : 'AI Review'}
+                                {!reviewLoading && reviewCost?.credits_cost > 0 && (
+                                    <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, background: 'rgba(26,31,58,0.14)', color: '#1a1f3a', padding: '2px 6px', borderRadius: 10, verticalAlign: 'middle' }}>{reviewCost.credits_cost} credits</span>
+                                )}
                             </button>
                             <button
                                 className="btn-ai"
@@ -3625,6 +3652,9 @@ const Estimation = () => {
                                 style={{ background: '#FDB813', color: '#1a1f3a', fontWeight: 700 }}
                             >
                                 ✨ Ask AI to Make Changes
+                                {reviewCost?.credits_cost > 0 && (
+                                    <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, background: 'rgba(26,31,58,0.14)', color: '#1a1f3a', padding: '2px 6px', borderRadius: 10, verticalAlign: 'middle' }}>{reviewCost.credits_cost} credits</span>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -4785,10 +4815,18 @@ const Estimation = () => {
                                     <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                         <button onClick={() => setChangesOpen(false)} style={{ padding: '9px 14px', background: '#f3f4f6', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                                         <button onClick={runAiChanges} disabled={changesLoading} style={{ padding: '9px 16px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: changesLoading ? 'wait' : 'pointer', opacity: changesLoading ? 0.7 : 1 }}>
-                                            {changesLoading ? 'Thinking…' : 'Ask AI'}
+                                            {changesLoading
+                                                ? 'Thinking…'
+                                                : reviewCost?.credits_cost > 0
+                                                    ? `Ask AI (${reviewCost.credits_cost} credits)`
+                                                    : 'Ask AI'}
                                         </button>
                                     </div>
-                                    <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af' }}>Nothing changes on your estimate until you review and Apply.</div>
+                                    <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af' }}>
+                                        {reviewCost?.credits_cost > 0
+                                            ? `Costs ${reviewCost.credits_cost} credits. Nothing changes on your estimate until you review and Apply.`
+                                            : 'Nothing changes on your estimate until you review and Apply.'}
+                                    </div>
                                 </>
                             ) : (
                                 <>
