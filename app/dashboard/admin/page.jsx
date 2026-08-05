@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Package, ShoppingCart, KeyRound, Ticket } from 'lucide-react';
+import { Package, ShoppingCart, KeyRound, Ticket, DollarSign } from 'lucide-react';
 
 export default function AdminHome() {
     const links = [
@@ -31,6 +31,13 @@ export default function AdminHome() {
             desc: 'Configure shared OpenAI / Gemini / Claude / S3 credentials.',
             Icon: KeyRound,
             color: '#dc2626',
+        },
+        {
+            href: '/dashboard/admin/ai-usage',
+            title: 'AI Cost Control',
+            desc: 'AI spend, spending caps & circuit breaker, model selection, kill-switch.',
+            Icon: DollarSign,
+            color: '#059669',
         },
     ];
 
