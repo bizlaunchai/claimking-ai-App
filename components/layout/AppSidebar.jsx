@@ -758,6 +758,19 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
 
                             {canAccess('manage_api_keys') && (
                                 <div className="nav-item">
+                                    <Link href="/dashboard/admin/ai-usage" className={`nav-link ${pathname.startsWith('/dashboard/admin/ai-usage') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="AI Cost Control">
+                                        <span className="nav-icon">
+                                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 1v2.09c-2.5.44-4.4 2.6-4.4 5.16 0 3.02 2.64 3.83 5.09 4.46 2.65.68 3.31 1.32 3.31 2.29 0 .72-.51 1.87-2.7 1.87-2.05 0-2.85-.91-2.96-2.08H7.89c.12 2.29 1.83 3.58 3.71 4v2.11h2.8v-2.09c1.51-.29 4-1.3 4-4.13 0-3.4-2.91-4.56-5.63-5.26-2.72-.7-3.31-1.42-3.31-2.42 0-.87.63-1.87 2.7-1.87 1.97 0 2.7.94 2.77 2.32h2.42c-.08-1.9-1.24-3.65-3.36-4.16V1h-2.8z"/>
+                                            </svg>
+                                        </span>
+                                        <span className="nav-text">AI Cost Control</span>
+                                    </Link>
+                                </div>
+                            )}
+
+                            {canAccess('manage_api_keys') && (
+                                <div className="nav-item">
                                     <Link href="/dashboard/admin/api-settings" className={`nav-link ${pathname === '/dashboard/admin/api-settings' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Shared API Credentials">
                                         <span className="nav-icon">
                                             <svg viewBox="0 0 24 24">
