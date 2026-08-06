@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Cloud, Hexagon, Home, Hammer, Target, BarChart3, CreditCard, Square, Wallet, Smartphone } from 'lucide-react';
 import "./settings.css"
 import dynamic from "next/dynamic";
+import StripeConnectCard from "./StripeConnectCard.jsx";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -11,6 +12,15 @@ const FileUploader = dynamic(
 
 const Settings = () => {
     const [expandedCategories, setExpandedCategories] = useState([]);
+
+    // Deep-link: /dashboard/settings?tab=payments (e.g. returning from Stripe
+    // onboarding) auto-expands the Payments category.
+    useEffect(() => {
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        if (tab === 'payments') {
+            setExpandedCategories((prev) => (prev.includes('payments') ? prev : [...prev, 'payments']));
+        }
+    }, []);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
     const [serviceRadius, setServiceRadius] = useState(50);
     const [primaryColor, setPrimaryColor] = useState('#FDB813');
@@ -1424,6 +1434,11 @@ const Settings = () => {
                         </div>
                         <div className={`category-content ${expandedCategories.includes('payments') ? 'expanded' : ''}`}>
                             <div className="category-body">
+                                {/* Real, wired Stripe Connect (client deposits → contractor's own account) */}
+                                <div className="settings-section">
+                                    <h3 className="section-title">Client Deposit Payments</h3>
+                                    <StripeConnectCard />
+                                </div>
                                 <div className="settings-section">
                                     <h3 className="section-title">Payment Processing Setup</h3>
                                     <div className="toggle-group">
