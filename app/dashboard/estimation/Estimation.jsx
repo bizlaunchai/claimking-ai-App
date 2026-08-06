@@ -1440,6 +1440,9 @@ const Estimation = () => {
     const [changesError, setChangesError] = useState(null);
     const changesFileInputRef = useRef(null);
     const [reviewError, setReviewError] = useState(null);
+    // Tracks which review findings have been applied so the button can show
+    // "Added" + disable. Keyed like "missing:3" / "pricing:1". Reset each review.
+    const [appliedFindings, setAppliedFindings] = useState({});
 
     const askAIToReview = async () => {
         if (!currentEstimateId) {
@@ -1452,17 +1455,28 @@ const Estimation = () => {
         setReviewLoading(true);
         setReviewError(null);
         setReviewData(null);
+        setAppliedFindings({});
         try {
             // Make sure the latest edits are persisted before review runs.
             await saveEstimateNow();
-            const res = await axiosInstance.post(`/estimates/${currentEstimateId}/ai-review`, {});
+            // The review is a synchronous Claude call and can run longer than the
+            // default 60s axios timeout on a large estimate — give it room so a
+            // slow-but-successful review isn't killed as a "network" error.
+            const res = await axiosInstance.post(
+                `/estimates/${currentEstimateId}/ai-review`,
+                {},
+                { timeout: 180000 },
+            );
             setReviewData(res.data?.data ?? null);
             // Refresh balance/cost so the header reflects the credits just spent.
             refreshCreditsState();
             const spent = res.data?.credits?.cost;
             toast(spent ? `AI review complete — ${spent} credits used` : 'AI review complete', 'success');
         } catch (err) {
-            const msg = err?.userMessage ?? err?.response?.data?.message ?? 'AI review failed';
+            const timedOut = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message ?? '');
+            const msg = timedOut
+                ? 'The AI review took too long and timed out. Please try again — large estimates can take a bit longer.'
+                : (err?.userMessage ?? err?.response?.data?.message ?? 'AI review failed');
             setReviewError(msg);
         } finally {
             setReviewLoading(false);
@@ -1470,7 +1484,8 @@ const Estimation = () => {
     };
 
     // ── Apply a single finding ────────────────────────────────────────
-    const applyMissingItem = (mi) => {
+    const applyMissingItem = (mi, key) => {
+        if (key && appliedFindings[key]) return; // already added — no-op
         // Reuse the existing addToEstimate path. We don't know the exact
         // section key Claude proposed maps to a real section, so we try to
         // match by section_key first, then fall back to active section.
@@ -1502,10 +1517,13 @@ const Estimation = () => {
                 : s,
         ));
         triggerSave();
-        toast(`Added "${mi.name}" to ${target.name}`, 'success');
+        if (key) setAppliedFindings((prev) => ({ ...prev, [key]: true }));
+        const priceNote = Number(mi.suggested_price) > 0 ? '' : ' — set the price/qty on the line (field-verify)';
+        toast(`Added "${mi.name}" to ${target.name}${priceNote}`, 'success');
     };
 
-    const applyPricingFix = (pc) => {
+    const applyPricingFix = (pc, key) => {
+        if (key && appliedFindings[key]) return; // already applied — no-op
         // Find the line item by name and update its price. If multiple
         // sections have the same item name, update the first match — the
         // contractor can repeat-click if they have duplicates.
@@ -1523,6 +1541,7 @@ const Estimation = () => {
         })));
         if (applied) {
             triggerSave();
+            if (key) setAppliedFindings((prev) => ({ ...prev, [key]: true }));
             toast(`Updated "${pc.item_name}" price`, 'success');
         } else {
             toast(`Could not find "${pc.item_name}" in current items`, 'error');
@@ -4968,10 +4987,24 @@ const Estimation = () => {
                                                                 Suggest: {mi.suggested_qty} {mi.suggested_unit} @ ${Number(mi.suggested_price).toFixed(2)}
                                                                 {mi.code_ref && <> · {mi.code_ref}</>}
                                                             </div>
-                                                            <button
-                                                                onClick={() => applyMissingItem(mi)}
-                                                                style={{ padding: '5px 10px', background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                                            >+ Add to estimate</button>
+                                                            {(() => {
+                                                                const added = !!appliedFindings[`missing:${i}`];
+                                                                return (
+                                                                    <button
+                                                                        onClick={() => applyMissingItem(mi, `missing:${i}`)}
+                                                                        disabled={added}
+                                                                        style={{
+                                                                            padding: '5px 10px',
+                                                                            background: added ? '#dcfce7' : '#FDB813',
+                                                                            color: added ? '#166534' : '#1a1f3a',
+                                                                            border: added ? '1px solid #86efac' : 'none',
+                                                                            borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                                                            cursor: added ? 'default' : 'pointer',
+                                                                            whiteSpace: 'nowrap',
+                                                                        }}
+                                                                    >{added ? '✓ Added' : '+ Add to estimate'}</button>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -4994,10 +5027,24 @@ const Estimation = () => {
                                                                 ${Number(pc.current_price).toFixed(2)} → <strong style={{ color: pc.direction === 'under' ? '#16a34a' : '#dc2626' }}>${Number(pc.suggested_price).toFixed(2)}</strong>
                                                                 {' '}({pc.direction === 'under' ? '+' : ''}{Number(pc.delta_pct).toFixed(0)}%)
                                                             </div>
-                                                            <button
-                                                                onClick={() => applyPricingFix(pc)}
-                                                                style={{ padding: '5px 10px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                                            >Update price</button>
+                                                            {(() => {
+                                                                const done = !!appliedFindings[`pricing:${i}`];
+                                                                return (
+                                                                    <button
+                                                                        onClick={() => applyPricingFix(pc, `pricing:${i}`)}
+                                                                        disabled={done}
+                                                                        style={{
+                                                                            padding: '5px 10px',
+                                                                            background: done ? '#dcfce7' : '#1a1f3a',
+                                                                            color: done ? '#166534' : '#FDB813',
+                                                                            border: done ? '1px solid #86efac' : 'none',
+                                                                            borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                                                            cursor: done ? 'default' : 'pointer',
+                                                                            whiteSpace: 'nowrap',
+                                                                        }}
+                                                                    >{done ? '✓ Updated' : 'Update price'}</button>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 ))}

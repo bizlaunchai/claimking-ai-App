@@ -58,6 +58,7 @@ export default function AiUsageAdmin() {
     const [daily, setDaily] = useState([]);
     const [settings, setSettings] = useState([]);
     const [models, setModels] = useState([]);
+    const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const globalRow = useMemo(
@@ -69,18 +70,20 @@ export default function AiUsageAdmin() {
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
-            const [st, cp, dy, se, mo] = await Promise.all([
+            const [st, cp, dy, se, mo, co] = await Promise.all([
                 axiosInstance.get('/admin/ai-usage/status'),
                 axiosInstance.get(`/admin/ai-usage/cost-per-feature?days=${days}`),
                 axiosInstance.get(`/admin/ai-usage/daily?days=${days}`),
                 axiosInstance.get('/admin/ai-usage/settings'),
                 axiosInstance.get('/admin/ai-usage/models'),
+                axiosInstance.get('/admin/ai-usage/companies'),
             ]);
             setStatus(st.data ?? null);
             setCpf(cp.data ?? null);
             setDaily(dy.data ?? []);
             setSettings(se.data ?? []);
             setModels(mo.data ?? []);
+            setCompanies(co.data ?? []);
         } catch { /* toasted */ } finally { setLoading(false); }
     }, [days]);
 
@@ -156,7 +159,7 @@ export default function AiUsageAdmin() {
                 {loading && <div className="aiu-card" style={{ padding: 24, color: '#6b7280' }}>Loading…</div>}
 
                 {!loading && tab === 'overview' && <Overview status={status} cpf={cpf} daily={daily} days={days} />}
-                {!loading && tab === 'caps' && <CapsTab settings={settings} onSaved={fetchAll} />}
+                {!loading && tab === 'caps' && <CapsTab settings={settings} companies={companies} onSaved={fetchAll} />}
                 {!loading && tab === 'models' && <ModelsTab models={models} onSaved={fetchAll} />}
                 {tab === 'recent' && <RecentTab />}
             </div>
@@ -254,21 +257,24 @@ function StatMeter({ label, value, cap, pct }) {
 }
 
 /* ────────────────────────────── Caps tab ────────────────────────────── */
-function CapsTab({ settings, onSaved }) {
+function CapsTab({ settings, companies, onSaved }) {
+    const companyName = (id) => companies.find((c) => c.id === id)?.name ?? null;
     return (
         <>
             <div className="aiu-note">
                 The <strong>global</strong> row applies to every company that has no override of its own.
-                A per-company row (matched by ID) takes precedence. Leave a cap blank for “no cap”.
+                A per-company row takes precedence. Leave a cap blank for “no cap”.
                 <em> Hard block</em> = stop requests over cap; off = alert only (still lets them through).
             </div>
-            {settings.map((row) => <CapRow key={row.id ?? 'global'} row={row} onSaved={onSaved} />)}
-            <NewCompanyCap onSaved={onSaved} />
+            {settings.map((row) => (
+                <CapRow key={row.id ?? 'global'} row={row} companyName={companyName(row.company_id)} onSaved={onSaved} />
+            ))}
+            <NewCompanyCap companies={companies} settings={settings} onSaved={onSaved} />
         </>
     );
 }
 
-function CapRow({ row, onSaved }) {
+function CapRow({ row, companyName, onSaved }) {
     const isGlobal = row.company_id == null;
     const [d, setD] = useState({
         daily_cap_usd: row.daily_cap_usd ?? '',
@@ -305,7 +311,9 @@ function CapRow({ row, onSaved }) {
     return (
         <div className="aiu-card" style={{ padding: 18 }}>
             <div className="aiu-card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {isGlobal ? <>🌐 Global default</> : <>🏢 Company <span className="aiu-mono" style={{ fontSize: 12 }}>{row.company_id}</span></>}
+                {isGlobal
+                    ? <>🌐 Global default</>
+                    : <>🏢 {companyName ?? 'Company'} <span className="aiu-mono" style={{ fontSize: 11, color: '#9ca3af' }}>{row.company_id}</span></>}
             </div>
             <div className="aiu-form-grid">
                 <Field label="Daily cap ($)"><input type="number" min={0} step="0.01" className="aiu-input" value={d.daily_cap_usd} onChange={(e) => set('daily_cap_usd', e.target.value)} placeholder="none" /></Field>
@@ -323,9 +331,15 @@ function CapRow({ row, onSaved }) {
     );
 }
 
-function NewCompanyCap({ onSaved }) {
+function NewCompanyCap({ companies, settings, onSaved }) {
     const [open, setOpen] = useState(false);
     const [companyId, setCompanyId] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    // Only offer companies that don't already have an override row.
+    const taken = new Set(settings.filter((s) => s.company_id).map((s) => s.company_id));
+    const available = companies.filter((c) => !taken.has(c.id));
+
     if (!open) {
         return (
             <button className="aiu-btn aiu-btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>
@@ -336,18 +350,30 @@ function NewCompanyCap({ onSaved }) {
     return (
         <div className="aiu-card" style={{ padding: 18 }}>
             <div className="aiu-card-title" style={{ marginBottom: 12 }}>New per-company override</div>
-            <Field label="Company ID (UUID)" wide>
-                <input className="aiu-input" value={companyId} onChange={(e) => setCompanyId(e.target.value)} placeholder="company uuid" />
-            </Field>
+            {available.length === 0 ? (
+                <div className="aiu-empty" style={{ padding: 12 }}>
+                    {companies.length === 0 ? 'No companies found.' : 'Every company already has an override.'}
+                </div>
+            ) : (
+                <Field label="Company" wide>
+                    <select className="aiu-input" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                        <option value="">— Select a company —</option>
+                        {available.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name || '(unnamed)'}</option>
+                        ))}
+                    </select>
+                </Field>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-                <button className="aiu-btn aiu-btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-                <button className="aiu-btn aiu-btn-primary" disabled={!companyId.trim()} onClick={async () => {
+                <button className="aiu-btn aiu-btn-ghost" onClick={() => { setOpen(false); setCompanyId(''); }}>Cancel</button>
+                <button className="aiu-btn aiu-btn-primary" disabled={!companyId || saving} onClick={async () => {
+                    setSaving(true);
                     try {
-                        await axiosInstance.post('/admin/ai-usage/settings', { company_id: companyId.trim(), enabled: true, hard_block: true });
-                        toast.success('Override created — edit its caps below');
+                        await axiosInstance.post('/admin/ai-usage/settings', { company_id: companyId, enabled: true, hard_block: true });
+                        toast.success('Override created — edit its caps above');
                         setOpen(false); setCompanyId(''); onSaved();
-                    } catch { /* toasted */ }
-                }}>Create</button>
+                    } catch { /* toasted */ } finally { setSaving(false); }
+                }}>{saving ? 'Creating…' : 'Create'}</button>
             </div>
         </div>
     );
@@ -429,37 +455,48 @@ function ModelRow({ m, onSaved }) {
 }
 
 /* ────────────────────────────── Recent tab (server-side paginated) ────────── */
-const PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50, 100];
 function RecentTab() {
     const [rows, setRows] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(0);          // 0-based
+    const [pageSize, setPageSize] = useState(25);
     const [loading, setLoading] = useState(false);
 
-    const load = useCallback(async (p) => {
+    const load = useCallback(async (p, size) => {
         setLoading(true);
         try {
             const r = await axiosInstance.get(
-                `/admin/ai-usage/recent?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`,
+                `/admin/ai-usage/recent?limit=${size}&offset=${p * size}`,
             );
             setRows(r.data?.data ?? []);
             setTotal(r.data?.total ?? 0);
         } catch { /* toasted */ } finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { load(page); }, [page, load]);
+    useEffect(() => { load(page, pageSize); }, [page, pageSize, load]);
 
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
-    const to = Math.min(total, (page + 1) * PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const from = total === 0 ? 0 : page * pageSize + 1;
+    const to = Math.min(total, (page + 1) * pageSize);
+
+    const changePageSize = (n) => { setPageSize(n); setPage(0); };
 
     return (
         <div className="aiu-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', gap: 10, flexWrap: 'wrap' }}>
                 <div className="aiu-card-title" style={{ margin: 0 }}>Recent AI requests</div>
-                <button className="aiu-btn aiu-btn-ghost" onClick={() => load(page)} disabled={loading}>
-                    <RefreshCw size={13} /> {loading ? 'Loading…' : 'Reload'}
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <label style={{ fontSize: 12.5, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        Per page
+                        <select className="aiu-input" style={{ width: 78, padding: '6px 8px' }} value={pageSize} onChange={(e) => changePageSize(Number(e.target.value))}>
+                            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                    </label>
+                    <button className="aiu-btn aiu-btn-ghost" onClick={() => load(page, pageSize)} disabled={loading}>
+                        <RefreshCw size={13} /> {loading ? 'Loading…' : 'Reload'}
+                    </button>
+                </div>
             </div>
             <div className="aiu-trow aiu-trow-head aiu-recent">
                 <div>Time</div><div>Feature</div><div>Provider / model</div><div>Tokens</div><div>Status</div><div style={{ textAlign: 'right' }}>Cost</div>

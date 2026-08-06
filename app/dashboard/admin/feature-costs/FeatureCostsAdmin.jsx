@@ -82,10 +82,23 @@ export default function FeatureCostsAdmin() {
     };
 
     const setDraftField = (key, field, value) => {
-        setDrafts(prev => ({
-            ...prev,
-            [key]: { ...(prev[key] ?? {}), [field]: value },
-        }));
+        setDrafts(prev => {
+            // Seed the draft from the row's current values so editing one field
+            // (e.g. credits) doesn't drop label/description and turn the inputs
+            // uncontrolled / trip the "Label cannot be empty" check.
+            const base = prev[key] ?? (() => {
+                const item = items.find(i => i.feature_key === key);
+                return item
+                    ? {
+                        credits_cost: item.credits_cost,
+                        is_active: item.is_active,
+                        label: item.label,
+                        description: item.description ?? '',
+                    }
+                    : {};
+            })();
+            return { ...prev, [key]: { ...base, [field]: value } };
+        });
     };
 
     const isDirty = (item) => {

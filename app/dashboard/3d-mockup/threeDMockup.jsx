@@ -597,34 +597,6 @@ const ThreeDMockup = () => {
             };
         }
 
-        if (lower.includes('quota') || lower.includes('429') || status === 429) {
-            return {
-                title: 'AI quota exceeded',
-                message: 'Your Gemini free tier has no image-generation quota left.',
-                hint: 'Enable billing on your Google AI key (aistudio.google.com → API keys → Set up Billing) — same key keeps working. Or save a Replicate token in API Settings.',
-            };
-        }
-        if (lower.includes('api key not configured') || lower.includes('no image generation provider')) {
-            return {
-                title: 'AI not configured',
-                message: 'No image AI is connected to your account.',
-                hint: 'Open Dashboard → API Settings and save a Gemini key, then come back.',
-            };
-        }
-        if (lower.includes('no gemini image model is available')) {
-            return {
-                title: 'No image model available',
-                message: 'Your Gemini API key cannot access any image-capable model.',
-                hint: 'Most likely the key is on the free tier. Enable billing in Google AI Studio, or set the env var GEMINI_IMAGE_MODEL to a model your key has access to.',
-            };
-        }
-        if (lower.includes('s3 credentials not configured')) {
-            return {
-                title: 'File storage not set up',
-                message: 'AWS S3 storage is required to save generated images.',
-                hint: 'Configure it under API Settings → AWS S3 Storage.',
-            };
-        }
         if (status === 401) {
             return {
                 title: 'Session expired',
@@ -632,16 +604,43 @@ const ThreeDMockup = () => {
                 hint: null,
             };
         }
-        if (status === 0) {
+
+        // A background (polled) generation failure comes in as { userMessage }
+        // with NO HTTP response — so status is 0 but it is NOT a network error.
+        // Only treat status 0 as "network" for a genuinely thrown request error.
+        const polled = err?.userMessage != null;
+        if (!polled && status === 0) {
             return {
                 title: 'Network error',
                 message: 'Could not reach the server.',
-                hint: 'Check your internet connection and that the backend is running.',
+                hint: 'Check your internet connection and try again.',
+            };
+        }
+
+        // Everything else — provider quota/billing, missing/invalid API key, no
+        // available model, storage not set up, or any other backend/infra error
+        // — is a PLATFORM issue, not something the contractor can act on. Never
+        // leak provider names, billing links, API-key or env-var instructions to
+        // a company user. Show one calm, generic message; the raw detail is still
+        // logged server-side (ai_usage_log) + visible to admins.
+        const isProviderOrConfig =
+            status === 429 || status === 503 ||
+            lower.includes('quota') || lower.includes('429') ||
+            lower.includes('billing') || lower.includes('prepay') ||
+            lower.includes('credits are depleted') || lower.includes('resource_exhausted') ||
+            lower.includes('api key') || lower.includes('image model') ||
+            lower.includes('gemini') || lower.includes('replicate') ||
+            lower.includes('provider') || lower.includes('s3');
+        if (isProviderOrConfig) {
+            return {
+                title: 'Image generation unavailable',
+                message: 'We couldn’t generate your mockup right now.',
+                hint: 'Please try again in a few minutes. If it keeps happening, contact support.',
             };
         }
         return {
             title: 'Generation failed',
-            message: raw || 'The mockup could not be generated.',
+            message: 'The mockup could not be generated.',
             hint: 'Try again, or simplify your instructions and re-generate.',
         };
     };
