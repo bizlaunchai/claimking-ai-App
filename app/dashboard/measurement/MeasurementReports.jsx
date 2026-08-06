@@ -5,6 +5,7 @@ import "./measurement.css"
 import "./measurement-hero.css"
 import LocalFileUploader from "@/utiles/LocalFileUploader.jsx";
 import axiosInstance from "@/lib/axiosInstance";
+import { pollAiJob } from "@/lib/pollAiJob";
 import { toast } from "sonner";
 import { Check, AlertCircle, Zap, FolderOpen } from "lucide-react";
 import ClientSelector from "@/components/clients/ClientSelector";
@@ -20,6 +21,7 @@ const Page = () => {
     const [activeInputTab, setActiveInputTab] = useState('report');
     const [measurementReportsFiles, setMeasurementReportsFiles] = useState([]);
     const [extracting, setExtracting] = useState(false);
+    const [extractElapsed, setExtractElapsed] = useState(0); // seconds, for the progress card
     const [extractResult, setExtractResult] = useState(null); // backend row
     const [extractError, setExtractError] = useState(null);
 
@@ -137,15 +139,24 @@ const Page = () => {
         setExtracting(true);
         setExtractError(null);
         setExtractResult(null);
+        setExtractElapsed(0);
+        const startedAt = Date.now();
+        const timer = setInterval(() => setExtractElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
         try {
             const fd = new FormData();
             fd.append('source_file', localFile);
             if (selectedClient?.id) fd.append('client_id', selectedClient.id);
             if (selectedClient?.name) fd.append('title', `${selectedClient.name} — Measurement`);
 
-            const res = await axiosInstance.post('/measurement/extract', fd);
-            const payload = res.data?.data;
-            const credits = res.data?.credits;
+            // Async: the POST just uploads + enqueues a job (returns fast, even
+            // for a 14 MB file); the slow Gemini parse runs server-side and we
+            // poll GET /ai-jobs/:id until it's done — no 60s idle-timeout death.
+            const startRes = await axiosInstance.post('/measurement/extract', fd, { timeout: 120000 });
+            const jobId = startRes.data?.job_id;
+            // Back-compat: if the server still answered synchronously, use it.
+            const result = jobId ? await pollAiJob(jobId) : startRes.data;
+            const payload = result?.data;
+            const credits = result?.credits;
             setExtractResult(payload);
             // Seed the editable form with whatever the AI got.
             setEdits({ ...(payload?.extracted_data ?? {}) });
@@ -161,11 +172,15 @@ const Page = () => {
             }
             // Refresh the report list so the badge count updates immediately.
             refreshReportList();
-            toast.success(res.data?.message ?? 'Measurement extracted');
+            toast.success(result?.message ?? 'Measurement extracted');
         } catch (err) {
-            const msg = err?.userMessage || err?.response?.data?.message || 'Extraction failed';
+            const timedOut = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message ?? '');
+            const msg = timedOut
+                ? 'Extraction took too long and timed out. Large reports can take a bit — please try again.'
+                : (err?.userMessage || err?.response?.data?.message || 'Extraction failed');
             setExtractError(msg);
         } finally {
+            clearInterval(timer);
             setExtracting(false);
         }
     };
@@ -558,6 +573,35 @@ const Page = () => {
                                         </span>
                                     )}
                                 </button>
+
+                                {extracting && (
+                                    <div style={{
+                                        marginTop: 10, padding: '14px 16px', borderRadius: 8, fontSize: 13,
+                                        background: '#eff6ff', border: '1px solid #bfdbfe',
+                                        borderLeft: '4px solid #2563eb', color: '#1e3a8a',
+                                        display: 'flex', alignItems: 'center', gap: 12,
+                                    }}>
+                                        <style>{`@keyframes ms-spin{to{transform:rotate(360deg)}}`}</style>
+                                        <span style={{
+                                            width: 20, height: 20, flexShrink: 0, borderRadius: '50%',
+                                            border: '2.5px solid #bfdbfe', borderTopColor: '#2563eb',
+                                            animation: 'ms-spin 0.8s linear infinite',
+                                        }} />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 700 }}>
+                                                AI is reading your report…
+                                                <span style={{ fontWeight: 500, opacity: 0.8 }}> ({extractElapsed}s)</span>
+                                            </div>
+                                            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                                                {extractElapsed < 15
+                                                    ? 'Analyzing the pages — this usually takes a few seconds.'
+                                                    : extractElapsed < 45
+                                                        ? 'Large / multi-page reports can take up to a minute. Hang tight…'
+                                                        : 'Almost there — big PDFs take a little longer. Please keep this tab open.'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {extractError && (
                                     <div role="alert" style={{
