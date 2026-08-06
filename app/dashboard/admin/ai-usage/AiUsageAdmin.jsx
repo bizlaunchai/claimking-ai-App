@@ -33,6 +33,38 @@ const TABS = [
 const money = (n) => `$${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (n) => Number(n ?? 0).toLocaleString();
 
+// Human-readable names for the internal feature keys shown across the dashboard
+// (Models tab, cost-per-feature table, activity log).
+const FEATURE_LABELS = {
+    __default_text__: 'Default · Text (Claude)',
+    __default_vision__: 'Default · Vision (Gemini)',
+    __default_image__: 'Default · Image (Gemini)',
+    estimate_generate: 'Estimate — Generate',
+    estimate_review: 'Estimate — AI Review',
+    estimate_changes: 'Estimate — AI Changes',
+    supplement_generate: 'Supplement — Generate',
+    rate_extract: 'Rate Book — Extract',
+    policy_analysis: 'Policy Analysis',
+    comms_extract: 'Email / SMS — Extract',
+    gmb_review_reply: 'Google Business — Review Reply',
+    gmb_caption: 'Google Business — Post Caption',
+    photo_vision: 'Photo — Damage Vision',
+    measurement_extract: 'Measurement — Extract',
+    color_import: 'Color Chart Import',
+    mockup_generate: '3D Mockup — Generate',
+    document_generate: 'Document — Generate',
+};
+
+/** Pretty label for a feature key; falls back to Title Case of the raw key. */
+const featureLabel = (key) => {
+    if (!key) return '—';
+    if (FEATURE_LABELS[key]) return FEATURE_LABELS[key];
+    return String(key)
+        .replace(/^__|__$/g, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 // Known model ids per provider — power the model-picker dropdowns. Not
 // exhaustive: the field still accepts a custom id (typed) so a brand-new model
 // works before this list is updated.
@@ -49,9 +81,34 @@ const KNOWN_MODELS = {
     openai: ['gpt-4o', 'gpt-4o-mini'],
 };
 
+// Friendly labels for the model-picker suggestions (datalist shows label + id).
+const MODEL_LABELS = {
+    'claude-opus-4-8': 'Claude Opus 4.8 — most capable, priciest',
+    'claude-opus-4-7': 'Claude Opus 4.7',
+    'claude-sonnet-5': 'Claude Sonnet 5',
+    'claude-sonnet-4-6': 'Claude Sonnet 4.6 — balanced (default)',
+    'claude-haiku-4-5-20251001': 'Claude Haiku 4.5 — cheapest 💸',
+    'claude-fable-5': 'Claude Fable 5',
+    'gemini-2.5-pro': 'Gemini 2.5 Pro — best vision',
+    'gemini-2.5-flash': 'Gemini 2.5 Flash — cheap (default vision)',
+    'gemini-2.5-flash-image': 'Gemini 2.5 Flash Image',
+    'gemini-2.5-flash-image-preview': 'Gemini 2.5 Flash Image (preview)',
+    'gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'gemini-2.0-flash-preview-image-generation': 'Gemini 2.0 Flash Image (preview)',
+    'gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'gemini-1.5-flash': 'Gemini 1.5 Flash — cheapest vision',
+    'gpt-4o': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o mini — cheapest OpenAI',
+};
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
 export default function AiUsageAdmin() {
     const [tab, setTab] = useState('overview');
-    const [days, setDays] = useState(30);
+    // Time filter: preset 'today' | '7' | '30' | '90' | 'custom'.
+    const [preset, setPreset] = useState('30');
+    const [customFrom, setCustomFrom] = useState(todayStr());
+    const [customTo, setCustomTo] = useState(todayStr());
 
     const [status, setStatus] = useState(null);
     const [cpf, setCpf] = useState(null);          // { total_cost_usd, features:[] }
@@ -67,13 +124,26 @@ export default function AiUsageAdmin() {
     );
     const killed = !!globalRow?.ai_disabled;
 
+    // Build the query string + a human label for the active time filter.
+    const range = useMemo(() => {
+        if (preset === 'today') { const d = todayStr(); return { qs: `from=${d}&to=${d}`, label: 'Today' }; }
+        if (preset === 'custom') {
+            const from = customFrom || todayStr();
+            const to = customTo || todayStr();
+            // Guard swapped dates.
+            const [a, b] = from <= to ? [from, to] : [to, from];
+            return { qs: `from=${a}&to=${b}`, label: a === b ? a : `${a} → ${b}` };
+        }
+        return { qs: `days=${preset}`, label: `Last ${preset} days` };
+    }, [preset, customFrom, customTo]);
+
     const fetchAll = useCallback(async () => {
         setLoading(true);
         try {
             const [st, cp, dy, se, mo, co] = await Promise.all([
                 axiosInstance.get('/admin/ai-usage/status'),
-                axiosInstance.get(`/admin/ai-usage/cost-per-feature?days=${days}`),
-                axiosInstance.get(`/admin/ai-usage/daily?days=${days}`),
+                axiosInstance.get(`/admin/ai-usage/cost-per-feature?${range.qs}`),
+                axiosInstance.get(`/admin/ai-usage/daily?${range.qs}`),
                 axiosInstance.get('/admin/ai-usage/settings'),
                 axiosInstance.get('/admin/ai-usage/models'),
                 axiosInstance.get('/admin/ai-usage/companies'),
@@ -85,7 +155,7 @@ export default function AiUsageAdmin() {
             setModels(mo.data ?? []);
             setCompanies(co.data ?? []);
         } catch { /* toasted */ } finally { setLoading(false); }
-    }, [days]);
+    }, [range.qs]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -115,12 +185,21 @@ export default function AiUsageAdmin() {
                             emergency kill-switch. Cost = real provider tokens × published rates (an estimate — reconcile monthly).
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <select className="aiu-input" style={{ width: 130 }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
-                            <option value={7}>Last 7 days</option>
-                            <option value={30}>Last 30 days</option>
-                            <option value={90}>Last 90 days</option>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <select className="aiu-input" style={{ width: 150 }} value={preset} onChange={(e) => setPreset(e.target.value)}>
+                            <option value="today">Today</option>
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="custom">Custom range…</option>
                         </select>
+                        {preset === 'custom' && (
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input type="date" className="aiu-input" style={{ width: 150 }} value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} />
+                                <span style={{ color: '#9ca3af', fontSize: 13 }}>→</span>
+                                <input type="date" className="aiu-input" style={{ width: 150 }} value={customTo} min={customFrom || undefined} max={todayStr()} onChange={(e) => setCustomTo(e.target.value)} />
+                            </div>
+                        )}
                         <button className="aiu-btn aiu-btn-ghost" onClick={fetchAll} disabled={loading}>
                             <RefreshCw size={14} /> Refresh
                         </button>
@@ -158,7 +237,7 @@ export default function AiUsageAdmin() {
 
                 {loading && <div className="aiu-card" style={{ padding: 24, color: '#6b7280' }}>Loading…</div>}
 
-                {!loading && tab === 'overview' && <Overview status={status} cpf={cpf} daily={daily} days={days} />}
+                {!loading && tab === 'overview' && <Overview status={status} cpf={cpf} daily={daily} rangeLabel={range.label} />}
                 {!loading && tab === 'caps' && <CapsTab settings={settings} companies={companies} onSaved={fetchAll} />}
                 {!loading && tab === 'models' && <ModelsTab models={models} onSaved={fetchAll} />}
                 {tab === 'recent' && <RecentTab />}
@@ -168,7 +247,7 @@ export default function AiUsageAdmin() {
 }
 
 /* ────────────────────────────── Overview ────────────────────────────── */
-function Overview({ status, cpf, daily, days }) {
+function Overview({ status, cpf, daily, rangeLabel }) {
     const dailyPct = status?.daily_cap_usd
         ? Math.min(100, Math.round((status.daily_spend_usd / status.daily_cap_usd) * 100))
         : null;
@@ -185,7 +264,7 @@ function Overview({ status, cpf, daily, days }) {
                 <StatMeter label="This month" value={money(status?.monthly_spend_usd)}
                     cap={status?.monthly_cap_usd} pct={monthPct} />
                 <div className="aiu-card aiu-stat">
-                    <div className="aiu-stat-label">Cost ({days}d)</div>
+                    <div className="aiu-stat-label">Cost · {rangeLabel}</div>
                     <div className="aiu-stat-val">{money(cpf?.total_cost_usd)}</div>
                     <div className="aiu-stat-foot">
                         {status?.enabled
@@ -225,7 +304,10 @@ function Overview({ status, cpf, daily, days }) {
                 {(cpf?.features ?? []).length === 0 && <div className="aiu-empty">No usage in this window.</div>}
                 {(cpf?.features ?? []).map((f) => (
                     <div key={f.feature} className="aiu-trow">
-                        <div className="aiu-mono">{f.feature}</div>
+                        <div>
+                            <div style={{ fontWeight: 600 }}>{featureLabel(f.feature)}</div>
+                            <div className="aiu-mono" style={{ fontSize: 11, color: '#9ca3af' }}>{f.feature}</div>
+                        </div>
                         <div>{num(f.requests)}</div>
                         <div style={{ color: f.errors ? '#b91c1c' : '#6b7280' }}>{num(f.errors)}</div>
                         <div>{num(f.input_tokens)}</div>
@@ -390,14 +472,40 @@ function ModelsTab({ models, onSaved }) {
                 feature to Opus only if it needs the quality. Pick from the dropdown or type a custom
                 model id.
             </div>
-            {/* Shared suggestion lists — the model inputs pick their provider's list. */}
-            {Object.entries(KNOWN_MODELS).map(([provider, list]) => (
-                <datalist key={provider} id={`aiu-models-${provider}`}>
-                    {list.map((m) => <option key={m} value={m} />)}
-                </datalist>
-            ))}
             {models.map((m) => <ModelRow key={m.id ?? m.feature_key} m={m} onSaved={onSaved} />)}
         </>
+    );
+}
+
+/** Real dropdown of known models for the provider (always shows ALL options,
+ *  unlike a datalist which filters by typed text) + a "Custom…" escape hatch. */
+function ModelPicker({ provider, value, onChange }) {
+    const known = KNOWN_MODELS[provider] || [];
+    const inKnown = known.includes(value);
+    const [custom, setCustom] = useState(!inKnown && !!value);
+
+    if (custom) {
+        return (
+            <div style={{ display: 'flex', gap: 6 }}>
+                <input className="aiu-input" value={value} onChange={(e) => onChange(e.target.value)} placeholder="custom model id" />
+                <button type="button" className="aiu-btn aiu-btn-ghost" title="Back to list"
+                    onClick={() => { setCustom(false); onChange(known[0] || ''); }}>↩</button>
+            </div>
+        );
+    }
+    return (
+        <select
+            className="aiu-input"
+            value={inKnown ? value : '__current__'}
+            onChange={(e) => {
+                if (e.target.value === '__custom__') { setCustom(true); return; }
+                onChange(e.target.value);
+            }}
+        >
+            {!inKnown && value && <option value="__current__">{value} (current)</option>}
+            {known.map((mdl) => <option key={mdl} value={mdl}>{MODEL_LABELS[mdl] || mdl}</option>)}
+            <option value="__custom__">✎ Custom model id…</option>
+        </select>
     );
 }
 
@@ -431,7 +539,10 @@ function ModelRow({ m, onSaved }) {
     return (
         <div className="aiu-card" style={{ padding: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 10, flexWrap: 'wrap' }}>
-                <span className="aiu-mono" style={{ fontWeight: 700, fontSize: 13 }}>{m.feature_key}</span>
+                <div>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{featureLabel(m.feature_key)}</div>
+                    <div className="aiu-mono" style={{ fontSize: 11, color: '#9ca3af' }}>{m.feature_key}</div>
+                </div>
                 {!d.enabled && <span className="aiu-pill off"><AlertTriangle size={11} /> disabled</span>}
             </div>
             <div className="aiu-form-grid">
@@ -442,7 +553,7 @@ function ModelRow({ m, onSaved }) {
                         <option value="openai">openai</option>
                     </select>
                 </Field>
-                <Field label="Primary model"><input className="aiu-input" list={`aiu-models-${d.provider}`} value={d.primary_model} onChange={(e) => set('primary_model', e.target.value)} placeholder="pick or type…" /></Field>
+                <Field label="Primary model"><ModelPicker provider={d.provider} value={d.primary_model} onChange={(v) => set('primary_model', v)} /></Field>
                 <Field label="Max output tokens"><input type="number" min={1} className="aiu-input" value={d.max_output_tokens} onChange={(e) => set('max_output_tokens', e.target.value)} placeholder="code default" /></Field>
                 <Field label="Enabled"><select className="aiu-input" value={d.enabled ? 'on' : 'off'} onChange={(e) => set('enabled', e.target.value === 'on')}><option value="on">Enabled</option><option value="off">Disabled</option></select></Field>
                 <Field label="Fallback models (comma-separated)" wide><input className="aiu-input" value={d.fallback_models} onChange={(e) => set('fallback_models', e.target.value)} placeholder="claude-sonnet-5, claude-haiku-4-5-20251001" /></Field>
@@ -505,9 +616,17 @@ function RecentTab() {
             {rows.map((r) => (
                 <div key={r.id} className="aiu-trow aiu-recent">
                     <div style={{ color: '#6b7280', fontSize: 12 }}>{new Date(r.created_at).toLocaleString()}</div>
-                    <div className="aiu-mono">{r.feature}{r.is_background ? ' ·bg' : ''}</div>
+                    <div>
+                        <div style={{ fontSize: 12.5 }}>{featureLabel(r.feature)}{r.is_background ? ' ·bg' : ''}</div>
+                        <div className="aiu-mono" style={{ fontSize: 10.5, color: '#9ca3af' }}>{r.feature}</div>
+                    </div>
                     <div className="aiu-mono" style={{ fontSize: 11.5 }}>{r.provider} / {r.model ?? '—'}</div>
-                    <div style={{ fontSize: 12 }}>{num(r.input_tokens)}→{num(r.output_tokens)}{r.image_count ? ` ·${r.image_count}img` : ''}</div>
+                    <div style={{ fontSize: 12 }}>
+                        {num(r.input_tokens)}→{num(r.output_tokens)}{r.image_count ? ` ·${r.image_count}img` : ''}
+                        {r.cache_read_tokens > 0 && (
+                            <span title={`${num(r.cache_read_tokens)} tokens served from cache`} style={{ marginLeft: 4, color: '#059669', fontWeight: 600 }}>·cached</span>
+                        )}
+                    </div>
                     <div>
                         {r.status === 'success' && <span className="aiu-pill on">ok</span>}
                         {r.status === 'error' && <span className="aiu-pill off" title={r.error_message ?? ''}>error</span>}
