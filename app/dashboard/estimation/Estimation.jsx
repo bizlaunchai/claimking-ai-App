@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import axiosInstance from "@/lib/axiosInstance";
+import { pollAiJob } from "@/lib/pollAiJob";
 import { toast as sonner } from "sonner";
 import SignaturePad from "@/components/signature/SignaturePad";
 import ClientSelector from "@/components/clients/ClientSelector";
@@ -1459,18 +1460,15 @@ const Estimation = () => {
         try {
             // Make sure the latest edits are persisted before review runs.
             await saveEstimateNow();
-            // The review is a synchronous Claude call and can run longer than the
-            // default 60s axios timeout on a large estimate — give it room so a
-            // slow-but-successful review isn't killed as a "network" error.
-            const res = await axiosInstance.post(
-                `/estimates/${currentEstimateId}/ai-review`,
-                {},
-                { timeout: 180000 },
-            );
-            setReviewData(res.data?.data ?? null);
+            // Async: POST enqueues the review job (returns fast), then we poll
+            // GET /ai-jobs/:id — no 60s idle-timeout death on big estimates.
+            const startRes = await axiosInstance.post(`/estimates/${currentEstimateId}/ai-review`, {});
+            const jobId = startRes.data?.job_id;
+            const result = jobId ? await pollAiJob(jobId) : startRes.data;
+            setReviewData(result?.data ?? null);
             // Refresh balance/cost so the header reflects the credits just spent.
             refreshCreditsState();
-            const spent = res.data?.credits?.cost;
+            const spent = result?.credits?.cost;
             toast(spent ? `AI review complete — ${spent} credits used` : 'AI review complete', 'success');
         } catch (err) {
             const timedOut = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message ?? '');
