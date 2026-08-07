@@ -171,17 +171,14 @@ const SignView = () => {
             {/* Contractor branding only — no ClaimKing header, no exit links */}
             <div className="sv-header">
                 <div className="sv-brand">
-                    {logoSrc ? (
+                    {/* No logo on file → just show the company name (no initials tile). */}
+                    {logoSrc && (
                         <img
                             src={logoSrc}
                             alt={company.name ?? ''}
                             className="sv-logo"
                             onError={() => setLogoBroken(true)}
                         />
-                    ) : (
-                        <div className="sv-logo sv-logo-fallback">
-                            {(company.name ?? 'C').split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}
-                        </div>
                     )}
                     <div>
                         <div className="sv-brand-name">{company.name ?? 'Your Contractor'}</div>
