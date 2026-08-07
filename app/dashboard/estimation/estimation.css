@@ -72,6 +72,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 @media (max-width:1280px){.builder-section{grid-template-columns:260px minmax(0,1fr)}.right-rail{grid-column:1/-1}}
 @media (max-width:900px){.builder-section{grid-template-columns:1fr}.left-panel{grid-column:1/-1}}
 
+/* §5.1 — resizable estimate width. Only on wide desktops (below 1281px the
+   responsive stacking above owns the grid). 'wide' hides the right-rail item
+   palette; 'full' hides both side panels so the line-item table gets the full
+   width. Both side panels are add-item helpers — the table, totals and Finalize
+   live in the centre column, so nothing essential is hidden. */
+@media (min-width:1281px){
+    .builder-section.layout-wide{grid-template-columns:280px minmax(0,1fr)}
+    .builder-section.layout-wide .right-rail{display:none}
+    .builder-section.layout-full{grid-template-columns:minmax(0,1fr)}
+    .builder-section.layout-full .left-panel,
+    .builder-section.layout-full .right-rail{display:none}
+}
+/* Width control (Standard / Wide / Full) */
+.layout-width-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:10px}
+.layout-width-label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em}
+.layout-width-control{display:inline-flex;border:1px solid #e5e7eb;border-radius:7px;overflow:hidden;background:#fff}
+.layout-width-control button{padding:5px 11px;font-size:11.5px;font-weight:600;border:none;border-left:1px solid #e5e7eb;background:#fff;color:#6b7280;cursor:pointer;transition:background .12s,color .12s}
+.layout-width-control button:first-child{border-left:none}
+.layout-width-control button:hover{background:#f9fafb;color:#1a1f3a}
+.layout-width-control button.active{background:#1a1f3a;color:#FDB813}
+/* On narrower screens the width toggle is a no-op (grid is responsive) — hide it. */
+@media (max-width:1280px){.layout-width-toolbar{display:none}}
+
 .left-panel{display:flex;flex-direction:column;gap:14px;position:sticky;top:76px}
 @media (max-width:900px){.left-panel{position:static}}
 .panel{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #e5e7eb}

@@ -1439,7 +1439,7 @@ const Settings = () => {
                                     <h3 className="section-title">Client Deposit Payments</h3>
                                     <StripeConnectCard />
                                 </div>
-                                <div className="settings-section">
+                                {/*<div className="settings-section">
                                     <h3 className="section-title">Payment Processing Setup</h3>
                                     <div className="toggle-group">
                                         <div className="toggle-info">
@@ -1684,7 +1684,7 @@ const Settings = () => {
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
-                                </div>
+                                </div>*/}
                             </div>
                         </div>
                     </div>
