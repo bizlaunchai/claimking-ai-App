@@ -393,6 +393,8 @@ function parseCsvRows(text) {
 
 const LIBRARY_CSV_HEADERS = ["category", "name", "unit", "price"];
 const CODE_CSV_HEADERS = ["name", "reference", "unit", "price"];
+// Spec (Aug-04 handoff): bulk-add estimate LINE ITEMS grouped by Category.
+const LINE_ITEM_CSV_HEADERS = ["title", "description", "category", "qty", "unit", "price", "notes"];
 
 function headerMatches(rowCells, expected) {
     const h = (rowCells ?? []).map((c) => (c ?? "").trim().toLowerCase());
@@ -434,6 +436,30 @@ function parseCodeCsv(text) {
         valid.push({ name, ref: reference, unit, price });
     }
     return { kind: "code", valid, errors };
+}
+
+// Spec CSV: Title/Description/Category/Qty/Unit/Price/Notes → estimate line items.
+function parseLineItemCsv(text) {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return { kind: "lineitems", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
+    if (!headerMatches(rows[0], LINE_ITEM_CSV_HEADERS)) {
+        return { kind: "lineitems", valid: [], errors: [{ line: 1, msg: `Header must be: ${LINE_ITEM_CSV_HEADERS.join(",")}` }] };
+    }
+    const valid = [], errors = [];
+    for (let i = 1; i < rows.length; i++) {
+        const [title, description, category, qtyRaw, unit, priceRaw, notes] = rows[i].map((c) => (c ?? "").trim());
+        const line = i + 1;
+        if (!title || !category || !unit || !priceRaw) {
+            errors.push({ line, msg: "Missing required field(s): title, category, unit, price" });
+            continue;
+        }
+        const qty = parseFloat(qtyRaw || "1");
+        const price = parseFloat(priceRaw);
+        if (!(qty > 0)) { errors.push({ line, msg: `Invalid qty "${qtyRaw}"` }); continue; }
+        if (!(price >= 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
+        valid.push({ title, description, category, qty, unit, price, notes });
+    }
+    return { kind: "lineitems", valid, errors };
 }
 
 function downloadCsvFile(filename, content) {
@@ -500,6 +526,22 @@ const Estimation = () => {
     const [editCodeName, setEditCodeName] = useState('');
     const [editCodePrice, setEditCodePrice] = useState('');
     const [editCodeRef, setEditCodeRef] = useState('');
+    const [editCodeNote, setEditCodeNote] = useState(''); // §5.2 code-item saved note
+
+    // §5.1 — estimate-table width: 'standard' | 'wide' | 'full'. Persisted per
+    // user so their preferred line-item area width survives reloads. Read in an
+    // effect (not a lazy initializer) to avoid an SSR hydration mismatch.
+    const [layoutWidth, setLayoutWidth] = useState('standard');
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('ck.estimate.layoutWidth');
+            if (saved === 'standard' || saved === 'wide' || saved === 'full') setLayoutWidth(saved);
+        } catch { /* ignore */ }
+    }, []);
+    const setLayoutWidthPersist = (val) => {
+        setLayoutWidth(val);
+        try { localStorage.setItem('ck.estimate.layoutWidth', val); } catch { /* ignore */ }
+    };
     // Editable code & manufacturer database (session-only). Items get a stable id.
     const [codeDb, setCodeDb] = useState(() => CODE_DB.map((c, i) => ({ ...c, id: `cdb-${i}` })));
     const [editingCodeDb, setEditingCodeDb] = useState(null); // item.id
@@ -593,6 +635,9 @@ const Estimation = () => {
     const [paymentType, setPaymentType] = useState("percentage");
     const [paymentPct, setPaymentPct] = useState("50");
     const [paymentFixed, setPaymentFixed] = useState("0");
+    // Sign & Pay: deposit the homeowner pays at signing (persisted on the
+    // estimate). Declared before buildSavePayload so it can be included there.
+    const [signDeposit, setSignDeposit] = useState("0");
 
     // ── More options dropdown ────────────────────────────────────────────
     const [moreOpen, setMoreOpen] = useState(false);
@@ -708,6 +753,9 @@ const Estimation = () => {
     // (S3 key) joined from the companies row. AuthedPhotoThumb handles the
     // bearer-token blob fetch for the logo image.
     const [contractorCompany, setContractorCompany] = useState(null);
+    // §3 — can the company charge cards now? null=unknown, true=Stripe connected
+    // & charges enabled, false=not connected. Drives the Sign-tab deposit warning.
+    const [stripeReady, setStripeReady] = useState(null);
     useEffect(() => {
         let cancelled = false;
         let createdBlobUrl = null;
@@ -745,6 +793,23 @@ const Estimation = () => {
             cancelled = true;
             if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
         };
+    }, []);
+
+    // §3 — resolve the company's Stripe charge-ability so the Sign tab can warn
+    // when a deposit is set but online Sign & Pay can't actually run.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const r = await axiosInstance.get('/stripe-connect/status', { suppressErrorToast: true });
+                if (cancelled) return;
+                const s = r.data?.data ?? null;
+                setStripeReady(!!(s?.connected && s?.charges_enabled));
+            } catch {
+                if (!cancelled) setStripeReady(false);
+            }
+        })();
+        return () => { cancelled = true; };
     }, []);
 
     // ── Credits: cost per generation + user's balance + AI provider status ─
@@ -909,6 +974,8 @@ const Estimation = () => {
                 setOverheadOn(!!e.overhead_on);
                 setTaxOn(!!e.tax_on);
                 setTaxName(e.tax_name ?? "Sales Tax");
+                // Sign & Pay deposit due at signing
+                setSignDeposit(Number(e.deposit_amount) > 0 ? String(e.deposit_amount) : "0");
                 // Empty string, not "0" — a saved 0% and an unset rate look the
                 // same in the DB, and showing "0" reads as a deliberate choice.
                 setTaxPercent(Number(e.tax_pct) ? String(e.tax_pct) : "");
@@ -945,6 +1012,7 @@ const Estimation = () => {
                         reason: it.reason ?? undefined,
                         source_field: it.source_field ?? undefined,
                         code_ref: it.code_ref ?? undefined,
+                        notes: it.notes ?? undefined,
                     })),
                 }));
                 setSections(restoredSections);
@@ -1157,6 +1225,9 @@ const Estimation = () => {
             include_photos_in_pdf: includePhotosInPdf,
             include_measurement_in_pdf: includeMeasurementInPdf,
             terms_html: termsState?.full_terms ?? undefined,
+            // Sign & Pay — deposit due at signing (0 = none).
+            deposit_amount: Math.max(parseFloat(signDeposit) || 0, 0),
+            deposit_currency: 'usd',
             sections: sections.map((s, idx) => ({
                 section_key: s.id,                              // "dwelling-roof"
                 name: s.name,
@@ -1169,6 +1240,7 @@ const Estimation = () => {
                     reason: it.reason ?? undefined,
                     source_field: it.source_field ?? undefined,
                     code_ref: it.code_ref ?? undefined,
+                    notes: it.notes ?? undefined,
                     sort_order: j,
                 })),
             })),
@@ -1178,6 +1250,7 @@ const Estimation = () => {
         client, linkedMeasurement, estimateTitle, mode, overheadOn,
         taxOn, taxName, taxPercentNum, termsState, sections, includePhotosInPdf, includeMeasurementInPdf,
         discountType, discountValueNum, cardFeeOn, cardFeePctNum, customFees,
+        signDeposit,
     ]);
 
     /**
@@ -1546,6 +1619,144 @@ const Estimation = () => {
         }
     };
 
+    // §5.3 — resolve the price for a supplement opportunity. Prefer the AI's
+    // structured unit price; else, if only a total potential_value is known,
+    // put it on a qty-1 line so the total lands (contractor edits qty/unit).
+    const supplementLinePrice = (so) =>
+        Number(so.suggested_price) ||
+        (so.suggested_qty ? 0 : Number(so.potential_value) || 0);
+
+    // §5.3 — "Add to estimate" for a supplement opportunity. Mirrors
+    // applyMissingItem; inserts into the AI-suggested section or the active one.
+    const applySupplementOpportunity = (so, key) => {
+        if (key && appliedFindings[key]) return; // already added — no-op
+        const target =
+            sections.find((s) => s.id === so.suggested_section_key) ??
+            sections.find((s) => s.id === activeSection) ??
+            sections[0];
+        if (!target) {
+            toast('Add a section before applying supplements', 'error');
+            return;
+        }
+        const price = supplementLinePrice(so);
+        setSections((prev) => prev.map((s) =>
+            s.id === target.id
+                ? {
+                    ...s,
+                    items: [
+                        ...(s.items ?? []),
+                        {
+                            name: so.title,
+                            qty: Number(so.suggested_qty) || 1,
+                            unit: so.suggested_unit || 'EA',
+                            price,
+                            reason: so.reason,
+                            source_field: 'ai_review_suggestion',
+                        },
+                    ],
+                }
+                : s,
+        ));
+        triggerSave();
+        if (key) setAppliedFindings((prev) => ({ ...prev, [key]: true }));
+        const priceNote = price > 0 ? '' : ' — set the price/qty on the line (field-verify)';
+        toast(`Added "${so.title}" to ${target.name}${priceNote}`, 'success');
+    };
+
+    // §5.3 — "Apply All": add every not-yet-applied missing item + supplement
+    // opportunity AND apply every pricing fix, in one atomic sections update.
+    const applyAllFindings = () => {
+        const f = reviewData?.findings;
+        if (!f) return;
+        const mis = f.missing_items ?? [];
+        const sos = f.supplement_opportunities ?? [];
+        const pcs = f.pricing_concerns ?? [];
+
+        if (!sections.length && (mis.length || sos.length)) {
+            toast('Add a section before applying', 'error');
+            return;
+        }
+
+        let added = 0;
+        let priced = 0;
+        const newKeys = {};
+
+        setSections((prev) => {
+            let next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+            const findTarget = (sectionKey) =>
+                next.find((s) => s.id === sectionKey) ??
+                next.find((s) => s.id === activeSection) ??
+                next[0];
+
+            // 1. Pricing fixes on existing lines (first name match each).
+            pcs.forEach((pc, i) => {
+                const key = `pricing:${i}`;
+                if (appliedFindings[key] || newKeys[key]) return;
+                let done = false;
+                next = next.map((s) => ({
+                    ...s,
+                    items: s.items.map((it) => {
+                        if (done) return it;
+                        if ((it.name ?? '').toLowerCase() === (pc.item_name ?? '').toLowerCase()) {
+                            done = true;
+                            return { ...it, price: Number(pc.suggested_price) || it.price };
+                        }
+                        return it;
+                    }),
+                }));
+                if (done) { priced++; newKeys[key] = true; }
+            });
+
+            // 2. Missing items (append).
+            mis.forEach((mi, i) => {
+                const key = `missing:${i}`;
+                if (appliedFindings[key] || newKeys[key]) return;
+                const target = findTarget(mi.suggested_section_key);
+                if (!target) return;
+                target.items.push({
+                    name: mi.name,
+                    qty: Number(mi.suggested_qty) || 1,
+                    unit: mi.suggested_unit || 'EA',
+                    price: Number(mi.suggested_price) || 0,
+                    reason: mi.reason,
+                    code_ref: mi.code_ref ?? undefined,
+                    source_field: 'ai_review_suggestion',
+                });
+                added++; newKeys[key] = true;
+            });
+
+            // 3. Supplement opportunities (append).
+            sos.forEach((so, i) => {
+                const key = `supplement:${i}`;
+                if (appliedFindings[key] || newKeys[key]) return;
+                const target = findTarget(so.suggested_section_key);
+                if (!target) return;
+                target.items.push({
+                    name: so.title,
+                    qty: Number(so.suggested_qty) || 1,
+                    unit: so.suggested_unit || 'EA',
+                    price: supplementLinePrice(so),
+                    reason: so.reason,
+                    source_field: 'ai_review_suggestion',
+                });
+                added++; newKeys[key] = true;
+            });
+
+            return next;
+        });
+
+        if (added || priced) {
+            triggerSave();
+            setAppliedFindings((prev) => ({ ...prev, ...newKeys }));
+            const bits = [];
+            if (added) bits.push(`${added} item${added === 1 ? '' : 's'} added`);
+            if (priced) bits.push(`${priced} price fix${priced === 1 ? '' : 'es'}`);
+            toast(`Applied ${bits.join(' · ')}`, 'success');
+        } else {
+            toast('Nothing left to apply', 'info');
+        }
+    };
+
     // ====================== 2.3 — ASK AI TO MAKE CHANGES ======================
     const runAiChanges = async () => {
         if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
@@ -1691,6 +1902,7 @@ const Estimation = () => {
                     reason: it.reason ?? undefined,
                     source_field: it.source_field ?? undefined,
                     code_ref: it.code_ref ?? undefined,
+                    notes: it.notes ?? undefined,
                 })),
             }));
             setSections(restored);
@@ -2018,21 +2230,31 @@ const Estimation = () => {
         setEditingItem(null);
     };
 
+    // §5.2 — per-line-item saved note. Persists with the estimate (debounced
+    // save) and travels with the item when saved into a template/bundle.
+    const updateItemNote = (secId, idx, value) => {
+        setSections((prev) => prev.map((s) => s.id === secId
+            ? { ...s, items: s.items.map((it, i) => (i === idx ? { ...it, notes: value } : it)) }
+            : s));
+        triggerSave();
+    };
+
     // Inline edit for a code-requirement item (name + unit price).
     const startEditCode = (item) => {
         setEditingCode(item.id);
         setEditCodeName(item.name);
         setEditCodePrice(String(item.price));
         setEditCodeRef(item.ref || '');
+        setEditCodeNote(item.note || '');
     };
-    const cancelEditCode = () => { setEditingCode(null); setEditCodeName(''); setEditCodePrice(''); setEditCodeRef(''); };
+    const cancelEditCode = () => { setEditingCode(null); setEditCodeName(''); setEditCodePrice(''); setEditCodeRef(''); setEditCodeNote(''); };
     const saveEditCode = () => {
         if (!editingCode) return;
         const name = editCodeName.trim();
         const price = parseFloat(editCodePrice);
         if (!name) { toast('Item name is required', 'error'); return; }
         if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
-        setCodeItems((prev) => prev.map((c) => c.id === editingCode ? { ...c, name, price, ref: editCodeRef.trim() } : c));
+        setCodeItems((prev) => prev.map((c) => c.id === editingCode ? { ...c, name, price, ref: editCodeRef.trim(), note: editCodeNote.trim() } : c));
         toast('Code item updated', 'success');
         cancelEditCode();
     };
@@ -2069,7 +2291,11 @@ const Estimation = () => {
         const reader = new FileReader();
         reader.onload = () => {
             const text = String(reader.result || '');
-            setBulkResult(kind === 'library' ? parseLibraryCsv(text) : parseCodeCsv(text));
+            setBulkResult(
+                kind === 'library' ? parseLibraryCsv(text)
+                    : kind === 'lineitems' ? parseLineItemCsv(text)
+                        : parseCodeCsv(text),
+            );
         };
         reader.readAsText(file);
     };
@@ -2104,6 +2330,36 @@ const Estimation = () => {
                     return axiosInstance.post(`/estimate-categories/${custom.id}/items/bulk`, { items: items.map((i) => ({ name: i.name, unit: i.unit, price: i.price })) });
                 })).then(() => reloadCategories()).catch((err) => toast(err?.userMessage ?? 'Some items could not import', 'error'));
             }
+        } else if (bulkResult.kind === 'lineitems') {
+            // Spec CSV → estimate line items, grouped into sections by Category.
+            // A matching section (by name, case-insensitive) is appended to; a
+            // new Category creates a new section. Description + Notes fold into
+            // the line's reason (shown to the client + on the PDF/sign page).
+            setSections((prev) => {
+                const next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+                for (const row of bulkResult.valid) {
+                    const catName = row.category.trim();
+                    let sec = next.find((s) => (s.name ?? '').toLowerCase() === catName.toLowerCase());
+                    if (!sec) {
+                        sec = {
+                            id: `${slugifyCat(catName)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+                            name: catName,
+                            items: [],
+                        };
+                        next.push(sec);
+                    }
+                    sec.items.push({
+                        name: row.title,
+                        qty: row.qty,
+                        unit: row.unit,
+                        price: row.price,
+                        reason: [row.description, row.notes].filter(Boolean).join(' — ') || undefined,
+                        source_field: 'csv_import',
+                    });
+                }
+                return next;
+            });
+            triggerSave();
         } else {
             setCodeItems((prev) => {
                 const next = [...prev];
@@ -2122,6 +2378,11 @@ const Estimation = () => {
         'category,name,unit,price\nroofing,30yr Architectural Shingles,SQ,125\nsiding,Vinyl Siding,SQ,85\n');
     const downloadCodeTemplate = () => downloadCsvFile('code-requirements-template.csv',
         'name,reference,unit,price\nIce & Water Shield,IRC R905.1.2 - valleys & eaves,SQ,125\nDrip Edge,IRC R905.2.8.5,LF,3.75\n');
+    const downloadLineItemTemplate = () => downloadCsvFile('estimate-line-items-template.csv',
+        'title,description,category,qty,unit,price,notes\n' +
+        '30yr Architectural Shingles,GAF Timberline HDZ,Roofing,32,SQ,125,Charcoal color\n' +
+        'Drip Edge,Aluminum eaves & gables,Roofing,180,LF,3.75,\n' +
+        'Gutter Replacement,6" seamless aluminum,Gutters,120,LF,8.5,Rear elevation\n');
 
     // ── 2.5 custom categories ──
     const reloadCategories = useCallback(async () => {
@@ -2607,7 +2868,9 @@ const Estimation = () => {
                     if (existing) {
                         items = items.map((i) => i.name === ci.name ? { ...i, qty: i.qty + 1 } : i);
                     } else {
-                        items.push({ name: ci.name, qty: 1, unit: ci.unit, price: ci.price });
+                        // §5.2 — carry the code item's saved note onto the line item
+                        // so it persists with the estimate and travels on reuse.
+                        items.push({ name: ci.name, qty: 1, unit: ci.unit, price: ci.price, notes: ci.note || undefined });
                     }
                 });
                 return { ...s, items };
@@ -3445,6 +3708,22 @@ const Estimation = () => {
                                         <button
                                             type="button"
                                             className="menu-item"
+                                            onClick={() => { setMoreOpen(false); openBulkUpload('lineitems'); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-plus" /></svg>
+                                            Bulk add line items (CSV)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
+                                            onClick={() => { setMoreOpen(false); downloadLineItemTemplate(); }}
+                                        >
+                                            <svg className="icon icon-sm"><use href="#i-doc" /></svg>
+                                            Download line-item CSV template
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="menu-item"
                                             onClick={() => { setMoreOpen(false); openSaveAsTemplate(); }}
                                         >
                                             <svg className="icon icon-sm"><use href="#i-copy" /></svg>
@@ -3679,7 +3958,7 @@ const Estimation = () => {
 
                 {/* STAGE 2: Builder */}
                 {hasStarted && (
-                    <div className="builder-section" style={{ display: "grid" }}>
+                    <div className={`builder-section layout-${layoutWidth}`} style={{ display: "grid" }}>
 
                         {/* LEFT PANEL */}
                         <aside className="left-panel">
@@ -3794,6 +4073,24 @@ const Estimation = () => {
 
                         {/* CENTER */}
                         <section className="estimate-panel">
+                            {/* §5.1 — estimate-table width control (Standard / Wide / Full). Persisted. */}
+                            <div className="layout-width-toolbar">
+                                <span className="layout-width-label">Width</span>
+                                <div className="layout-width-control" role="group" aria-label="Estimate table width">
+                                    {[['standard', 'Standard', '▣'], ['wide', 'Wide', '◫'], ['full', 'Full', '▭']].map(([val, label, glyph]) => (
+                                        <button
+                                            key={val}
+                                            type="button"
+                                            onClick={() => setLayoutWidthPersist(val)}
+                                            className={layoutWidth === val ? 'active' : ''}
+                                            title={`${label} width`}
+                                            aria-pressed={layoutWidth === val}
+                                        >
+                                            <span aria-hidden="true" style={{ marginRight: 4 }}>{glyph}</span>{label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="estimate-header">
                                 <div className="company-info">
                                     {contractorCompany?.logo_url ? (
@@ -3896,6 +4193,18 @@ const Estimation = () => {
                                                                     )}
                                                                 </span>
                                                             )}
+                                                            {/* §5.2 saved note — contractor-internal, persists with the estimate (not on the homeowner PDF) */}
+                                                            <input
+                                                                className="item-note-input"
+                                                                value={it.notes ?? ""}
+                                                                placeholder="📝 Add a note (internal — not on PDF)"
+                                                                draggable={false}
+                                                                onDragStart={(e) => e.stopPropagation()}
+                                                                onChange={(e) => updateItemNote(s.id, idx, e.target.value)}
+                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 4, padding: "2px 6px", fontSize: 11, color: "#6b7280", border: "1px solid transparent", borderRadius: 4, background: "transparent" }}
+                                                                onFocus={(e) => { e.target.style.border = "1px solid #d1d5db"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
+                                                                onBlur={(e) => { e.target.style.border = "1px solid transparent"; e.target.style.background = "transparent"; e.target.style.color = "#6b7280"; }}
+                                                            />
                                                         </td>
                                                         <td>{isItemEditing ? (
                                                             <input type="number" min="0" step="0.01" className="qty-input" value={itemDraft.qty}
@@ -4098,6 +4407,13 @@ const Estimation = () => {
                                                             onKeyDown={(e) => { if (e.key === "Enter") saveEditCode(); if (e.key === "Escape") cancelEditCode(); }}
                                                             style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px", fontSize: 11.5, border: "1px solid #d1d5db", borderRadius: 5, color: "#374151" }}
                                                         />
+                                                        <input
+                                                            value={editCodeNote}
+                                                            onChange={(e) => setEditCodeNote(e.target.value)}
+                                                            placeholder="📝 Saved note (added to the line item)"
+                                                            onKeyDown={(e) => { if (e.key === "Enter") saveEditCode(); if (e.key === "Escape") cancelEditCode(); }}
+                                                            style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px", fontSize: 11.5, border: "1px solid #d1d5db", borderRadius: 5, color: "#6b7280" }}
+                                                        />
                                                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                                                             <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>$</span>
                                                             <input
@@ -4122,6 +4438,7 @@ const Estimation = () => {
                                                     <div className="ci-body">
                                                         <div className="ci-name">{item.name}</div>
                                                         <div className="ci-meta">{item.ref}</div>
+                                                        {item.note && <div className="ci-meta" style={{ color: "#92400e" }}>📝 {item.note}</div>}
                                                     </div>
                                                     <div className="ci-price">${item.price}/{item.unit}</div>
                                                     <button
@@ -4391,6 +4708,32 @@ const Estimation = () => {
                                                     rows={2}
                                                     style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1px solid #d1d5db', borderRadius: 5, marginBottom: 8, fontFamily: 'inherit', resize: 'vertical' }}
                                                 />
+                                                {/* §3 Sign & Pay — deposit due at signing, right above the send
+                                                    button so it's set last. >0 makes the button + homeowner sign
+                                                    page read "Sign & Pay"; 0 = sign-only. */}
+                                                <div style={{ marginBottom: 8, padding: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8 }}>
+                                                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', display: 'block', marginBottom: 6 }}>
+                                                        Deposit due at signing (Sign &amp; Pay)
+                                                    </label>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span style={{ color: '#64748b' }}>$</span>
+                                                        <input
+                                                            type="number" min="0" step="50" value={signDeposit}
+                                                            onChange={(e) => { setSignDeposit(e.target.value); triggerSave(); }}
+                                                            style={{ width: 120, padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 13 }}
+                                                            placeholder="0"
+                                                        />
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 5 }}>
+                                                        When set (and your Stripe is connected), the button below becomes <strong>“Send Sign &amp; Pay link”</strong> and the deposit is collected right after the client signs. Leave 0 for sign-only.
+                                                    </div>
+                                                    {Number(signDeposit) > 0 && stripeReady === false && (
+                                                        <div style={{ marginTop: 8, padding: '7px 9px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, color: '#92400e', lineHeight: 1.45 }}>
+                                                            ⚠ Your Stripe isn’t connected, so the homeowner <strong>can’t pay online</strong> — they’ll sign and you collect the ${Number(signDeposit).toLocaleString()} deposit separately.{' '}
+                                                            <a href="/dashboard/settings?tab=payments" style={{ color: '#92400e', fontWeight: 700, textDecoration: 'underline' }}>Connect Stripe</a> to enable Sign &amp; Pay.
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <button
                                                     type="button"
                                                     className="sig-action"
@@ -4398,7 +4741,11 @@ const Estimation = () => {
                                                     disabled={signing || !currentEstimateId}
                                                 >
                                                     <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-send" /></svg>
-                                                    {signing ? 'Sending…' : 'Send signing link'}
+                                                    {signing
+                                                        ? 'Sending…'
+                                                        : (Number(signDeposit) > 0
+                                                            ? `Send Sign & Pay link ($${Number(signDeposit).toLocaleString()})`
+                                                            : 'Send signing link')}
                                                 </button>
                                                 {lastSignLink?.sign_url && (
                                                     <div style={{ marginTop: 8, padding: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, fontSize: 11.5 }}>
@@ -5053,15 +5400,39 @@ const Estimation = () => {
                                         {f.supplement_opportunities?.length > 0 && (
                                             <section style={{ marginBottom: 18 }}>
                                                 <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px', color: '#1a1f3a' }}>💡 Supplement opportunities ({f.supplement_opportunities.length})</h3>
-                                                {f.supplement_opportunities.map((so, i) => (
+                                                {f.supplement_opportunities.map((so, i) => {
+                                                    const added = !!appliedFindings[`supplement:${i}`];
+                                                    const hasQty = so.suggested_qty != null && so.suggested_unit;
+                                                    return (
                                                     <div key={i} style={{ padding: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, marginBottom: 6 }}>
                                                         <strong style={{ fontSize: 13, color: '#1e40af' }}>{so.title}</strong>
                                                         {so.potential_value != null && (
                                                             <span style={{ marginLeft: 8, fontSize: 11, color: '#1e40af', fontWeight: 600 }}>~${Number(so.potential_value).toFixed(0)}</span>
                                                         )}
-                                                        <div style={{ fontSize: 12, color: '#374151', marginTop: 4 }}>{so.reason}</div>
+                                                        <div style={{ fontSize: 12, color: '#374151', marginTop: 4, marginBottom: 6 }}>{so.reason}</div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                                            <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                                {hasQty
+                                                                    ? <>Suggest: {so.suggested_qty} {so.suggested_unit} @ ${Number(so.suggested_price ?? 0).toFixed(2)}</>
+                                                                    : <>Add as a line — set qty/price after</>}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => applySupplementOpportunity(so, `supplement:${i}`)}
+                                                                disabled={added}
+                                                                style={{
+                                                                    padding: '5px 10px',
+                                                                    background: added ? '#dcfce7' : '#1e40af',
+                                                                    color: added ? '#166534' : '#fff',
+                                                                    border: added ? '1px solid #86efac' : 'none',
+                                                                    borderRadius: 4, fontSize: 11, fontWeight: 700,
+                                                                    cursor: added ? 'default' : 'pointer',
+                                                                    whiteSpace: 'nowrap',
+                                                                }}
+                                                            >{added ? '✓ Added' : '+ Add to estimate'}</button>
+                                                        </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </section>
                                         )}
 
@@ -5087,6 +5458,22 @@ const Estimation = () => {
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: '1px solid #e5e7eb' }}>
+                            {(() => {
+                                const f = reviewData?.findings;
+                                const n = f
+                                    ? (f.missing_items?.length ?? 0)
+                                        + (f.supplement_opportunities?.length ?? 0)
+                                        + (f.pricing_concerns?.length ?? 0)
+                                    : 0;
+                                if (!n || reviewLoading) return null;
+                                return (
+                                    <button
+                                        onClick={applyAllFindings}
+                                        title="Add all missing items + supplement opportunities and apply all price fixes"
+                                        style={{ marginRight: 'auto', padding: '8px 14px', background: '#FDB813', color: '#1a1f3a', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                                    >✓ Apply All ({n})</button>
+                                );
+                            })()}
                             <button
                                 onClick={() => setReviewModal(false)}
                                 style={{ padding: '8px 14px', background: '#fff', color: '#1a1f3a', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
@@ -5632,7 +6019,7 @@ const Estimation = () => {
                     <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
                         <div style={{ padding: "16px 20px", borderBottom: "1px solid #eef0f3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1f3a" }}>
-                                Bulk upload — {bulkResult.kind === "library" ? "item library" : "code requirements"}
+                                Bulk upload — {bulkResult.kind === "library" ? "item library" : bulkResult.kind === "lineitems" ? "estimate line items" : "code requirements"}
                             </div>
                             <button onClick={() => setBulkResult(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>

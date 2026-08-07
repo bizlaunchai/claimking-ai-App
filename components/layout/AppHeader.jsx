@@ -98,7 +98,15 @@ const AppHeader = () => {
     // pages render their own chrome. /portal/* is the homeowner-facing
     // token portal which must look standalone (white-labelled to the
     // contractor, not co-branded with ClaimKing).
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/portal")){
+    // Homeowner-facing token pages (/portal, /sign, /pay) must be standalone,
+    // white-labelled to the contractor — no ClaimKing marketing header / nav /
+    // "Start Free Trial" / exit links (spec §3: the sign page is a dead end).
+    if (
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/portal") ||
+        pathname.startsWith("/sign") ||
+        pathname.startsWith("/pay")
+    ){
         return null
     }
 

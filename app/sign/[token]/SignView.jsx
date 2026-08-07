@@ -1,13 +1,20 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import axiosInstance from '@/lib/axiosInstance';
 import SignaturePad from '@/components/signature/SignaturePad';
 import './sign.css';
 
+const money = (n, cur = 'usd') =>
+    `${(cur || 'usd').toUpperCase() === 'USD' ? '$' : ''}${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// `companies.logo_url` is stored as an S3 KEY, not a fetchable URL. Homeowners
+// are unauthenticated, so we load the logo through the token-less public endpoint
+// keyed by company_id (same one the portal + branded emails use).
+const apiOrigin = () => (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+
 const SignView = () => {
     const { token } = useParams();
-    const router = useRouter();
 
     // ── Data flow ───────────────────────────────────────────────────────
     const [loading, setLoading] = useState(true);
@@ -17,21 +24,23 @@ const SignView = () => {
     const [signerName, setSignerName] = useState('');
     const [agreedTerms, setAgreedTerms] = useState(false);
     const [hasInk, setHasInk] = useState(false);
+    const [logoBroken, setLogoBroken] = useState(false);
 
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
 
+    // DocuSign-style guided flow: 0 Review · 1 Name · 2 Signature · 3 Confirm
+    const [step, setStep] = useState(0);
+    const STEPS = ['Review', 'Your name', 'Signature', 'Confirm'];
+
     const padRef = useRef(null);
 
-    // Resolve the token on mount
     useEffect(() => {
         if (!token) return;
         let cancelled = false;
         (async () => {
             try {
-                const res = await axiosInstance.get(`/sign-public/${token}`, {
-                    suppressErrorToast: true,
-                });
+                const res = await axiosInstance.get(`/sign-public/${token}`, { suppressErrorToast: true });
                 if (cancelled) return;
                 setData(res.data?.data ?? null);
                 setSignerName(res.data?.data?.signer_name ?? '');
@@ -39,9 +48,7 @@ const SignView = () => {
                 if (cancelled) return;
                 const status = err?.response?.status;
                 const msg =
-                    err?.userMessage ||
-                    err?.response?.data?.message ||
-                    err?.message ||
+                    err?.userMessage || err?.response?.data?.message || err?.message ||
                     'Could not load this signing link.';
                 setError({ status: status ?? 0, message: msg });
             } finally {
@@ -51,40 +58,6 @@ const SignView = () => {
         return () => { cancelled = true; };
     }, [token]);
 
-    // ── Submit ─────────────────────────────────────────────────────────
-    const submit = async () => {
-        if (!padRef.current || padRef.current.isEmpty()) {
-            alert('Please sign in the box above before submitting.');
-            return;
-        }
-        if (!signerName.trim()) {
-            alert('Please type your full name.');
-            return;
-        }
-        if (!agreedTerms) {
-            alert('Please tick the box to confirm you agree to the estimate terms.');
-            return;
-        }
-        setSubmitting(true);
-        try {
-            const signatureDataUrl = padRef.current.toDataURL('image/png');
-            await axiosInstance.post(`/sign-public/${token}`, {
-                signer_name: signerName.trim(),
-                signature_image: signatureDataUrl,
-            });
-            setSubmitted(true);
-        } catch (err) {
-            const msg =
-                err?.response?.data?.message ||
-                err?.userMessage ||
-                'Could not submit your signature. Please try again.';
-            alert(msg);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // ── Totals (computed from items so we don't trust the row's snapshot) ──
     const totals = useMemo(() => {
         if (!data?.estimate) return null;
         const e = data.estimate;
@@ -96,38 +69,74 @@ const SignView = () => {
         };
     }, [data]);
 
-    // ─────────────────────────────────────────────────────────────────
-    //   Render
-    // ─────────────────────────────────────────────────────────────────
+    const deposit = data?.deposit ?? null;
+    // hasDeposit → a deposit is ATTACHED (spec §3: the action must read "Sign &
+    // Pay" whenever a payment is attached, regardless of how it's collected).
+    // payAtSign → we can charge it now (Stripe connected) so we redirect to
+    // Stripe after signing; otherwise the contractor collects it separately.
+    const hasDeposit = !!(deposit && Number(deposit.amount) > 0);
+    const payAtSign = !!(hasDeposit && deposit.chargeable);
+    const depositNote = hasDeposit && !deposit.chargeable;
+
+    // ── Step nav ────────────────────────────────────────────────────────
+    const validateStep = (s) => {
+        if (s === 1 && !signerName.trim()) { alert('Please type your full legal name.'); return false; }
+        if (s === 2 && (!padRef.current || padRef.current.isEmpty())) { alert('Please sign in the box before continuing.'); return false; }
+        return true;
+    };
+    const next = () => {
+        if (!validateStep(step)) return;
+        setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    };
+    const back = () => setStep((s) => Math.max(0, s - 1));
+
+    // ── Submit (+ pay) ──────────────────────────────────────────────────
+    const submit = async () => {
+        if (!padRef.current || padRef.current.isEmpty()) { setStep(2); alert('Please sign before submitting.'); return; }
+        if (!signerName.trim()) { setStep(1); alert('Please type your full name.'); return; }
+        if (!agreedTerms) { alert('Please tick the box to confirm you agree to the estimate terms.'); return; }
+
+        setSubmitting(true);
+        try {
+            const signatureDataUrl = padRef.current.toDataURL('image/png');
+            const res = await axiosInstance.post(`/sign-public/${token}`, {
+                signer_name: signerName.trim(),
+                signature_image: signatureDataUrl,
+            });
+            // Sign & Pay: the sign response carries the deposit checkout URL when a
+            // deposit is due + the contractor's Stripe is connected. Redirect to pay.
+            const payUrl = res.data?.data?.deposit_checkout_url;
+            if (payUrl) { window.location.href = payUrl; return; }
+            setSubmitted(true);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err?.userMessage || 'Could not submit your signature. Please try again.';
+            alert(msg);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // ─────────────────────────── Render ────────────────────────────────
     if (loading) {
         return (
             <div className="sv-shell">
-                <div className="sv-card sv-status">
-                    <div className="sv-spinner" />
-                    <p>Loading your estimate…</p>
-                </div>
+                <div className="sv-card sv-status"><div className="sv-spinner" /><p>Loading your estimate…</p></div>
             </div>
         );
     }
-
     if (error) {
-        const headline =
-            error.status === 410 ? 'This link is no longer valid'
-            : error.status === 404 ? 'Link not found'
-            : 'Could not load this link';
+        const headline = error.status === 410 ? 'This link is no longer valid'
+            : error.status === 404 ? 'Link not found' : 'Could not load this link';
         return (
             <div className="sv-shell">
                 <div className="sv-card sv-status">
                     <h2>{headline}</h2>
                     <p>{error.message}</p>
-                    <p className="sv-sub">
-                        If you believe this is wrong, contact your contractor for a fresh link.
-                    </p>
+                    <p className="sv-sub">If you believe this is wrong, contact your contractor for a fresh link.</p>
                 </div>
             </div>
         );
     }
-
     if (submitted) {
         return (
             <div className="sv-shell">
@@ -135,9 +144,7 @@ const SignView = () => {
                     <div className="sv-check">✓</div>
                     <h2>Thank you!</h2>
                     <p>Your signed estimate has been recorded.</p>
-                    <p className="sv-sub">
-                        {data?.company?.name ?? 'Your contractor'} will be in touch with next steps.
-                    </p>
+                    <p className="sv-sub">{data?.company?.name ?? 'Your contractor'} will be in touch with next steps.</p>
                 </div>
             </div>
         );
@@ -145,14 +152,32 @@ const SignView = () => {
 
     const e = data.estimate;
     const company = data.company ?? {};
+    // Load the logo via the public company-logo endpoint (logo_url is an S3 key,
+    // not directly fetchable). Falls back to the initials tile if it fails.
+    const companyId = company.company_id ?? e?.company_id ?? null;
+    const logoSrc = (company.logo_url && companyId && !logoBroken)
+        ? `${apiOrigin()}/portal-public/company/${encodeURIComponent(companyId)}/logo`
+        : null;
+    // Button is HONEST about what the click does: "Sign & Pay" only when we can
+    // actually charge now (Stripe connected). When a deposit is attached but not
+    // chargeable, we sign only and the pay box tells the homeowner the deposit is
+    // collected separately — so the button stays "Sign & submit".
+    const finalLabel = submitting
+        ? (payAtSign ? 'Redirecting to payment…' : 'Submitting…')
+        : (payAtSign ? `✓ Sign & Pay ${money(deposit.amount, deposit.currency)}` : '✓ Sign & submit');
 
     return (
         <div className="sv-shell">
-            {/* ─── Header ──────────────────────────────────────────── */}
+            {/* Contractor branding only — no ClaimKing header, no exit links */}
             <div className="sv-header">
                 <div className="sv-brand">
-                    {company.logo_url ? (
-                        <img src={company.logo_url} alt={company.name ?? ''} className="sv-logo" />
+                    {logoSrc ? (
+                        <img
+                            src={logoSrc}
+                            alt={company.name ?? ''}
+                            className="sv-logo"
+                            onError={() => setLogoBroken(true)}
+                        />
                     ) : (
                         <div className="sv-logo sv-logo-fallback">
                             {(company.name ?? 'C').split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}
@@ -169,125 +194,142 @@ const SignView = () => {
                 </div>
             </div>
 
-            {/* ─── Estimate body (read-only) ───────────────────────── */}
-            <div className="sv-card">
-                <h1 className="sv-h1">Please review &amp; sign</h1>
-                <p className="sv-help">
-                    Scroll through the line items below. When you're ready, sign and submit at the bottom of the page.
-                </p>
-
-                {(e.sections ?? []).map(section => (
-                    <div key={section.id} className="sv-section">
-                        <div className="sv-section-head">{section.name}</div>
-                        <table className="sv-table">
-                            <thead>
-                                <tr>
-                                    <th>Description</th>
-                                    <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
-                                    <th style={{ width: 60 }}>Unit</th>
-                                    <th style={{ width: 100, textAlign: 'right' }}>Price</th>
-                                    <th style={{ width: 110, textAlign: 'right' }}>Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(section.items ?? []).map(it => (
-                                    <tr key={it.id}>
-                                        <td>
-                                            {it.name}
-                                            {it.reason && <div className="sv-item-reason">{it.reason}</div>}
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
-                                        <td>{it.unit}</td>
-                                        <td style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
-                                        <td style={{ textAlign: 'right' }}>${(Number(it.qty) * Number(it.price)).toFixed(2)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            {/* Progress */}
+            <div className="sv-steps">
+                {STEPS.map((label, i) => (
+                    <div key={label} className={`sv-step ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
+                        <span className="sv-step-dot">{i < step ? '✓' : i + 1}</span>
+                        <span className="sv-step-label">{label}</span>
                     </div>
                 ))}
-
-                {/* Totals */}
-                {totals && (
-                    <div className="sv-totals">
-                        <div className="sv-tot-row"><span>Subtotal</span><span>${totals.subtotal.toFixed(2)}</span></div>
-                        {e.overhead_on && (
-                            <div className="sv-tot-row"><span>O&amp;P ({Number(e.overhead_pct).toFixed(0)}%)</span><span>${totals.overhead.toFixed(2)}</span></div>
-                        )}
-                        {e.tax_on && (
-                            <div className="sv-tot-row"><span>{e.tax_name ?? 'Tax'} ({Number(e.tax_pct).toFixed(2)}%)</span><span>${totals.tax.toFixed(2)}</span></div>
-                        )}
-                        <div className="sv-tot-row sv-tot-grand"><span>Total</span><span>${totals.total.toFixed(2)}</span></div>
-                    </div>
-                )}
-
-                {/* Terms */}
-                {e.terms_html && (
-                    <div className="sv-terms">
-                        <h3>Terms &amp; conditions</h3>
-                        <div className="sv-terms-body" dangerouslySetInnerHTML={{ __html: e.terms_html }} />
-                    </div>
-                )}
             </div>
 
-            {/* ─── Sign block ─────────────────────────────────────── */}
-            <div className="sv-card">
-                <h2 className="sv-h2">Sign here</h2>
+            {/* STEP 0 — Review */}
+            {step === 0 && (
+                <div className="sv-card">
+                    <h1 className="sv-h1">Please review your estimate</h1>
+                    <p className="sv-help">Scroll through the line items. When you’re ready, tap <strong>Next</strong> to sign.</p>
 
-                <label className="sv-label">
-                    Full legal name
-                    <input
-                        type="text"
-                        className="sv-input"
-                        value={signerName}
-                        onChange={(e) => setSignerName(e.target.value)}
-                        placeholder="As it would appear on a contract"
-                        autoComplete="name"
-                    />
-                </label>
+                    {(e.sections ?? []).map(section => (
+                        <div key={section.id} className="sv-section">
+                            <div className="sv-section-head">{section.name}</div>
+                            <table className="sv-table">
+                                <thead>
+                                    <tr>
+                                        <th>Description</th>
+                                        <th style={{ width: 80, textAlign: 'right' }}>Qty</th>
+                                        <th style={{ width: 60 }}>Unit</th>
+                                        <th style={{ width: 100, textAlign: 'right' }}>Price</th>
+                                        <th style={{ width: 110, textAlign: 'right' }}>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(section.items ?? []).map(it => (
+                                        <tr key={it.id}>
+                                            <td>{it.name}{it.reason && <div className="sv-item-reason">{it.reason}</div>}</td>
+                                            <td style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
+                                            <td>{it.unit}</td>
+                                            <td style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right' }}>${(Number(it.qty) * Number(it.price)).toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ))}
 
-                <div className="sv-pad-wrap">
-                    <SignaturePad
-                        ref={padRef}
-                        height={200}
-                        onChange={({ isEmpty }) => setHasInk(!isEmpty)}
-                    />
-                    <div className="sv-pad-tools">
-                        <button
-                            type="button"
-                            className="sv-link"
-                            onClick={() => { padRef.current?.clear(); setHasInk(false); }}
-                            disabled={submitting}
-                        >Clear</button>
-                        {hasInk && <span className="sv-pad-ink">Signature captured</span>}
+                    {totals && (
+                        <div className="sv-totals">
+                            <div className="sv-tot-row"><span>Subtotal</span><span>${totals.subtotal.toFixed(2)}</span></div>
+                            {e.overhead_on && <div className="sv-tot-row"><span>O&amp;P ({Number(e.overhead_pct).toFixed(0)}%)</span><span>${totals.overhead.toFixed(2)}</span></div>}
+                            {e.tax_on && <div className="sv-tot-row"><span>{e.tax_name ?? 'Tax'} ({Number(e.tax_pct).toFixed(2)}%)</span><span>${totals.tax.toFixed(2)}</span></div>}
+                            <div className="sv-tot-row sv-tot-grand"><span>Total</span><span>${totals.total.toFixed(2)}</span></div>
+                            {Number(deposit?.amount) > 0 && (
+                                <div className="sv-tot-row" style={{ color: '#1e40af', fontWeight: 700 }}>
+                                    <span>Deposit due at signing</span><span>{money(deposit.amount, deposit.currency)}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {e.terms_html && (
+                        <div className="sv-terms">
+                            <h3>Terms &amp; conditions</h3>
+                            <div className="sv-terms-body" dangerouslySetInnerHTML={{ __html: e.terms_html }} />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* STEP 1 — Name */}
+            {step === 1 && (
+                <div className="sv-card">
+                    <h2 className="sv-h2">What’s your full legal name?</h2>
+                    <p className="sv-help">Enter your name exactly as it should appear on the agreement.</p>
+                    <label className="sv-label">
+                        Full legal name
+                        <input type="text" className="sv-input" value={signerName}
+                            onChange={(ev) => setSignerName(ev.target.value)}
+                            placeholder="As it would appear on a contract" autoComplete="name" autoFocus />
+                    </label>
+                </div>
+            )}
+
+            {/* STEP 2 — Signature */}
+            {step === 2 && (
+                <div className="sv-card">
+                    <h2 className="sv-h2">Draw your signature</h2>
+                    <p className="sv-help">Sign in the box below using your mouse or finger.</p>
+                    <div className="sv-pad-wrap">
+                        <SignaturePad ref={padRef} height={200} onChange={({ isEmpty }) => setHasInk(!isEmpty)} />
+                        <div className="sv-pad-tools">
+                            <button type="button" className="sv-link" onClick={() => { padRef.current?.clear(); setHasInk(false); }} disabled={submitting}>Clear</button>
+                            {hasInk && <span className="sv-pad-ink">Signature captured</span>}
+                        </div>
                     </div>
                 </div>
+            )}
 
-                <label className="sv-checkbox">
-                    <input
-                        type="checkbox"
-                        checked={agreedTerms}
-                        onChange={(e) => setAgreedTerms(e.target.checked)}
-                    />
-                    <span>
-                        I, <strong>{signerName || '(your name)'}</strong>, have reviewed the estimate above and
-                        authorise the work described at the amounts shown. I understand my signature
-                        creates a legally binding agreement.
-                    </span>
-                </label>
+            {/* STEP 3 — Confirm */}
+            {step === 3 && (
+                <div className="sv-card">
+                    <h2 className="sv-h2">Confirm &amp; {payAtSign ? 'pay' : 'submit'}</h2>
+                    {hasDeposit && (
+                        <div className={`sv-pay-box ${payAtSign ? '' : 'muted'}`}>
+                            <div className="sv-pay-caption">Deposit due at signing</div>
+                            <div className="sv-pay-amount">{money(deposit.amount, deposit.currency)}</div>
+                            <div className="sv-pay-label">
+                                {payAtSign
+                                    ? 'You’ll be taken to a secure Stripe checkout right after signing.'
+                                    : 'Your contractor will send payment details separately.'}
+                            </div>
+                        </div>
+                    )}
+                    <label className="sv-checkbox">
+                        <input type="checkbox" checked={agreedTerms} onChange={(ev) => setAgreedTerms(ev.target.checked)} />
+                        <span>
+                            I, <strong>{signerName || '(your name)'}</strong>, have reviewed the estimate above and authorise the
+                            work described at the amounts shown. I understand my signature creates a legally binding agreement
+                            {payAtSign
+                                ? ' and authorise the deposit payment shown above.'
+                                : (hasDeposit ? ' and agree to the deposit shown above.' : '.')}
+                        </span>
+                    </label>
+                    <button className="sv-submit" onClick={submit} disabled={submitting || !agreedTerms}>
+                        {finalLabel}
+                    </button>
+                    <p className="sv-fineprint">
+                        By submitting, your name, signature image, IP address and timestamp will be recorded by {company.name ?? 'your contractor'} for legal verification.
+                    </p>
+                </div>
+            )}
 
-                <button
-                    className="sv-submit"
-                    onClick={submit}
-                    disabled={submitting}
-                >
-                    {submitting ? 'Submitting…' : '✓ Sign & submit'}
-                </button>
-
-                <p className="sv-fineprint">
-                    By submitting, your name, signature image, IP address and timestamp will be
-                    recorded by {company.name ?? 'your contractor'} for legal verification.
-                </p>
+            {/* Nav buttons */}
+            <div className="sv-nav">
+                <button className="sv-nav-back" onClick={back} disabled={step === 0 || submitting}>‹ Back</button>
+                {step < STEPS.length - 1 && (
+                    <button className="sv-nav-next" onClick={next}>Next ›</button>
+                )}
             </div>
         </div>
     );
