@@ -304,7 +304,9 @@ const SignView = () => {
                                 <tbody>
                                     {(section.items ?? []).map(it => (
                                         <tr key={it.id}>
-                                            <td><span className="sv-item-name">{it.name}</span>{it.reason && <div className="sv-item-reason">{it.reason}</div>}</td>
+                                            {/* CK-14: the AI `reason` is internal working context and is
+                                                never sent to this public page — nothing to render here. */}
+                                            <td><span className="sv-item-name">{it.name}</span></td>
                                             <td style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
                                             <td>{it.unit}</td>
                                             <td style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
