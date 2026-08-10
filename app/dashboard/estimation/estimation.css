@@ -153,9 +153,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .section-btn{width:26px;height:26px;background:#fff;border:1px solid #e5e7eb;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#6b7280}
 .section-btn:hover{background:#1a1f3a;color:#fff;border-color:#1a1f3a}
 .estimate-table{width:100%;border-collapse:collapse}
-.estimate-table th{background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:9px 12px;text-align:left;font-weight:600;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
-.estimate-table td{border-bottom:1px solid #f3f4f6;padding:10px 12px;font-size:12.5px;vertical-align:middle;color:#1a1f3a}
-.estimate-table td:first-child{font-weight:500}
+.estimate-table th{background:#f3f4f6;border-bottom:2px solid #d1d5db;padding:10px 12px;text-align:left;font-weight:700;font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.04em}
+/* CK-06 design pass: an item = a data row + its action row. Keep them visually
+   welded (no divider between them) and draw the divider only after the action
+   row, so each item reads as one clear block. */
+.estimate-table td{padding:11px 12px 6px;font-size:12.5px;vertical-align:top;color:#1a1f3a;border-bottom:none}
+.estimate-table td:first-child{font-weight:600}
+.estimate-table td.col-total strong{font-size:13.5px}
 .qty-input{width:55px;padding:4px 6px;border:1px solid #e5e7eb;border-radius:4px;text-align:center;font-size:12px}
 .qty-input:focus{outline:none;border-color:#FDB813}
 .empty-section{text-align:center;color:#9ca3af;padding:24px;font-size:12px;font-style:italic}
@@ -166,11 +170,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
    full-width action row beneath each item. Buttons are labelled pills that
    wrap, so every action stays visible + tappable at any viewport width. */
 .estimate-table td.col-total{white-space:nowrap;text-align:right}
-.line-action-row td{padding:0 12px 10px;border-bottom:1px solid #f3f4f6;background:#fcfcfd}
+/* Action row = footer of each item block; its bottom border is the divider
+   BETWEEN items, so it is the strong one. */
+.line-action-row td{padding:6px 12px 12px;border-bottom:1px solid #d1d5db;background:#f9fafb}
+.estimate-table tbody tr:last-child td{border-bottom:none}
 .line-actions{display:flex;gap:6px;justify-content:flex-start;align-items:center;flex-wrap:wrap}
-.line-action-btn{background:#fff;border:1px solid #e5e7eb;color:#6b7280;cursor:pointer;padding:4px 9px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;line-height:1;min-height:28px}
+.line-action-btn{background:#fff;border:1px solid #cbd0d8;color:#4b5563;cursor:pointer;padding:5px 10px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;line-height:1;min-height:29px;box-shadow:0 1px 1px rgba(16,24,40,.04)}
 .line-action-btn span{white-space:nowrap}
-.line-action-btn:hover{background:#f3f4f6;color:#1a1f3a;border-color:#d1d5db}
+.line-action-btn:hover{background:#1a1f3a;color:#fff;border-color:#1a1f3a}
 .line-action-btn.save{color:#059669;border-color:#a7f3d0;background:#ecfdf5}
 .line-action-btn.save:hover{background:#d1fae5;color:#047857}
 .line-action-btn.danger:hover{color:#dc2626;background:#fef2f2;border-color:#fecaca}
