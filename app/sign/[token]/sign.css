@@ -331,6 +331,8 @@
     .sv-table td {
         display: flex;
         justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
         border-bottom: 1px dashed #f3f4f6;
         padding: 6px 0;
         font-size: 12.5px;
@@ -340,6 +342,22 @@
         content: attr(data-label);
         font-weight: 600;
         color: #6b7280;
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+    /* Description = the card's heading. Full-width, no inline label, so the
+       (often long) item name never collides with a "Description" tag. */
+    .sv-table td:first-child {
+        display: block;
+        padding: 2px 0 8px;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 4px;
+        text-align: left;
+    }
+    .sv-table td:first-child::before { display: none; }
+    /* Value side of every other row: align right, wrap gracefully. */
+    .sv-table td:not(:first-child) {
+        text-align: right;
     }
     .sv-totals { max-width: 100%; }
 }
@@ -403,6 +421,16 @@
 .sv-nav-scroll { background: #fff; color: #1a1f3a; border: 1px solid #1a1f3a; animation: sv-nudge 1.8s ease-in-out infinite; }
 .sv-nav-scroll:hover { background: #1a1f3a; color: #FDB813; }
 @keyframes sv-nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
+/* Mobile nav: Back stays compact so the (sometimes long) primary CTA gets the
+   remaining width and reads as one balanced, centred button instead of a
+   cramped two-up row with wrapped text. */
+@media (max-width: 560px) {
+    .sv-nav { padding: 8px 10px; }
+    .sv-nav-row { gap: 8px; }
+    .sv-nav-back { flex: 0 0 auto; padding: 12px 16px; }
+    .sv-nav-next { flex: 1 1 auto; text-align: center; margin-left: 0;
+        padding: 12px 14px; font-size: 14px; line-height: 1.3; }
+}
 
 /* Scroll-gate hint under the final submit button (CK-13). */
 .sv-scroll-hint { margin-top: 10px; font-size: 12px; font-weight: 600; color: #b45309; text-align: center; }
