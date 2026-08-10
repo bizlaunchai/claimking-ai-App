@@ -70,7 +70,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 /* ===== STAGE 2: Builder layout ===== */
 .builder-section{display:grid;grid-template-columns:280px minmax(0,1fr) 320px;gap:16px;align-items:start}
 @media (max-width:1280px){.builder-section{grid-template-columns:260px minmax(0,1fr)}.right-rail{grid-column:1/-1}}
-@media (max-width:900px){.builder-section{grid-template-columns:1fr}.left-panel{grid-column:1/-1}}
+@media (max-width:900px){.builder-section{grid-template-columns:1fr}.left-panel{grid-column:1/-1}
+    /* Stack order on mobile: Sections → build tools (rail) → Estimate card
+       (table · Finalize · Terms). Keeps the rail off the very bottom without
+       splitting the estimate card. */
+    .left-panel{order:1}.right-rail{order:2}.estimate-panel{order:3}}
 
 /* §5.1 — resizable estimate width. Only on wide desktops (below 1281px the
    responsive stacking above owns the grid). 'wide' hides the right-rail item
@@ -625,10 +629,15 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
     .estimate-header { padding-bottom: 12px; margin-bottom: 16px; }
     .company-info-text { font-size: 15px; }
 
-    /* Estimate table — tighten cell padding while scrolling */
-    .estimate-table { min-width: 520px; }
+    /* Estimate table — tighten cell padding while scrolling. Give the
+       Description column a readable floor so the item title + note textarea
+       don't collapse to one-word-per-line; the table scrolls horizontally. */
+    .estimate-table { min-width: 560px; }
     .estimate-table th,
     .estimate-table td { padding: 8px 10px; }
+    .estimate-table th:first-child,
+    .estimate-table td:first-child { min-width: 190px; }
+    .item-note-input { min-width: 170px; }
 
     /* AI bar stacks on small tablet */
     .ai-bar { flex-direction: column; align-items: flex-start; }
@@ -694,10 +703,13 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
     .client-info { text-align: left; }
     .estimate-title { font-size: 14px; }
 
-    /* Table — tighter on phone */
-    .estimate-table { min-width: 460px; font-size: 11.5px; }
+    /* Table — tighter on phone, but keep the Description column readable so the
+       title + note wrap into legible lines (table still scrolls sideways). */
+    .estimate-table { min-width: 540px; font-size: 11.5px; }
     .estimate-table th,
     .estimate-table td { padding: 7px 8px; }
+    .estimate-table th:first-child,
+    .estimate-table td:first-child { min-width: 180px; }
     .qty-input { width: 44px; }
 
     /* Totals */
@@ -709,9 +721,12 @@ body.mode-retail .scope-callout{background:#dbeafe;border-color:#60a5fa;border-l
     /* Rate learning stats */
     .rate-stats { grid-template-columns: 1fr 1fr; }
 
-    /* AI bar */
+    /* AI bar — stack the three actions full-width so none wraps mid-label and
+       they read as an even, tappable stack instead of a cramped 2-up grid. */
     .ai-bar-title { font-size: 13px; }
     .ai-bar-sub { font-size: 11px; }
+    .ai-bar-actions { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+    .btn-ai, .btn-ai-ghost { flex: 1 1 auto; width: 100%; justify-content: center; padding: 11px 14px; }
 
     /* Section header bar text wrap */
     .section-header-bar { font-size: 11.5px; flex-wrap: wrap; gap: 6px; }
