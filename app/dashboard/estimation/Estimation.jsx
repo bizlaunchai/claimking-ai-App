@@ -4438,9 +4438,9 @@ const Estimation = () => {
                                                                 draggable={false}
                                                                 onDragStart={(e) => e.stopPropagation()}
                                                                 onChange={(e) => updateItemNote(s.id, idx, e.target.value)}
-                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 4, padding: "2px 6px", fontSize: 11, color: "#6b7280", border: "1px solid transparent", borderRadius: 4, background: "transparent" }}
-                                                                onFocus={(e) => { e.target.style.border = "1px solid #d1d5db"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
-                                                                onBlur={(e) => { e.target.style.border = "1px solid transparent"; e.target.style.background = "transparent"; e.target.style.color = "#6b7280"; }}
+                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "4px 8px", fontSize: 11, color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: 5, background: "#fafbfc" }}
+                                                                onFocus={(e) => { e.target.style.border = "1px solid #FDB813"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
+                                                                onBlur={(e) => { e.target.style.border = "1px dashed #d1d5db"; e.target.style.background = "#fafbfc"; e.target.style.color = "#6b7280"; }}
                                                             />
                                                         </td>
                                                         <td>{isItemEditing ? (
