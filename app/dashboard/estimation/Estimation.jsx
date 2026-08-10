@@ -746,6 +746,10 @@ const Estimation = () => {
     // True while a debounced save is scheduled but hasn't fired yet. Lets the
     // beforeunload safety-net know there's an unsaved edit worth flushing.
     const pendingSaveRef = useRef(false);
+    // Set to an estimate id we just created locally (Start Blank) so the
+    // ?estimate_id= load effect skips re-hydrating it from the server — it's
+    // already in local state, and re-fetching only flashes a loading overlay.
+    const skipLoadForIdRef = useRef(null);
     const dragSrcRef = useRef(null);
     const [estimateDate, setEstimateDate] = useState("");
 
@@ -972,6 +976,12 @@ const Estimation = () => {
     useEffect(() => {
         const estimateId = searchParams?.get("estimate_id");
         if (!estimateId) return;
+        // Just created locally (Start Blank) — it's already in state, so skip the
+        // server round-trip and the loading overlay it would flash.
+        if (estimateId === skipLoadForIdRef.current) {
+            skipLoadForIdRef.current = null;
+            return;
+        }
         let cancelled = false;
         setEstimateLoading(true);
         setGeneratingEstimate(false); // fresh load — clear any prior generating state
@@ -1371,7 +1381,16 @@ const Estimation = () => {
             if (newId) setCurrentEstimateId(newId);
             setSaveIndicator({ saving: false, text: "Saved" });
             return newId;
-        } catch {
+        } catch (err) {
+            // Surface the real cause — saveEstimateNow suppresses the toast, so
+            // without this a failed save is invisible (the "Could not save the
+            // estimate" path). Shows HTTP status + backend message in the console.
+            console.error(
+                '[saveEstimateNow] failed:',
+                err?.response?.status,
+                err?.response?.data ?? err?.message,
+                err,
+            );
             setSaveIndicator({ saving: false, text: "Save failed" });
             return null;
         }
@@ -1459,14 +1478,46 @@ const Estimation = () => {
     // ====================== STAGE TRANSITIONS ======================
     const showBuilder = () => setHasStarted(true);
 
-    const startBlank = () => {
+    const startBlank = async () => {
         if (!ensureClient()) return;
         const def = mode === "insurance"
             ? { id: "dwelling-roof", name: "Dwelling Roof" }
             : { id: "roof-replacement", name: "Roof Replacement" };
-        addSection(def);
-        showBuilder();
-        toast("Empty estimate ready. Add items from the left.", "success");
+        // Build the default section synchronously so the very first save already
+        // includes it (commitSectionsNow reads the list we pass, not async state).
+        const next = sections.find((x) => x.id === def.id)
+            ? sections
+            : [...sections, { id: def.id, name: def.name, items: [] }];
+        setActiveSection(def.id);
+        // Show a loader and WAIT while the estimate is created + persisted —
+        // don't flash the empty builder first. Only once it's saved do we move
+        // to the builder with ?estimate_id= in the URL. currentEstimateId is set
+        // up front, so AI Changes / AI Review work immediately (no "save first"
+        // race), and a refresh re-hydrates from the URL.
+        showLoading("Creating estimate…", "Setting up your blank estimate");
+        try {
+            const id = await commitSectionsNow(next);
+            if (id) {
+                // Mark this id so the load effect (which re-fires because Next
+                // syncs history.replaceState into useSearchParams) skips a
+                // redundant re-fetch — the estimate is already in local state.
+                // A manual refresh later still reads ?estimate_id= and hydrates.
+                skipLoadForIdRef.current = id;
+                window.history.replaceState({}, "", `/dashboard/estimation?estimate_id=${id}`);
+                showBuilder();
+                toast("Empty estimate created. Add items from the left.", "success");
+            } else {
+                // Save failed (e.g. transient network) — still let them work
+                // locally; it'll persist on the next edit's autosave.
+                showBuilder();
+                toast("Estimate ready — the first save didn't go through; it'll retry as you edit.", "warn");
+            }
+        } catch {
+            showBuilder();
+            toast("Estimate ready — the first save didn't go through; it'll retry as you edit.", "warn");
+        } finally {
+            hideLoading();
+        }
     };
 
     // ====================== ESTIMATE TYPE ======================
@@ -1656,10 +1707,6 @@ const Estimation = () => {
     const [appliedFindings, setAppliedFindings] = useState({});
 
     const askAIToReview = async () => {
-        if (!currentEstimateId) {
-            toast('Save the estimate first', 'error');
-            return;
-        }
         // Show the loading state (button + modal) from the very first click —
         // saveEstimateNow() below can take a beat and used to give no feedback.
         setReviewModal(true);
@@ -1668,11 +1715,20 @@ const Estimation = () => {
         setReviewData(null);
         setAppliedFindings({});
         try {
-            // Make sure the latest edits are persisted before review runs.
-            await saveEstimateNow();
+            // Works on from-scratch estimates: save (creating the estimate on the
+            // fly if a measurement handoff never did) and use the returned id.
+            // AI review runs on the CURRENT line items — a measurement is optional
+            // cross-check context, never a precondition.
+            const estId = await saveEstimateNow();
+            if (!estId) {
+                setReviewError(client?.id
+                    ? 'Could not save the estimate — try again.'
+                    : 'Select a client first — AI review runs on a saved estimate.');
+                return;
+            }
             // Async: POST enqueues the review job (returns fast), then we poll
             // GET /ai-jobs/:id — no 60s idle-timeout death on big estimates.
-            const startRes = await axiosInstance.post(`/estimates/${currentEstimateId}/ai-review`, {});
+            const startRes = await axiosInstance.post(`/estimates/${estId}/ai-review`, {});
             const jobId = startRes.data?.job_id;
             const result = jobId ? await pollAiJob(jobId) : startRes.data;
             setReviewData(result?.data ?? null);
@@ -1818,69 +1874,71 @@ const Estimation = () => {
         let priced = 0;
         const newKeys = {};
 
-        setSections((prev) => {
-            let next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
-            const findTarget = (sectionKey) =>
-                next.find((s) => s.id === sectionKey) ??
-                next.find((s) => s.id === activeSection) ??
-                next[0];
+        // Build the new sections + counts SYNCHRONOUSLY (NOT inside a setSections
+        // updater — React runs that updater later, so the `if (added || priced)`
+        // check below would read a stale 0, toast "Nothing left to apply", and
+        // skip the save + appliedFindings mark even though the items were added).
+        let next = sections.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+        const findTarget = (sectionKey) =>
+            next.find((s) => s.id === sectionKey) ??
+            next.find((s) => s.id === activeSection) ??
+            next[0];
 
-            // 1. Pricing fixes on existing lines (first name match each).
-            pcs.forEach((pc, i) => {
-                const key = `pricing:${i}`;
-                if (appliedFindings[key] || newKeys[key]) return;
-                let done = false;
-                next = next.map((s) => ({
-                    ...s,
-                    items: s.items.map((it) => {
-                        if (done) return it;
-                        if ((it.name ?? '').toLowerCase() === (pc.item_name ?? '').toLowerCase()) {
-                            done = true;
-                            return { ...it, price: Number(pc.suggested_price) || it.price };
-                        }
-                        return it;
-                    }),
-                }));
-                if (done) { priced++; newKeys[key] = true; }
-            });
-
-            // 2. Missing items (append).
-            mis.forEach((mi, i) => {
-                const key = `missing:${i}`;
-                if (appliedFindings[key] || newKeys[key]) return;
-                const target = findTarget(mi.suggested_section_key);
-                if (!target) return;
-                target.items.push({
-                    name: mi.name,
-                    qty: Number(mi.suggested_qty) || 1,
-                    unit: mi.suggested_unit || 'EA',
-                    price: Number(mi.suggested_price) || 0,
-                    reason: mi.reason,
-                    code_ref: mi.code_ref ?? undefined,
-                    source_field: 'ai_review_suggestion',
-                });
-                added++; newKeys[key] = true;
-            });
-
-            // 3. Supplement opportunities (append).
-            sos.forEach((so, i) => {
-                const key = `supplement:${i}`;
-                if (appliedFindings[key] || newKeys[key]) return;
-                const target = findTarget(so.suggested_section_key);
-                if (!target) return;
-                target.items.push({
-                    name: so.title,
-                    qty: Number(so.suggested_qty) || 1,
-                    unit: so.suggested_unit || 'EA',
-                    price: supplementLinePrice(so),
-                    reason: so.reason,
-                    source_field: 'ai_review_suggestion',
-                });
-                added++; newKeys[key] = true;
-            });
-
-            return next;
+        // 1. Pricing fixes on existing lines (first name match each).
+        pcs.forEach((pc, i) => {
+            const key = `pricing:${i}`;
+            if (appliedFindings[key] || newKeys[key]) return;
+            let done = false;
+            next = next.map((s) => ({
+                ...s,
+                items: s.items.map((it) => {
+                    if (done) return it;
+                    if ((it.name ?? '').toLowerCase() === (pc.item_name ?? '').toLowerCase()) {
+                        done = true;
+                        return { ...it, price: Number(pc.suggested_price) || it.price };
+                    }
+                    return it;
+                }),
+            }));
+            if (done) { priced++; newKeys[key] = true; }
         });
+
+        // 2. Missing items (append).
+        mis.forEach((mi, i) => {
+            const key = `missing:${i}`;
+            if (appliedFindings[key] || newKeys[key]) return;
+            const target = findTarget(mi.suggested_section_key);
+            if (!target) return;
+            target.items.push({
+                name: mi.name,
+                qty: Number(mi.suggested_qty) || 1,
+                unit: mi.suggested_unit || 'EA',
+                price: Number(mi.suggested_price) || 0,
+                reason: mi.reason,
+                code_ref: mi.code_ref ?? undefined,
+                source_field: 'ai_review_suggestion',
+            });
+            added++; newKeys[key] = true;
+        });
+
+        // 3. Supplement opportunities (append).
+        sos.forEach((so, i) => {
+            const key = `supplement:${i}`;
+            if (appliedFindings[key] || newKeys[key]) return;
+            const target = findTarget(so.suggested_section_key);
+            if (!target) return;
+            target.items.push({
+                name: so.title,
+                qty: Number(so.suggested_qty) || 1,
+                unit: so.suggested_unit || 'EA',
+                price: supplementLinePrice(so),
+                reason: so.reason,
+                source_field: 'ai_review_suggestion',
+            });
+            added++; newKeys[key] = true;
+        });
+
+        setSections(next);
 
         if (added || priced) {
             triggerSave();
@@ -1896,7 +1954,6 @@ const Estimation = () => {
 
     // ====================== 2.3 — ASK AI TO MAKE CHANGES ======================
     const runAiChanges = async () => {
-        if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
         if (!changesInstruction.trim() && changesFiles.length === 0) {
             toast('Describe the change or attach a file', 'error'); return;
         }
@@ -1904,12 +1961,22 @@ const Estimation = () => {
         // beat, and the button used to stay idle until after it finished.
         setChangesLoading(true); setChangesError(null); setChangesResult(null); setChangesChecked({});
         try {
-            await saveEstimateNow();
+            // Works on from-scratch estimates: save (creating the estimate on the
+            // fly if a measurement handoff never did) and use the returned id.
+            // AI changes operate on the CURRENT line items — a measurement is
+            // optional context, never a precondition.
+            const estId = await saveEstimateNow();
+            if (!estId) {
+                setChangesError(client?.id
+                    ? 'Could not save the estimate — try again.'
+                    : 'Select a client first — AI changes run on a saved estimate.');
+                return;
+            }
             const fd = new FormData();
             fd.append('instruction', changesInstruction.trim());
             changesFiles.forEach((f) => fd.append('files', f));
             const res = await axiosInstance.post(
-                `/estimates/${currentEstimateId}/ai-changes`, fd,
+                `/estimates/${estId}/ai-changes`, fd,
                 { headers: { 'Content-Type': 'multipart/form-data' } },
             );
             const data = res.data?.data ?? null;
