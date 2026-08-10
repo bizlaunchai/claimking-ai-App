@@ -561,6 +561,7 @@ const Estimation = () => {
     const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
     const [editingSectionId, setEditingSectionId] = useState(null); // inline section rename
     const [sectionDraft, setSectionDraft] = useState('');
+    const [savingSection, setSavingSection] = useState(false);       // section rename → server save in flight
     // Code-requirements checklist. The 6 hard-coded CODE_ITEMS are a session
     // seed; bulk-uploaded / hand-added rows are PERSISTED (estimate_code_library)
     // and hydrated on mount via reloadCodeLibrary, merged on top (server row wins
@@ -2166,21 +2167,17 @@ const Estimation = () => {
             cancelButtonText: "Cancel",
         });
         if (!result.isConfirmed) return;
-        setSections((prev) => {
-            const next = prev.filter((s) => s.id !== id);
-            if (activeSection === id) setActiveSection(next[0]?.id || null);
-            return next;
-        });
-        triggerSave();
+        const next = sectionsRef.current.filter((s) => s.id !== id);
+        if (activeSection === id) setActiveSection(next[0]?.id || null);
+        void commitSectionsNow(next);
     };
 
     const duplicateSection = (id) => {
-        setSections((prev) => {
-            const orig = prev.find((s) => s.id === id);
-            if (!orig) return prev;
-            return [...prev, { id: "copy-" + Date.now(), name: orig.name + " (Copy)", items: orig.items.map((i) => ({ ...i })) }];
-        });
-        triggerSave();
+        const prev = sectionsRef.current;
+        const orig = prev.find((s) => s.id === id);
+        if (!orig) return;
+        const next = [...prev, { id: "copy-" + Date.now(), name: orig.name + " (Copy)", items: orig.items.map((i) => ({ ...i })) }];
+        void commitSectionsNow(next);
     };
 
     // Inline section rename (replaces the old window.prompt modal).
@@ -2191,17 +2188,33 @@ const Estimation = () => {
         setEditingSectionId(id);
     };
     const cancelEditSection = () => {
+        if (savingSection) return;
         setEditingSectionId(null);
         setSectionDraft('');
     };
-    const saveSectionName = () => {
+    const saveSectionName = async () => {
+        if (savingSection) return;                 // guard the onBlur + click double-fire
         const id = editingSectionId;
         const name = sectionDraft.trim();
-        if (id != null && name) {
-            setSections((prev) => prev.map((x) => x.id === id ? { ...x, name } : x));
-            triggerSave();
+        // No id, empty name, or unchanged → just close (nothing to persist).
+        if (id == null || !name) { setEditingSectionId(null); setSectionDraft(''); return; }
+        const current = sectionsRef.current.find((x) => x.id === id);
+        if (current && current.name === name) { setEditingSectionId(null); setSectionDraft(''); return; }
+        const next = sectionsRef.current.map((x) => x.id === id ? { ...x, name } : x);
+        // Keep the input open with a spinner until the server commits — the old
+        // debounced save was lost if the user refreshed right after renaming.
+        setSavingSection(true);
+        try {
+            const savedId = await commitSectionsNow(next);
+            if (savedId) {
+                setEditingSectionId(null);
+                setSectionDraft('');
+            } else {
+                toast('Could not rename the section — check your connection and try again', 'error');
+            }
+        } finally {
+            setSavingSection(false);
         }
-        cancelEditSection();
     };
 
     // ====================== ITEMS ======================
@@ -4448,15 +4461,20 @@ const Estimation = () => {
                                                         className="section-name-input"
                                                         value={sectionDraft}
                                                         autoFocus
+                                                        disabled={savingSection}
                                                         onChange={(e) => setSectionDraft(e.target.value)}
                                                         onKeyDown={(e) => { if (e.key === "Enter") saveSectionName(); if (e.key === "Escape") cancelEditSection(); }}
                                                         onBlur={saveSectionName}
                                                     />
                                                     <div className="section-controls">
-                                                        <button className="section-btn save" onMouseDown={(e) => e.preventDefault()} onClick={saveSectionName} title="Save">
-                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                        <button className="section-btn save" onMouseDown={(e) => e.preventDefault()} onClick={saveSectionName} title="Save" disabled={savingSection}>
+                                                            {savingSection ? (
+                                                                <svg className="icon icon-sm ck-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                                                            ) : (
+                                                                <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                            )}
                                                         </button>
-                                                        <button className="section-btn" onMouseDown={(e) => e.preventDefault()} onClick={cancelEditSection} title="Cancel">
+                                                        <button className="section-btn" onMouseDown={(e) => e.preventDefault()} onClick={cancelEditSection} title="Cancel" disabled={savingSection}>
                                                             <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                                                         </button>
                                                     </div>
