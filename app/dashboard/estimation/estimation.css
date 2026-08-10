@@ -154,6 +154,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .section-btn:hover{background:#1a1f3a;color:#fff;border-color:#1a1f3a}
 .section-btn.save{color:#059669;border-color:#a7f3d0;background:#ecfdf5}
 .section-btn.save:hover{background:#059669;color:#fff;border-color:#059669}
+.section-btn:disabled{opacity:.5;cursor:not-allowed}
+.section-btn:disabled:hover{background:#fff;color:#6b7280;border-color:#e5e7eb}
+.section-btn.save:disabled:hover{background:#ecfdf5;color:#059669;border-color:#a7f3d0}
 /* Inline section rename (replaces the native prompt) */
 .section-name-input{flex:1;min-width:0;margin-right:10px;padding:5px 9px;font-size:13px;font-weight:700;color:#1a1f3a;text-transform:uppercase;letter-spacing:.04em;border:1px solid #FDB813;border-radius:5px;background:#fff;box-shadow:0 0 0 2px rgba(253,184,19,.18)}
 .section-name-input:focus{outline:none}
