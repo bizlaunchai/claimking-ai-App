@@ -351,11 +351,11 @@ const SignView = () => {
                                         <tr key={it.id}>
                                             {/* CK-14: the AI `reason` is internal working context and is
                                                 never sent to this public page — nothing to render here. */}
-                                            <td><span className="sv-item-name">{it.name}</span></td>
-                                            <td style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
-                                            <td>{it.unit}</td>
-                                            <td style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
-                                            <td style={{ textAlign: 'right' }}>${(Number(it.qty) * Number(it.price)).toFixed(2)}</td>
+                                            <td data-label="Description"><span className="sv-item-name">{it.name}</span></td>
+                                            <td data-label="Qty" style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
+                                            <td data-label="Unit">{it.unit}</td>
+                                            <td data-label="Price" style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
+                                            <td data-label="Subtotal" style={{ textAlign: 'right' }}>${(Number(it.qty) * Number(it.price)).toFixed(2)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

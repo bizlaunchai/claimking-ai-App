@@ -4640,15 +4640,18 @@ const Estimation = () => {
                                                                     )}
                                                                 </span>
                                                             )}
-                                                            {/* §5.2 saved note — contractor-internal, persists with the estimate (not on the homeowner PDF) */}
-                                                            <input
+                                                            {/* §5.2 saved note — contractor-internal, persists with the estimate (not on the homeowner PDF).
+                                                                Textarea that auto-grows with its content so long notes stay fully visible + easy to edit. */}
+                                                            <textarea
                                                                 className="item-note-input"
                                                                 value={it.notes ?? ""}
                                                                 placeholder="📝 Add a note (internal — not on PDF)"
+                                                                rows={1}
                                                                 draggable={false}
                                                                 onDragStart={(e) => e.stopPropagation()}
-                                                                onChange={(e) => updateItemNote(s.id, idx, e.target.value)}
-                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "4px 8px", fontSize: 11, color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: 5, background: "#fafbfc" }}
+                                                                ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }}
+                                                                onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; updateItemNote(s.id, idx, e.target.value); }}
+                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "4px 8px", fontSize: 11, lineHeight: 1.5, color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: 5, background: "#fafbfc", fontFamily: "inherit", resize: "vertical", minHeight: 28, overflow: "hidden" }}
                                                                 onFocus={(e) => { e.target.style.border = "1px solid #FDB813"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
                                                                 onBlur={(e) => { e.target.style.border = "1px dashed #d1d5db"; e.target.style.background = "#fafbfc"; e.target.style.color = "#6b7280"; }}
                                                             />
