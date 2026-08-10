@@ -4381,21 +4381,20 @@ const Estimation = () => {
                                         </div>
                                         <table className="estimate-table">
                                             <thead><tr>
-                                                <th style={{ width: 24 }}></th>
                                                 <th>Description</th>
                                                 <th style={{ width: 80 }}>Qty</th>
                                                 <th style={{ width: 60 }}>Unit</th>
                                                 <th style={{ width: 90 }}>Unit $</th>
-                                                <th style={{ width: 100 }}>Total</th>
-                                                <th style={{ width: 130 }}></th>
+                                                <th style={{ width: 110 }}>Total</th>
                                             </tr></thead>
                                             <tbody>
                                                 {s.items.length === 0 ? (
-                                                    <tr><td colSpan="7" className="empty-section">No items yet. Click items in the left panel to add.</td></tr>
+                                                    <tr><td colSpan="5" className="empty-section">No items yet. Click items in the left panel to add.</td></tr>
                                                 ) : s.items.map((it, idx) => {
                                                     const isItemEditing = editingItem && editingItem.secId === s.id && editingItem.idx === idx;
                                                     return (
-                                                    <tr key={idx}
+                                                    <React.Fragment key={idx}>
+                                                    <tr
                                                         draggable={!isItemEditing}
                                                         data-section-id={s.id}
                                                         data-idx={idx}
@@ -4403,7 +4402,6 @@ const Estimation = () => {
                                                         onDragEnd={handleDragEnd}
                                                         onDragOver={(e) => handleDragOver(e, s.id)}
                                                         onDrop={(e) => handleDrop(e, s.id, idx)}>
-                                                        <td><span className="drag-handle" title="Drag to reorder"><svg className="icon icon-sm"><use href="#i-grip" /></svg></span></td>
                                                         <td>
                                                             {isItemEditing ? (
                                                                 <input
@@ -4462,34 +4460,43 @@ const Estimation = () => {
                                                                 onKeyDown={(e) => { if (e.key === "Enter") saveEditItem(); if (e.key === "Escape") cancelEditItem(); }}
                                                                 style={{ width: 75, boxSizing: "border-box", padding: "5px 6px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 5 }} />
                                                         ) : `$${it.price.toFixed(2)}`}</td>
-                                                        <td><strong>${isItemEditing
+                                                        <td className="col-total"><strong>${isItemEditing
                                                             ? ((parseFloat(itemDraft.qty) || 0) * (parseFloat(itemDraft.price) || 0)).toFixed(2)
                                                             : (it.qty * it.price).toFixed(2)}</strong></td>
-                                                        <td>
+                                                    </tr>
+                                                    {/* CK-06: actions live in their own full-width row beneath the item so
+                                                        they (and the numeric columns) are never pushed off-screen / clipped
+                                                        at narrow panel widths. */}
+                                                    <tr key={`${idx}-actions`} className="line-action-row">
+                                                        <td colSpan="5">
                                                             <div className="line-actions">
                                                                 {isItemEditing ? (
                                                                     <>
-                                                                        <button className="line-action-btn" onClick={saveEditItem} title="Save" style={{ color: "#059669" }}>
+                                                                        <button className="line-action-btn save" onClick={saveEditItem} title="Save">
                                                                             <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                                            <span>Save</span>
                                                                         </button>
                                                                         <button className="line-action-btn" onClick={cancelEditItem} title="Cancel">
                                                                             <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                                            <span>Cancel</span>
                                                                         </button>
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <button className="line-action-btn" onClick={() => startEditItem(s.id, idx)} title="Edit">
+                                                                        <button className="line-action-btn" onClick={() => startEditItem(s.id, idx)} title="Edit item">
                                                                             <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                                                                            <span>Edit</span>
                                                                         </button>
-                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, -1)} title="Move up" disabled={idx === 0}><svg className="icon icon-sm"><use href="#i-arrow-up" /></svg></button>
-                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, 1)} title="Move down" disabled={idx === s.items.length - 1}><svg className="icon icon-sm"><use href="#i-arrow-down" /></svg></button>
-                                                                        <button className="line-action-btn" onClick={(e) => openMoveMenu(e, s.id, idx)} title="Move to section"><svg className="icon icon-sm"><use href="#i-move" /></svg></button>
-                                                                        <button className="line-action-btn danger" onClick={() => removeItem(s.id, idx)} title="Remove"><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
+                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, -1)} title="Move up" disabled={idx === 0}><svg className="icon icon-sm"><use href="#i-arrow-up" /></svg><span>Up</span></button>
+                                                                        <button className="line-action-btn" onClick={() => moveItem(s.id, idx, 1)} title="Move down" disabled={idx === s.items.length - 1}><svg className="icon icon-sm"><use href="#i-arrow-down" /></svg><span>Down</span></button>
+                                                                        <button className="line-action-btn" onClick={(e) => openMoveMenu(e, s.id, idx)} title="Move to another section"><svg className="icon icon-sm"><use href="#i-move" /></svg><span>Move</span></button>
+                                                                        <button className="line-action-btn danger" onClick={() => removeItem(s.id, idx)} title="Remove item"><svg className="icon icon-sm"><use href="#i-trash" /></svg><span>Delete</span></button>
                                                                     </>
                                                                 )}
                                                             </div>
                                                         </td>
                                                     </tr>
+                                                    </React.Fragment>
                                                     );
                                                 })}
                                             </tbody>
