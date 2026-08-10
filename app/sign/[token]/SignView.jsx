@@ -32,6 +32,8 @@ const SignView = () => {
 
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    // Inline submit error (replaces native alert() on the Confirm step).
+    const [submitError, setSubmitError] = useState('');
 
     // DocuSign-style guided flow: 0 Review · 1 Name · 2 Signature · 3 Confirm
     const [step, setStep] = useState(0);
@@ -102,6 +104,15 @@ const SignView = () => {
         window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     };
 
+    // When the homeowner returns to the signature step, redraw their captured
+    // signature onto the freshly-mounted (blank) pad so it isn't lost visually.
+    // A rAF lets the pad's own mount/resize (which wipes the canvas) settle first.
+    useEffect(() => {
+        if (step !== 2 || !signatureData) return;
+        const id = requestAnimationFrame(() => padRef.current?.fromDataURL(signatureData));
+        return () => cancelAnimationFrame(id);
+    }, [step, signatureData]);
+
     const totals = useMemo(() => {
         if (!data?.estimate) return null;
         const e = data.estimate;
@@ -123,15 +134,22 @@ const SignView = () => {
     const depositNote = hasDeposit && !deposit.chargeable;
 
     // ── Step nav ────────────────────────────────────────────────────────
-    const validateStep = (s) => {
-        if (s === 1 && !signerName.trim()) { alert('Please type your full legal name.'); return false; }
-        // Accept either fresh ink on the pad or a signature already captured
-        // (e.g. the homeowner drew it, went to Confirm, then stepped back).
-        if (s === 2 && (!padRef.current || padRef.current.isEmpty()) && !signatureData) { alert('Please sign in the box before continuing.'); return false; }
-        return true;
-    };
+    // Reactive validity of the current step drives the Next button's disabled
+    // state, so we never fall back to a native alert() prompt. A signature counts
+    // as present via live ink OR the snapshot taken when advancing past step 2
+    // (the homeowner may have drawn it, gone to Confirm, then stepped back).
+    const signatureCaptured = hasInk || !!signatureData;
+    const currentStepValid =
+        step === 1 ? !!signerName.trim()
+            : step === 2 ? signatureCaptured
+                : true;
+    // Inline hint shown in the sticky bar explaining WHY Next is disabled.
+    const stepHint =
+        step === 1 && !signerName.trim() ? 'Enter your full legal name to continue.'
+            : step === 2 && !signatureCaptured ? 'Please sign in the box to continue.'
+                : '';
     const next = () => {
-        if (!validateStep(step)) return;
+        if (!currentStepValid) return; // defensive — the button is disabled anyway
         // Snapshot the signature before the pad unmounts on the next step.
         if (step === 2 && padRef.current && !padRef.current.isEmpty()) {
             setSignatureData(padRef.current.toDataURL('image/png'));
@@ -148,9 +166,12 @@ const SignView = () => {
             (padRef.current && !padRef.current.isEmpty())
                 ? padRef.current.toDataURL('image/png')
                 : signatureData;
-        if (!signatureDataUrl) { setStep(2); alert('Please sign before submitting.'); return; }
-        if (!signerName.trim()) { setStep(1); alert('Please type your full name.'); return; }
-        if (!agreedTerms) { alert('Please tick the box to confirm you agree to the estimate terms.'); return; }
+        setSubmitError('');
+        // These send the homeowner back to the step that still needs input, where
+        // the disabled Next + inline hint guide them (no native prompt).
+        if (!signatureDataUrl) { setStep(2); return; }
+        if (!signerName.trim()) { setStep(1); return; }
+        if (!agreedTerms) { setSubmitError('Please tick the box to confirm you agree to the estimate terms.'); return; }
 
         setSubmitting(true);
         try {
@@ -165,7 +186,7 @@ const SignView = () => {
             setSubmitted(true);
         } catch (err) {
             const msg = err?.response?.data?.message || err?.userMessage || 'Could not submit your signature. Please try again.';
-            alert(msg);
+            setSubmitError(msg);
         } finally {
             setSubmitting(false);
         }
@@ -174,8 +195,12 @@ const SignView = () => {
     // ─────────────────────────── Render ────────────────────────────────
     if (loading) {
         return (
-            <div className="sv-shell">
-                <div className="sv-card sv-status"><div className="sv-spinner" /><p>Loading your estimate…</p></div>
+            <div className="sv-shell sv-shell--center">
+                <div className="sv-card sv-status">
+                    <div className="sv-loader" aria-label="Loading"><span className="sv-loader-ring" /></div>
+                    <h2>Loading your estimate…</h2>
+                    <p className="sv-sub">Just a moment while we securely fetch your document.</p>
+                </div>
             </div>
         );
     }
@@ -183,8 +208,9 @@ const SignView = () => {
         const headline = error.status === 410 ? 'This link is no longer valid'
             : error.status === 404 ? 'Link not found' : 'Could not load this link';
         return (
-            <div className="sv-shell">
+            <div className="sv-shell sv-shell--center">
                 <div className="sv-card sv-status">
+                    <div className="sv-status-badge sv-status-badge--warn">!</div>
                     <h2>{headline}</h2>
                     <p>{error.message}</p>
                     <p className="sv-sub">If you believe this is wrong, contact your contractor for a fresh link.</p>
@@ -194,9 +220,9 @@ const SignView = () => {
     }
     if (submitted) {
         return (
-            <div className="sv-shell">
+            <div className="sv-shell sv-shell--center">
                 <div className="sv-card sv-status sv-success">
-                    <div className="sv-check">✓</div>
+                    <div className="sv-status-badge sv-status-badge--success">✓</div>
                     <h2>Thank you!</h2>
                     <p>Your signed estimate has been recorded.</p>
                     <p className="sv-sub">{data?.company?.name ?? 'Your contractor'} will be in touch with next steps.</p>
@@ -278,7 +304,7 @@ const SignView = () => {
                                 <tbody>
                                     {(section.items ?? []).map(it => (
                                         <tr key={it.id}>
-                                            <td>{it.name}{it.reason && <div className="sv-item-reason">{it.reason}</div>}</td>
+                                            <td><span className="sv-item-name">{it.name}</span>{it.reason && <div className="sv-item-reason">{it.reason}</div>}</td>
                                             <td style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
                                             <td>{it.unit}</td>
                                             <td style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>
@@ -335,7 +361,7 @@ const SignView = () => {
                     <div className="sv-pad-wrap">
                         <SignaturePad ref={padRef} height={200} onChange={({ isEmpty }) => setHasInk(!isEmpty)} />
                         <div className="sv-pad-tools">
-                            <button type="button" className="sv-link" onClick={() => { padRef.current?.clear(); setHasInk(false); }} disabled={submitting}>Clear</button>
+                            <button type="button" className="sv-link" onClick={() => { padRef.current?.clear(); setHasInk(false); setSignatureData(null); }} disabled={submitting}>Clear</button>
                             {hasInk && <span className="sv-pad-ink">Signature captured</span>}
                         </div>
                     </div>
@@ -370,6 +396,7 @@ const SignView = () => {
                     <button className="sv-submit" onClick={submit} disabled={submitting || !agreedTerms || !atBottom}>
                         {finalLabel}
                     </button>
+                    {submitError && <p className="sv-submit-error">{submitError}</p>}
                     {!atBottom && <p className="sv-scroll-hint">Please scroll to the bottom to continue.</p>}
                     <p className="sv-fineprint">
                         By submitting, your name, signature image, IP address and timestamp will be recorded by {company.name ?? 'your contractor'} for legal verification.
@@ -381,14 +408,19 @@ const SignView = () => {
                 to the bottom of this step (CK-13), Next becomes an anchor that
                 carries them to what's left rather than advancing. */}
             <div className="sv-nav">
-                <button className="sv-nav-back" onClick={back} disabled={step === 0 || submitting}>‹ Back</button>
-                {step < STEPS.length - 1 && (
-                    atBottom
-                        ? <button className="sv-nav-next" onClick={next}>Next ›</button>
-                        : <button className="sv-nav-next sv-nav-scroll" onClick={scrollToNext}>
-                            {step === 0 ? 'Read the full estimate & terms ↓' : 'Scroll to continue ↓'}
-                          </button>
+                {atBottom && stepHint && step < STEPS.length - 1 && (
+                    <div className="sv-nav-hint">{stepHint}</div>
                 )}
+                <div className="sv-nav-row">
+                    <button className="sv-nav-back" onClick={back} disabled={step === 0 || submitting}>‹ Back</button>
+                    {step < STEPS.length - 1 && (
+                        atBottom
+                            ? <button className="sv-nav-next" onClick={next} disabled={!currentStepValid}>Next ›</button>
+                            : <button className="sv-nav-next sv-nav-scroll" onClick={scrollToNext}>
+                                {step === 0 ? 'Read the full estimate & terms ↓' : 'Scroll to continue ↓'}
+                              </button>
+                    )}
+                </div>
             </div>
         </div>
     );

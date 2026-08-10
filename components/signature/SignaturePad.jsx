@@ -120,7 +120,27 @@ const SignaturePad = forwardRef(function SignaturePad(
                 canvasRef.current?.toBlob((b) => resolve(b), type, quality);
             });
         },
-    }), [resizeCanvas, onChange]);
+        // Restore a previously-captured signature PNG back onto the canvas — used
+        // when the homeowner steps away from the signature step and returns, so
+        // their drawing reappears instead of a blank pad. The ctx is already
+        // dpr-scaled by resizeCanvas, so we draw in CSS-pixel dimensions.
+        fromDataURL: (dataUrl) => {
+            const canvas = canvasRef.current;
+            if (!canvas || !dataUrl) return;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                const rect = canvas.getBoundingClientRect();
+                ctx.fillStyle = backgroundColor;
+                ctx.fillRect(0, 0, rect.width, rect.height);
+                ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                hasInkRef.current = true;
+                force(n => n + 1);
+                onChange?.({ isEmpty: false });
+            };
+            img.src = dataUrl;
+        },
+    }), [resizeCanvas, onChange, backgroundColor]);
 
     return (
         <canvas
