@@ -163,6 +163,34 @@
 }
 .sv-terms-body strong { color: #1a1f3a; font-weight: 700; }
 
+/* Structured terms (parity with the contractor PDF) */
+.sv-terms-list { margin: 4px 0 8px; padding-left: 20px; font-size: 13px; color: #374151; line-height: 1.7; }
+.sv-terms-list li { margin-bottom: 4px; }
+.sv-terms-fineprint { font-size: 11px; color: #9ca3af; margin: 6px 0; }
+.sv-terms-note {
+    margin: 12px 0;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 7px;
+    font-size: 12.5px;
+    color: #374151;
+    line-height: 1.6;
+}
+.sv-terms-note strong { color: #1a1f3a; }
+.sv-terms-pay {
+    margin: 12px 0;
+    padding: 10px 12px;
+    background: #fffdf5;
+    border: 1px solid #f3e6b3;
+    border-radius: 7px;
+    font-size: 12.5px;
+    color: #374151;
+}
+.sv-terms-pay h4 { margin: 0 0 6px; font-size: 12.5px; color: #1a1f3a; font-weight: 700; }
+.sv-terms-pay p { margin: 4px 0; line-height: 1.6; }
+.sv-terms-pay strong { color: #1a1f3a; }
+
 /* ─── Sign block ─────────────────────────────────────────────────────── */
 .sv-label {
     display: block;

@@ -846,6 +846,23 @@ const Estimation = () => {
                     logo_url,
                     address: p.address || null,
                 });
+                // Seed the Terms & Conditions company block from the REAL company
+                // so the contractor's name/address/phone/website are theirs — not
+                // the hard-coded ClaimKing placeholders in COMPANY_DEFAULT. Only
+                // overwrite a field when the DB actually has a value, so a blank
+                // column keeps the placeholder rather than showing empty.
+                //
+                // Full-dynamic follow-up: when legal_name / hours / emails / the
+                // insurance & licensing block get their own storage, add them to
+                // /profile's company select + this same merge — nothing else here
+                // has to change.
+                setCompanyState((prev) => ({
+                    ...prev,
+                    name: p.business_name || prev.name,
+                    address: p.address || prev.address,
+                    phone: p.business_phone || prev.phone,
+                    website: p.business_website || prev.website,
+                }));
             } catch { /* non-fatal — header falls back to neutral text */ }
         })();
         return () => {
@@ -1049,7 +1066,12 @@ const Estimation = () => {
                         amount: String(f.amount ?? ""),
                     })),
                 );
-                if (e.terms_html) {
+                // Restore the FULL structured terms the contractor last saved
+                // (short_terms / payment box / industry note), falling back to
+                // the legacy full_terms-only blob for pre-terms_json estimates.
+                if (e.terms_json && typeof e.terms_json === "object") {
+                    setTermsState((prev) => ({ ...(prev ?? {}), ...e.terms_json }));
+                } else if (e.terms_html) {
                     setTermsState((prev) => ({ ...(prev ?? {}), full_terms: e.terms_html }));
                 }
                 if (e.measurement_id) {
@@ -1284,6 +1306,10 @@ const Estimation = () => {
             include_photos_in_pdf: includePhotosInPdf,
             include_measurement_in_pdf: includeMeasurementInPdf,
             terms_html: termsState?.full_terms ?? undefined,
+            // Full structured terms — the client-facing source of truth so the
+            // sign page + portal PDF show the SAME short_terms / payment box /
+            // industry note the contractor authored, not just full_terms.
+            terms_json: termsState ?? undefined,
             // Sign & Pay — deposit due at signing (0 = none).
             deposit_amount: Math.max(parseFloat(signDeposit) || 0, 0),
             deposit_currency: 'usd',
@@ -3453,6 +3479,12 @@ const Estimation = () => {
         if (!currentEstimateId) { toast('Save the estimate first', 'error'); return; }
         setSigning(true);
         try {
+            // Persist the estimate FIRST so the homeowner's sign page — which reads
+            // `terms_html` live from the estimate row — always shows the current
+            // Terms & Conditions. AI-generated estimates start with a null
+            // terms_html (the generator insert never sets it), so without this the
+            // homeowner sees the estimate but no terms at all.
+            await saveEstimateNow();
             const res = await axiosInstance.post(`/estimates/${currentEstimateId}/sign/send-link`, {
                 recipient_email: signerEmail.trim() || undefined,
                 signer_name: signerName.trim() || undefined,
