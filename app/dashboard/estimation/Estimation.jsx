@@ -557,6 +557,7 @@ const Estimation = () => {
     const [editLibPrice, setEditLibPrice] = useState('');
     // Inline estimate line-item editing (edit icon → name/qty/unit/price inputs → save icon)
     const [editingItem, setEditingItem] = useState(null); // { secId, idx }
+    const [savingItem, setSavingItem] = useState(false);   // inline edit → server save in flight
     const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
     const [editingSectionId, setEditingSectionId] = useState(null); // inline section rename
     const [sectionDraft, setSectionDraft] = useState('');
@@ -741,6 +742,9 @@ const Estimation = () => {
     // timer was scheduled. See the P0 bulk-upload data-loss fix.
     const sectionsRef = useRef([]);
     const saveEstimateNowRef = useRef(null);
+    // True while a debounced save is scheduled but hasn't fired yet. Lets the
+    // beforeunload safety-net know there's an unsaved edit worth flushing.
+    const pendingSaveRef = useRef(false);
     const dragSrcRef = useRef(null);
     const [estimateDate, setEstimateDate] = useState("");
 
@@ -1366,10 +1370,49 @@ const Estimation = () => {
             return;
         }
         setSaveIndicator({ saving: true, text: "Saving..." });
+        pendingSaveRef.current = true;
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
+            pendingSaveRef.current = false;
             saveEstimateNowRef.current?.();
         }, 1200);
+    }, []);
+
+    /**
+     * Persist a discrete, committed edit IMMEDIATELY — no 1.2s debounce.
+     *
+     * Used by one-shot row actions (inline edit save, up/down, move-to-section,
+     * delete, drag-reorder). Those give instant success feedback, so a contractor
+     * often refreshes within the debounce window; the old `triggerSave()` PATCH
+     * never fired and the edit was silently lost (notes only "survived" because
+     * typing naturally outlasts the debounce). We set both `sections` state and
+     * `sectionsRef.current` synchronously so the flushed save reads the fresh
+     * list, cancel any pending debounce, and await the write so callers can gate
+     * their toast on a real server commit. Returns the estimate id, or null on
+     * failure.
+     */
+    const commitSectionsNow = useCallback(async (next) => {
+        setSections(next);
+        sectionsRef.current = next;
+        pendingSaveRef.current = false;
+        clearTimeout(saveTimerRef.current);
+        return saveEstimateNowRef.current ? saveEstimateNowRef.current() : null;
+    }, []);
+
+    // Safety-net: if the tab is refreshed/closed while a debounced save is still
+    // pending, best-effort flush it so an in-flight edit (e.g. a note typed then
+    // immediately refreshed) isn't lost. Discrete row actions already save
+    // synchronously via commitSectionsNow, so this mainly covers the note field.
+    // beforeunload can't reliably await async work, so this is best-effort.
+    useEffect(() => {
+        const flush = () => {
+            if (!pendingSaveRef.current) return;
+            pendingSaveRef.current = false;
+            clearTimeout(saveTimerRef.current);
+            saveEstimateNowRef.current?.();
+        };
+        window.addEventListener("beforeunload", flush);
+        return () => window.removeEventListener("beforeunload", flush);
     }, []);
 
     // ====================== CLIENT ======================
@@ -2275,10 +2318,10 @@ const Estimation = () => {
     };
 
     const removeItem = (secId, idx) => {
-        setSections((prev) => prev.map((s) => s.id === secId
+        const next = sectionsRef.current.map((s) => s.id === secId
             ? { ...s, items: s.items.filter((_, i) => i !== idx) }
-            : s));
-        triggerSave();
+            : s);
+        void commitSectionsNow(next);
     };
 
     // Inline row edit — pencil enters edit mode (name/qty/unit/price), check saves.
@@ -2289,9 +2332,9 @@ const Estimation = () => {
         setEditingItem({ secId, idx });
         setItemDraft({ name: it.name ?? '', qty: String(it.qty ?? ''), unit: it.unit ?? '', price: String(it.price ?? '') });
     };
-    const cancelEditItem = () => setEditingItem(null);
-    const saveEditItem = () => {
-        if (!editingItem) return;
+    const cancelEditItem = () => { if (savingItem) return; setEditingItem(null); };
+    const saveEditItem = async () => {
+        if (!editingItem || savingItem) return;
         const { secId, idx } = editingItem;
         const name = itemDraft.name.trim();
         const qty = parseFloat(itemDraft.qty);
@@ -2300,12 +2343,24 @@ const Estimation = () => {
         if (!name) { toast('Item name is required', 'error'); return; }
         if (!(qty > 0)) { toast('Quantity must be greater than 0', 'error'); return; }
         if (isNaN(price) || price < 0) { toast('Enter a valid price', 'error'); return; }
-        setSections((prev) => prev.map((s) => s.id === secId
+        const next = sectionsRef.current.map((s) => s.id === secId
             ? { ...s, items: s.items.map((it, i) => i === idx ? { ...it, name, qty, unit: unit || it.unit, price } : it) }
-            : s));
-        triggerSave();
-        toast('Item updated', 'success');
-        setEditingItem(null);
+            : s);
+        // Keep the row in edit mode with a spinner on Save until the server
+        // actually commits — the old code toasted "Item updated" on local state
+        // alone, so a quick refresh lost the edit before the PATCH ever fired.
+        setSavingItem(true);
+        try {
+            const savedId = await commitSectionsNow(next);
+            if (savedId) {
+                toast('Item updated', 'success');
+                setEditingItem(null);
+            } else {
+                toast('Could not save the item — check your connection and try again', 'error');
+            }
+        } finally {
+            setSavingItem(false);
+        }
     };
 
     // §5.2 — per-line-item saved note. Persists with the estimate (debounced
@@ -2734,7 +2789,7 @@ const Estimation = () => {
     };
 
     const moveItem = (secId, idx, direction) => {
-        setSections((prev) => prev.map((s) => {
+        const next = sectionsRef.current.map((s) => {
             if (s.id !== secId) return s;
             const newIdx = idx + direction;
             if (newIdx < 0 || newIdx >= s.items.length) return s;
@@ -2742,8 +2797,8 @@ const Estimation = () => {
             const [item] = items.splice(idx, 1);
             items.splice(newIdx, 0, item);
             return { ...s, items };
-        }));
-        triggerSave();
+        });
+        void commitSectionsNow(next);
     };
 
     const openMoveMenu = (event, secId, idx) => {
@@ -2762,21 +2817,22 @@ const Estimation = () => {
     };
 
     const moveItemToSection = (fromSecId, idx, toSecId) => {
-        setSections((prev) => {
-            const fromSec = prev.find((s) => s.id === fromSecId);
-            if (!fromSec) return prev;
-            const item = fromSec.items[idx];
-            if (!item) return prev;
-            return prev.map((s) => {
-                if (s.id === fromSecId) return { ...s, items: s.items.filter((_, i) => i !== idx) };
-                if (s.id === toSecId) return { ...s, items: [...s.items, item] };
-                return s;
-            });
+        const prev = sectionsRef.current;
+        const fromSec = prev.find((s) => s.id === fromSecId);
+        if (!fromSec) return;
+        const item = fromSec.items[idx];
+        if (!item) return;
+        const next = prev.map((s) => {
+            if (s.id === fromSecId) return { ...s, items: s.items.filter((_, i) => i !== idx) };
+            if (s.id === toSecId) return { ...s, items: [...s.items, item] };
+            return s;
         });
-        const toSec = sections.find((s) => s.id === toSecId);
-        if (toSec) toast(`Moved item to ${toSec.name}`, "success");
-        triggerSave();
+        const toSec = prev.find((s) => s.id === toSecId);
         setMoveMenu(null);
+        void commitSectionsNow(next).then((savedId) => {
+            if (savedId && toSec) toast(`Moved item to ${toSec.name}`, "success");
+            else if (!savedId) toast("Could not move the item — check your connection and try again", "error");
+        });
     };
 
     // ── Drag & drop for line item reordering (within a section) ─────────
@@ -2816,14 +2872,14 @@ const Estimation = () => {
         let newIdx = before ? targetIdx : targetIdx + 1;
         if (newIdx > src.idx) newIdx -= 1;
         if (newIdx === src.idx) return;
-        setSections((prev) => prev.map((s) => {
+        const next = sectionsRef.current.map((s) => {
             if (s.id !== secId) return s;
             const items = [...s.items];
             const [item] = items.splice(src.idx, 1);
             items.splice(newIdx, 0, item);
             return { ...s, items };
-        }));
-        triggerSave();
+        });
+        void commitSectionsNow(next);
     };
 
     // ====================== ITEM LIBRARY ======================
@@ -4509,11 +4565,15 @@ const Estimation = () => {
                                                             <div className="line-actions">
                                                                 {isItemEditing ? (
                                                                     <>
-                                                                        <button className="line-action-btn save" onClick={saveEditItem} title="Save">
-                                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                                                            <span>Save</span>
+                                                                        <button className="line-action-btn save" onClick={saveEditItem} title="Save" disabled={savingItem}>
+                                                                            {savingItem ? (
+                                                                                <svg className="icon icon-sm ck-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                                                                            ) : (
+                                                                                <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                                            )}
+                                                                            <span>{savingItem ? "Saving…" : "Save"}</span>
                                                                         </button>
-                                                                        <button className="line-action-btn" onClick={cancelEditItem} title="Cancel">
+                                                                        <button className="line-action-btn" onClick={cancelEditItem} title="Cancel" disabled={savingItem}>
                                                                             <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                                                                             <span>Cancel</span>
                                                                         </button>
