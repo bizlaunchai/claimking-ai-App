@@ -127,6 +127,28 @@ const Page = () => {
     // ── Input tab + file upload ──────────────────────────────────────────
     const switchInputTab = (tab) => setActiveInputTab(tab);
 
+    // If the client stopped waiting (poll timeout / lost contact) but the job
+    // actually finished server-side, the measurement is already saved. Look for
+    // a report matching this upload created since we started, so we can surface
+    // the real result instead of a false failure + a retry that double-charges.
+    const recoverExtraction = async (fileName, startedAt) => {
+        try {
+            const res = await axiosInstance.get('/measurement', { suppressErrorToast: true });
+            const rows = res.data?.data ?? [];
+            const skewMs = 60000; // tolerate a little clock skew between client + server
+            const match = rows.find((r) => {
+                const created = new Date(r.created_at).getTime();
+                if (!Number.isFinite(created) || created < startedAt - skewMs) return false;
+                // Prefer a filename match when we have one; otherwise any brand-new
+                // row created during this attempt is almost certainly ours.
+                return fileName ? (r.source_file_name === fileName) : true;
+            });
+            return match ?? null;
+        } catch {
+            return null;
+        }
+    };
+
     // ── REAL extraction flow: POST /measurement/extract ──────────────────
     const runExtraction = async () => {
         const localFile =
@@ -141,6 +163,7 @@ const Page = () => {
         setExtractResult(null);
         setExtractElapsed(0);
         const startedAt = Date.now();
+        const fileName = localFile?.name ?? null;
         const timer = setInterval(() => setExtractElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
         try {
             const fd = new FormData();
@@ -154,7 +177,9 @@ const Page = () => {
             const startRes = await axiosInstance.post('/measurement/extract', fd, { timeout: 120000 });
             const jobId = startRes.data?.job_id;
             // Back-compat: if the server still answered synchronously, use it.
-            const result = jobId ? await pollAiJob(jobId) : startRes.data;
+            // Give the poll a generous budget — the backend now bounds its own
+            // slow steps, so a done job should land well inside this.
+            const result = jobId ? await pollAiJob(jobId, { maxMs: 480000 }) : startRes.data;
             const payload = result?.data;
             const credits = result?.credits;
             setExtractResult(payload);
@@ -174,11 +199,25 @@ const Page = () => {
             refreshReportList();
             toast.success(result?.message ?? 'Measurement extracted');
         } catch (err) {
-            const timedOut = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message ?? '');
-            const msg = timedOut
-                ? 'Extraction took too long and timed out. Large reports can take a bit — please try again.'
-                : (err?.userMessage || err?.response?.data?.message || 'Extraction failed');
-            setExtractError(msg);
+            // The AI + save can complete server-side even after the client stops
+            // waiting (poll timeout / lost contact). Blindly telling the user to
+            // "try again" would re-run the whole thing → a duplicate report AND a
+            // second credit charge. So before reporting failure, check whether the
+            // extraction actually landed, and if so treat it as success.
+            const recovered = await recoverExtraction(fileName, startedAt);
+            if (recovered) {
+                setExtractResult(recovered);
+                setEdits({ ...(recovered?.extracted_data ?? {}) });
+                refreshCreditsState();
+                refreshReportList();
+                toast.success('Measurement extracted (recovered after a slow response)');
+            } else {
+                const timedOut = err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message ?? '');
+                const msg = timedOut
+                    ? 'Extraction took too long and timed out. Large reports can take a bit — please try again.'
+                    : (err?.userMessage || err?.response?.data?.message || 'Extraction failed');
+                setExtractError(msg);
+            }
         } finally {
             clearInterval(timer);
             setExtracting(false);

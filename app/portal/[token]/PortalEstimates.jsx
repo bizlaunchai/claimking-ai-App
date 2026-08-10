@@ -292,11 +292,9 @@ const PortalEstimates = ({ clientId, estimateId }) => {
                                                         <tr key={it.id} className="border-b border-gray-100 align-top">
                                                             <td className="py-2 pr-2">
                                                                 <div className="text-gray-900">{it.name}</div>
-                                                                {/* The "why this line is here" note — the whole
-                                                                    point of the portal is transparency. */}
-                                                                {it.reason && (
-                                                                    <div className="text-xs text-gray-500 mt-0.5">{it.reason}</div>
-                                                                )}
+                                                                {/* CK-14: the AI `reason` is internal working context
+                                                                    (same category as job cost / margin) and is no longer
+                                                                    sent to the client portal, so there is nothing to show. */}
                                                                 {it.code_ref && (
                                                                     <div className="text-[11px] text-blue-800 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 mt-1 inline-block">
                                                                         {it.code_ref}
