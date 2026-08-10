@@ -37,6 +37,11 @@ const SignView = () => {
     const [step, setStep] = useState(0);
     const STEPS = ['Review', 'Your name', 'Signature', 'Confirm'];
 
+    // CK-13 — legal-defensibility: the homeowner must scroll to the bottom of the
+    // CURRENT step (terms included) before the Next / Sign control unlocks. Tracked
+    // per step; short steps that fit the viewport auto-satisfy it.
+    const [atBottom, setAtBottom] = useState(false);
+
     const padRef = useRef(null);
 
     useEffect(() => {
@@ -61,6 +66,41 @@ const SignView = () => {
         })();
         return () => { cancelled = true; };
     }, [token]);
+
+    // ── CK-13 · force full scroll ───────────────────────────────────────
+    // Recomputed on scroll/resize and re-armed on every step change. A page that
+    // fits the viewport (nothing to scroll) counts as already-at-bottom so short
+    // steps don't dead-end the user.
+    useEffect(() => {
+        const computeAtBottom = () => {
+            if (typeof window === 'undefined') return true;
+            const doc = document.documentElement;
+            const scrollable = doc.scrollHeight - window.innerHeight;
+            if (scrollable <= 4) return true;            // nothing to scroll
+            return window.scrollY >= scrollable - 40;    // within 40px of the end
+        };
+        const check = () => setAtBottom(computeAtBottom());
+        // New step starts at the top; re-arm the gate, then re-check after paint
+        // (terms HTML / fonts can change the height a frame or two later).
+        window.scrollTo(0, 0);
+        check();
+        const raf = requestAnimationFrame(check);
+        const t = setTimeout(check, 200);
+        window.addEventListener('scroll', check, { passive: true });
+        window.addEventListener('resize', check);
+        return () => {
+            cancelAnimationFrame(raf);
+            clearTimeout(t);
+            window.removeEventListener('scroll', check);
+            window.removeEventListener('resize', check);
+        };
+    }, [step, loading, submitted, error, data]);
+
+    // CK-12 — the sticky CTA doubles as an anchor: until they've reached the
+    // bottom, tapping it carries them to what's left instead of advancing.
+    const scrollToNext = () => {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+    };
 
     const totals = useMemo(() => {
         if (!data?.estimate) return null;
@@ -327,20 +367,27 @@ const SignView = () => {
                                 : (hasDeposit ? ' and agree to the deposit shown above.' : '.')}
                         </span>
                     </label>
-                    <button className="sv-submit" onClick={submit} disabled={submitting || !agreedTerms}>
+                    <button className="sv-submit" onClick={submit} disabled={submitting || !agreedTerms || !atBottom}>
                         {finalLabel}
                     </button>
+                    {!atBottom && <p className="sv-scroll-hint">Please scroll to the bottom to continue.</p>}
                     <p className="sv-fineprint">
                         By submitting, your name, signature image, IP address and timestamp will be recorded by {company.name ?? 'your contractor'} for legal verification.
                     </p>
                 </div>
             )}
 
-            {/* Nav buttons */}
+            {/* Nav buttons — sticky CTA (CK-12). Until the homeowner has scrolled
+                to the bottom of this step (CK-13), Next becomes an anchor that
+                carries them to what's left rather than advancing. */}
             <div className="sv-nav">
                 <button className="sv-nav-back" onClick={back} disabled={step === 0 || submitting}>‹ Back</button>
                 {step < STEPS.length - 1 && (
-                    <button className="sv-nav-next" onClick={next}>Next ›</button>
+                    atBottom
+                        ? <button className="sv-nav-next" onClick={next}>Next ›</button>
+                        : <button className="sv-nav-next sv-nav-scroll" onClick={scrollToNext}>
+                            {step === 0 ? 'Read the full estimate & terms ↓' : 'Scroll to continue ↓'}
+                          </button>
                 )}
             </div>
         </div>
