@@ -152,6 +152,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .section-controls{display:flex;gap:4px}
 .section-btn{width:26px;height:26px;background:#fff;border:1px solid #e5e7eb;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#6b7280}
 .section-btn:hover{background:#1a1f3a;color:#fff;border-color:#1a1f3a}
+.section-btn.save{color:#059669;border-color:#a7f3d0;background:#ecfdf5}
+.section-btn.save:hover{background:#059669;color:#fff;border-color:#059669}
+/* Inline section rename (replaces the native prompt) */
+.section-name-input{flex:1;min-width:0;margin-right:10px;padding:5px 9px;font-size:13px;font-weight:700;color:#1a1f3a;text-transform:uppercase;letter-spacing:.04em;border:1px solid #FDB813;border-radius:5px;background:#fff;box-shadow:0 0 0 2px rgba(253,184,19,.18)}
+.section-name-input:focus{outline:none}
 .estimate-table{width:100%;border-collapse:collapse}
 .estimate-table th{background:#f3f4f6;border-bottom:2px solid #d1d5db;padding:10px 12px;text-align:left;font-weight:700;font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.04em}
 /* CK-06 design pass: an item = a data row + its action row. Keep them visually
