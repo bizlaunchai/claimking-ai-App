@@ -391,31 +391,59 @@ function parseCsvRows(text) {
     return rows.filter((r) => r.some((c) => (c ?? "").trim() !== ""));
 }
 
+// Full column set each template writes/round-trips (order = template order).
+// `price` is OPTIONAL everywhere (blank / 0 imports cleanly); `notes` is an
+// optional trailing column so records that carry a note round-trip fully.
 const LIBRARY_CSV_HEADERS = ["category", "name", "unit", "price"];
-const CODE_CSV_HEADERS = ["name", "reference", "unit", "price"];
+const CODE_CSV_HEADERS = ["name", "reference", "unit", "price", "notes"];
 // Spec (Aug-04 handoff): bulk-add estimate LINE ITEMS grouped by Category.
 const LINE_ITEM_CSV_HEADERS = ["title", "description", "category", "qty", "unit", "price", "notes"];
 
-function headerMatches(rowCells, expected) {
-    const h = (rowCells ?? []).map((c) => (c ?? "").trim().toLowerCase());
-    return expected.every((e, i) => h[i] === e);
+// Header-name → column-index map (case-insensitive). Parsing by header NAME
+// rather than fixed position keeps old templates (missing the newer optional
+// columns) importing cleanly and tolerates reordered/extra columns.
+function indexHeaders(rowCells) {
+    const map = {};
+    (rowCells ?? []).forEach((c, i) => {
+        const key = (c ?? "").trim().toLowerCase();
+        if (key && !(key in map)) map[key] = i;
+    });
+    return map;
+}
+function missingHeaders(map, required) {
+    return required.filter((h) => !(h in map));
+}
+
+// Parse an OPTIONAL price cell. Blank → 0 (valid, "no price yet"). A present
+// value must be a non-negative number; negatives are the only price error.
+function parseOptionalPrice(raw) {
+    const s = (raw ?? "").trim();
+    if (!s) return { price: 0 };
+    const p = parseFloat(s);
+    if (!Number.isFinite(p) || p < 0) return { error: `Invalid price "${s}"` };
+    return { price: p };
 }
 
 // Validate + split into { valid, errors }. errors: [{ line, msg }] (1-indexed).
 function parseLibraryCsv(text) {
     const rows = parseCsvRows(text);
     if (!rows.length) return { kind: "library", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
-    if (!headerMatches(rows[0], LIBRARY_CSV_HEADERS)) {
-        return { kind: "library", valid: [], errors: [{ line: 1, msg: `Header must be: ${LIBRARY_CSV_HEADERS.join(",")}` }] };
+    const hdr = indexHeaders(rows[0]);
+    const missing = missingHeaders(hdr, ["category", "name", "unit"]);
+    if (missing.length) {
+        return { kind: "library", valid: [], errors: [{ line: 1, msg: `Header must include: ${missing.join(", ")}. Use the template.` }] };
     }
+    const cell = (row, name) => (hdr[name] != null ? (row[hdr[name]] ?? "").trim() : "");
     const valid = [], errors = [];
     for (let i = 1; i < rows.length; i++) {
-        const [category, name, unit, priceRaw] = rows[i].map((c) => (c ?? "").trim());
         const line = i + 1;
-        if (!category || !name || !unit || !priceRaw) { errors.push({ line, msg: "Missing required field(s)" }); continue; }
-        const price = parseFloat(priceRaw);
-        if (!(price > 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
-        valid.push({ category: category.toLowerCase(), name, unit, price });
+        const category = cell(rows[i], "category");
+        const name = cell(rows[i], "name");
+        const unit = cell(rows[i], "unit");
+        if (!category || !name || !unit) { errors.push({ line, msg: "Missing required field(s): category, name, unit" }); continue; }
+        const pr = parseOptionalPrice(cell(rows[i], "price"));
+        if (pr.error) { errors.push({ line, msg: pr.error }); continue; }
+        valid.push({ category: category.toLowerCase(), name, unit, price: pr.price });
     }
     return { kind: "library", valid, errors };
 }
@@ -423,17 +451,21 @@ function parseLibraryCsv(text) {
 function parseCodeCsv(text) {
     const rows = parseCsvRows(text);
     if (!rows.length) return { kind: "code", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
-    if (!headerMatches(rows[0], CODE_CSV_HEADERS)) {
-        return { kind: "code", valid: [], errors: [{ line: 1, msg: `Header must be: ${CODE_CSV_HEADERS.join(",")}` }] };
+    const hdr = indexHeaders(rows[0]);
+    const missing = missingHeaders(hdr, ["name", "unit"]);
+    if (missing.length) {
+        return { kind: "code", valid: [], errors: [{ line: 1, msg: `Header must include: ${missing.join(", ")}. Use the template.` }] };
     }
+    const cell = (row, name) => (hdr[name] != null ? (row[hdr[name]] ?? "").trim() : "");
     const valid = [], errors = [];
     for (let i = 1; i < rows.length; i++) {
-        const [name, reference, unit, priceRaw] = rows[i].map((c) => (c ?? "").trim());
         const line = i + 1;
-        if (!name || !unit || !priceRaw) { errors.push({ line, msg: "Missing required field(s)" }); continue; }
-        const price = parseFloat(priceRaw);
-        if (!(price > 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
-        valid.push({ name, ref: reference, unit, price });
+        const name = cell(rows[i], "name");
+        const unit = cell(rows[i], "unit");
+        if (!name || !unit) { errors.push({ line, msg: "Missing required field(s): name, unit" }); continue; }
+        const pr = parseOptionalPrice(cell(rows[i], "price"));
+        if (pr.error) { errors.push({ line, msg: pr.error }); continue; }
+        valid.push({ name, ref: cell(rows[i], "reference"), unit, price: pr.price, note: cell(rows[i], "notes") });
     }
     return { kind: "code", valid, errors };
 }
@@ -442,22 +474,28 @@ function parseCodeCsv(text) {
 function parseLineItemCsv(text) {
     const rows = parseCsvRows(text);
     if (!rows.length) return { kind: "lineitems", valid: [], errors: [{ line: 0, msg: "File is empty" }] };
-    if (!headerMatches(rows[0], LINE_ITEM_CSV_HEADERS)) {
-        return { kind: "lineitems", valid: [], errors: [{ line: 1, msg: `Header must be: ${LINE_ITEM_CSV_HEADERS.join(",")}` }] };
+    const hdr = indexHeaders(rows[0]);
+    const missing = missingHeaders(hdr, ["title", "category", "unit"]);
+    if (missing.length) {
+        return { kind: "lineitems", valid: [], errors: [{ line: 1, msg: `Header must include: ${missing.join(", ")}. Use the template.` }] };
     }
+    const cell = (row, name) => (hdr[name] != null ? (row[hdr[name]] ?? "").trim() : "");
     const valid = [], errors = [];
     for (let i = 1; i < rows.length; i++) {
-        const [title, description, category, qtyRaw, unit, priceRaw, notes] = rows[i].map((c) => (c ?? "").trim());
         const line = i + 1;
-        if (!title || !category || !unit || !priceRaw) {
-            errors.push({ line, msg: "Missing required field(s): title, category, unit, price" });
+        const title = cell(rows[i], "title");
+        const category = cell(rows[i], "category");
+        const unit = cell(rows[i], "unit");
+        if (!title || !category || !unit) {
+            errors.push({ line, msg: "Missing required field(s): title, category, unit" });
             continue;
         }
+        const qtyRaw = cell(rows[i], "qty");
         const qty = parseFloat(qtyRaw || "1");
-        const price = parseFloat(priceRaw);
         if (!(qty > 0)) { errors.push({ line, msg: `Invalid qty "${qtyRaw}"` }); continue; }
-        if (!(price >= 0)) { errors.push({ line, msg: `Invalid price "${priceRaw}"` }); continue; }
-        valid.push({ title, description, category, qty, unit, price, notes });
+        const pr = parseOptionalPrice(cell(rows[i], "price"));
+        if (pr.error) { errors.push({ line, msg: pr.error }); continue; }
+        valid.push({ title, description: cell(rows[i], "description"), category, qty, unit, price: pr.price, notes: cell(rows[i], "notes") });
     }
     return { kind: "lineitems", valid, errors };
 }
@@ -520,7 +558,10 @@ const Estimation = () => {
     // Inline estimate line-item editing (edit icon → name/qty/unit/price inputs → save icon)
     const [editingItem, setEditingItem] = useState(null); // { secId, idx }
     const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
-    // Editable code-requirements checklist (session-only, like the item library)
+    // Code-requirements checklist. The 6 hard-coded CODE_ITEMS are a session
+    // seed; bulk-uploaded / hand-added rows are PERSISTED (estimate_code_library)
+    // and hydrated on mount via reloadCodeLibrary, merged on top (server row wins
+    // on a name collision). A persisted row carries `_codeId` (its DB id).
     const [codeItems, setCodeItems] = useState(CODE_ITEMS);
     const [editingCode, setEditingCode] = useState(null); // item.id
     const [editCodeName, setEditCodeName] = useState('');
@@ -552,6 +593,9 @@ const Estimation = () => {
     const bulkFileRef = useRef(null);
     const bulkKindRef = useRef(null); // 'library' | 'code'
     const [bulkResult, setBulkResult] = useState(null); // { kind, valid, errors }
+    const [bulkImporting, setBulkImporting] = useState(false); // true while a commit is in flight
+    const [bulkDragKind, setBulkDragKind] = useState(null); // which drop zone a file is being dragged over
+    const [bulkModalKind, setBulkModalKind] = useState(null); // open the drop-zone modal (used for menu-triggered kinds e.g. line items)
     // 2.5 — custom categories (company-wide, from DB). Built-ins stay hard-coded.
     const [customCategories, setCustomCategories] = useState([]);
     const [catModalOpen, setCatModalOpen] = useState(false);
@@ -687,6 +731,14 @@ const Estimation = () => {
 
     // ── Misc refs ────────────────────────────────────────────────────────
     const saveTimerRef = useRef(null);
+    // Always-fresh mirrors used by the debounced/awaited save so a one-shot
+    // mutation (e.g. bulk import) is never lost to a stale closure. `sectionsRef`
+    // lets buildSavePayload read the latest sections even when a bulk op sets it
+    // synchronously; `saveEstimateNowRef` lets the 1.2s debounce timer invoke the
+    // freshest saver (with the latest state) rather than the one captured when the
+    // timer was scheduled. See the P0 bulk-upload data-loss fix.
+    const sectionsRef = useRef([]);
+    const saveEstimateNowRef = useRef(null);
     const dragSrcRef = useRef(null);
     const [estimateDate, setEstimateDate] = useState("");
 
@@ -1228,7 +1280,10 @@ const Estimation = () => {
             // Sign & Pay — deposit due at signing (0 = none).
             deposit_amount: Math.max(parseFloat(signDeposit) || 0, 0),
             deposit_currency: 'usd',
-            sections: sections.map((s, idx) => ({
+            // Read from the ref so a synchronous bulk import (which sets both
+            // `sections` state and `sectionsRef.current` before awaiting a save)
+            // persists the just-imported rows instead of the pre-import snapshot.
+            sections: sectionsRef.current.map((s, idx) => ({
                 section_key: s.id,                              // "dwelling-roof"
                 name: s.name,
                 sort_order: idx,
@@ -1289,6 +1344,16 @@ const Estimation = () => {
         }
     }, [buildSavePayload, currentEstimateId]);
 
+    // Mirror sections into a ref so buildSavePayload (and any awaited save right
+    // after a synchronous bulk import) always reads the freshest section list.
+    useEffect(() => { sectionsRef.current = sections; }, [sections]);
+
+    // Keep the ref pointing at the latest saver so the debounce timer below
+    // always runs the freshest closure (latest state), not the one captured when
+    // the timer was scheduled — otherwise the last edit before a quiet period is
+    // saved stale (fatal for one-shot bulk imports).
+    useEffect(() => { saveEstimateNowRef.current = saveEstimateNow; }, [saveEstimateNow]);
+
     /**
      * Debounced save trigger — every state mutation calls this; the actual
      * network round-trip happens 1.2s after the last edit.
@@ -1301,9 +1366,9 @@ const Estimation = () => {
         setSaveIndicator({ saving: true, text: "Saving..." });
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-            saveEstimateNow();
+            saveEstimateNowRef.current?.();
         }, 1200);
-    }, [saveEstimateNow]);
+    }, []);
 
     // ====================== CLIENT ======================
     const ensureClient = () => {
@@ -2248,15 +2313,73 @@ const Estimation = () => {
         setEditCodeNote(item.note || '');
     };
     const cancelEditCode = () => { setEditingCode(null); setEditCodeName(''); setEditCodePrice(''); setEditCodeRef(''); setEditCodeNote(''); };
-    const saveEditCode = () => {
+    const saveEditCode = async () => {
         if (!editingCode) return;
         const name = editCodeName.trim();
-        const price = parseFloat(editCodePrice);
         if (!name) { toast('Item name is required', 'error'); return; }
-        if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
-        setCodeItems((prev) => prev.map((c) => c.id === editingCode ? { ...c, name, price, ref: editCodeRef.trim(), note: editCodeNote.trim() } : c));
-        toast('Code item updated', 'success');
+        // Price is optional — blank/invalid → 0, negatives clamped to 0.
+        const priceNum = parseFloat(editCodePrice);
+        const price = Number.isFinite(priceNum) && priceNum >= 0 ? priceNum : 0;
+        const ref = editCodeRef.trim();
+        const note = editCodeNote.trim();
+        const target = codeItems.find((c) => c.id === editingCode);
+        // Persisted rows (from the company code library) round-trip to the server
+        // so the edit survives reload; session seed rows stay client-only.
+        if (target?._codeId) {
+            try {
+                const res = await axiosInstance.patch(`/estimate-code-library/${target._codeId}`, { name, code_ref: ref, unit: target.unit, price, note });
+                const r = res?.data?.data;
+                setCodeItems((prev) => prev.map((c) => c.id === editingCode
+                    ? { ...c, name: r?.name ?? name, price: r ? Number(r.price) : price, ref: r?.code_ref ?? ref, note: r?.note ?? note }
+                    : c));
+                toast('Code item updated', 'success');
+            } catch (err) {
+                toast(err?.userMessage ?? 'Could not save code item — try again', 'error');
+                return; // keep the editor open so the edit isn't lost
+            }
+        } else {
+            setCodeItems((prev) => prev.map((c) => c.id === editingCode ? { ...c, name, price, ref, note } : c));
+            toast('Code item updated', 'success');
+        }
         cancelEditCode();
+    };
+
+    // Delete a code-checklist item (row trash icon). Always confirms first.
+    // Persisted (_codeId) rows are removed from the company code library on the
+    // server; session seed rows are removed locally (return on reload by design).
+    const deleteCodeItem = async (item) => {
+        const target = item || codeItems.find((c) => c.id === editingCode);
+        if (!target) return;
+        const result = await Swal.fire({
+            title: 'Delete this code item?',
+            html: `<b>${target.name}</b> will be removed from your code checklist.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+        });
+        if (!result.isConfirmed) return;
+        if (target._codeId) {
+            swalLoading('Deleting…', 'Removing from your code checklist');
+            try {
+                await axiosInstance.delete(`/estimate-code-library/${target._codeId}`);
+                setCodeItems((prev) => prev.filter((c) => c.id !== target.id));
+                setCodeChecked((prev) => { const n = { ...prev }; delete n[target.id]; return n; });
+                swalToast.fire({ icon: 'success', title: 'Code item removed' });
+            } catch (err) {
+                swalError(err?.userMessage ?? 'Could not remove item', 'Could not remove item');
+                return;
+            }
+            if (editingCode === target.id) cancelEditCode();
+            return;
+        }
+        // Session seed row → local only.
+        setCodeItems((prev) => prev.filter((c) => c.id !== target.id));
+        setCodeChecked((prev) => { const n = { ...prev }; delete n[target.id]; return n; });
+        toast('Code item removed', 'success');
+        if (editingCode === target.id) cancelEditCode();
     };
 
     // Inline edit for a code & manufacturer database entry (name + meta + price).
@@ -2278,106 +2401,175 @@ const Estimation = () => {
         cancelEditCodeDb();
     };
 
-    // ── 2.4 CSV bulk upload handlers ──
+    // ── 2.4 CSV bulk upload handlers (click-to-browse + drag-and-drop) ──
+    // Open the OS file picker for a given kind (click-to-browse fallback).
     const openBulkUpload = (kind) => {
         bulkKindRef.current = kind;
         setBulkResult(null);
         if (bulkFileRef.current) { bulkFileRef.current.value = ''; bulkFileRef.current.click(); }
     };
-    const onBulkFile = (e) => {
-        const file = e.target.files?.[0];
+    // Shared file→parse pipeline for BOTH the file input and a drag-drop. Rejects
+    // non-CSV files with a clear message; on success opens the result modal.
+    const processBulkFile = (file) => {
         if (!file) return;
         const kind = bulkKindRef.current;
+        const isCsv = /\.csv$/i.test(file.name || '')
+            || (file.type || '').includes('csv')
+            || (file.type || '').startsWith('text/');
+        if (!isCsv) { toast('Please choose a .csv file (use the template).', 'error'); return; }
         const reader = new FileReader();
         reader.onload = () => {
             const text = String(reader.result || '');
+            setBulkDragKind(null);
+            setBulkModalKind(null);
             setBulkResult(
                 kind === 'library' ? parseLibraryCsv(text)
                     : kind === 'lineitems' ? parseLineItemCsv(text)
                         : parseCodeCsv(text),
             );
         };
+        reader.onerror = () => toast('Could not read that file. Try again.', 'error');
         reader.readAsText(file);
     };
-    const importBulk = () => {
-        if (!bulkResult || !bulkResult.valid.length) return;
-        if (bulkResult.kind === 'library') {
-            const bySlug = {};
-            for (const it of bulkResult.valid) {
-                const cat = slugifyCat(it.category);
-                (bySlug[cat] = bySlug[cat] || []).push(it);
-            }
-            // Built-in categories → session merge.
-            setItemLibrary((prev) => {
-                const next = { ...prev };
-                for (const [cat, items] of Object.entries(bySlug)) {
-                    if (customCategories.find((c) => c.slug === cat && c.slug !== 'general')) continue; // custom → DB below
-                    const list = next[cat] ? [...next[cat]] : [];
-                    for (const it of items) {
-                        const idx = list.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
-                        if (idx >= 0) list[idx] = { ...list[idx], price: it.price, unit: it.unit };
-                        else list.push({ name: it.name, price: it.price, unit: it.unit });
-                    }
-                    next[cat] = list;
+    const onBulkFile = (e) => { processBulkFile(e.target.files?.[0]); };
+    // Open the drop-zone modal for a kind that has no always-visible upload area
+    // (e.g. line items, reached from the More menu). Drop or click-to-browse.
+    const openBulkDropModal = (kind) => {
+        bulkKindRef.current = kind;
+        setBulkResult(null);
+        setBulkDragKind(null);
+        setBulkModalKind(kind);
+    };
+    // Reusable drag-and-drop handlers for a bulk-upload area of a given `kind`.
+    // Sets a visible hover state and, on drop, routes the file through the same
+    // parser pipeline as click-to-browse.
+    const bulkDropHandlers = (kind) => ({
+        onDragOver: (e) => {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+            if (bulkDragKind !== kind) setBulkDragKind(kind);
+        },
+        onDragEnter: (e) => { e.preventDefault(); if (bulkDragKind !== kind) setBulkDragKind(kind); },
+        onDragLeave: (e) => {
+            // Ignore leaves onto child nodes — only clear when leaving the zone.
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            setBulkDragKind((k) => (k === kind ? null : k));
+        },
+        onDrop: (e) => {
+            e.preventDefault();
+            setBulkDragKind(null);
+            bulkKindRef.current = kind;
+            setBulkResult(null);
+            processBulkFile(e.dataTransfer?.files?.[0]);
+        },
+    });
+    // Commit-driven bulk import. The success toast fires ONLY after the write is
+    // confirmed (library/code → server insert; line items → estimate save). No
+    // more green "Imported N" that a page reload silently discards (P0).
+    const importBulk = async () => {
+        if (!bulkResult || !bulkResult.valid.length || bulkImporting) return;
+        setBulkImporting(true);
+        try {
+            if (bulkResult.kind === 'library') {
+                // Group rows by category slug → persist to the matching bucket
+                // (built-in slug or an existing custom category). Rows whose
+                // category doesn't exist are reported, never silently dropped.
+                const bySlug = {};
+                for (const it of bulkResult.valid) {
+                    const cat = slugifyCat(it.category);
+                    (bySlug[cat] = bySlug[cat] || []).push(it);
                 }
-                return next;
-            });
-            // Custom categories → persist to DB, then refresh from the server.
-            const customImports = Object.entries(bySlug).filter(([cat]) => customCategories.find((c) => c.slug === cat && c.slug !== 'general'));
-            if (customImports.length) {
-                Promise.all(customImports.map(([cat, items]) => {
-                    const custom = customCategories.find((c) => c.slug === cat);
-                    return axiosInstance.post(`/estimate-categories/${custom.id}/items/bulk`, { items: items.map((i) => ({ name: i.name, unit: i.unit, price: i.price })) });
-                })).then(() => reloadCategories()).catch((err) => toast(err?.userMessage ?? 'Some items could not import', 'error'));
-            }
-        } else if (bulkResult.kind === 'lineitems') {
-            // Spec CSV → estimate line items, grouped into sections by Category.
-            // A matching section (by name, case-insensitive) is appended to; a
-            // new Category creates a new section. Description + Notes fold into
-            // the line's reason (shown to the client + on the PDF/sign page).
-            setSections((prev) => {
-                const next = prev.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
+                const calls = [];
+                const unknownCats = [];
+                let importedCount = 0;
+                for (const [slug, items] of Object.entries(bySlug)) {
+                    const payloadItems = items.map((i) => ({ name: i.name, unit: i.unit, price: i.price }));
+                    const isBuiltin = BUILTIN_CATEGORIES.some((b) => b.slug === slug);
+                    const custom = customCategories.find((c) => c.slug === slug);
+                    if (isBuiltin) {
+                        calls.push(axiosInstance.post(`/estimate-categories/builtin/${slug}/items/bulk`, { items: payloadItems }));
+                        importedCount += items.length;
+                    } else if (custom) {
+                        calls.push(axiosInstance.post(`/estimate-categories/${custom.id}/items/bulk`, { items: payloadItems }));
+                        importedCount += items.length;
+                    } else {
+                        unknownCats.push(slug);
+                    }
+                }
+                if (!calls.length) {
+                    toast(`No matching categories to import into (${unknownCats.join(', ')}). Create the category first, then re-import.`, 'error');
+                    return;
+                }
+                await Promise.all(calls);
+                await reloadCategories();
+                const suffix = unknownCats.length ? ` · skipped ${unknownCats.length} unknown categor${unknownCats.length === 1 ? 'y' : 'ies'}: ${unknownCats.join(', ')}` : '';
+                toast(`Imported ${importedCount} item${importedCount === 1 ? '' : 's'} to your library${suffix}`, unknownCats.length ? 'warn' : 'success');
+                setBulkResult(null);
+            } else if (bulkResult.kind === 'lineitems') {
+                // Line items live on the estimate, which needs a client to exist.
+                if (!client?.id) {
+                    toast('Pick a client first — line items are saved on the estimate.', 'error');
+                    return;
+                }
+                // Spec CSV → estimate line items, grouped into sections by Category.
+                // Description → reason (homeowner-facing); Notes → the item's
+                // dedicated contractor-internal `notes` field (round-trip fidelity).
+                const nextSections = sectionsRef.current.map((s) => ({ ...s, items: [...(s.items ?? [])] }));
                 for (const row of bulkResult.valid) {
                     const catName = row.category.trim();
-                    let sec = next.find((s) => (s.name ?? '').toLowerCase() === catName.toLowerCase());
+                    let sec = nextSections.find((s) => (s.name ?? '').toLowerCase() === catName.toLowerCase());
                     if (!sec) {
                         sec = {
                             id: `${slugifyCat(catName)}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
                             name: catName,
                             items: [],
                         };
-                        next.push(sec);
+                        nextSections.push(sec);
                     }
                     sec.items.push({
                         name: row.title,
                         qty: row.qty,
                         unit: row.unit,
                         price: row.price,
-                        reason: [row.description, row.notes].filter(Boolean).join(' — ') || undefined,
+                        reason: (row.description || '').trim() || undefined,
+                        notes: (row.notes || '').trim() || undefined,
                         source_field: 'csv_import',
                     });
                 }
-                return next;
-            });
-            triggerSave();
-        } else {
-            setCodeItems((prev) => {
-                const next = [...prev];
-                bulkResult.valid.forEach((it, k) => {
-                    const idx = next.findIndex((x) => x.name.toLowerCase() === it.name.toLowerCase());
-                    if (idx >= 0) next[idx] = { ...next[idx], price: it.price, unit: it.unit, ref: it.ref };
-                    else next.push({ id: `csv-${Date.now()}-${k}`, name: it.name, ref: it.ref, price: it.price, unit: it.unit });
+                // Update state AND the ref synchronously, then await the estimate
+                // save so the toast reflects a committed write (not a 200 alone).
+                setSections(nextSections);
+                sectionsRef.current = nextSections;
+                if (!hasStarted) setHasStarted(true);
+                const savedId = await saveEstimateNow();
+                if (!savedId) { toast('Import failed to save. Nothing was committed — try again.', 'error'); return; }
+                toast(`Imported ${bulkResult.valid.length} line item${bulkResult.valid.length === 1 ? '' : 's'}`, 'success');
+                setBulkResult(null);
+            } else {
+                // Code requirements → persist to the company code library.
+                const res = await axiosInstance.post('/estimate-code-library/bulk', {
+                    items: bulkResult.valid.map((it) => ({
+                        name: it.name, code_ref: it.ref, unit: it.unit, price: it.price, note: it.note,
+                    })),
                 });
-                return next;
-            });
+                const saved = res?.data?.data ?? [];
+                await reloadCodeLibrary();
+                toast(`Imported ${saved.length || bulkResult.valid.length} code requirement${(saved.length || bulkResult.valid.length) === 1 ? '' : 's'}`, 'success');
+                setBulkResult(null);
+            }
+        } catch (err) {
+            toast(err?.userMessage ?? err?.response?.data?.message ?? 'Import failed — nothing was saved. Try again.', 'error');
+        } finally {
+            setBulkImporting(false);
         }
-        toast(`Imported ${bulkResult.valid.length} item${bulkResult.valid.length === 1 ? '' : 's'}`, 'success');
-        setBulkResult(null);
     };
     const downloadLibraryTemplate = () => downloadCsvFile('item-library-template.csv',
-        'category,name,unit,price\nroofing,30yr Architectural Shingles,SQ,125\nsiding,Vinyl Siding,SQ,85\n');
+        'category,name,unit,price\nroofing,30yr Architectural Shingles,SQ,125\nsiding,Vinyl Siding,SQ,85\ngeneral,Building Permit,EA,\n');
     const downloadCodeTemplate = () => downloadCsvFile('code-requirements-template.csv',
-        'name,reference,unit,price\nIce & Water Shield,IRC R905.1.2 - valleys & eaves,SQ,125\nDrip Edge,IRC R905.2.8.5,LF,3.75\n');
+        'name,reference,unit,price,notes\n' +
+        'Ice & Water Shield,IRC R905.1.2 - valleys & eaves,SQ,125,Required in valleys and eaves\n' +
+        'Drip Edge,IRC R905.2.8.5,LF,3.75,\n' +
+        'Permit & Inspection,Local Building Code,EA,,Price set later\n');
     const downloadLineItemTemplate = () => downloadCsvFile('estimate-line-items-template.csv',
         'title,description,category,qty,unit,price,notes\n' +
         '30yr Architectural Shingles,GAF Timberline HDZ,Roofing,32,SQ,125,Charcoal color\n' +
@@ -2398,9 +2590,11 @@ const Estimation = () => {
                     const dbItems = (c.items || []).map((i) => ({
                         name: i.name, price: Number(i.price), unit: i.unit, _libId: i.id,
                     }));
-                    if (c.slug === 'general') {
-                        // General = hard-coded session defaults + reassigned DB items.
-                        next.general = [...INITIAL_ITEM_LIBRARY.general, ...dbItems];
+                    if (BUILTIN_CATEGORIES.some((b) => b.slug === c.slug)) {
+                        // Built-in category = hard-coded session defaults +
+                        // persisted DB items (bulk-uploaded / reassigned). The
+                        // DB row is a hidden bucket; the built-in chip owns it.
+                        next[c.slug] = [...(INITIAL_ITEM_LIBRARY[c.slug] || []), ...dbItems];
                     } else {
                         next[c.slug] = dbItems;
                     }
@@ -2411,10 +2605,36 @@ const Estimation = () => {
     }, []);
     useEffect(() => { reloadCategories(); }, [reloadCategories]);
 
+    // Persistent company code-requirements library. Hydrate on mount and merge
+    // the DB rows on top of the hard-coded CODE_ITEMS seed (server row wins on a
+    // name collision). Keeps the palette surviving reloads (P0 fix).
+    const reloadCodeLibrary = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/estimate-code-library', { suppressErrorToast: true });
+            const rows = res.data?.data ?? [];
+            setCodeItems((prev) => {
+                const merged = [...prev];
+                for (const r of rows) {
+                    const item = {
+                        id: r.id, _codeId: r.id, name: r.name,
+                        ref: r.code_ref || '', unit: r.unit,
+                        price: Number(r.price), note: r.note || '',
+                    };
+                    const idx = merged.findIndex((x) => x.name.toLowerCase() === item.name.toLowerCase());
+                    if (idx >= 0) merged[idx] = item; else merged.push(item);
+                }
+                return merged;
+            });
+        } catch { /* keep the session seed on failure */ }
+    }, []);
+    useEffect(() => { reloadCodeLibrary(); }, [reloadCodeLibrary]);
+
     // Built-ins + active custom categories — powers the chip row and dropdowns.
+    // Built-in slugs (incl. hidden buckets that hold persisted built-in items)
+    // are already represented by BUILTIN_CATEGORIES — never show them twice.
     const activeCategories = [
         ...BUILTIN_CATEGORIES.map((c) => ({ ...c, builtin: true })),
-        ...customCategories.filter((c) => c.is_active && c.slug !== 'general').map((c) => ({ slug: c.slug, label: c.name, builtin: false, id: c.id })),
+        ...customCategories.filter((c) => c.is_active && !BUILTIN_CATEGORIES.some((b) => b.slug === c.slug)).map((c) => ({ slug: c.slug, label: c.name, builtin: false, id: c.id })),
     ];
 
     const addCategory = async () => {
@@ -2641,41 +2861,47 @@ const Estimation = () => {
         toast('Item updated', 'success');
         cancelEditLibItem();
     };
-    const deleteLibItem = async () => {
-        if (!editingLib) return;
-        const { cat, idx } = editingLib;
+    // Delete a library item by (category, index) — works from the row trash icon
+    // or the edit-mode Delete button (no need to be in edit mode). Always
+    // confirms first. Persisted (_libId) items are removed server-side.
+    const deleteLibItemAt = async (cat, idx) => {
         const target = (itemLibrary[cat] || [])[idx];
+        if (!target) return;
 
-        // Custom-category (DB) item → confirm (it's permanent), then remove with loading.
+        const result = await Swal.fire({
+            title: 'Delete this item?',
+            html: `<b>${target.name}</b> will be removed from your item library.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+        });
+        if (!result.isConfirmed) return;
+
+        // Persisted (custom-category or bulk-imported built-in) item → server delete.
         if (target?._libId) {
-            const result = await Swal.fire({
-                title: 'Delete this item?',
-                html: `<b>${target.name}</b> will be permanently removed from your item library.`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#dc2626',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: 'Yes, delete it',
-                cancelButtonText: 'Cancel',
-            });
-            if (!result.isConfirmed) return;
             swalLoading('Deleting item…', 'Removing from your item library');
             try {
                 await axiosInstance.delete(`/estimate-categories/items/${target._libId}`);
                 setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
                 swalToast.fire({ icon: 'success', title: 'Item removed' });
-                cancelEditLibItem();
             } catch (err) {
                 swalError(err?.userMessage ?? 'Could not remove item', 'Could not remove item');
+                return;
             }
+            if (editingLib && editingLib.cat === cat && editingLib.idx === idx) cancelEditLibItem();
             return;
         }
 
-        // Built-in session item → local only.
+        // Built-in session seed item → local only (returns on reload by design).
         setItemLibrary((prev) => ({ ...prev, [cat]: (prev[cat] || []).filter((_, i) => i !== idx) }));
         toast('Item removed', 'success');
-        cancelEditLibItem();
+        if (editingLib && editingLib.cat === cat && editingLib.idx === idx) cancelEditLibItem();
     };
+    // Back-compat: edit-mode Delete button deletes the item being edited.
+    const deleteLibItem = () => { if (editingLib) deleteLibItemAt(editingLib.cat, editingLib.idx); };
 
     const visibleItems = (() => {
         const q = itemSearch.toLowerCase().trim();
@@ -3711,7 +3937,7 @@ const Estimation = () => {
                                         <button
                                             type="button"
                                             className="menu-item"
-                                            onClick={() => { setMoreOpen(false); openBulkUpload('lineitems'); }}
+                                            onClick={() => { setMoreOpen(false); openBulkDropModal('lineitems'); }}
                                         >
                                             <svg className="icon icon-sm"><use href="#i-plus" /></svg>
                                             Bulk add line items (CSV)
@@ -3991,9 +4217,10 @@ const Estimation = () => {
                                     </button>
                                 </div>
                                 <input ref={bulkFileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={onBulkFile} />
-                                <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center" }}>
+                                <div {...bulkDropHandlers("library")} style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, border: bulkDragKind === "library" ? "1.5px dashed #1a1f3a" : "1.5px dashed #f0d38a", background: bulkDragKind === "library" ? "#fff7db" : "#fffdf5", transition: "background .12s, border-color .12s" }}>
                                     <button type="button" onClick={() => openBulkUpload("library")} style={{ background: "#fffef7", border: "1px dashed #FDB813", color: "#92400e", padding: "4px 9px", borderRadius: 6, fontWeight: 600, cursor: "pointer" }}>📤 Bulk Upload</button>
-                                    <button type="button" onClick={downloadLibraryTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Download template</button>
+                                    <span style={{ color: bulkDragKind === "library" ? "#1a1f3a" : "#9ca3af", fontWeight: bulkDragKind === "library" ? 700 : 400, pointerEvents: "none" }}>{bulkDragKind === "library" ? "Drop to upload CSV" : "or drop a CSV here"}</span>
+                                    <button type="button" onClick={downloadLibraryTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0, marginLeft: "auto" }}>Download template</button>
                                 </div>
                                 <input type="text" className="search-input" placeholder="Search items..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} />
                                 <div className="category-tabs">
@@ -4011,11 +4238,13 @@ const Estimation = () => {
                                         <div className="empty-list">{itemSearch ? "No matches" : "No items in this category"}</div>
                                     ) : visibleItems.map((it) => {
                                         const isEditing = editingLib && editingLib.cat === it._cat && editingLib.idx === it._idx;
-                                        // Delete only for General + custom categories. The 4 hard-coded
-                                        // built-ins (roofing/siding/gutters/windows) keep their default
-                                        // items un-deletable so a teammate can't wipe the shared defaults.
+                                        // Deletable = anything the user ADDED (persisted `_libId`, incl.
+                                        // bulk-imported into a built-in) OR any custom-category item. The
+                                        // hard-coded built-in SEED items (no `_libId`) stay protected —
+                                        // they're the shared defaults and a session-only delete would just
+                                        // reappear on reload (the reload-confusion we fixed elsewhere).
                                         const canDeleteLibItem =
-                                            it._cat === "general" ||
+                                            !!it._libId ||
                                             !BUILTIN_CATEGORIES.some((c) => c.slug === it._cat);
                                         return (
                                         <div key={`${it._cat}-${it._idx}`} className="item-row library-row"
@@ -4060,7 +4289,14 @@ const Estimation = () => {
                                                         <div className="item-name">{it.name}</div>
                                                         <div className="item-price">${it.price.toFixed(2)}/{it.unit}{itemSearch && <span style={{ color: "#9ca3af", fontWeight: 400 }}> · {it._cat}</span>}</div>
                                                     </div>
-                                                    <button className="item-edit-btn library-edit" onClick={(e) => { e.stopPropagation(); startEditLibItem(it._cat, it._idx); }}>Edit</button>
+                                                    <div className="library-edit" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                                        <button className="item-edit-btn" onClick={(e) => { e.stopPropagation(); startEditLibItem(it._cat, it._idx); }}>Edit</button>
+                                                        {canDeleteLibItem && (
+                                                            <button className="item-edit-btn" title="Delete item" aria-label={`Delete ${it.name}`} onClick={(e) => { e.stopPropagation(); deleteLibItemAt(it._cat, it._idx); }} style={{ color: "#dc2626", borderColor: "#fecaca" }}>
+                                                                <svg className="icon icon-sm"><use href="#i-trash" /></svg>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
@@ -4373,7 +4609,7 @@ const Estimation = () => {
                         {/* RIGHT RAIL */}
                         <aside className="right-rail">
                             <div className="rail-tabs" role="tablist">
-                                {[["code", "i-shield", "Code Checklist"], ["library", "i-book", "Item Library"], ["docs", "i-camera", "Docs"], ["sign", "i-pen", "Sign"]].map(([id, icon, label]) => (
+                                {[["code", "i-shield", "Code Checklist"], ["library", "i-book", "Item Library"], ["docs", "i-camera", "Docs"], ["sign", "i-pen", "Sign & Pay"]].map(([id, icon, label]) => (
                                     <button key={id} className={`rail-tab ${railTab === id ? "active" : ""}`} onClick={() => setRailTab(id)} role="tab">
                                         <svg className="icon icon-sm"><use href={`#${icon}`} /></svg>
                                         {label}
@@ -4386,9 +4622,10 @@ const Estimation = () => {
                                 <div className={`rail-pane ${railTab === "code" ? "active" : ""}`}>
                                     <h3>Code requirements</h3>
                                     <p className="desc">Check the boxes for items required by code, then tap "Add to Estimate" below.</p>
-                                    <div style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center" }}>
+                                    <div {...bulkDropHandlers("code")} style={{ display: "flex", gap: 10, marginBottom: 8, fontSize: 11.5, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, border: bulkDragKind === "code" ? "1.5px dashed #1a1f3a" : "1.5px dashed #f0d38a", background: bulkDragKind === "code" ? "#fff7db" : "#fffdf5", transition: "background .12s, border-color .12s" }}>
                                         <button type="button" onClick={() => openBulkUpload("code")} style={{ background: "#fffef7", border: "1px dashed #FDB813", color: "#92400e", padding: "4px 9px", borderRadius: 6, fontWeight: 600, cursor: "pointer" }}>📤 Bulk Upload</button>
-                                        <button type="button" onClick={downloadCodeTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Download template</button>
+                                        <span style={{ color: bulkDragKind === "code" ? "#1a1f3a" : "#9ca3af", fontWeight: bulkDragKind === "code" ? 700 : 400, pointerEvents: "none" }}>{bulkDragKind === "code" ? "Drop to upload CSV" : "or drop a CSV here"}</span>
+                                        <button type="button" onClick={downloadCodeTemplate} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0, marginLeft: "auto" }}>Download template</button>
                                     </div>
                                     <div>
                                         {codeItems.map((item) => {
@@ -4431,6 +4668,9 @@ const Estimation = () => {
                                                         <div style={{ display: "flex", gap: 6 }}>
                                                             <button onClick={saveEditCode} style={{ flex: 1, padding: "6px 10px", background: "#1a1f3a", color: "#fff", border: "none", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
                                                             <button onClick={cancelEditCode} style={{ flex: 1, padding: "6px 10px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                                            {item._codeId && (
+                                                                <button onClick={() => deleteCodeItem(item)} title="Delete item" style={{ padding: "6px 9px", background: "#fff", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 5, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -4450,6 +4690,16 @@ const Estimation = () => {
                                                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditCode(item); }}
                                                         style={{ marginLeft: 6, padding: "3px 8px", background: "#fff", border: "1px solid #d1d5db", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#374151" }}
                                                     >Edit</button>
+                                                    {item._codeId && (
+                                                        <button
+                                                            type="button"
+                                                            className="library-edit"
+                                                            title="Delete item"
+                                                            aria-label={`Delete ${item.name}`}
+                                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteCodeItem(item); }}
+                                                            style={{ marginLeft: 4, padding: "3px 7px", background: "#fff", border: "1px solid #fecaca", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer", color: "#dc2626", display: "inline-flex", alignItems: "center" }}
+                                                        ><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
+                                                    )}
                                                 </label>
                                             );
                                         })}
@@ -6016,11 +6266,11 @@ const Estimation = () => {
                                 ))}
                             </div>
                             <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 700 }}>Custom</div>
-                            {customCategories.filter((c) => c.slug !== 'general').length === 0 ? (
+                            {customCategories.filter((c) => !BUILTIN_CATEGORIES.some((b) => b.slug === c.slug)).length === 0 ? (
                                 <div style={{ fontSize: 12.5, color: "#6b7280" }}>No custom categories yet. Add one above.</div>
                             ) : (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    {customCategories.filter((c) => c.slug !== 'general').map((c) => (
+                                    {customCategories.filter((c) => !BUILTIN_CATEGORIES.some((b) => b.slug === c.slug)).map((c) => (
                                         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: c.is_active ? "#fff" : "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
                                             <input defaultValue={c.name} onBlur={(e) => renameCategory(c, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
                                                 style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "5px 8px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 5, background: "transparent", color: c.is_active ? "#1a1f3a" : "#9ca3af" }} />
@@ -6040,15 +6290,46 @@ const Estimation = () => {
                 </div>
             )}
 
+            {/* ============ 2.4 CSV BULK UPLOAD DROP-ZONE MODAL (menu-triggered kinds) ============ */}
+            {bulkModalKind && (
+                <div onClick={() => setBulkModalKind(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid #eef0f3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1f3a" }}>
+                                Bulk upload — {bulkModalKind === "library" ? "item library" : bulkModalKind === "lineitems" ? "estimate line items" : "code requirements"}
+                            </div>
+                            <button onClick={() => setBulkModalKind(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
+                        </div>
+                        <div style={{ padding: 20 }}>
+                            <div
+                                {...bulkDropHandlers(bulkModalKind)}
+                                onClick={() => openBulkUpload(bulkModalKind)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBulkUpload(bulkModalKind); } }}
+                                style={{ cursor: "pointer", border: `2px dashed ${bulkDragKind === bulkModalKind ? "#1a1f3a" : "#f0d38a"}`, background: bulkDragKind === bulkModalKind ? "#fff7db" : "#fffdf5", borderRadius: 10, padding: "28px 16px", textAlign: "center", transition: "background .12s, border-color .12s" }}
+                            >
+                                <div style={{ fontSize: 26, marginBottom: 6, pointerEvents: "none" }}>📤</div>
+                                <div style={{ fontWeight: 700, color: "#1a1f3a", fontSize: 13.5, pointerEvents: "none" }}>{bulkDragKind === bulkModalKind ? "Drop to upload" : "Drag a CSV here"}</div>
+                                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3, pointerEvents: "none" }}>or <span style={{ color: "#1d4ed8", textDecoration: "underline" }}>click to browse</span></div>
+                            </div>
+                            <div style={{ marginTop: 12, fontSize: 12, textAlign: "center" }}>
+                                <button type="button" onClick={() => (bulkModalKind === "library" ? downloadLibraryTemplate() : bulkModalKind === "code" ? downloadCodeTemplate() : downloadLineItemTemplate())} style={{ background: "transparent", border: "none", color: "#1d4ed8", fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Download template</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ============ 2.4 CSV BULK UPLOAD RESULT MODAL ============ */}
             {bulkResult && (
-                <div onClick={() => setBulkResult(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
+                <div onClick={() => { if (!bulkImporting) setBulkResult(null); }} style={{ position: "fixed", inset: 0, background: "rgba(15,18,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2100 }}>
                     <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
                         <div style={{ padding: "16px 20px", borderBottom: "1px solid #eef0f3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1f3a" }}>
                                 Bulk upload — {bulkResult.kind === "library" ? "item library" : bulkResult.kind === "lineitems" ? "estimate line items" : "code requirements"}
                             </div>
-                            <button onClick={() => setBulkResult(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
+                            <button onClick={() => { if (!bulkImporting) setBulkResult(null); }} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#6b7280" }}><svg className="icon"><use href="#i-x" /></svg></button>
                         </div>
                         <div style={{ padding: 20, overflowY: "auto" }}>
                             <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
@@ -6067,13 +6348,13 @@ const Estimation = () => {
                             {bulkResult.valid.length === 0 ? (
                                 <div style={{ fontSize: 13, color: "#6b7280" }}>No valid rows to import. Fix the file (use the template) and try again.</div>
                             ) : (
-                                <div style={{ fontSize: 12.5, color: "#374151" }}>{bulkResult.valid.length} row{bulkResult.valid.length === 1 ? "" : "s"} ready to import{bulkResult.errors.length > 0 ? " (invalid rows skipped)" : ""}.</div>
+                                <div style={{ fontSize: 12.5, color: "#374151" }}>{bulkResult.valid.length} row{bulkResult.valid.length === 1 ? "" : "s"} ready to import{bulkResult.errors.length > 0 ? " (invalid rows skipped)" : ""}. <span style={{ color: "#6b7280" }}>Price is optional — blank/0 imports fine.</span></div>
                             )}
                         </div>
                         <div style={{ padding: "14px 20px", borderTop: "1px solid #eef0f3", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                            <button onClick={() => setBulkResult(null)} style={{ padding: "9px 14px", background: "#f3f4f6", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                            <button onClick={importBulk} disabled={!bulkResult.valid.length} style={{ padding: "9px 16px", background: bulkResult.valid.length ? "#1a1f3a" : "#9ca3af", color: "#FDB813", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: bulkResult.valid.length ? "pointer" : "not-allowed" }}>
-                                Import {bulkResult.valid.length} item{bulkResult.valid.length === 1 ? "" : "s"}
+                            <button onClick={() => setBulkResult(null)} disabled={bulkImporting} style={{ padding: "9px 14px", background: "#f3f4f6", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: bulkImporting ? "not-allowed" : "pointer", opacity: bulkImporting ? 0.6 : 1 }}>Cancel</button>
+                            <button onClick={importBulk} disabled={!bulkResult.valid.length || bulkImporting} style={{ padding: "9px 16px", background: (bulkResult.valid.length && !bulkImporting) ? "#1a1f3a" : "#9ca3af", color: "#FDB813", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: (bulkResult.valid.length && !bulkImporting) ? "pointer" : "not-allowed" }}>
+                                {bulkImporting ? "Saving…" : `Import ${bulkResult.valid.length} item${bulkResult.valid.length === 1 ? "" : "s"}`}
                             </button>
                         </div>
                     </div>
