@@ -143,7 +143,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .scope-callout-title{font-weight:700;font-size:13px;color:#92400e;display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .scope-callout ul{margin:6px 0 0 22px;font-size:12px;color:#78350f}
 .scope-callout li{margin-bottom:3px}
-.estimate-section{margin-bottom:20px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+/* CK-06: overflow-x auto (not hidden) so a table that can't fit the panel
+   scrolls instead of clipping the Total column. overflow-y hidden keeps the
+   rounded corners tidy. */
+.estimate-section{margin-bottom:20px;border:1px solid #e5e7eb;border-radius:8px;overflow-x:auto;overflow-y:hidden}
 .section-header-bar{background:#f9fafb;padding:10px 14px;font-weight:700;font-size:13px;border-left:4px solid #3b82f6;display:flex;justify-content:space-between;align-items:center;color:#1a1f3a;text-transform:uppercase;letter-spacing:.04em}
 .estimate-section.supplement .section-header-bar{background:#fff7ed;border-left-color:#ea580c}
 .section-controls{display:flex;gap:4px}
@@ -159,12 +162,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .add-item-area{padding:12px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb}
 .add-item-btn{padding:7px 14px;background:#fff;border:1px dashed #d1d5db;border-radius:6px;color:#6b7280;font-size:12.5px;font-weight:600;cursor:pointer}
 .add-item-btn:hover{background:#FDB813;color:#1a1f3a;border-color:#FDB813;border-style:solid}
-.line-actions{display:flex;gap:1px;justify-content:flex-end;align-items:center}
-.line-action-btn{background:transparent;border:1px solid transparent;color:#9ca3af;cursor:pointer;padding:4px;border-radius:4px;display:flex;align-items:center;justify-content:center;width:24px;height:24px}
-.line-action-btn:hover{background:#f3f4f6;color:#1a1f3a;border-color:#e5e7eb}
+/* CK-06: line-item actions moved out of the inline row into a dedicated
+   full-width action row beneath each item. Buttons are labelled pills that
+   wrap, so every action stays visible + tappable at any viewport width. */
+.estimate-table td.col-total{white-space:nowrap;text-align:right}
+.line-action-row td{padding:0 12px 10px;border-bottom:1px solid #f3f4f6;background:#fcfcfd}
+.line-actions{display:flex;gap:6px;justify-content:flex-start;align-items:center;flex-wrap:wrap}
+.line-action-btn{background:#fff;border:1px solid #e5e7eb;color:#6b7280;cursor:pointer;padding:4px 9px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;line-height:1;min-height:28px}
+.line-action-btn span{white-space:nowrap}
+.line-action-btn:hover{background:#f3f4f6;color:#1a1f3a;border-color:#d1d5db}
+.line-action-btn.save{color:#059669;border-color:#a7f3d0;background:#ecfdf5}
+.line-action-btn.save:hover{background:#d1fae5;color:#047857}
 .line-action-btn.danger:hover{color:#dc2626;background:#fef2f2;border-color:#fecaca}
-.line-action-btn:disabled{opacity:.3;cursor:not-allowed}
-.line-action-btn:disabled:hover{background:transparent;border-color:transparent;color:#9ca3af}
+.line-action-btn:disabled{opacity:.4;cursor:not-allowed}
+.line-action-btn:disabled:hover{background:#fff;border-color:#e5e7eb;color:#6b7280}
 .move-menu{position:absolute;background:#fff;border:1px solid #e5e7eb;border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:200px;z-index:1500;padding:5px;display:none}
 .move-menu.active{display:block}
 .move-menu-header{padding:6px 10px;font-size:10.5px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #f3f4f6;margin-bottom:4px}
@@ -348,9 +359,7 @@ tr.drag-over-bottom td{border-bottom:2px solid #FDB813}
 
 /* Print styles - only show estimate */
 @media print{
-    .header,.left-panel,.right-rail,.ai-bar,.start-stage,.modal,.est-loading-overlay,.toast-container,.finalize-btn,.section-controls,.add-item-area,.line-actions,.line-action-btn,.item-edit-btn,.add-section-btn,.terms-toolbar,.drag-handle,.move-menu{display:none !important}
-    .estimate-table th:first-child,.estimate-table td:first-child{display:none}
-    .estimate-table th:last-child,.estimate-table td:last-child{display:none}
+    .header,.left-panel,.right-rail,.ai-bar,.start-stage,.modal,.est-loading-overlay,.toast-container,.finalize-btn,.section-controls,.add-item-area,.line-actions,.line-action-btn,.line-action-row,.item-edit-btn,.add-section-btn,.terms-toolbar,.drag-handle,.move-menu{display:none !important}
     body{background:#fff}
     .builder-section{display:block}
     .estimate-panel{box-shadow:none;border:none;padding:0;border-radius:0}
