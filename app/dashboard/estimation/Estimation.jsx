@@ -558,6 +558,8 @@ const Estimation = () => {
     // Inline estimate line-item editing (edit icon → name/qty/unit/price inputs → save icon)
     const [editingItem, setEditingItem] = useState(null); // { secId, idx }
     const [itemDraft, setItemDraft] = useState({ name: '', qty: '', unit: '', price: '' });
+    const [editingSectionId, setEditingSectionId] = useState(null); // inline section rename
+    const [sectionDraft, setSectionDraft] = useState('');
     // Code-requirements checklist. The 6 hard-coded CODE_ITEMS are a session
     // seed; bulk-uploaded / hand-added rows are PERSISTED (estimate_code_library)
     // and hydrated on mount via reloadCodeLibrary, merged on top (server row wins
@@ -2138,14 +2140,25 @@ const Estimation = () => {
         triggerSave();
     };
 
-    const editSectionName = (id) => {
+    // Inline section rename (replaces the old window.prompt modal).
+    const startEditSection = (id) => {
         const s = sections.find((x) => x.id === id);
         if (!s) return;
-        const newName = window.prompt("Section name", s.name);
-        if (newName && newName.trim()) {
-            setSections((prev) => prev.map((x) => x.id === id ? { ...x, name: newName.trim() } : x));
+        setSectionDraft(s.name);
+        setEditingSectionId(id);
+    };
+    const cancelEditSection = () => {
+        setEditingSectionId(null);
+        setSectionDraft('');
+    };
+    const saveSectionName = () => {
+        const id = editingSectionId;
+        const name = sectionDraft.trim();
+        if (id != null && name) {
+            setSections((prev) => prev.map((x) => x.id === id ? { ...x, name } : x));
             triggerSave();
         }
+        cancelEditSection();
     };
 
     // ====================== ITEMS ======================
@@ -4332,14 +4345,15 @@ const Estimation = () => {
                             </div>
                             <div className="estimate-header">
                                 <div className="company-info">
-                                    {contractorCompany?.logo_url ? (
+                                    {/* No logo (or a logo that fails to load) → show the company name
+                                        only, never a default/placeholder icon. */}
+                                    {contractorCompany?.logo_url && (
                                         <img
                                             src={contractorCompany.logo_url}
                                             alt="logo"
                                             style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }}
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                         />
-                                    ) : (
-                                        <svg viewBox="0 0 24 24"><use href="#i-crown" /></svg>
                                     )}
                                     <div>
                                         <div className="company-info-text">
@@ -4372,12 +4386,35 @@ const Estimation = () => {
                                 ) : sections.map((s) => (
                                     <div className="estimate-section" key={s.id} id={`section-${s.id}`}>
                                         <div className="section-header-bar">
-                                            <span>{s.name.toUpperCase()}</span>
-                                            <div className="section-controls">
-                                                <button className="section-btn" onClick={() => duplicateSection(s.id)} title="Duplicate"><svg className="icon icon-sm"><use href="#i-copy" /></svg></button>
-                                                <button className="section-btn" onClick={() => editSectionName(s.id)} title="Rename"><svg className="icon icon-sm"><use href="#i-edit" /></svg></button>
-                                                <button className="section-btn" onClick={() => deleteSection(s.id)} title="Delete"><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
-                                            </div>
+                                            {editingSectionId === s.id ? (
+                                                <>
+                                                    <input
+                                                        className="section-name-input"
+                                                        value={sectionDraft}
+                                                        autoFocus
+                                                        onChange={(e) => setSectionDraft(e.target.value)}
+                                                        onKeyDown={(e) => { if (e.key === "Enter") saveSectionName(); if (e.key === "Escape") cancelEditSection(); }}
+                                                        onBlur={saveSectionName}
+                                                    />
+                                                    <div className="section-controls">
+                                                        <button className="section-btn save" onMouseDown={(e) => e.preventDefault()} onClick={saveSectionName} title="Save">
+                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                        </button>
+                                                        <button className="section-btn" onMouseDown={(e) => e.preventDefault()} onClick={cancelEditSection} title="Cancel">
+                                                            <svg className="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span onDoubleClick={() => startEditSection(s.id)} title="Double-click to rename" style={{ cursor: "text" }}>{s.name.toUpperCase()}</span>
+                                                    <div className="section-controls">
+                                                        <button className="section-btn" onClick={() => duplicateSection(s.id)} title="Duplicate"><svg className="icon icon-sm"><use href="#i-copy" /></svg></button>
+                                                        <button className="section-btn" onClick={() => startEditSection(s.id)} title="Rename"><svg className="icon icon-sm"><use href="#i-edit" /></svg></button>
+                                                        <button className="section-btn" onClick={() => deleteSection(s.id)} title="Delete"><svg className="icon icon-sm"><use href="#i-trash" /></svg></button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                         <table className="estimate-table">
                                             <thead><tr>
