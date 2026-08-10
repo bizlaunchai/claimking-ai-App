@@ -13,6 +13,51 @@ const money = (n, cur = 'usd') =>
 // keyed by company_id (same one the portal + branded emails use).
 const apiOrigin = () => (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 
+// Full structured Terms & Conditions on the homeowner sign page — mirrors the
+// contractor PDF so the client signs the EXACT same terms: the short_terms list,
+// the industry pricing note, the payment / card-authorization box, and the full
+// legal body. Fed from the estimate's persisted `terms_json` (sql/95).
+const SignTerms = ({ terms, website }) => {
+    if (!terms || typeof terms !== 'object') return null;
+    const shortTerms = Array.isArray(terms.short_terms) ? terms.short_terms.filter(Boolean) : [];
+    const pay = terms.payment_terms ?? {};
+    const hasPay = pay.card_processing_fee || pay.card_on_file || pay.payment_due;
+    const fullTerms = typeof terms.full_terms === 'string' ? terms.full_terms.trim() : '';
+    if (!shortTerms.length && !terms.industry_pricing_note && !hasPay && !fullTerms) return null;
+    return (
+        <>
+            {shortTerms.length > 0 && (
+                <ul className="sv-terms-list">
+                    {shortTerms.map((t, i) => (
+                        <li key={i} dangerouslySetInnerHTML={{ __html: t }} />
+                    ))}
+                </ul>
+            )}
+            {website && (
+                <p className="sv-terms-fineprint">Full Terms &amp; Conditions at {website}/terms-and-conditions</p>
+            )}
+            {terms.industry_pricing_note && (
+                <div className="sv-terms-note">
+                    <strong>Industry Pricing Note:</strong> {terms.industry_pricing_note}
+                </div>
+            )}
+            {hasPay && (
+                <div className="sv-terms-pay">
+                    <h4>Payment Terms &amp; Card Authorization</h4>
+                    {pay.card_processing_fee && <p><strong>Card Processing Fee:</strong> {pay.card_processing_fee}</p>}
+                    {pay.card_on_file && <p><strong>Card on File &amp; Auto-Charge Authorization:</strong> {pay.card_on_file}</p>}
+                    {pay.payment_due && <p><strong>Payment Due:</strong> {pay.payment_due}</p>}
+                </div>
+            )}
+            {/* Reuses .sv-terms-body (white-space: pre-wrap, CK-13) so the \n\n
+                paragraph breaks + <strong> headers in full_terms render cleanly. */}
+            {fullTerms && (
+                <div className="sv-terms-body" dangerouslySetInnerHTML={{ __html: fullTerms }} />
+            )}
+        </>
+    );
+};
+
 const SignView = () => {
     const { token } = useParams();
 
@@ -332,10 +377,17 @@ const SignView = () => {
                         </div>
                     )}
 
-                    {e.terms_html && (
+                    {(e.terms_json || e.terms_html) && (
                         <div className="sv-terms">
                             <h3>Terms &amp; conditions</h3>
-                            <div className="sv-terms-body" dangerouslySetInnerHTML={{ __html: e.terms_html }} />
+                            {/* Prefer the full structured terms (parity with the
+                                contractor PDF); fall back to the legacy terms_html
+                                blob for estimates saved before terms_json existed. */}
+                            {e.terms_json && typeof e.terms_json === 'object' ? (
+                                <SignTerms terms={e.terms_json} website={company.website} />
+                            ) : (
+                                <div className="sv-terms-body" dangerouslySetInnerHTML={{ __html: e.terms_html }} />
+                            )}
                         </div>
                     )}
                 </div>
