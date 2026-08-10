@@ -25,6 +25,10 @@ const SignView = () => {
     const [agreedTerms, setAgreedTerms] = useState(false);
     const [hasInk, setHasInk] = useState(false);
     const [logoBroken, setLogoBroken] = useState(false);
+    // The signature pad is only mounted on step 2. Once the homeowner advances to
+    // the Confirm step the pad unmounts and `padRef.current` becomes null, so we
+    // snapshot the drawn PNG here when leaving step 2 and submit from this snapshot.
+    const [signatureData, setSignatureData] = useState(null);
 
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -81,24 +85,35 @@ const SignView = () => {
     // ── Step nav ────────────────────────────────────────────────────────
     const validateStep = (s) => {
         if (s === 1 && !signerName.trim()) { alert('Please type your full legal name.'); return false; }
-        if (s === 2 && (!padRef.current || padRef.current.isEmpty())) { alert('Please sign in the box before continuing.'); return false; }
+        // Accept either fresh ink on the pad or a signature already captured
+        // (e.g. the homeowner drew it, went to Confirm, then stepped back).
+        if (s === 2 && (!padRef.current || padRef.current.isEmpty()) && !signatureData) { alert('Please sign in the box before continuing.'); return false; }
         return true;
     };
     const next = () => {
         if (!validateStep(step)) return;
+        // Snapshot the signature before the pad unmounts on the next step.
+        if (step === 2 && padRef.current && !padRef.current.isEmpty()) {
+            setSignatureData(padRef.current.toDataURL('image/png'));
+        }
         setStep((s) => Math.min(STEPS.length - 1, s + 1));
     };
     const back = () => setStep((s) => Math.max(0, s - 1));
 
     // ── Submit (+ pay) ──────────────────────────────────────────────────
     const submit = async () => {
-        if (!padRef.current || padRef.current.isEmpty()) { setStep(2); alert('Please sign before submitting.'); return; }
+        // Prefer the live pad if it's still mounted (step 2); otherwise use the
+        // snapshot taken when the homeowner advanced past the signature step.
+        const signatureDataUrl =
+            (padRef.current && !padRef.current.isEmpty())
+                ? padRef.current.toDataURL('image/png')
+                : signatureData;
+        if (!signatureDataUrl) { setStep(2); alert('Please sign before submitting.'); return; }
         if (!signerName.trim()) { setStep(1); alert('Please type your full name.'); return; }
         if (!agreedTerms) { alert('Please tick the box to confirm you agree to the estimate terms.'); return; }
 
         setSubmitting(true);
         try {
-            const signatureDataUrl = padRef.current.toDataURL('image/png');
             const res = await axiosInstance.post(`/sign-public/${token}`, {
                 signer_name: signerName.trim(),
                 signature_image: signatureDataUrl,

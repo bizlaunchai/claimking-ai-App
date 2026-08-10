@@ -3098,13 +3098,16 @@ const Estimation = () => {
     const [signing, setSigning] = useState(false);
     const [signHistory, setSignHistory] = useState([]);
     const [lastSignLink, setLastSignLink] = useState(null);
+    const [signHistoryLoading, setSignHistoryLoading] = useState(false);
 
     const reloadSignatures = useCallback(async () => {
         if (!currentEstimateId) return;
+        setSignHistoryLoading(true);
         try {
             const res = await axiosInstance.get(`/estimates/${currentEstimateId}/sign`, { suppressErrorToast: true });
             setSignHistory(res.data?.data ?? []);
         } catch { /* ignore */ }
+        finally { setSignHistoryLoading(false); }
     }, [currentEstimateId]);
 
     useEffect(() => { reloadSignatures(); }, [reloadSignatures]);
@@ -4795,7 +4798,31 @@ const Estimation = () => {
                                             )?.id;
                                             return (
                                                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e5e7eb' }}>
-                                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280', marginBottom: 6 }}>Signature history</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#6b7280' }}>Signature history</div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={reloadSignatures}
+                                                            disabled={signHistoryLoading}
+                                                            title="Refresh signature history"
+                                                            aria-label="Refresh signature history"
+                                                            style={{
+                                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                width: 24, height: 24, padding: 0, borderRadius: 5,
+                                                                border: '1px solid #e5e7eb', background: '#fff',
+                                                                color: '#6b7280', cursor: signHistoryLoading ? 'default' : 'pointer',
+                                                            }}
+                                                        >
+                                                            <svg
+                                                                width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                                                stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                                                                className={signHistoryLoading ? 'ck-spin' : undefined}
+                                                            >
+                                                                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                                                                <path d="M21 3v6h-6" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                     {signHistory.map((s) => {
                                                         const isCurrent = s.id === currentId;
                                                         const isSuperseded = s.esign_status === 'superseded';
