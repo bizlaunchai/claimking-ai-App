@@ -274,7 +274,12 @@
     cursor: pointer;
 }
 .sv-submit:hover:not(:disabled) { background: #fcc83d; }
-.sv-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Locked state reads as locked — flat grey, not faded gold (which still looks
+   pressable). Applies whether the gate, the terms box, or submission blocks it. */
+.sv-submit:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+
+/* CK-13 — zero-footprint marker for the reached-the-bottom IntersectionObserver. */
+.sv-bottom-sentinel { height: 1px; width: 100%; pointer-events: none; }
 
 .sv-fineprint {
     margin-top: 12px;

@@ -90,6 +90,9 @@ const SignView = () => {
     const [atBottom, setAtBottom] = useState(false);
 
     const padRef = useRef(null);
+    // Invisible marker at the very end of the current step's scrollable content.
+    // The reached-the-bottom gate below watches it (CK-13).
+    const bottomRef = useRef(null);
 
     useEffect(() => {
         if (!token) return;
@@ -114,33 +117,32 @@ const SignView = () => {
         return () => { cancelled = true; };
     }, [token]);
 
-    // ── CK-13 · force full scroll ───────────────────────────────────────
-    // Recomputed on scroll/resize and re-armed on every step change. A page that
-    // fits the viewport (nothing to scroll) counts as already-at-bottom so short
-    // steps don't dead-end the user.
+    // ── CK-13 · reached-the-bottom gate (IntersectionObserver) ──────────
+    // Legal-defensibility: the Next / Sign control stays locked until the bottom
+    // of the CURRENT step's content scrolls into view. We watch an invisible
+    // sentinel at the end of the content instead of doing scrollHeight math.
+    // The old math broke on iOS Safari: `.sv-shell { min-height: 100vh }` sizes
+    // to the LARGE viewport (URL bar hidden) while `window.innerHeight` is the
+    // SMALL one, leaving a phantom ~40–90px of "unscrolled" height so a page
+    // that already fit the screen never unlocked. A sentinel that's already on
+    // screen (short page) fires `isIntersecting` immediately → unlocks at once.
+    // Once reached, the gate stays open even if the client scrolls back up; it
+    // only re-arms on a step change.
     useEffect(() => {
-        const computeAtBottom = () => {
-            if (typeof window === 'undefined') return true;
-            const doc = document.documentElement;
-            const scrollable = doc.scrollHeight - window.innerHeight;
-            if (scrollable <= 4) return true;            // nothing to scroll
-            return window.scrollY >= scrollable - 40;    // within 40px of the end
-        };
-        const check = () => setAtBottom(computeAtBottom());
-        // New step starts at the top; re-arm the gate, then re-check after paint
-        // (terms HTML / fonts can change the height a frame or two later).
+        if (loading || error || submitted) return;
+        const el = bottomRef.current;
+        if (!el) return;
+        // New step starts at the top with the gate re-armed.
+        setAtBottom(false);
         window.scrollTo(0, 0);
-        check();
-        const raf = requestAnimationFrame(check);
-        const t = setTimeout(check, 200);
-        window.addEventListener('scroll', check, { passive: true });
-        window.addEventListener('resize', check);
-        return () => {
-            cancelAnimationFrame(raf);
-            clearTimeout(t);
-            window.removeEventListener('scroll', check);
-            window.removeEventListener('resize', check);
-        };
+        const io = new IntersectionObserver(
+            ([entry]) => { if (entry.isIntersecting) setAtBottom(true); },
+            // Pull the trigger line up past the sticky CTA bar (CK-12) so the
+            // sentinel must clear it, not merely touch the nav-covered edge.
+            { root: null, threshold: 0, rootMargin: '0px 0px -64px 0px' },
+        );
+        io.observe(el);
+        return () => io.disconnect();
     }, [step, loading, submitted, error, data]);
 
     // CK-12 — the sticky CTA doubles as an anchor: until they've reached the
@@ -462,6 +464,11 @@ const SignView = () => {
                     </p>
                 </div>
             )}
+
+            {/* CK-13 — reached-the-bottom sentinel. Sits at the end of the
+                scrollable content, just above the sticky CTA; the gate unlocks
+                when it enters the viewport (works on short and long pages). */}
+            <div ref={bottomRef} className="sv-bottom-sentinel" aria-hidden="true" />
 
             {/* Nav buttons — sticky CTA (CK-12). Until the homeowner has scrolled
                 to the bottom of this step (CK-13), Next becomes an anchor that
