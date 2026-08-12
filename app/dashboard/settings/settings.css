@@ -727,6 +727,27 @@
     to { transform: translateX(0); opacity: 1; }
 }
 
+/* Notification History loading overlay */
+.notif-table-wrap { position: relative; }
+.notif-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.6);
+    z-index: 2;
+}
+.notif-spinner {
+    width: 26px;
+    height: 26px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #FDB813;
+    border-radius: 50%;
+    animation: notif-spin 0.7s linear infinite;
+}
+@keyframes notif-spin { to { transform: rotate(360deg); } }
+
 /* Responsive */
 @media (max-width: 768px) {
     .main-container {
