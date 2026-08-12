@@ -6,9 +6,7 @@ import {
     User,
     Building2,
     Phone,
-    MapPin,
     Mail,
-    Sparkles,
     Loader2,
     CheckCircle,
     AlertCircle,
@@ -40,20 +38,15 @@ export default function AccountPage() {
     const [email, setEmail] = useState("");
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
-    const [businessName, setBusinessName] = useState("");
-    const [address, setAddress] = useState("");
 
-    // S3 keys saved in DB
+    // S3 key saved in DB
     const [avatarKey, setAvatarKey] = useState(null);
-    const [logoKey, setLogoKey] = useState(null);
 
-    // Blob URLs for rendering
+    // Blob URL for rendering
     const [avatarBlobUrl, setAvatarBlobUrl] = useState(null);
-    const [logoBlobUrl, setLogoBlobUrl] = useState(null);
 
     // FileUploader state (new uploads only)
     const [avatarFiles, setAvatarFiles] = useState([]);
-    const [logoFiles, setLogoFiles] = useState([]);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -83,18 +76,11 @@ export default function AccountPage() {
             setEmail(profile.email || "");
             setFullName(profile.full_name || "");
             setPhone(profile.phone || "");
-            setBusinessName(profile.business_name || "");
-            setAddress(profile.address || "");
 
             if (profile.avatar_url) {
                 setAvatarKey(profile.avatar_url);
                 const url = await fetchS3Image(profile.avatar_url, accessToken);
                 setAvatarBlobUrl(url);
-            }
-            if (profile.business_logo) {
-                setLogoKey(profile.business_logo);
-                const url = await fetchS3Image(profile.business_logo, accessToken);
-                setLogoBlobUrl(url);
             }
 
             setIsLoading(false);
@@ -110,35 +96,21 @@ export default function AccountPage() {
         fetchS3Image(newKey, token).then((url) => { if (url) setAvatarBlobUrl(url); });
     }, [avatarFiles]);
 
-    // When a new logo is uploaded, extract key and refresh preview
-    useEffect(() => {
-        if (logoFiles.length === 0) return;
-        const newKey = logoFiles[logoFiles.length - 1]?.serverResponse?.payload?.key;
-        if (!newKey || newKey === logoKey) return;
-        setLogoKey(newKey);
-        fetchS3Image(newKey, token).then((url) => { if (url) setLogoBlobUrl(url); });
-    }, [logoFiles]);
-
     const handleSave = async (e) => {
         e.preventDefault();
         setIsSaving(true);
         setError(null);
         setSuccess(null);
 
-        debugger
-
-        console.log({fullName, phone, businessName, address, avatarKey, logoKey})
-
         try {
             // Only include fields that have values — skip nulls/empties so the
             // backend validator (whitelist + @IsOptional) gets a clean payload.
+            // Business details (name, address, logo, branding) now live in
+            // Settings → Company & Profile; this page is personal-only.
             const payload = {};
             if (fullName !== undefined && fullName !== null) payload.full_name = fullName;
             if (phone !== undefined && phone !== null) payload.phone = phone;
-            if (businessName !== undefined && businessName !== null) payload.business_name = businessName;
-            if (address !== undefined && address !== null) payload.address = address;
             if (avatarKey) payload.avatar_url = avatarKey;
-            if (logoKey) payload.business_logo = logoKey;
 
             const res = await fetch(`${API_URL}/profile/${userId}`, {
                 method: "PUT",
@@ -255,63 +227,19 @@ export default function AccountPage() {
                     </div>
                 </div>
 
-                {/* Business Info */}
+                {/* Business details moved to Settings → Company & Profile */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-5">Business Information</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                            <label className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-                                <Building2 className="w-4 h-4 text-yellow-600" /> Business Name
-                            </label>
-                            <input
-                                type="text"
-                                value={businessName}
-                                onChange={(e) => setBusinessName(e.target.value)}
-                                placeholder="ClaimKing Solutions"
-                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40 transition-all text-gray-900"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-                                <MapPin className="w-4 h-4 text-yellow-600" /> Business Address
-                            </label>
-                            <input
-                                type="text"
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                                placeholder="123 AI Way, Tech City"
-                                className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40 transition-all text-gray-900"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Business Logo */}
-                    <div className="mt-5 space-y-2">
-                        <label className="text-sm font-semibold flex items-center gap-2 text-gray-700">
-                            <Sparkles className="w-4 h-4 text-yellow-600" /> Business Logo
-                        </label>
-                        <div className="flex items-start gap-6">
-                            <div className="w-24 h-24 rounded-2xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 overflow-hidden">
-                                {logoBlobUrl ? (
-                                    <img src={logoBlobUrl} alt="Business logo" className="w-full h-full object-contain p-2" />
-                                ) : (
-                                    <ImageIcon className="w-8 h-8 text-gray-300" />
-                                )}
-                            </div>
-                            <div className="flex-1 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50 p-4 hover:border-yellow-400 transition-colors min-h-[96px] flex items-center justify-center">
-                                <FileUploader
-                                    label="Upload new business logo"
-                                    files={logoFiles}
-                                    setFiles={setLogoFiles}
-                                    allowedExtensions={[".jpg", ".png", ".jpeg", ".webp"]}
-                                    maxFiles={1}
-                                    maxSizeMB={1}
-                                    uploadFolderName="business_logo"
-                                />
-                            </div>
-                        </div>
-                    </div>
+                    <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">Business Information</h2>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Your company name, address, logo and brand colours now live in one place.
+                    </p>
+                    <a
+                        href="/dashboard/settings"
+                        className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-yellow-400 transition-all text-sm font-semibold text-gray-700"
+                    >
+                        <Building2 className="w-4 h-4 text-yellow-600" />
+                        Manage business & branding in Settings
+                    </a>
                 </div>
 
                 {error && (
