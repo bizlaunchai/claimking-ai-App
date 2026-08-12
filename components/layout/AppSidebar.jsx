@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 // The HTML/CSS structure is preserved here using className attributes.
 import "../../app/styles/sidebar.css"
 import {LogoutButton} from "@/components/logout-button";
+import NotificationBell from "@/components/layout/NotificationBell";
 import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
@@ -285,9 +286,12 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                                 )}
                             </div>
                             {!(isCollapsed && !isMobile) && (
-                                <div className="sidebar-company-meta">
-                                    <span className="sidebar-company-name">{company.name}</span>
-                                </div>
+                                <>
+                                    <div className="sidebar-company-meta" style={{ flex: 1 }}>
+                                        <span className="sidebar-company-name">{company.name}</span>
+                                    </div>
+                                    <NotificationBell />
+                                </>
                             )}
                         </div>
                     )}

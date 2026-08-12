@@ -15,6 +15,7 @@ const FileUploader = dynamic(
 );
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const NOTIF_PAGE_SIZE = 10;
 
 // The 5-slot brand palette default — mirrors the backend DB column default
 // (sql/96) and the legacy hard-coded email colours, so the preview and every
@@ -81,20 +82,26 @@ const Settings = () => {
             : [...prev.service_states, name],
     }));
 
-    // Notification send history (owner alerts on signature / payment).
+    // Notification send history (owner alerts on signature / payment) —
+    // server-side paginated.
     const [notifLog, setNotifLog] = useState([]);
     const [notifLoading, setNotifLoading] = useState(false);
-    const loadNotifLog = async () => {
+    const [notifPage, setNotifPage] = useState(0);
+    const [notifTotal, setNotifTotal] = useState(0);
+    const loadNotifLog = async (page = notifPage) => {
         const t = token || (await createClient().auth.getSession()).data?.session?.access_token;
         if (!t) return;
         setNotifLoading(true);
         try {
-            const res = await fetch(`${API_URL}/notifications/log?limit=50`, {
+            const offset = page * NOTIF_PAGE_SIZE;
+            const res = await fetch(`${API_URL}/notifications/log?limit=${NOTIF_PAGE_SIZE}&offset=${offset}`, {
                 headers: { Authorization: `Bearer ${t}` },
             });
             if (res.ok) {
                 const j = await res.json();
                 setNotifLog(Array.isArray(j.data) ? j.data : []);
+                setNotifTotal(Number(j.total) || 0);
+                setNotifPage(page);
             }
         } catch {
             // Non-fatal — history stays empty.
@@ -121,12 +128,27 @@ const Settings = () => {
     });
 
     const toggleCategory = (categoryId) => {
-        setExpandedCategories(prev => 
-            prev.includes(categoryId) 
+        setExpandedCategories(prev =>
+            prev.includes(categoryId)
                 ? prev.filter(id => id !== categoryId)
                 : [...prev, categoryId]
         );
     };
+
+    // Deep-link support: /dashboard/settings?section=notifications (from the
+    // header bell) opens the Notifications & Alerts category and scrolls to it.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const section = new URLSearchParams(window.location.search).get('section');
+        if (!section) return;
+        setExpandedCategories((prev) => prev.includes(section) ? prev : [...prev, section]);
+        const id = section === 'notifications' ? 'notifications-section' : null;
+        if (id) {
+            setTimeout(() => {
+                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 350);
+        }
+    }, []);
 
     // ── Load the contractor's real company profile on mount ────────────────
     useEffect(() => {
@@ -141,15 +163,16 @@ const Settings = () => {
             setUserId(id);
             setToken(accessToken);
 
-            // Load notification send history (best-effort, non-blocking).
+            // Load first page of notification send history (best-effort).
             (async () => {
                 try {
-                    const r = await fetch(`${API_URL}/notifications/log?limit=50`, {
+                    const r = await fetch(`${API_URL}/notifications/log?limit=${NOTIF_PAGE_SIZE}&offset=0`, {
                         headers: { Authorization: `Bearer ${accessToken}` },
                     });
                     if (r.ok) {
                         const j = await r.json();
                         setNotifLog(Array.isArray(j.data) ? j.data : []);
+                        setNotifTotal(Number(j.total) || 0);
                     }
                 } catch { /* non-fatal */ }
             })();
@@ -184,6 +207,22 @@ const Settings = () => {
                     notify_on_payment: p.notify_on_payment !== false,
                     notify_sms_enabled: p.notify_sms_enabled === true,
                 });
+
+                // Default the notification email to the owner's email the first
+                // time Settings opens — so alerts work out of the box without a
+                // manual Save (and without depending on a backend redeploy).
+                const fallbackNotifyEmail = p.business_email || p.email || '';
+                if (!p.notify_email && fallbackNotifyEmail) {
+                    fetch(`${API_URL}/profile/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${accessToken}`,
+                        },
+                        body: JSON.stringify({ notify_email: fallbackNotifyEmail }),
+                    }).catch(() => { /* non-fatal */ });
+                }
+
                 if (p.brand_colors) {
                     setBrandColors({ ...DEFAULT_BRAND_COLORS, ...p.brand_colors });
                 }
@@ -1334,8 +1373,8 @@ const Settings = () => {
                     </div>
 
                     {/* Notifications & Alerts */}
-                    <div className={`settings-category ${expandedCategories.includes('notifications') ? 'expanded' : ''}`}>
-                        <div 
+                    <div id="notifications-section" className={`settings-category ${expandedCategories.includes('notifications') ? 'expanded' : ''}`}>
+                        <div
                             className={`category-header ${expandedCategories.includes('notifications') ? 'active' : ''}`}
                             onClick={() => toggleCategory('notifications')}
                         >
@@ -1430,42 +1469,86 @@ const Settings = () => {
                                         Every alert we tried to send. A <strong>failed</strong> row means the
                                         email/text didn't go out; <strong>skipped</strong> means it was off or unconfigured.
                                     </p>
-                                    <div style={{ overflowX: 'auto' }}>
+                                    <div className="notif-table-wrap" style={{ overflowX: 'auto' }}>
+                                        {notifLoading && notifLog.length > 0 && (
+                                            <div className="notif-loading-overlay"><div className="notif-spinner" /></div>
+                                        )}
                                         <table className="settings-table">
                                             <thead>
                                                 <tr>
                                                     <th>When</th>
-                                                    <th>Event</th>
+                                                    <th>Details</th>
                                                     <th>Channel</th>
-                                                    <th>To</th>
                                                     <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {notifLog.length === 0 ? (
-                                                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9ca3af', padding: '18px 0' }}>
-                                                        {notifLoading ? 'Loading…' : 'No notifications sent yet.'}
+                                                    <tr><td colSpan={4} style={{ textAlign: 'center', color: '#9ca3af', padding: '24px 0' }}>
+                                                        {notifLoading
+                                                            ? <div className="notif-spinner" style={{ margin: '0 auto' }} />
+                                                            : 'No notifications sent yet.'}
                                                     </td></tr>
                                                 ) : notifLog.map((n) => (
                                                     <tr key={n.id}>
                                                         <td style={{ whiteSpace: 'nowrap' }}>{new Date(n.created_at).toLocaleString()}</td>
-                                                        <td>{n.event === 'signature' ? '✍️ Signed' : '💳 Payment'}</td>
+                                                        <td>
+                                                            <span style={{ fontSize: 15, marginRight: 6 }}>{n.event === 'signature' ? '✍️' : '💳'}</span>
+                                                            {n.body || (n.event === 'signature' ? 'Estimate signed' : 'Payment received')}
+                                                        </td>
                                                         <td>{n.channel === 'sms' ? 'Text' : 'Email'}</td>
-                                                        <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.recipient || '—'}</td>
                                                         <td>
                                                             <span style={{
                                                                 fontWeight: 600, fontSize: 12, padding: '2px 8px', borderRadius: 10,
                                                                 color: n.status === 'sent' ? '#065f46' : n.status === 'failed' ? '#991b1b' : '#6b7280',
                                                                 background: n.status === 'sent' ? '#d1fae5' : n.status === 'failed' ? '#fee2e2' : '#f3f4f6',
                                                             }} title={n.error || ''}>
-                                                                {n.status}{n.status === 'failed' && n.error ? ' ⓘ' : ''}
+                                                                {n.status}
                                                             </span>
+                                                            {n.status !== 'sent' && n.error && (
+                                                                <span style={{ marginLeft: 8, fontSize: 11, color: '#9ca3af' }}>
+                                                                    {n.error}
+                                                                </span>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
+                                    {notifTotal > NOTIF_PAGE_SIZE && (() => {
+                                        const totalPages = Math.ceil(notifTotal / NOTIF_PAGE_SIZE);
+                                        const cur = notifPage;
+                                        const win = 2;
+                                        const start = Math.max(0, cur - win);
+                                        const end = Math.min(totalPages - 1, cur + win);
+                                        const pages = [];
+                                        for (let i = start; i <= end; i++) pages.push(i);
+                                        const pageBtn = (label, target, disabled, active) => (
+                                            <button key={`${label}-${target}`} type="button" className="header-btn"
+                                                disabled={disabled || notifLoading}
+                                                onClick={() => loadNotifLog(target)}
+                                                style={active ? { background: '#1a1f3a', color: '#fff', borderColor: '#1a1f3a' } : undefined}>
+                                                {label}
+                                            </button>
+                                        );
+                                        return (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+                                                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                                    {cur * NOTIF_PAGE_SIZE + 1}–{Math.min((cur + 1) * NOTIF_PAGE_SIZE, notifTotal)} of {notifTotal}
+                                                </span>
+                                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                    {pageBtn('« First', 0, cur === 0)}
+                                                    {pageBtn('‹ Prev', cur - 1, cur === 0)}
+                                                    {start > 0 && <span style={{ color: '#9ca3af', padding: '0 2px' }}>…</span>}
+                                                    {pages.map((p) => pageBtn(String(p + 1), p, false, p === cur))}
+                                                    {end < totalPages - 1 && <span style={{ color: '#9ca3af', padding: '0 2px' }}>…</span>}
+                                                    {pageBtn('Next ›', cur + 1, cur >= totalPages - 1)}
+                                                    {pageBtn('Last »', totalPages - 1, cur >= totalPages - 1)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
