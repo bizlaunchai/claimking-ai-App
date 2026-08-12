@@ -72,14 +72,24 @@ const PERMISSION_CATALOG = [
     // ── Pipeline (lead → job → claim) ─────────────────────────────────
     { group: 'New Leads', items: [
         { key: 'view_leads', label: 'View New Leads' },
+        { key: 'view_all_leads', label: 'View ALL Company Leads (off = own only)' },
         { key: 'convert_lead', label: 'Convert Lead to Job' },
     ]},
     { group: 'Jobs Ready', items: [
         { key: 'view_jobs', label: 'View Jobs Ready' },
         { key: 'convert_job', label: 'Convert Job to Claim' },
+        { key: 'dispatch_subs', label: 'Dispatch Jobs to Subcontractors' },
+        { key: 'manage_subs', label: 'Manage Subcontractors & Onboarding' },
+        { key: 'view_job_financials', label: 'View Job Cost / Profit' },
+    ]},
+    { group: 'Scheduling', items: [
+        { key: 'view_schedule', label: 'View Schedule' },
+        { key: 'manage_all_schedule', label: 'Manage All Appointments (off = own only)' },
     ]},
     { group: 'Active Claims', items: [
         { key: 'view_claims', label: 'View Active Claims' },
+        { key: 'view_all_claims', label: 'View ALL Company Claims (off = own only)' },
+        { key: 'assign_claims', label: 'Assign / Reassign Claims' },
         { key: 'create_claim', label: 'Create Active Claim' },
         { key: 'edit_claim', label: 'Edit Active Claim' },
         { key: 'delete_claim', label: 'Delete / Archive Claim' },
@@ -116,6 +126,9 @@ const PERMISSION_CATALOG = [
     ]},
     { group: 'AI Call Center', items: [
         { key: 'use_call_center', label: 'Use AI Call Center (PRO)' },
+        { key: 'view_call_log', label: 'View Call Log & History' },
+        { key: 'listen_recordings', label: 'Listen to Call Recordings' },
+        { key: 'import_call_data', label: 'Import Historical Call Data' },
         { key: 'configure_call_center', label: 'Configure AI Call Center' },
     ]},
     { group: 'Storm Tracking', items: [
