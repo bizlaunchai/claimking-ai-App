@@ -70,6 +70,8 @@ const Settings = () => {
         address: '', city: '', state: '', zip_code: '',
         business_phone: '', business_email: '', business_website: '',
         service_radius: 50, service_type: '', service_states: [],
+        notify_email: '', notify_phone: '',
+        notify_on_signature: true, notify_on_payment: true, notify_sms_enabled: false,
     });
     const setC = (key, value) => setCompany((prev) => ({ ...prev, [key]: value }));
     const toggleServiceState = (name) => setCompany((prev) => ({
@@ -78,6 +80,28 @@ const Settings = () => {
             ? prev.service_states.filter((s) => s !== name)
             : [...prev.service_states, name],
     }));
+
+    // Notification send history (owner alerts on signature / payment).
+    const [notifLog, setNotifLog] = useState([]);
+    const [notifLoading, setNotifLoading] = useState(false);
+    const loadNotifLog = async () => {
+        const t = token || (await createClient().auth.getSession()).data?.session?.access_token;
+        if (!t) return;
+        setNotifLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/notifications/log?limit=50`, {
+                headers: { Authorization: `Bearer ${t}` },
+            });
+            if (res.ok) {
+                const j = await res.json();
+                setNotifLog(Array.isArray(j.data) ? j.data : []);
+            }
+        } catch {
+            // Non-fatal — history stays empty.
+        } finally {
+            setNotifLoading(false);
+        }
+    };
 
     const [brandColors, setBrandColors] = useState(DEFAULT_BRAND_COLORS);
     const setBrandColor = (slot, value) => setBrandColors((prev) => ({ ...prev, [slot]: value }));
@@ -117,6 +141,19 @@ const Settings = () => {
             setUserId(id);
             setToken(accessToken);
 
+            // Load notification send history (best-effort, non-blocking).
+            (async () => {
+                try {
+                    const r = await fetch(`${API_URL}/notifications/log?limit=50`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    if (r.ok) {
+                        const j = await r.json();
+                        setNotifLog(Array.isArray(j.data) ? j.data : []);
+                    }
+                } catch { /* non-fatal */ }
+            })();
+
             try {
                 const res = await fetch(`${API_URL}/profile/${id}`, {
                     headers: { Authorization: `Bearer ${accessToken}` },
@@ -138,6 +175,14 @@ const Settings = () => {
                     service_radius: p.service_radius ?? 50,
                     service_type: p.service_type || '',
                     service_states: Array.isArray(p.service_states) ? p.service_states : [],
+                    // Default to the company email/phone until the owner sets a
+                    // dedicated notification address. Fall back to the account
+                    // login email when the company has no email on file.
+                    notify_email: p.notify_email || p.business_email || p.email || '',
+                    notify_phone: p.notify_phone || p.business_phone || '',
+                    notify_on_signature: p.notify_on_signature !== false,
+                    notify_on_payment: p.notify_on_payment !== false,
+                    notify_sms_enabled: p.notify_sms_enabled === true,
                 });
                 if (p.brand_colors) {
                     setBrandColors({ ...DEFAULT_BRAND_COLORS, ...p.brand_colors });
@@ -192,6 +237,11 @@ const Settings = () => {
                 service_radius: Number(company.service_radius) || 0,
                 service_type: company.service_type,
                 service_states: company.service_states,
+                notify_email: company.notify_email,
+                notify_phone: company.notify_phone,
+                notify_on_signature: company.notify_on_signature,
+                notify_on_payment: company.notify_on_payment,
+                notify_sms_enabled: company.notify_sms_enabled,
                 brand_colors,
             };
             if (logoKey) payload.business_logo = logoKey;
@@ -1308,128 +1358,113 @@ const Settings = () => {
                             <div className="category-body">
                                 <div className="settings-section">
                                     <h3 className="section-title">Notification Channels</h3>
+                                    <p className="form-help" style={{ marginTop: 0, marginBottom: 12 }}>
+                                        Get alerted the moment a client signs an estimate or pays a deposit.
+                                        Leave the email blank to fall back to your company email.
+                                    </p>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Email Notifications</label>
-                                            <input type="email" className="form-input" />
+                                            <input type="email" className="form-input" placeholder="owner@company.com"
+                                                value={company.notify_email}
+                                                onChange={(e) => setC('notify_email', e.target.value)} />
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label">SMS Notifications</label>
-                                            <input type="tel" className="form-input" />
+                                            <label className="form-label">SMS Notifications (phone)</label>
+                                            <input type="tel" className="form-input" placeholder="+1 555 123 4567"
+                                                value={company.notify_phone}
+                                                onChange={(e) => setC('notify_phone', e.target.value)} />
                                         </div>
                                     </div>
                                     <div className="toggle-group">
                                         <div className="toggle-info">
-                                            <div className="toggle-label">Push Notifications</div>
-                                            <div className="toggle-description">Browser and mobile app notifications</div>
+                                            <div className="toggle-label">Send text messages (SMS)</div>
+                                            <div className="toggle-description">
+                                                Turns on texts once our SMS number is carrier-approved — flip it on now
+                                                and texts start automatically. Email is unaffected.
+                                            </div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox"  />
-                                            <span className="toggle-slider"></span>
-                                        </label>
-                                    </div>
-                                    <div className="toggle-group">
-                                        <div className="toggle-info">
-                                            <div className="toggle-label">In-App Notifications</div>
-                                            <div className="toggle-description">Show notifications within the application</div>
-                                        </div>
-                                        <label className="toggle-switch">
-                                            <input type="checkbox"  />
+                                            <input type="checkbox"
+                                                checked={company.notify_sms_enabled}
+                                                onChange={(e) => setC('notify_sms_enabled', e.target.checked)} />
                                             <span className="toggle-slider"></span>
                                         </label>
                                     </div>
                                 </div>
                                 <div className="settings-section">
                                     <h3 className="section-title">Notification Types</h3>
-                                    <table className="settings-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Event</th>
-                                                <th>Email</th>
-                                                <th>SMS</th>
-                                                <th>Push</th>
-                                                <th>In-App</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>New Claim Created</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Claim Status Change</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Storm Alert</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Appointment Reminder</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Payment Received</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Document Signed</td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Team Activity</td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" /></td>
-                                                <td><input type="checkbox" defaultChecked /></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div className="settings-section">
-                                    <h3 className="section-title">Notification Schedule</h3>
-                                    <div className="form-grid">
-                                        <div className="form-group">
-                                            <label className="form-label">Email Digest Frequency</label>
-                                            <select className="form-select">
-                                                <option>Real-time</option>
-                                                <option defaultValue>Daily Summary</option>
-                                                <option>Weekly Summary</option>
-                                                <option>Never</option>
-                                            </select>
+                                    <div className="toggle-group">
+                                        <div className="toggle-info">
+                                            <div className="toggle-label">Estimate signed</div>
+                                            <div className="toggle-description">Alert me when a client signs an estimate</div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="form-label">Digest Send Time</label>
-                                            <input type="time" className="form-input" defaultValue="09:00" />
-                                        </div>
+                                        <label className="toggle-switch">
+                                            <input type="checkbox"
+                                                checked={company.notify_on_signature}
+                                                onChange={(e) => setC('notify_on_signature', e.target.checked)} />
+                                            <span className="toggle-slider"></span>
+                                        </label>
                                     </div>
                                     <div className="toggle-group">
                                         <div className="toggle-info">
-                                            <div className="toggle-label">Do Not Disturb</div>
-                                            <div className="toggle-description">Pause notifications during specific hours</div>
+                                            <div className="toggle-label">Payment received</div>
+                                            <div className="toggle-description">Alert me when a deposit / payment is paid</div>
                                         </div>
                                         <label className="toggle-switch">
-                                            <input type="checkbox" />
+                                            <input type="checkbox"
+                                                checked={company.notify_on_payment}
+                                                onChange={(e) => setC('notify_on_payment', e.target.checked)} />
                                             <span className="toggle-slider"></span>
                                         </label>
+                                    </div>
+                                </div>
+                                <div className="settings-section">
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <h3 className="section-title" style={{ margin: 0 }}>Notification History</h3>
+                                        <button type="button" className="header-btn" onClick={loadNotifLog} disabled={notifLoading}>
+                                            {notifLoading ? 'Refreshing…' : 'Refresh'}
+                                        </button>
+                                    </div>
+                                    <p className="form-help" style={{ marginTop: 4 }}>
+                                        Every alert we tried to send. A <strong>failed</strong> row means the
+                                        email/text didn't go out; <strong>skipped</strong> means it was off or unconfigured.
+                                    </p>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table className="settings-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>When</th>
+                                                    <th>Event</th>
+                                                    <th>Channel</th>
+                                                    <th>To</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {notifLog.length === 0 ? (
+                                                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9ca3af', padding: '18px 0' }}>
+                                                        {notifLoading ? 'Loading…' : 'No notifications sent yet.'}
+                                                    </td></tr>
+                                                ) : notifLog.map((n) => (
+                                                    <tr key={n.id}>
+                                                        <td style={{ whiteSpace: 'nowrap' }}>{new Date(n.created_at).toLocaleString()}</td>
+                                                        <td>{n.event === 'signature' ? '✍️ Signed' : '💳 Payment'}</td>
+                                                        <td>{n.channel === 'sms' ? 'Text' : 'Email'}</td>
+                                                        <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.recipient || '—'}</td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontWeight: 600, fontSize: 12, padding: '2px 8px', borderRadius: 10,
+                                                                color: n.status === 'sent' ? '#065f46' : n.status === 'failed' ? '#991b1b' : '#6b7280',
+                                                                background: n.status === 'sent' ? '#d1fae5' : n.status === 'failed' ? '#fee2e2' : '#f3f4f6',
+                                                            }} title={n.error || ''}>
+                                                                {n.status}{n.status === 'failed' && n.error ? ' ⓘ' : ''}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
