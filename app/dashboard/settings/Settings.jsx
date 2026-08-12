@@ -3,12 +3,50 @@ import React, { useState, useEffect } from 'react';
 import { Cloud, Hexagon, Home, Hammer, Target, BarChart3, CreditCard, Square, Wallet, Smartphone } from 'lucide-react';
 import "./settings.css"
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 import StripeConnectCard from "./StripeConnectCard.jsx";
+import EmailBrandPreview from "./EmailBrandPreview.jsx";
+import US_STATES from "@/lib/data/usStates.json";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
     { ssr: false }
 );
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// The 5-slot brand palette default — mirrors the backend DB column default
+// (sql/96) and the legacy hard-coded email colours, so the preview and every
+// sent email match even before a contractor customises anything.
+const DEFAULT_BRAND_COLORS = {
+    c1: '#1a1f3a', // primary — headings, wordmark, CTA text
+    c2: '#FDB813', // accent — CTA button background
+    c3: '#374151', // body text
+    c4: '#6b7280', // muted text — footer / fine print
+    c5: '#f5f5f5', // page background
+};
+
+const BRAND_SLOT_LABELS = [
+    { key: 'c1', label: 'Colour 1 · Primary', help: 'Headings & wordmark' },
+    { key: 'c2', label: 'Colour 2 · Accent', help: 'Buttons / call-to-action' },
+    { key: 'c3', label: 'Colour 3 · Body text', help: 'Paragraph text' },
+    { key: 'c4', label: 'Colour 4 · Muted', help: 'Footer & fine print' },
+    { key: 'c5', label: 'Colour 5 · Background', help: 'Email page background' },
+];
+
+async function fetchS3Image(key, token) {
+    try {
+        const res = await fetch(`${API_URL}/s3/file?key=${encodeURIComponent(key)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+    } catch {
+        return null;
+    }
+}
 
 const Settings = () => {
     const [expandedCategories, setExpandedCategories] = useState([]);
@@ -22,9 +60,32 @@ const Settings = () => {
         }
     }, []);
     const [showSuccessToast, setShowSuccessToast] = useState(false);
-    const [serviceRadius, setServiceRadius] = useState(50);
-    const [primaryColor, setPrimaryColor] = useState('#FDB813');
-    const [secondaryColor, setSecondaryColor] = useState('#1a1f3a');
+
+    // ── Company & Profile — real, persisted state (was a static mock) ──────
+    const [userId, setUserId] = useState(null);
+    const [token, setToken] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [company, setCompany] = useState({
+        business_name: '', business_dba: '', business_license: '', business_tax_id: '',
+        address: '', city: '', state: '', zip_code: '',
+        business_phone: '', business_email: '', business_website: '',
+        service_radius: 50, service_type: '', service_states: [],
+    });
+    const setC = (key, value) => setCompany((prev) => ({ ...prev, [key]: value }));
+    const toggleServiceState = (name) => setCompany((prev) => ({
+        ...prev,
+        service_states: prev.service_states.includes(name)
+            ? prev.service_states.filter((s) => s !== name)
+            : [...prev.service_states, name],
+    }));
+
+    const [brandColors, setBrandColors] = useState(DEFAULT_BRAND_COLORS);
+    const setBrandColor = (slot, value) => setBrandColors((prev) => ({ ...prev, [slot]: value }));
+    const [previewTemplate, setPreviewTemplate] = useState('estimate');
+
+    // Logo — S3 key saved in DB + a blob URL for rendering (mirrors /account).
+    const [logoKey, setLogoKey] = useState(null);
+    const [logoBlobUrl, setLogoBlobUrl] = useState(null);
     const [files, setFiles] = useState([]);
     const [integrations, setIntegrations] = useState({
         salesforce: false,
@@ -43,9 +104,118 @@ const Settings = () => {
         );
     };
 
-    const handleSaveAll = () => {
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3000);
+    // ── Load the contractor's real company profile on mount ────────────────
+    useEffect(() => {
+        (async () => {
+            const supabase = createClient();
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData?.session?.access_token;
+            const { data, error } = await supabase.auth.getClaims();
+            if (error || !data?.claims || !accessToken) return;
+
+            const id = data.claims.sub;
+            setUserId(id);
+            setToken(accessToken);
+
+            try {
+                const res = await fetch(`${API_URL}/profile/${id}`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                if (!res.ok) return;
+                const p = await res.json();
+                setCompany({
+                    business_name: p.business_name || '',
+                    business_dba: p.business_dba || '',
+                    business_license: p.business_license || '',
+                    business_tax_id: p.business_tax_id || '',
+                    address: p.address || '',
+                    city: p.city || '',
+                    state: p.state || '',
+                    zip_code: p.zip_code || '',
+                    business_phone: p.business_phone || '',
+                    business_email: p.business_email || '',
+                    business_website: p.business_website || '',
+                    service_radius: p.service_radius ?? 50,
+                    service_type: p.service_type || '',
+                    service_states: Array.isArray(p.service_states) ? p.service_states : [],
+                });
+                if (p.brand_colors) {
+                    setBrandColors({ ...DEFAULT_BRAND_COLORS, ...p.brand_colors });
+                }
+                if (p.business_logo) {
+                    setLogoKey(p.business_logo);
+                    const url = await fetchS3Image(p.business_logo, accessToken);
+                    if (url) setLogoBlobUrl(url);
+                }
+            } catch {
+                // Non-fatal — the panel stays on defaults; save still works.
+            }
+        })();
+    }, []);
+
+    // When a new logo is uploaded, capture its S3 key + refresh the preview.
+    useEffect(() => {
+        if (files.length === 0) return;
+        const newKey = files[files.length - 1]?.serverResponse?.payload?.key;
+        if (!newKey || newKey === logoKey) return;
+        setLogoKey(newKey);
+        if (token) fetchS3Image(newKey, token).then((url) => { if (url) setLogoBlobUrl(url); });
+    }, [files]);
+
+    const handleSaveAll = async () => {
+        if (!userId || !token) {
+            toast.error('Not signed in — please refresh and try again.');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            // Only send valid #RRGGBB slots; the backend merges over stored
+            // values so an omitted/invalid slot keeps whatever was saved.
+            const validHex = /^#[0-9a-fA-F]{6}$/;
+            const brand_colors = {};
+            for (const { key } of BRAND_SLOT_LABELS) {
+                if (validHex.test(brandColors[key])) brand_colors[key] = brandColors[key];
+            }
+
+            const payload = {
+                business_name: company.business_name,
+                business_dba: company.business_dba,
+                business_license: company.business_license,
+                business_tax_id: company.business_tax_id,
+                address: company.address,
+                city: company.city,
+                state: company.state,
+                zip_code: company.zip_code,
+                business_phone: company.business_phone,
+                business_email: company.business_email,
+                business_website: company.business_website,
+                service_radius: Number(company.service_radius) || 0,
+                service_type: company.service_type,
+                service_states: company.service_states,
+                brand_colors,
+            };
+            if (logoKey) payload.business_logo = logoKey;
+
+            const res = await fetch(`${API_URL}/profile/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Failed to save settings');
+            }
+            setShowSuccessToast(true);
+            setTimeout(() => setShowSuccessToast(false), 3000);
+            toast.success('Company profile & branding saved');
+        } catch (e) {
+            toast.error(e.message || 'Could not save settings');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleIntegrationClick = (integrationId) => {
@@ -109,13 +279,14 @@ const Settings = () => {
                             <button
                                 className="header-btn primary w-full sm:w-auto"
                                 onClick={handleSaveAll}
+                                disabled={isSaving}
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
                                     <polyline points="17 21 17 13 7 13 7 21"/>
                                     <polyline points="7 3 7 8 15 8"/>
                                 </svg>
-                                Save All Settings
+                                {isSaving ? 'Saving…' : 'Save All Settings'}
                             </button>
                         </div>
 
@@ -155,57 +326,67 @@ const Settings = () => {
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Company Name</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.business_name}
+                                                onChange={(e) => setC('business_name', e.target.value)} placeholder="ClaimKing Solutions" />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">DBA Name</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.business_dba}
+                                                onChange={(e) => setC('business_dba', e.target.value)} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">License Number</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.business_license}
+                                                onChange={(e) => setC('business_license', e.target.value)} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Tax ID/EIN</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.business_tax_id}
+                                                onChange={(e) => setC('business_tax_id', e.target.value)} />
                                         </div>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Business Address</label>
-                                        <input type="text" className="form-input" />
+                                        <input type="text" className="form-input" value={company.address}
+                                            onChange={(e) => setC('address', e.target.value)} placeholder="123 AI Way" />
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">City</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.city}
+                                                onChange={(e) => setC('city', e.target.value)} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">State</label>
-                                            <select className="form-select">
-                                                <option value=""></option>
-                                                <option>Arizona</option>
-                                                <option>California</option>
-                                                <option>Texas</option>
-                                                <option>Florida</option>
+                                            <select className="form-select" value={company.state}
+                                                onChange={(e) => setC('state', e.target.value)}>
+                                                <option value="">Select State</option>
+                                                {US_STATES.map((s) => (
+                                                    <option key={s.code} value={s.name}>{s.name}</option>
+                                                ))}
                                             </select>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">ZIP Code</label>
-                                            <input type="text" className="form-input" />
+                                            <input type="text" className="form-input" value={company.zip_code}
+                                                onChange={(e) => setC('zip_code', e.target.value)} />
                                         </div>
                                     </div>
                                     <div className="form-grid">
                                         <div className="form-group">
                                             <label className="form-label">Phone</label>
-                                            <input type="tel" className="form-input" />
+                                            <input type="tel" className="form-input" value={company.business_phone}
+                                                onChange={(e) => setC('business_phone', e.target.value)} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Email</label>
-                                            <input type="email" className="form-input" />
+                                            <input type="email" className="form-input" value={company.business_email}
+                                                onChange={(e) => setC('business_email', e.target.value)} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Website</label>
-                                            <input type="url" className="form-input" />
+                                            <input type="url" className="form-input" value={company.business_website}
+                                                onChange={(e) => setC('business_website', e.target.value)} placeholder="https://" />
                                         </div>
                                     </div>
                                 </div>
@@ -219,21 +400,22 @@ const Settings = () => {
                                             <div className="range-group">
                                                 <div className="range-header">
                                                     <span>Service Radius</span>
-                                                    <span className="range-value">{serviceRadius} miles</span>
+                                                    <span className="range-value">{company.service_radius} miles</span>
                                                 </div>
                                                 <input
                                                     type="range"
                                                     className="range-slider"
                                                     min="10"
                                                     max="200"
-                                                    value={serviceRadius}
-                                                    onChange={(e) => setServiceRadius(e.target.value)}
+                                                    value={company.service_radius}
+                                                    onChange={(e) => setC('service_radius', Number(e.target.value))}
                                                 />
                                             </div>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Service Type</label>
-                                            <select className="form-select" defaultValue="">
+                                            <select className="form-select" value={company.service_type}
+                                                onChange={(e) => setC('service_type', e.target.value)}>
                                                 <option value="" disabled>Select Service Type</option>
                                                 <option value="both">Residential & Commercial</option>
                                                 <option value="residential">Residential Only</option>
@@ -244,30 +426,17 @@ const Settings = () => {
                                     <div className="form-group">
                                         <label className="form-label">Service States</label>
                                         <div className="checkbox-grid">
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-az" />
-                                                <label htmlFor="state-az" className="checkbox-label">Arizona</label>
-                                            </div>
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-ca" />
-                                                <label htmlFor="state-ca" className="checkbox-label">California</label>
-                                            </div>
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-nv" />
-                                                <label htmlFor="state-nv" className="checkbox-label">Nevada</label>
-                                            </div>
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-tx" />
-                                                <label htmlFor="state-tx" className="checkbox-label">Texas</label>
-                                            </div>
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-nm" />
-                                                <label htmlFor="state-nm" className="checkbox-label">New Mexico</label>
-                                            </div>
-                                            <div className="checkbox-item">
-                                                <input type="checkbox" id="state-co" />
-                                                <label htmlFor="state-co" className="checkbox-label">Colorado</label>
-                                            </div>
+                                            {['Arizona', 'California', 'Nevada', 'Texas', 'New Mexico', 'Colorado'].map((st) => {
+                                                const id = `state-${st.toLowerCase().replace(/\s+/g, '-')}`;
+                                                return (
+                                                    <div className="checkbox-item" key={st}>
+                                                        <input type="checkbox" id={id}
+                                                            checked={company.service_states.includes(st)}
+                                                            onChange={() => toggleServiceState(st)} />
+                                                        <label htmlFor={id} className="checkbox-label">{st}</label>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
@@ -275,53 +444,74 @@ const Settings = () => {
                                 {/* Branding Settings */}
                                 <div className="settings-section">
                                     <h3 className="section-title">Branding & Appearance</h3>
-                                    <div className="form-grid">
-                                        <div className="form-group">
-                                            <label className="form-label">Primary Brand Color</label>
-                                            <div className="color-picker-group">
-                                                <input 
-                                                    type="color" 
-                                                    className="color-input" 
-                                                    value={primaryColor}
-                                                    onChange={(e) => setPrimaryColor(e.target.value)}
-                                                />
-                                                <span className="color-value">{primaryColor}</span>
+                                    {/* Brand palette — 5 ordered slots every outbound email reads from */}
+                                    <p className="form-help" style={{ marginTop: 0, marginBottom: 12 }}>
+                                        Set your five brand colours once — every estimate, deposit request,
+                                        invoice, signing link and reminder email uses them automatically.
+                                        Sensible defaults are pre-filled, so nothing breaks if you leave them.
+                                    </p>
+                                    <div className="brand-palette-grid">
+                                        {BRAND_SLOT_LABELS.map(({ key, label, help }) => (
+                                            <div className="form-group" key={key}>
+                                                <label className="form-label">{label}</label>
+                                                <div className="color-picker-group">
+                                                    <input
+                                                        type="color"
+                                                        className="color-input"
+                                                        value={/^#[0-9a-fA-F]{6}$/.test(brandColors[key]) ? brandColors[key] : '#000000'}
+                                                        onChange={(e) => setBrandColor(key, e.target.value)}
+                                                        aria-label={`${label} colour picker`}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        className="form-input color-hex-input"
+                                                        value={brandColors[key]}
+                                                        onChange={(e) => setBrandColor(key, e.target.value.trim())}
+                                                        placeholder="#RRGGBB"
+                                                        maxLength={7}
+                                                        spellCheck={false}
+                                                    />
+                                                </div>
+                                                <p className="form-help">{help}</p>
                                             </div>
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="form-label">Secondary Color</label>
-                                            <div className="color-picker-group">
-                                                <input 
-                                                    type="color" 
-                                                    className="color-input" 
-                                                    value={secondaryColor}
-                                                    onChange={(e) => setSecondaryColor(e.target.value)}
-                                                />
-                                                <span className="color-value">{secondaryColor}</span>
-                                            </div>
-                                        </div>
+                                        ))}
                                     </div>
-                                   {/* <div className="form-group">
-                                        <label className="form-label">Company Logo</label>
-                                        <button className="btn btn-outline">Upload Logo</button>
-                                        <p className="form-help">Recommended: 500x500px PNG or SVG</p>
-                                    </div>*/}
 
+                                    <label className="form-label" style={{ marginTop: 8 }}>Company Logo</label>
+                                    <p className="form-help" style={{ marginTop: 0 }}>Shown in every email header. Recommended: 500×500px PNG or SVG.</p>
+                                    {logoBlobUrl && (
+                                        <div className="brand-logo-current">
+                                            <img src={logoBlobUrl} alt="Current company logo" />
+                                            <span>Current logo</span>
+                                        </div>
+                                    )}
                                     <FileUploader label='Click to upload Company Logo or drag and drop' files={files} setFiles={setFiles} allowedExtensions={['.png', '.svg']} maxSizeMB={1}
                                                   recommendedSize={{width: 500, height: 500}}
                                                   enforceRecommendedSize={true}
                                     />
 
-                                    <div className="toggle-group">
-                                        <div className="toggle-info">
-                                            <div className="toggle-label">Use Custom Branding</div>
-                                            <div className="toggle-description">Apply your brand colors throughout the application</div>
-                                        </div>
-                                        <label className="toggle-switch">
-                                            <input type="checkbox" defaultChecked />
-                                            <span className="toggle-slider"></span>
-                                        </label>
+                                    {/* Live preview — the real email, in the contractor's colours */}
+                                    <div className="brand-preview-head">
+                                        <label className="form-label" style={{ margin: 0 }}>Live email preview</label>
+                                        <select className="form-select brand-preview-select" value={previewTemplate}
+                                            onChange={(e) => setPreviewTemplate(e.target.value)}>
+                                            <option value="estimate">Estimate ready</option>
+                                            <option value="sign">Signing link</option>
+                                            <option value="deposit">Deposit request</option>
+                                            <option value="invoice">Invoice (mock)</option>
+                                            <option value="invite">Portal invite</option>
+                                            <option value="mockup">3D mockup ready</option>
+                                            <option value="policy">Document analysis</option>
+                                            <option value="reply">Portal message reply</option>
+                                            <option value="reminder">Reminder</option>
+                                        </select>
                                     </div>
+                                    <EmailBrandPreview
+                                        brand={brandColors}
+                                        logoUrl={logoBlobUrl}
+                                        companyName={company.business_name || 'Your Company'}
+                                        template={previewTemplate}
+                                    />
                                 </div>
                             </div>
                         </div>

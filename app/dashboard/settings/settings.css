@@ -492,6 +492,53 @@
     color: #6b7280;
 }
 
+/* Brand palette — 5-slot grid + hex entry */
+.brand-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.color-hex-input {
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    max-width: 120px;
+}
+
+.brand-logo-current {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0 0.75rem;
+    font-size: 0.8125rem;
+    color: #6b7280;
+}
+
+.brand-logo-current img {
+    height: 44px;
+    width: auto;
+    max-width: 160px;
+    object-fit: contain;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 4px;
+    background: #fff;
+}
+
+.brand-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1.25rem 0 0;
+    flex-wrap: wrap;
+}
+
+.brand-preview-select {
+    max-width: 200px;
+}
+
 /* Range Slider */
 .range-group {
     margin-bottom: 1rem;
