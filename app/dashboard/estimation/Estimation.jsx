@@ -1104,6 +1104,7 @@ const Estimation = () => {
                         source_field: it.source_field ?? undefined,
                         code_ref: it.code_ref ?? undefined,
                         notes: it.notes ?? undefined,
+                        note_visibility: it.note_visibility === "client" ? "client" : "internal",
                     })),
                 }));
                 setSections(restoredSections);
@@ -1339,6 +1340,7 @@ const Estimation = () => {
                     source_field: it.source_field ?? undefined,
                     code_ref: it.code_ref ?? undefined,
                     notes: it.notes ?? undefined,
+                    note_visibility: it.note_visibility === "client" ? "client" : "internal",
                     sort_order: j,
                 })),
             })),
@@ -2107,6 +2109,7 @@ const Estimation = () => {
                     source_field: it.source_field ?? undefined,
                     code_ref: it.code_ref ?? undefined,
                     notes: it.notes ?? undefined,
+                    note_visibility: it.note_visibility === "client" ? "client" : "internal",
                 })),
             }));
             setSections(restored);
@@ -2474,6 +2477,21 @@ const Estimation = () => {
     const updateItemNote = (secId, idx, value) => {
         setSections((prev) => prev.map((s) => s.id === secId
             ? { ...s, items: s.items.map((it, i) => (i === idx ? { ...it, notes: value } : it)) }
+            : s));
+        triggerSave();
+    };
+
+    // sql/97 — flip a note between contractor-internal and client-visible.
+    // Default is 'internal' so nothing leaks; the contractor marks the
+    // client-safe ones (e.g. building-code citations) manually.
+    const toggleItemNoteVisibility = (secId, idx) => {
+        setSections((prev) => prev.map((s) => s.id === secId
+            ? {
+                ...s,
+                items: s.items.map((it, i) => (i === idx
+                    ? { ...it, note_visibility: it.note_visibility === "client" ? "internal" : "client" }
+                    : it)),
+            }
             : s));
         triggerSave();
     };
@@ -4640,21 +4658,54 @@ const Estimation = () => {
                                                                     )}
                                                                 </span>
                                                             )}
-                                                            {/* §5.2 saved note — contractor-internal, persists with the estimate (not on the homeowner PDF).
-                                                                Textarea that auto-grows with its content so long notes stay fully visible + easy to edit. */}
-                                                            <textarea
-                                                                className="item-note-input"
-                                                                value={it.notes ?? ""}
-                                                                placeholder="📝 Add a note (internal — not on PDF)"
-                                                                rows={1}
-                                                                draggable={false}
-                                                                onDragStart={(e) => e.stopPropagation()}
-                                                                ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }}
-                                                                onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; updateItemNote(s.id, idx, e.target.value); }}
-                                                                style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "4px 8px", fontSize: 11, lineHeight: 1.5, color: "#6b7280", border: "1px dashed #d1d5db", borderRadius: 5, background: "#fafbfc", fontFamily: "inherit", resize: "vertical", minHeight: 28, overflow: "hidden" }}
-                                                                onFocus={(e) => { e.target.style.border = "1px solid #FDB813"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
-                                                                onBlur={(e) => { e.target.style.border = "1px dashed #d1d5db"; e.target.style.background = "#fafbfc"; e.target.style.color = "#6b7280"; }}
-                                                            />
+                                                            {/* §5.2 saved note — dual-audience (sql/97). Default INTERNAL (dashboard only);
+                                                                the contractor flips a note to CLIENT to also show it on the portal / PDF / sign page.
+                                                                Textarea auto-grows with its content so long notes stay fully visible + easy to edit. */}
+                                                            {(() => {
+                                                                const isClient = it.note_visibility === "client";
+                                                                const hasNote = ((it.notes ?? "").trim().length > 0);
+                                                                // Colour-code the whole note box so a glance down the list shows
+                                                                // which notes the client sees: green = client, grey = internal.
+                                                                const boxBorder = isClient ? "1px solid #86efac" : "1px dashed #d1d5db";
+                                                                const boxBg = isClient ? "#f0fdf4" : "#fafbfc";
+                                                                const boxColor = isClient ? "#166534" : "#6b7280";
+                                                                return (
+                                                                    <>
+                                                                        <textarea
+                                                                            className="item-note-input"
+                                                                            value={it.notes ?? ""}
+                                                                            placeholder={isClient ? "📝 Add a note (shown to client)" : "📝 Add a note (internal — not on PDF/portal)"}
+                                                                            rows={1}
+                                                                            draggable={false}
+                                                                            onDragStart={(e) => e.stopPropagation()}
+                                                                            ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }}
+                                                                            onChange={(e) => { e.target.style.height = "auto"; e.target.style.height = `${e.target.scrollHeight}px`; updateItemNote(s.id, idx, e.target.value); }}
+                                                                            style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "4px 8px", fontSize: 11, lineHeight: 1.5, color: boxColor, border: boxBorder, borderRadius: 5, background: boxBg, fontFamily: "inherit", resize: "vertical", minHeight: 28, overflow: "hidden" }}
+                                                                            onFocus={(e) => { e.target.style.border = "1px solid #FDB813"; e.target.style.background = "#fff"; e.target.style.color = "#374151"; }}
+                                                                            onBlur={(e) => { e.target.style.border = boxBorder; e.target.style.background = boxBg; e.target.style.color = boxColor; }}
+                                                                        />
+                                                                        {hasNote && (
+                                                                            <div
+                                                                                onClick={() => toggleItemNoteVisibility(s.id, idx)}
+                                                                                role="switch"
+                                                                                aria-checked={isClient}
+                                                                                tabIndex={0}
+                                                                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleItemNoteVisibility(s.id, idx); } }}
+                                                                                title={isClient ? "This note is shown to the client (portal, PDF & sign page). Click to keep the note internal. The line item itself is always visible." : "This note is hidden from the client — the line item, price & code still show. Click to show the note to the client too."}
+                                                                                style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 5, cursor: "pointer", userSelect: "none" }}
+                                                                            >
+                                                                                {/* on/off switch */}
+                                                                                <span style={{ position: "relative", flex: "none", width: 30, height: 17, borderRadius: 999, background: isClient ? "#22c55e" : "#cbd5e1", transition: "background .15s" }}>
+                                                                                    <span style={{ position: "absolute", top: 2, left: isClient ? 15 : 2, width: 13, height: 13, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s" }} />
+                                                                                </span>
+                                                                                <span style={{ fontSize: 10.5, fontWeight: 600, color: isClient ? "#15803d" : "#6b7280" }}>
+                                                                                    {isClient ? "👁 Note shown to client" : "🔒 Note hidden from client"}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </td>
                                                         <td>{isItemEditing ? (
                                                             <input type="number" min="0" step="0.01" className="qty-input" value={itemDraft.qty}

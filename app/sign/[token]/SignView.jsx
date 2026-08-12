@@ -350,8 +350,13 @@ const SignView = () => {
                                     {(section.items ?? []).map(it => (
                                         <tr key={it.id}>
                                             {/* CK-14: the AI `reason` is internal working context and is
-                                                never sent to this public page — nothing to render here. */}
-                                            <td data-label="Description"><span className="sv-item-name">{it.name}</span></td>
+                                                never sent to this public page — nothing to render here.
+                                                sql/97: `notes` reach this page ONLY when the contractor marked
+                                                them client-visible; the server strips internal ones. */}
+                                            <td data-label="Description">
+                                                <span className="sv-item-name">{it.name}</span>
+                                                {it.notes && <span className="sv-item-note">{it.notes}</span>}
+                                            </td>
                                             <td data-label="Qty" style={{ textAlign: 'right' }}>{Number(it.qty).toLocaleString()}</td>
                                             <td data-label="Unit">{it.unit}</td>
                                             <td data-label="Price" style={{ textAlign: 'right' }}>${Number(it.price).toFixed(2)}</td>

@@ -295,6 +295,13 @@ const PortalEstimates = ({ clientId, estimateId }) => {
                                                                 {/* CK-14: the AI `reason` is internal working context
                                                                     (same category as job cost / margin) and is no longer
                                                                     sent to the client portal, so there is nothing to show. */}
+                                                                {/* sql/97: `notes` reach the portal ONLY when the contractor
+                                                                    marked them client-visible — the server strips internal ones. */}
+                                                                {it.notes && (
+                                                                    <div className="text-[11px] text-gray-600 mt-1 whitespace-pre-wrap">
+                                                                        {it.notes}
+                                                                    </div>
+                                                                )}
                                                                 {it.code_ref && (
                                                                     <div className="text-[11px] text-blue-800 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 mt-1 inline-block">
                                                                         {it.code_ref}
