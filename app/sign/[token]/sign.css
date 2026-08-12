@@ -106,6 +106,17 @@
 /* Item name — bold navy so the line item reads as the heading of its cell. */
 .sv-item-name { font-weight: 700; color: #1a1f3a; font-size: 13.5px; }
 
+/* sql/97: a client-visible line-item note (e.g. a building-code citation).
+   Only notes the contractor marked client-visible ever reach this page. */
+.sv-item-note {
+    display: block;
+    margin-top: 4px;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
 /* Item description/reason — bumped up + darkened, and set in a soft tinted box
    with a gold accent so the justification is clearly distinct from the title. */
 .sv-item-reason {
