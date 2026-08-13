@@ -39,6 +39,21 @@ export default function SelectPlanPage() {
                 }
                 setUserEmail(user.email ?? null);
 
+                // Invited team members join an existing company — they must NOT
+                // be forced to buy a plan. If this user has a pending invite,
+                // route them to accept it (which sets their company_id) instead
+                // of showing the plan picker.
+                try {
+                    const { data: pend } = await axiosInstance.get(
+                        '/accept-invite/mine/pending',
+                        { suppressErrorToast: true },
+                    );
+                    if (pend?.invitation?.token) {
+                        router.replace(`/accept-invite/${pend.invitation.token}`);
+                        return;
+                    }
+                } catch { /* no pending invite — fall through to plans */ }
+
                 const { data } = await axiosInstance.get('/plans');
                 const active = (data?.plans ?? data ?? []).filter(
                     (p) => p.status === 'active',

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import { Flame, Clock, DollarSign, AlertTriangle } from 'lucide-react';
 import "./claims.css"
 import MapView from "@/app/dashboard/claims/MapView.jsx";
@@ -15,7 +16,11 @@ import ActionItems from "@/app/dashboard/claims/Components/ActionItems.js";
 const ClaimsManagement = () => {
     const router = useRouter();
     const goToDetail = (claimId) => router.push(`/dashboard/claims/${claimId}`);
+    const { has } = usePermissions();
     // State declarations
+    const [teamMembers, setTeamMembers] = useState([]);   // for the employee filter + reassign (view-all users)
+    const [employeeFilter, setEmployeeFilter] = useState('all');
+    const [assigningId, setAssigningId] = useState(null);  // claim id currently being reassigned
     const [allClaims, setAllClaims] = useState([]);
     const [filteredClaims, setFilteredClaims] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -123,7 +128,7 @@ const ClaimsManagement = () => {
     const [boardScrollWidth, setBoardScrollWidth] = useState(0);
     // Mirrors the active filter so background refetches (realtime) can re-apply
     // it without resetting the user's view.
-    const filterRef = useRef({ stage: 0, tab: 'all', search: '' });
+    const filterRef = useRef({ stage: 0, tab: 'all', search: '', employee: 'all' });
 
     // Map a backend client_portal row -> the shape this page renders.
     const mapClaim = (c) => {
@@ -197,8 +202,15 @@ const ClaimsManagement = () => {
     // Pure filter — given rows + the active filter, return the visible subset.
     const computeFiltered = (rows, stage, tab, search) => {
         const term = (search || '').trim().toLowerCase();
+        // Employee filter (Task 1.3) — read from the ref so the 4 existing
+        // callers keep their signature. 'all' = no filter, 'unassigned' = null.
+        const employee = filterRef.current?.employee || 'all';
         return rows.filter(claim => {
             if (stage > 0 && claim.stage !== stage) return false;
+            if (employee !== 'all') {
+                if (employee === 'unassigned') { if (claim.assignedTo) return false; }
+                else if (claim.assignedTo !== employee) return false;
+            }
             if (term) {
                 const haystack = `${claim.client} ${claim.displayId} ${claim.claimNumber} ${claim.address} ${claim.insurer}`.toLowerCase();
                 if (!haystack.includes(term)) return false;
@@ -273,6 +285,49 @@ const ClaimsManagement = () => {
         })();
     }, []);
 
+    // Team members — only view-all users get the employee filter + reassign UI.
+    // Fetch is best-effort (needs view_team); on failure the dropdown just shows
+    // All / Unassigned. Names are normalised across the /team/members shape.
+    useEffect(() => {
+        if (!has('view_all_claims')) return;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
+                const rows = res.data?.data || res.data || [];
+                setTeamMembers(rows.map(m => ({
+                    id: m.id || m.user_id,
+                    name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email || 'Member',
+                })).filter(m => m.id));
+            } catch { /* dropdown degrades to All / Unassigned */ }
+        })();
+    }, [has]);
+
+    // Apply the employee filter (client-side; view-all users already receive all
+    // rows). Persisted in filterRef so background refetches keep it.
+    const applyEmployeeFilter = (value) => {
+        setEmployeeFilter(value);
+        filterRef.current = { ...filterRef.current, employee: value };
+        setFilteredClaims(computeFiltered(allClaims, filterRef.current.stage, filterRef.current.tab, filterRef.current.search));
+        setCurrentPage(1);
+    };
+
+    // Reassign a claim to a team member (or '' = unassign). Hits the new
+    // PATCH /client-portal/:id/assign endpoint, then re-syncs.
+    const reassignClaim = async (claimId, userId) => {
+        setAssigningId(claimId);
+        try {
+            await axiosInstance.patch(`/client-portal/${claimId}/assign`, { user_id: userId || null });
+            const who = userId ? (teamMembers.find(m => m.id === userId)?.name || 'team member') : 'Unassigned';
+            toast.success(userId ? `Assigned to ${who}.` : 'Claim unassigned.');
+            setSelectedClaim(prev => prev && prev.id === claimId ? { ...prev, assignedTo: userId || null } : prev);
+            fetchClaims({ silent: true });
+        } catch {
+            toast.error('Could not update assignment.');
+        } finally {
+            setAssigningId(null);
+        }
+    };
+
     // Track viewport on the client only
     useEffect(() => {
         const update = () => setIsMobile(window.innerWidth <= 768);
@@ -324,7 +379,7 @@ const ClaimsManagement = () => {
 
     // Filter claims based on current tab, stage and search term
     const filterClaims = (stage = currentStage, tab = currentTab, search = searchQuery) => {
-        filterRef.current = { stage, tab, search };
+        filterRef.current = { ...filterRef.current, stage, tab, search };
         setFilteredClaims(computeFiltered(allClaims, stage, tab, search));
         setCurrentPage(1);
         setVisibleGridItems(10);
@@ -1130,6 +1185,23 @@ const ClaimsManagement = () => {
 
             {/* View Controls */}
             <div className="view-controls">
+                {has('view_all_claims') && (
+                    <div className="employee-filter">
+                        <label htmlFor="claimEmployeeFilter" style={{ fontSize: '0.75rem', color: '#6b7280', marginRight: 6 }}>Employee</label>
+                        <select
+                            id="claimEmployeeFilter"
+                            className="stage-selector"
+                            value={employeeFilter}
+                            onChange={(e) => applyEmployeeFilter(e.target.value)}
+                        >
+                            <option value="all">All employees</option>
+                            <option value="unassigned">Unassigned</option>
+                            {teamMembers.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
                 <div className="view-toggle-container">
                     <button
                         className={`view-toggle-btn ${currentView === 'grid' ? 'active' : ''}`}
@@ -1411,6 +1483,24 @@ const ClaimsManagement = () => {
                                         )}
                                     </div>
                                 </div>
+                                {has('assign_claims') && (
+                                    <div className="detail-group">
+                                        <label>Assigned To</label>
+                                        <div className="detail-value">
+                                            <select
+                                                className="stage-selector"
+                                                value={selectedClaim.assignedTo || ''}
+                                                disabled={assigningId === selectedClaim.id}
+                                                onChange={(e) => reassignClaim(selectedClaim.id, e.target.value)}
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {teamMembers.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
