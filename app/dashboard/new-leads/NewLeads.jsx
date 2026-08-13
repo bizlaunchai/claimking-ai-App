@@ -1,178 +1,293 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { Flame, Sun, Snowflake, Check } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+    Flame, Sun, Snowflake, Phone, MessageSquare, CalendarPlus, FileText,
+    ArrowRightCircle, MoreHorizontal, X, MapPin, LayoutGrid, List as ListIcon,
+    RefreshCw, CloudLightning, Clock, UserPlus, Ban, ThumbsDown, Eye,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import axiosInstance from '@/lib/axiosInstance';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import 'leaflet/dist/leaflet.css';
 import './new-leads.css';
 
-// ─── Lead source breakdown (this month) ──────────────────────────────
-const SOURCES = [
-    { key: 'google-ad', label: 'Google Ads', icon: 'Ad', count: 58, color: '#4285F4', width: 100 },
-    { key: 'organic', label: 'Organic Search', icon: 'SEO', count: 42, color: '#16a34a', width: 72 },
-    { key: 'gmb', label: 'Google My Business', icon: 'GMB', count: 23, color: '#FDB813', width: 40 },
-    { key: 'facebook-ad', label: 'Facebook Ads', icon: 'fb', count: 14, color: '#1877F2', width: 24 },
-    { key: 'referral', label: 'Referrals', icon: '★', count: 7, color: '#8b5cf6', width: 12 },
-    { key: 'direct', label: 'Direct', icon: '→', count: 3, color: '#6b7280', width: 5 },
+// ─── Status model (mirror of the backend transition service) ─────────────
+// Order = the New Leads pipeline. `hot` is a virtual tab (new + contacted).
+const STATUS_META = {
+    new: { label: 'New', cls: 'new' },
+    contacted: { label: 'Contacted', cls: 'contacted' },
+    no_reply: { label: 'No Reply', cls: 'no-reply' },
+    estimate_scheduled: { label: 'Est. Scheduled', cls: 'est-scheduled' },
+    estimate_sent: { label: 'Est. Sent', cls: 'est-sent' },
+    follow_up: { label: 'Follow Up', cls: 'follow-up' },
+    claim_started: { label: 'Claim Started', cls: 'claim-started' },
+    job_approved: { label: 'Job Approved', cls: 'job-approved' },
+    declined: { label: 'Declined', cls: 'declined' },
+    do_not_contact: { label: 'Do Not Contact', cls: 'dnc' },
+};
+const PIPELINE = Object.keys(STATUS_META);
+
+// Tabs shown above the board. Hot first (the default working queue).
+const TABS = [
+    { key: 'hot', label: 'Hot' },
+    ...PIPELINE.map((k) => ({ key: k, label: STATUS_META[k].label })),
 ];
 
-// ─── Lead rows (seed data — replace with backend later) ──────────────
-const LEADS = [
-    {
-        id: 1, channel: 'phone', score: 'hot', status: 'new', received: '12 min ago',
-        name: 'Henderson Property', contact: 'Mike Henderson', phone: '(330) 555-2147',
-        source: 'google-ad', sourceLabel: 'Google Ads',
-        channelLabel: 'Phone Call', channelMeta: 'Campaign: Storm Damage 2025',
-        trackingNumber: '(555) 123-0001', trackingMeta: 'Google Ads tracking #',
-        callDuration: '3:42',
-        summary: 'AI: Hail damage last weekend, State Farm, wants inspection ASAP.',
-    },
-    {
-        id: 2, channel: 'form', score: 'warm', status: 'new', received: '45 min ago',
-        name: 'Sarah Williams', contact: 'sarah.w@email.com', phone: '(330) 555-8821',
-        source: 'organic', sourceLabel: 'Organic Search',
-        channelLabel: 'Form Submission', formTag: 'free-inspection',
-        formMessage: '"Just had hail storm, weekends only."',
-    },
-    {
-        id: 3, channel: 'phone', score: 'hot', status: 'contacted', received: '2h ago',
-        name: 'Robert Chen', contact: 'Property: Akron', phone: '(330) 555-9904',
-        source: 'gmb', sourceLabel: 'Google My Business',
-        channelLabel: 'Phone Call', channelMeta: 'Via GMB profile',
-        trackingNumber: '(555) 123-0003', trackingMeta: 'GMB tracking #',
-        callDuration: '5:18',
-        summary: 'AI: Saw Google reviews. Wind damage. Allstate.',
-        claimed: { by: 'Sarah K.', when: '1h 47min ago', response: '13m' },
-    },
-    {
-        id: 4, channel: 'form', score: 'hot', status: 'contacted', received: '3h ago',
-        name: 'Jennifer Lopez', contact: 'jen.lopez@email.com', phone: '(330) 555-3387',
-        source: 'google-ad', sourceLabel: 'Google Ads',
-        channelLabel: 'Form Submission', formTag: 'storm-damage',
-        formMessage: '"Tree fell on garage roof. State Farm."',
-        claimed: { by: 'Mike R.', when: '2h 38min ago', response: '22m' },
-    },
-    {
-        id: 5, channel: 'phone', score: 'cold', status: 'contacted', received: '5h ago',
-        name: 'David Brown', contact: 'Wooster', phone: '(330) 555-7732',
-        source: 'facebook-ad', sourceLabel: 'Facebook Ads',
-        channelLabel: 'Phone Call', channelMeta: 'Campaign: Spring Promo',
-        trackingNumber: '(555) 123-0004', trackingMeta: 'Facebook tracking #',
-        callDuration: '1:23',
-        summary: 'AI: Price shopping only.',
-        claimed: { by: 'Sarah K.', when: '4h 12min ago', response: '48m', slow: true },
-        coldOnly: true, // only "Call" button instead of Schedule/Convert
-    },
-    {
-        id: 6, channel: 'form', score: 'warm', status: 'qualified', received: 'Yesterday',
-        name: 'Patricia Martinez', contact: 'pmartinez@email.com', phone: '(330) 555-4419',
-        source: 'referral', sourceLabel: 'Referral',
-        channelLabel: 'Form Submission', formTag: 'quote-request',
-        channelMeta: 'Ref: john-smith',
-        formMessage: '"John recommended you. Wind damage."',
-        claimed: { by: 'Mike R.', when: '1d ago', response: '8m' },
-    },
-    {
-        id: 7, channel: 'phone', score: 'warm', status: 'qualified', received: 'Yesterday',
-        name: 'Tom Wilson', contact: 'Canton', phone: '(330) 555-1156',
-        source: 'organic', sourceLabel: 'Organic Search',
-        channelLabel: 'Phone Call', channelMeta: '"roof repair near me"',
-        trackingNumber: '(555) 123-0002', trackingMeta: 'Organic tracking #',
-        callDuration: '4:55',
-        summary: 'AI: Cash job replacement.',
-        claimed: { by: 'Sarah K.', when: '1d ago', response: '4m' },
-    },
-];
+// Front-end mirror of the backend ALLOWED map — UX affordance only, the server
+// re-validates every move (an illegal drop/select just surfaces its 400 toast).
+const ALLOWED_NEXT = {
+    new: ['contacted', 'estimate_scheduled', 'claim_started', 'declined', 'do_not_contact'],
+    contacted: ['no_reply', 'estimate_scheduled', 'estimate_sent', 'follow_up', 'claim_started', 'declined', 'do_not_contact'],
+    no_reply: ['contacted', 'declined', 'do_not_contact'],
+    estimate_scheduled: ['estimate_sent', 'follow_up', 'claim_started', 'declined', 'do_not_contact'],
+    estimate_sent: ['follow_up', 'claim_started', 'declined', 'do_not_contact'],
+    follow_up: ['contacted', 'estimate_scheduled', 'claim_started', 'declined', 'do_not_contact'],
+    claim_started: ['job_approved'],
+    job_approved: [],
+    declined: ['contacted'],
+    do_not_contact: ['contacted'], // admin-only on the server
+};
 
-const REPS = [
-    { initials: 'SK', name: 'Sarah K.', slug: 'sarah', avatarBg: '#FDB813', avatarColor: '#1a1f3a', active: true },
-    { initials: 'MR', name: 'Mike R.', slug: 'mike', avatarBg: '#1a1f3a' },
-    { initials: 'JB', name: 'James B.', slug: 'james', avatarBg: '#16a34a' },
-    { initials: 'AK', name: 'Ann K.', slug: 'ann', avatarBg: '#8b5cf6' },
-];
+const REASON_REQUIRED = new Set(['declined', 'do_not_contact']);
 
-// Phone icon SVG (reused several places)
-const PhoneIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-    </svg>
-);
-const FormIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <rect x="2" y="3" width="20" height="14" rx="2" />
-        <line x1="8" y1="21" x2="16" y2="21" />
-        <line x1="12" y1="17" x2="12" y2="21" />
-    </svg>
-);
+// Known source keys → display label + pill colour class. Unknown sources fall
+// back to a neutral pill with the raw key title-cased.
+const SOURCE_META = {
+    'google-ad': { label: 'Google Ads', cls: 'google-ad' },
+    google_ads: { label: 'Google Ads', cls: 'google-ad' },
+    organic: { label: 'Organic Search', cls: 'organic' },
+    gmb: { label: 'Google My Business', cls: 'gmb' },
+    'facebook-ad': { label: 'Facebook Ads', cls: 'facebook-ad' },
+    facebook_ads: { label: 'Facebook Ads', cls: 'facebook-ad' },
+    referral: { label: 'Referral', cls: 'referral' },
+    phone: { label: 'Phone Call', cls: 'phone' },
+    ai_call: { label: 'AI Call', cls: 'ai-call' },
+    form: { label: 'Website Form', cls: 'form' },
+    webhook: { label: 'Webhook', cls: 'webhook' },
+    manual: { label: 'Manual', cls: 'manual' },
+};
+function sourceInfo(src) {
+    if (!src) return { label: 'Unknown', cls: 'unknown' };
+    return SOURCE_META[src] || { label: src.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), cls: 'unknown' };
+}
 
+// ─── small helpers ────────────────────────────────────────────────────────
+function fmtRelative(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const s = (Date.now() - d.getTime()) / 1000;
+    if (s < 0) return 'just now';
+    if (s < 60) return 'just now';
+    const m = s / 60;
+    if (m < 60) return `${Math.floor(m)} min ago`;
+    const h = m / 60;
+    if (h < 24) return `${Math.floor(h)}h ago`;
+    const days = h / 24;
+    if (days < 7) return `${Math.floor(days)}d ago`;
+    return d.toLocaleDateString();
+}
+function fullName(l) {
+    const n = `${l.first_name || ''} ${l.last_name || ''}`.trim();
+    return n || l.email || l.phone || 'Unnamed lead';
+}
+// Speed-to-lead: an untouched New lead older than 5 min is overdue (BL 4.5.5).
+function isOverdue(l) {
+    if (l.status !== 'new' || (l.touches ?? 0) > 0) return false;
+    return Date.now() - new Date(l.created_at).getTime() > 5 * 60 * 1000;
+}
+function recordingUrl(l) {
+    const d = l.source_detail || {};
+    return d.recording_url || d.recording || d.call_recording_url || null;
+}
+
+const ScoreBadge = ({ score }) => {
+    const map = {
+        hot: <><Flame size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />HOT</>,
+        warm: <><Sun size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />WARM</>,
+        cold: <><Snowflake size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />COLD</>,
+    };
+    const s = (score || 'cold').toLowerCase();
+    return <span className={`lead-score ${s}`}>{map[s] || map.cold}</span>;
+};
+const StatusPill = ({ status }) => {
+    const m = STATUS_META[status] || { label: status, cls: 'unknown' };
+    return <span className={`nl-status-pill ${m.cls}`}>{m.label}</span>;
+};
+
+// ==========================================================================
+// Page
+// ==========================================================================
 export default function NewLeads() {
-    const [channel, setChannel] = useState('all');         // all | phone | form
-    const [pill, setPill] = useState('all');                // all | new | hot
-    const [search, setSearch] = useState('');
-    const [sourceFilter, setSourceFilter] = useState('All Sources');
-    const [dateFilter, setDateFilter] = useState('Last 7 days');
-    const [claimModal, setClaimModal] = useState(null);     // null | leadObj
-    const [selectedRep, setSelectedRep] = useState('');
-    const [claimError, setClaimError] = useState('');
+    const router = useRouter();
+    const { has } = usePermissions();
+    const canViewAll = has('view_all_leads');
+    const canConvert = has('convert_lead');
 
-    // Filter logic
+    const [tab, setTab] = useState('hot');
+    const [view, setView] = useState('queue');            // queue | kanban | map
+    const [search, setSearch] = useState('');
+    const [sourceFilter, setSourceFilter] = useState('all');
+    const [employeeFilter, setEmployeeFilter] = useState('all'); // all | unassigned | userId
+
+    const [rows, setRows] = useState([]);
+    const [board, setBoard] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [teamMembers, setTeamMembers] = useState([]);
+
+    const [busyId, setBusyId] = useState(null);
+    const [menuId, setMenuId] = useState(null);           // open overflow menu
+    const [reasonModal, setReasonModal] = useState(null); // { lead, to }
+    const [drawerId, setDrawerId] = useState(null);       // open detail drawer
+
+    const nameOf = useCallback(
+        (userId) => teamMembers.find((m) => m.id === userId)?.name || (userId ? 'Team member' : 'Unassigned'),
+        [teamMembers],
+    );
+
+    // ── data load ───────────────────────────────────────────────────────────
+    const loadBoard = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/leads/board', { suppressErrorToast: true });
+            setBoard(res.data?.data || {});
+        } catch { /* counts degrade to 0 */ }
+    }, []);
+
+    const loadRows = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = { page: 1, pageSize: 100 };
+            if (tab !== 'hot') params.status = tab;
+            if (canViewAll && employeeFilter !== 'all') params.assigned_to = employeeFilter;
+            const res = await axiosInstance.get('/leads', { params });
+            let data = res.data?.data || [];
+            // Hot = new + contacted (the server has no single "hot" status).
+            if (tab === 'hot') data = data.filter((l) => l.status === 'new' || l.status === 'contacted');
+            setRows(data);
+        } catch {
+            setRows([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [tab, canViewAll, employeeFilter]);
+
+    const refresh = useCallback(() => { loadBoard(); loadRows(); }, [loadBoard, loadRows]);
+
+    useEffect(() => { loadBoard(); }, [loadBoard]);
+    useEffect(() => { loadRows(); }, [loadRows]);
+
+    // Team list for reassign + the employee filter (needs view-all).
+    useEffect(() => {
+        if (!canViewAll) return;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
+                const list = res.data?.data || res.data || [];
+                setTeamMembers(
+                    list
+                        .map((m) => ({
+                            id: m.id || m.user_id,
+                            name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email || 'Member',
+                        }))
+                        .filter((m) => m.id),
+                );
+            } catch { /* degrades to All / Unassigned */ }
+        })();
+    }, [canViewAll]);
+
+    // ── client-side filters (search + source) ────────────────────────────────
     const filtered = useMemo(() => {
-        return LEADS.filter((l) => {
-            if (channel !== 'all' && l.channel !== channel) return false;
-            if (pill === 'new' && l.status !== 'new') return false;
-            if (pill === 'hot' && l.score !== 'hot') return false;
-            if (sourceFilter !== 'All Sources') {
-                const map = {
-                    'Google Ads': 'google-ad', 'Organic': 'organic', 'GMB': 'gmb',
-                    'Facebook Ads': 'facebook-ad', 'Referral': 'referral',
-                };
-                if (l.source !== map[sourceFilter]) return false;
-            }
+        return rows.filter((l) => {
+            if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
             if (search) {
                 const q = search.toLowerCase();
-                const hay = `${l.name} ${l.contact} ${l.phone}`.toLowerCase();
+                const hay = `${fullName(l)} ${l.phone || ''} ${l.email || ''} ${l.address_line1 || ''} ${l.city || ''}`.toLowerCase();
                 if (!hay.includes(q)) return false;
             }
             return true;
         });
-    }, [channel, pill, search, sourceFilter]);
+    }, [rows, sourceFilter, search]);
 
-    // Channel tab counts
-    const counts = useMemo(() => ({
-        all: LEADS.length,
-        phone: LEADS.filter((l) => l.channel === 'phone').length,
-        form: LEADS.filter((l) => l.channel === 'form').length,
-    }), []);
+    const sourceOptions = useMemo(() => {
+        const set = new Set(rows.map((l) => l.source).filter(Boolean));
+        return Array.from(set);
+    }, [rows]);
 
-    // Modal handlers
-    const openClaim = (lead) => {
-        setClaimModal(lead);
-        setSelectedRep('');
-        setClaimError('');
-    };
-    const closeClaim = () => setClaimModal(null);
-    const confirmClaim = () => {
-        if (!selectedRep) {
-            setClaimError('Please select a rep before claiming.');
-            return;
+    // ── mutations ─────────────────────────────────────────────────────────────
+    const withBusy = async (id, fn, successMsg) => {
+        setBusyId(id);
+        try {
+            await fn();
+            if (successMsg) toast.success(successMsg);
+            await refresh();
+        } catch (e) {
+            toast.error(e?.userMessage || 'Action failed');
+        } finally {
+            setBusyId(null);
+            setMenuId(null);
         }
-        // TODO: POST /api/leads/:id/claim
-        closeClaim();
-        // Optimistic: would refetch / update local state
     };
+
+    const logTouch = (lead, type, direction, summary) =>
+        axiosInstance.post(`/leads/${lead.id}/touch`, { type, direction, summary });
+
+    const doCall = (lead) => {
+        if (lead.phone) { try { window.open(`tel:${lead.phone}`); } catch { /* no dialer */ } }
+        withBusy(lead.id, () => logTouch(lead, 'call', 'outbound', 'Outbound call'), 'Call logged');
+    };
+    const doText = (lead) => {
+        // A2P registration gates real SMS; here we log the outbound touch (which
+        // also moves New → Contacted server-side).
+        if (lead.phone) { try { window.open(`sms:${lead.phone}`); } catch { /* no sms app */ } }
+        withBusy(lead.id, () => logTouch(lead, 'sms', 'outbound', 'Outbound text'), 'Text logged');
+    };
+    const setStatus = (lead, to, reason) =>
+        withBusy(
+            lead.id,
+            () => axiosInstance.patch(`/leads/${lead.id}/status`, { to, reason }),
+            `Moved to ${STATUS_META[to]?.label || to}`,
+        );
+    const doSchedule = (lead) => setStatus(lead, 'estimate_scheduled');
+    const doEstimate = (lead) => setStatus(lead, 'estimate_sent');
+    const doReassign = (lead, userId) =>
+        withBusy(lead.id, () => axiosInstance.patch(`/leads/${lead.id}/assign`, { user_id: userId || null }), 'Reassigned');
+    const doConvert = (lead) =>
+        withBusy(lead.id, async () => {
+            const res = await axiosInstance.post(`/leads/${lead.id}/convert`, {});
+            if (res.data?.claim_id) {
+                toast.success('Converted — claim created');
+                router.push('/dashboard/claims');
+            }
+        });
+
+    // Reason modal (Decline / DNC) — replaces window.prompt.
+    const askReason = (lead, to) => { setMenuId(null); setReasonModal({ lead, to }); };
+    const confirmReason = (reason) => {
+        if (!reasonModal) return;
+        const { lead, to } = reasonModal;
+        setReasonModal(null);
+        setStatus(lead, to, reason);
+    };
+
+    // ── stats derived from the (unfiltered) board counts ──────────────────────
+    const stat = (k) => board[k] ?? 0;
+    const converted = stat('claim_started') + stat('job_approved');
 
     return (
-        <div className="new-leads-page">
-            {/* Page header */}
+        <div className="new-leads-page" onClick={() => setMenuId(null)}>
+            {/* Header */}
             <div className="page-header">
                 <div>
                     <div className="page-title">New Leads</div>
                     <div className="page-subtitle">
-                        All incoming leads from calls (via CTM) and form submissions
+                        Every incoming lead — calls, forms, and integrations — in one live pipeline
                     </div>
                 </div>
                 <div className="header-right">
-                    <button className="btn-secondary">Export CSV</button>
-                    <button className="btn-primary">+ Add Manual Lead</button>
+                    <button className="btn-secondary" onClick={refresh} title="Refresh">
+                        <RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh
+                    </button>
                 </div>
             </div>
 
@@ -180,448 +295,636 @@ export default function NewLeads() {
                 {/* Stats */}
                 <div className="stats-grid">
                     <div className="stat-card">
-                        <div className="stat-label">Leads Today</div>
-                        <div className="stat-value">12</div>
-                        <div className="stat-meta up">▲ 33% vs yesterday</div>
+                        <div className="stat-label">Total Leads</div>
+                        <div className="stat-value">{stat('total')}</div>
+                        <div className="stat-meta">All statuses</div>
                     </div>
                     <div className="stat-card">
-                        <div className="stat-label">This Month</div>
-                        <div className="stat-value">147</div>
-                        <div className="stat-meta up">▲ 18%</div>
+                        <div className="stat-label">Hot Queue</div>
+                        <div className="stat-value">{stat('hot')}</div>
+                        <div className="stat-meta">New + Contacted</div>
                     </div>
                     <div className="stat-card">
-                        <div className="stat-label">Conversion Rate</div>
-                        <div className="stat-value">31%</div>
-                        <div className="stat-meta">Lead → Job</div>
+                        <div className="stat-label">Converted</div>
+                        <div className="stat-value">{converted}</div>
+                        <div className="stat-meta">Claim Started + Job Approved</div>
                     </div>
                     <div className="stat-card">
-                        <div className="stat-label">Avg Response</div>
-                        <div className="stat-value">8m</div>
-                        <div
-                            className="stat-meta up"
-                            title="Computed from claimed_at − created_at across all claimed leads in last 30 days"
+                        <div className="stat-label">No Reply</div>
+                        <div className="stat-value">{stat('no_reply')}</div>
+                        <div className="stat-meta">Needs re-engagement</div>
+                    </div>
+                </div>
+
+                {/* Status tabs with live counts */}
+                <div className="pipeline-nav">
+                    {TABS.map((t) => (
+                        <button
+                            key={t.key}
+                            className={`pipeline-tab ${tab === t.key ? 'active' : ''}`}
+                            onClick={() => setTab(t.key)}
                         >
-                            Lead → Claimed (30d)
-                        </div>
-                    </div>
-                    <div className="stat-card">
-                        <div className="stat-label">Avg Value</div>
-                        <div className="stat-value">$12.4K</div>
-                        <div className="stat-meta">Closed jobs</div>
-                    </div>
-                </div>
-
-                {/* Source breakdown */}
-                <div className="source-card">
-                    <div className="source-card-title">Lead Sources (This Month)</div>
-                    <div className="source-list">
-                        {SOURCES.map((s) => (
-                            <div className="source-item" key={s.key}>
-                                <div className="source-name">
-                                    <span className={`source-icon ${s.key}`}>{s.icon}</span>
-                                    {s.label}
-                                </div>
-                                <div className="source-count">{s.count}</div>
-                                <div className="source-bar">
-                                    <div
-                                        className="source-bar-fill"
-                                        style={{ width: `${s.width}%`, background: s.color }}
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Channel tabs */}
-                <div className="channel-tabs">
-                    <button
-                        className={`channel-tab ${channel === 'all' ? 'active' : ''}`}
-                        onClick={() => setChannel('all')}
-                    >
-                        All Leads <span className="tab-count">{counts.all}</span>
-                    </button>
-                    <button
-                        className={`channel-tab ${channel === 'phone' ? 'active' : ''}`}
-                        onClick={() => setChannel('phone')}
-                    >
-                        <PhoneIcon /> Phone Calls <span className="tab-count">{counts.phone}</span>
-                    </button>
-                    <button
-                        className={`channel-tab ${channel === 'form' ? 'active' : ''}`}
-                        onClick={() => setChannel('form')}
-                    >
-                        <FormIcon /> Website Forms <span className="tab-count">{counts.form}</span>
-                    </button>
+                            {t.label}
+                            <span className="tab-count">{board[t.key] ?? 0}</span>
+                        </button>
+                    ))}
                 </div>
 
                 {/* Toolbar */}
-                <div className="toolbar">
+                <div className="toolbar nl-toolbar">
                     <div className="toolbar-left">
                         <input
                             type="text"
                             className="search-input"
-                            placeholder="Search leads..."
+                            placeholder="Search name, phone, address…"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
-                        {['all', 'new', 'hot'].map((p) => (
-                            <span
-                                key={p}
-                                className={`filter-pill ${pill === p ? 'active' : ''}`}
-                                onClick={() => setPill(p)}
-                            >
-                                {p === 'all' ? 'All' : p === 'new' ? 'New (Unread)' : 'Hot Leads Only'}
-                            </span>
-                        ))}
-                        <select
-                            className="filter-select"
-                            value={sourceFilter}
-                            onChange={(e) => setSourceFilter(e.target.value)}
-                        >
-                            <option>All Sources</option>
-                            <option>Google Ads</option>
-                            <option>Organic</option>
-                            <option>GMB</option>
-                            <option>Facebook Ads</option>
-                            <option>Referral</option>
+                        <select className="filter-select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                            <option value="all">All Sources</option>
+                            {sourceOptions.map((s) => (
+                                <option key={s} value={s}>{sourceInfo(s).label}</option>
+                            ))}
                         </select>
-                        <select
-                            className="filter-select"
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                        >
-                            <option>Last 7 days</option>
-                            <option>Last 30 days</option>
-                            <option>This month</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Table */}
-                <div className="table-card">
-                    <div className="table-scroll">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Lead</th>
-                                    <th>Source</th>
-                                    <th>Form / Channel</th>
-                                    <th>Phone Number Called</th>
-                                    <th>Recording / Notes</th>
-                                    <th>Score</th>
-                                    <th>Received</th>
-                                    <th>Status / Claimed By</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filtered.map((l) => (
-                                    <LeadRow key={l.id} lead={l} onClaim={() => openClaim(l)} />
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    {filtered.length === 0 && (
-                        <div className="empty-state">No leads match the current filters.</div>
-                    )}
-                </div>
-
-                {/* Scheduling section */}
-                <SchedulingSection />
-            </div>
-
-            {/* Claim Lead Modal */}
-            {claimModal && (
-                <div className="modal-backdrop active" onClick={closeClaim}>
-                    <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <div className="modal-title">Claim This Lead</div>
-                            <button className="modal-close" onClick={closeClaim}>&times;</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="modal-lead-summary">
-                                <div className="name">{claimModal.name}</div>
-                                <div className="meta">Received {claimModal.received}</div>
-                            </div>
-                            <label htmlFor="claim-rep-select">Which sales rep is taking this lead?</label>
-                            <select
-                                id="claim-rep-select"
-                                value={selectedRep}
-                                onChange={(e) => setSelectedRep(e.target.value)}
-                            >
-                                <option value="">— Select a rep —</option>
-                                {REPS.map((r) => (
-                                    <option key={r.slug} value={r.name}>{r.name}</option>
+                        {canViewAll && (
+                            <select className="filter-select" value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
+                                <option value="all">All Employees</option>
+                                <option value="unassigned">Unassigned</option>
+                                {teamMembers.map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                             </select>
-                            {claimError && (
-                                <div style={{ color: '#b91c1c', fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: 600 }}>
-                                    {claimError}
-                                </div>
-                            )}
-                            <div className="help">
-                                Claiming captures the rep's name + timestamp. This is how the Avg Response Time stat is computed (Lead received → Claimed).
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn-secondary" onClick={closeClaim}>Cancel</button>
-                            <button className="btn-primary" onClick={confirmClaim}>Claim Lead</button>
-                        </div>
+                        )}
+                    </div>
+                    <div className="nl-view-toggle">
+                        <button className={`nl-view-btn ${view === 'queue' ? 'active' : ''}`} onClick={() => setView('queue')}>
+                            <ListIcon size={15} /> Queue
+                        </button>
+                        <button className={`nl-view-btn ${view === 'kanban' ? 'active' : ''}`} onClick={() => setView('kanban')}>
+                            <LayoutGrid size={15} /> Kanban
+                        </button>
+                        <button className={`nl-view-btn ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')}>
+                            <MapPin size={15} /> Map
+                        </button>
                     </div>
                 </div>
+
+                {/* Views */}
+                {view === 'queue' && (
+                    <QueueView
+                        loading={loading}
+                        rows={filtered}
+                        busyId={busyId}
+                        menuId={menuId}
+                        setMenuId={setMenuId}
+                        canConvert={canConvert}
+                        canViewAll={canViewAll}
+                        teamMembers={teamMembers}
+                        nameOf={nameOf}
+                        onCall={doCall}
+                        onText={doText}
+                        onSchedule={doSchedule}
+                        onEstimate={doEstimate}
+                        onConvert={doConvert}
+                        onReassign={doReassign}
+                        onDecline={(l) => askReason(l, 'declined')}
+                        onDnc={(l) => askReason(l, 'do_not_contact')}
+                        onView={(l) => setDrawerId(l.id)}
+                    />
+                )}
+                {view === 'kanban' && (
+                    <KanbanView
+                        loading={loading}
+                        rows={filtered}
+                        busyId={busyId}
+                        onMove={(lead, to) => setStatus(lead, to)}
+                        onOpen={(l) => setDrawerId(l.id)}
+                    />
+                )}
+                {view === 'map' && <MapView rows={filtered} onOpen={(id) => setDrawerId(id)} />}
+            </div>
+
+            {/* Reason modal */}
+            {reasonModal && (
+                <ReasonModal
+                    to={reasonModal.to}
+                    lead={reasonModal.lead}
+                    onCancel={() => setReasonModal(null)}
+                    onConfirm={confirmReason}
+                />
+            )}
+
+            {/* Detail drawer */}
+            {drawerId && (
+                <LeadDrawer
+                    leadId={drawerId}
+                    nameOf={nameOf}
+                    canConvert={canConvert}
+                    canViewAll={canViewAll}
+                    teamMembers={teamMembers}
+                    onClose={() => setDrawerId(null)}
+                    onChanged={refresh}
+                />
             )}
         </div>
     );
 }
 
-// ====================================================================
-// LeadRow
-// ====================================================================
-const LeadRow = ({ lead, onClaim }) => {
-    const scoreIconStyle = { verticalAlign: '-2px', marginRight: 3 };
-    const scoreLabel = lead.score === 'hot'
-        ? <><Flame size={12} strokeWidth={2.5} style={scoreIconStyle} />HOT</>
-        : lead.score === 'warm'
-            ? <><Sun size={12} strokeWidth={2.5} style={scoreIconStyle} />WARM</>
-            : <><Snowflake size={12} strokeWidth={2.5} style={scoreIconStyle} />COLD</>;
-    const channelIcon = lead.channel === 'phone' ? <PhoneIcon /> : <FormIcon />;
+// ==========================================================================
+// Queue (table) view — sticky far-left actions column (task 2.7)
+// ==========================================================================
+function QueueView({
+    loading, rows, busyId, menuId, setMenuId, canConvert, canViewAll, teamMembers, nameOf,
+    onCall, onText, onSchedule, onEstimate, onConvert, onReassign, onDecline, onDnc, onView,
+}) {
+    if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
+    if (!rows.length) return <div className="nl-panel"><div className="empty-state">No leads in this view.</div></div>;
 
     return (
-        <tr className="lead-row">
-            {/* Lead */}
-            <td>
-                <div className="lead-name">{lead.name}</div>
-                <div className="lead-contact">{lead.contact}</div>
-                <div className="lead-contact lead-phone">{lead.phone}</div>
-            </td>
+        <div className="table-card nl-panel">
+            <div className="table-scroll">
+                <table className="nl-table">
+                    <thead>
+                        <tr>
+                            <th className="nl-sticky-col">Actions</th>
+                            <th>Lead</th>
+                            <th>Source</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Assigned</th>
+                            <th>Touches</th>
+                            <th>Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((l) => {
+                            const busy = busyId === l.id;
+                            const src = sourceInfo(l.source);
+                            const overdue = isOverdue(l);
+                            const canConv = ALLOWED_NEXT[l.status]?.includes('claim_started');
+                            return (
+                                <tr key={l.id} className="lead-row">
+                                    {/* Sticky actions */}
+                                    <td className="nl-sticky-col">
+                                        <div className="nl-actions">
+                                            <button className="nl-act call" disabled={busy} title="Call" onClick={() => onCall(l)}>
+                                                <Phone size={14} />
+                                            </button>
+                                            <button className="nl-act text" disabled={busy} title="Text" onClick={() => onText(l)}>
+                                                <MessageSquare size={14} />
+                                            </button>
+                                            <button className="nl-act sched" disabled={busy} title="Schedule estimate" onClick={() => onSchedule(l)}>
+                                                <CalendarPlus size={14} />
+                                            </button>
+                                            <button className="nl-act est" disabled={busy} title="Mark estimate sent" onClick={() => onEstimate(l)}>
+                                                <FileText size={14} />
+                                            </button>
+                                            {canConvert && canConv && (
+                                                <button className="nl-act convert" disabled={busy} title="Convert to claim" onClick={() => onConvert(l)}>
+                                                    <ArrowRightCircle size={14} />
+                                                </button>
+                                            )}
+                                            <div className="nl-menu-wrap" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    className="nl-act more"
+                                                    title="More"
+                                                    onClick={() => setMenuId(menuId === l.id ? null : l.id)}
+                                                >
+                                                    <MoreHorizontal size={14} />
+                                                </button>
+                                                {menuId === l.id && (
+                                                    <div className="nl-menu">
+                                                        <button onClick={() => { setMenuId(null); onView(l); }}>
+                                                            <Eye size={13} /> View details
+                                                        </button>
+                                                        {canViewAll && (
+                                                            <div className="nl-menu-reassign">
+                                                                <span><UserPlus size={13} /> Reassign</span>
+                                                                <select
+                                                                    defaultValue={l.assigned_to || ''}
+                                                                    onChange={(e) => onReassign(l, e.target.value)}
+                                                                >
+                                                                    <option value="">Unassigned</option>
+                                                                    {teamMembers.map((m) => (
+                                                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        )}
+                                                        <button className="danger" onClick={() => onDecline(l)}>
+                                                            <ThumbsDown size={13} /> Decline
+                                                        </button>
+                                                        <button className="danger" onClick={() => onDnc(l)}>
+                                                            <Ban size={13} /> Do Not Contact
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
 
-            {/* Source */}
-            <td>
-                <span className={`source-pill ${lead.source}`}>{lead.sourceLabel}</span>
-            </td>
+                                    {/* Lead */}
+                                    <td>
+                                        <button className="nl-name-btn" onClick={() => onView(l)}>{fullName(l)}</button>
+                                        <div className="lead-contact lead-phone">{l.phone || '—'}</div>
+                                        {(l.address_line1 || l.city) && (
+                                            <div className="lead-contact">{[l.address_line1, l.city, l.state].filter(Boolean).join(', ')}</div>
+                                        )}
+                                    </td>
 
-            {/* Form / Channel */}
-            <td>
-                <div className="channel-icon">{channelIcon}{lead.channelLabel}</div>
-                {lead.formTag && (
-                    <div style={{ marginTop: '0.25rem' }}>
-                        <span className="form-tag">{lead.formTag}</span>
+                                    {/* Source */}
+                                    <td><span className={`source-pill ${src.cls}`}>{src.label}</span></td>
+
+                                    {/* Score */}
+                                    <td><ScoreBadge score={l.lead_score} /></td>
+
+                                    {/* Status */}
+                                    <td><StatusPill status={l.status} /></td>
+
+                                    {/* Assigned */}
+                                    <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{nameOf(l.assigned_to)}</td>
+
+                                    {/* Touches */}
+                                    <td style={{ fontSize: '0.8rem' }}>{l.touches ?? 0}</td>
+
+                                    {/* Received */}
+                                    <td style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                                        {fmtRelative(l.created_at)}
+                                        {overdue && (
+                                            <div className="nl-overdue"><Clock size={11} style={{ verticalAlign: '-1px' }} /> {'>'}5m untouched</div>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// ==========================================================================
+// Kanban view (task 2.8) — HTML5 drag to change status
+// ==========================================================================
+function KanbanView({ loading, rows, busyId, onMove, onOpen }) {
+    const [dragId, setDragId] = useState(null);
+    const [overCol, setOverCol] = useState(null);
+
+    const byStatus = useMemo(() => {
+        const g = Object.fromEntries(PIPELINE.map((s) => [s, []]));
+        for (const l of rows) if (g[l.status]) g[l.status].push(l);
+        return g;
+    }, [rows]);
+
+    if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
+
+    const onDrop = (status) => {
+        setOverCol(null);
+        const lead = rows.find((l) => l.id === dragId);
+        setDragId(null);
+        if (!lead || lead.status === status) return;
+        if (!ALLOWED_NEXT[lead.status]?.includes(status)) {
+            toast.error(`Can't move a ${STATUS_META[lead.status]?.label} lead to ${STATUS_META[status]?.label}.`);
+            return;
+        }
+        onMove(lead, status);
+    };
+
+    return (
+        <div className="nl-kanban">
+            {PIPELINE.map((status) => (
+                <div
+                    key={status}
+                    className={`nl-kcol ${overCol === status ? 'over' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); setOverCol(status); }}
+                    onDragLeave={() => setOverCol((c) => (c === status ? null : c))}
+                    onDrop={() => onDrop(status)}
+                >
+                    <div className="nl-kcol-head">
+                        <span className={`nl-kdot ${STATUS_META[status].cls}`} />
+                        {STATUS_META[status].label}
+                        <span className="nl-kcount">{byStatus[status].length}</span>
                     </div>
-                )}
-                {lead.channelMeta && (
-                    <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: '0.25rem' }}>
-                        {lead.channelMeta}
+                    <div className="nl-kcol-body">
+                        {byStatus[status].map((l) => (
+                            <div
+                                key={l.id}
+                                className={`nl-kcard ${busyId === l.id ? 'busy' : ''}`}
+                                draggable
+                                onDragStart={() => setDragId(l.id)}
+                                onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                                onClick={() => onOpen(l)}
+                            >
+                                <div className="nl-kcard-top">
+                                    <span className="nl-kcard-name">{fullName(l)}</span>
+                                    <ScoreBadge score={l.lead_score} />
+                                </div>
+                                <div className="nl-kcard-meta">{sourceInfo(l.source).label}</div>
+                                {l.phone && <div className="lead-phone" style={{ fontSize: '0.72rem' }}>{l.phone}</div>}
+                                <div className="nl-kcard-foot">
+                                    {l.storm_event_id && <span className="nl-storm-chip"><CloudLightning size={11} /> Storm</span>}
+                                    <span>{fmtRelative(l.created_at)}</span>
+                                </div>
+                            </div>
+                        ))}
+                        {!byStatus[status].length && <div className="nl-kempty">—</div>}
                     </div>
-                )}
-            </td>
+                </div>
+            ))}
+        </div>
+    );
+}
 
-            {/* Phone Number Called */}
-            <td>
-                {lead.trackingNumber ? (
-                    <>
-                        <span className="lead-phone">{lead.trackingNumber}</span>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: '0.25rem' }}>
-                            {lead.trackingMeta}
-                        </div>
-                    </>
-                ) : (
-                    <span style={{ color: '#9ca3af' }}>—</span>
-                )}
-            </td>
+// ==========================================================================
+// Map view (task 2.8) — leaflet pins from lat/lng, storm-linked highlighted
+// ==========================================================================
+function MapView({ rows, onOpen }) {
+    const mapRef = useRef(null);
+    const layerRef = useRef(null);
+    const withCoords = useMemo(() => rows.filter((l) => l.lat != null && l.lng != null), [rows]);
 
-            {/* Recording / Notes */}
-            <td>
-                {lead.callDuration ? (
-                    <>
-                        <div className="call-player">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                            <span className="call-duration">{lead.callDuration}</span>
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: '0.35rem', maxWidth: 240 }}>
-                            {lead.summary}
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div style={{ fontSize: '0.8rem', color: '#1a1f3a', fontWeight: 500 }}>
-                            Form Message:
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.15rem', maxWidth: 240 }}>
-                            {lead.formMessage}
-                        </div>
-                    </>
-                )}
-            </td>
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById('leadsMap');
+            if (!el) return;
+            if (!mapRef.current || !el._leaflet_id) {
+                if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                mapRef.current = L.map('leadsMap').setView([39.8283, -98.5795], 4);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap',
+                    maxZoom: 19,
+                }).addTo(mapRef.current);
+            }
+            const map = mapRef.current;
+            if (layerRef.current) { layerRef.current.remove(); layerRef.current = null; }
+            const group = L.layerGroup().addTo(map);
+            layerRef.current = group;
 
-            {/* Score */}
-            <td><span className={`lead-score ${lead.score}`}>{scoreLabel}</span></td>
+            const pts = [];
+            for (const l of withCoords) {
+                const stormy = !!l.storm_event_id;
+                const marker = L.circleMarker([l.lat, l.lng], {
+                    radius: 8,
+                    color: stormy ? '#b91c1c' : '#1a1f3a',
+                    fillColor: stormy ? '#ef4444' : '#FDB813',
+                    fillOpacity: 0.85,
+                    weight: 2,
+                });
+                marker.bindPopup(
+                    `<strong>${fullName(l)}</strong><br/>${sourceInfo(l.source).label}` +
+                    `${stormy ? '<br/>⚡ Storm-linked' : ''}<br/><em>${STATUS_META[l.status]?.label || l.status}</em>`,
+                );
+                marker.on('click', () => onOpen(l.id));
+                marker.addTo(group);
+                pts.push([l.lat, l.lng]);
+            }
+            if (pts.length) {
+                try { map.fitBounds(pts, { padding: [40, 40], maxZoom: 11 }); } catch { /* single pt */ }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [withCoords, onOpen]);
 
-            {/* Received */}
-            <td style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
-                {lead.received}
-            </td>
+    // Tear the map down when this view unmounts.
+    useEffect(() => () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } }, []);
 
-            {/* Status / Claimed By */}
-            <td>
-                {!lead.claimed ? (
-                    <span className="lead-status new">New</span>
-                ) : (
-                    <>
-                        <span className="claimed-pill"><Check size={12} strokeWidth={3} style={{ verticalAlign: '-2px', marginRight: 3 }} />Claimed</span>
-                        <div className="claimed-meta">by <strong>{lead.claimed.by}</strong></div>
-                        <div className="claimed-meta">{lead.claimed.when}</div>
-                        <div className={`response-time-pill ${lead.claimed.slow ? 'slow' : ''}`}>
-                            Response: {lead.claimed.response}
-                        </div>
-                    </>
-                )}
-            </td>
+    return (
+        <div className="nl-panel nl-map-wrap">
+            <div id="leadsMap" className="nl-map" />
+            <div className="nl-map-legend">
+                <span><i className="dot storm" /> Storm-linked</span>
+                <span><i className="dot normal" /> Standard</span>
+                {!withCoords.length && <span className="nl-map-note">No geocoded leads in this view yet.</span>}
+            </div>
+        </div>
+    );
+}
 
-            {/* Actions */}
-            <td>
-                <div className="action-cell">
-                    {!lead.claimed ? (
-                        <button className="btn-claim" onClick={onClaim}>Claim Lead</button>
-                    ) : lead.coldOnly ? (
-                        <button className="btn-secondary">Call</button>
-                    ) : (
-                        <>
-                            <button className="btn-claim">Schedule</button>
-                            <button className="btn-success">Convert</button>
-                        </>
+// ==========================================================================
+// Reason modal (Decline / DNC)
+// ==========================================================================
+function ReasonModal({ to, lead, onCancel, onConfirm }) {
+    const [reason, setReason] = useState('');
+    const label = STATUS_META[to]?.label || to;
+    return (
+        <div className="modal-backdrop active" onClick={onCancel}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title">Move to {label}</div>
+                    <button className="modal-close" onClick={onCancel}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <div className="modal-lead-summary">
+                        <div className="name">{fullName(lead)}</div>
+                        <div className="meta">{sourceInfo(lead.source).label} · Received {fmtRelative(lead.created_at)}</div>
+                    </div>
+                    <label htmlFor="nl-reason">Reason (required)</label>
+                    <input
+                        id="nl-reason"
+                        type="text"
+                        value={reason}
+                        autoFocus
+                        placeholder={to === 'do_not_contact' ? 'e.g. Requested no further contact' : 'e.g. Chose another contractor'}
+                        onChange={(e) => setReason(e.target.value)}
+                    />
+                    {to === 'do_not_contact' && (
+                        <div className="help">Do Not Contact suppresses all calls, texts and emails company-wide. Only an admin can lift it.</div>
                     )}
                 </div>
-            </td>
-        </tr>
-    );
-};
-
-// ====================================================================
-// Scheduling section
-// ====================================================================
-const SchedulingSection = () => {
-    const [activeRep, setActiveRep] = useState('sarah');
-    const activeRepObj = REPS.find((r) => r.slug === activeRep) ?? REPS[0];
-
-    return (
-        <div className="scheduling-section">
-            <div className="scheduling-header">
-                <div>
-                    <h3>Scheduling — Book Inspections</h3>
-                    <div className="meta">
-                        Native ClaimKing calendar per sales rep. Public booking link can be embedded on your website.
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn-secondary">Manage Working Hours</button>
-                    <button className="btn-primary">+ New Appointment</button>
-                </div>
-            </div>
-
-            <div className="scheduling-grid">
-                {/* Rep list */}
-                <div className="rep-list">
-                    <div className="rep-list-title">Active Sales Reps</div>
-                    {REPS.map((r) => (
-                        <div
-                            key={r.slug}
-                            className={`rep-item ${activeRep === r.slug ? 'active' : ''}`}
-                            onClick={() => setActiveRep(r.slug)}
-                        >
-                            <div className="rep-avatar" style={{ background: r.avatarBg, color: r.avatarColor ?? 'white' }}>
-                                {r.initials}
-                            </div>
-                            <div className="rep-info">
-                                <div className="rep-name">{r.name}</div>
-                                <div className="rep-status">claimking.ai/book/nathaniel/{r.slug}</div>
-                            </div>
-                            <div className="rep-dot"></div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Calendar */}
-                <div>
-                    <div className="calendar-view">
-                        <div className="calendar-toolbar">
-                            <div className="calendar-nav">
-                                <button className="cal-nav-btn">‹</button>
-                                <span className="cal-title">Mon May 12 — Fri May 16</span>
-                                <button className="cal-nav-btn">›</button>
-                                <button className="cal-nav-btn">Today</button>
-                            </div>
-                            <div className="cal-view-toggle">
-                                <button className="cal-view-btn">Day</button>
-                                <button className="cal-view-btn active">Week</button>
-                                <button className="cal-view-btn">Month</button>
-                            </div>
-                        </div>
-
-                        <div className="calendar-grid">
-                            <div className="cal-cell header"></div>
-                            <div className="cal-cell header">Mon 12</div>
-                            <div className="cal-cell header">Tue 13</div>
-                            <div className="cal-cell header">Wed 14</div>
-                            <div className="cal-cell header">Thu 15</div>
-                            <div className="cal-cell header">Fri 16</div>
-
-                            <div className="cal-cell time-label">8 AM</div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"><span className="cal-event">Henderson — Inspection</span></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-
-                            <div className="cal-cell time-label">10 AM</div>
-                            <div className="cal-cell"><span className="cal-event">R. Chen — Inspection</span></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"><span className="cal-event busy">Office time</span></div>
-                            <div className="cal-cell"><span className="cal-event tentative">Williams — Tentative</span></div>
-                            <div className="cal-cell"></div>
-
-                            <div className="cal-cell time-label">12 PM</div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"><span className="cal-event">Lopez — Inspection</span></div>
-
-                            <div className="cal-cell time-label">2 PM</div>
-                            <div className="cal-cell"><span className="cal-event">Wilson — Consult</span></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"><span className="cal-event">Martinez — Inspection</span></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-
-                            <div className="cal-cell time-label">4 PM</div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"><span className="cal-event">Brown — Follow-up</span></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                            <div className="cal-cell"></div>
-                        </div>
-                    </div>
-
-                    <div className="booking-link-card">
-                        <div className="booking-link-card-title">
-                            {activeRepObj.name}'s Public Booking Link
-                        </div>
-                        <div className="booking-link-row">
-                            <div className="booking-link-url">
-                                https://claimking.ai/book/nathaniel-roofing/{activeRepObj.slug}
-                            </div>
-                            <button className="booking-link-copy">Copy</button>
-                            <button className="booking-link-copy">Embed on Website</button>
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.625rem' }}>
-                            Embed code adds a "Book Inspection" widget to your website. Homeowners pick a slot, fill in their info, and the appointment lands in {activeRepObj.name}'s calendar automatically.
-                        </div>
-                    </div>
+                <div className="modal-footer">
+                    <button className="btn-secondary" onClick={onCancel}>Cancel</button>
+                    <button className="btn-primary" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+                        Confirm
+                    </button>
                 </div>
             </div>
         </div>
     );
-};
+}
+
+// ==========================================================================
+// Lead detail drawer (task 2.9)
+// ==========================================================================
+function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClose, onChanged }) {
+    const router = useRouter();
+    const [lead, setLead] = useState(null);
+    const [touches, setTouches] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [l, t] = await Promise.all([
+                axiosInstance.get(`/leads/${leadId}`, { suppressErrorToast: true }),
+                axiosInstance.get(`/leads/${leadId}/touches`, { suppressErrorToast: true }).catch(() => ({ data: { data: [] } })),
+            ]);
+            setLead(l.data?.data || null);
+            setTouches(t.data?.data || []);
+        } catch {
+            setLead(null);
+        } finally {
+            setLoading(false);
+        }
+    }, [leadId]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const act = async (fn, msg) => {
+        setBusy(true);
+        try {
+            await fn();
+            if (msg) toast.success(msg);
+            await load();
+            onChanged();
+        } catch (e) {
+            toast.error(e?.userMessage || 'Action failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const changeStatus = (to) => act(() => axiosInstance.patch(`/leads/${leadId}/status`, { to }), `Moved to ${STATUS_META[to]?.label}`);
+    const reassign = (userId) => act(() => axiosInstance.patch(`/leads/${leadId}/assign`, { user_id: userId || null }), 'Reassigned');
+    const convert = () => act(async () => {
+        const res = await axiosInstance.post(`/leads/${leadId}/convert`, {});
+        if (res.data?.claim_id) { onClose(); router.push('/dashboard/claims'); }
+    }, 'Converted — claim created');
+
+    const rec = lead ? recordingUrl(lead) : null;
+    const nextStatuses = lead ? (ALLOWED_NEXT[lead.status] || []).filter((s) => !REASON_REQUIRED.has(s)) : [];
+
+    return (
+        <div className="nl-drawer-backdrop" onClick={onClose}>
+            <aside className="nl-drawer" onClick={(e) => e.stopPropagation()}>
+                <div className="nl-drawer-head">
+                    <div className="nl-drawer-title">Lead Details</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+
+                {loading && <div className="empty-state">Loading…</div>}
+                {!loading && !lead && <div className="empty-state">Lead not found.</div>}
+
+                {!loading && lead && (
+                    <div className="nl-drawer-body">
+                        <div className="nl-drawer-hero">
+                            <div className="nl-drawer-name">{fullName(lead)}</div>
+                            <div className="nl-drawer-badges">
+                                <ScoreBadge score={lead.lead_score} />
+                                <StatusPill status={lead.status} />
+                                {lead.storm_event_id && <span className="nl-storm-chip"><CloudLightning size={12} /> Storm-linked</span>}
+                            </div>
+                        </div>
+
+                        {/* Contact */}
+                        <div className="nl-drawer-sec">
+                            <div className="nl-drawer-sec-title">Contact</div>
+                            <div className="nl-kv"><span>Phone</span><b className="lead-phone">{lead.phone || '—'}</b></div>
+                            <div className="nl-kv"><span>Email</span><b>{lead.email || '—'}</b></div>
+                            <div className="nl-kv"><span>Address</span><b>{[lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ') || '—'}</b></div>
+                            <div className="nl-kv"><span>Damage</span><b>{lead.damage_type || '—'}</b></div>
+                            <div className="nl-kv"><span>Source</span><b>{sourceInfo(lead.source).label}</b></div>
+                            <div className="nl-kv"><span>Assigned</span><b>{nameOf(lead.assigned_to)}</b></div>
+                        </div>
+
+                        {/* Score reason */}
+                        {lead.score_reason && (
+                            <div className="nl-drawer-sec">
+                                <div className="nl-drawer-sec-title">Why this score</div>
+                                <div className="nl-reason-box">{lead.score_reason}</div>
+                            </div>
+                        )}
+
+                        {/* Storm link */}
+                        {lead.storm_event_id && (
+                            <div className="nl-drawer-sec">
+                                <div className="nl-drawer-sec-title">Storm</div>
+                                <div className="nl-reason-box">
+                                    Linked to a nearby storm event.{' '}
+                                    <a className="nl-link" href="/dashboard/storm-tracking">View storm tracking →</a>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Recording */}
+                        {rec && (
+                            <div className="nl-drawer-sec">
+                                <div className="nl-drawer-sec-title">Call recording</div>
+                                <audio controls src={rec} style={{ width: '100%' }} />
+                            </div>
+                        )}
+
+                        {/* Timeline */}
+                        <div className="nl-drawer-sec">
+                            <div className="nl-drawer-sec-title">Activity timeline</div>
+                            {!touches.length && <div className="nl-reason-box">No touches logged yet.</div>}
+                            {touches.map((t) => (
+                                <div key={t.id} className="nl-touch">
+                                    <span className={`nl-touch-dir ${t.direction}`}>{t.direction === 'outbound' ? '↗' : '↙'}</span>
+                                    <div>
+                                        <div className="nl-touch-line"><b>{t.type}</b> · {t.direction}</div>
+                                        {t.summary && <div className="nl-touch-sum">{t.summary}</div>}
+                                        <div className="nl-touch-time">{fmtRelative(t.created_at)}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Notes / disposition */}
+                        {lead.disposition && (
+                            <div className="nl-drawer-sec">
+                                <div className="nl-drawer-sec-title">Disposition</div>
+                                <div className="nl-reason-box">{lead.disposition}</div>
+                            </div>
+                        )}
+
+                        {/* Controls */}
+                        <div className="nl-drawer-sec">
+                            <div className="nl-drawer-sec-title">Move status</div>
+                            <select
+                                className="filter-select"
+                                style={{ width: '100%' }}
+                                value=""
+                                disabled={busy || !nextStatuses.length}
+                                onChange={(e) => e.target.value && changeStatus(e.target.value)}
+                            >
+                                <option value="">{nextStatuses.length ? 'Choose next status…' : 'No moves available'}</option>
+                                {nextStatuses.map((s) => (
+                                    <option key={s} value={s}>{STATUS_META[s].label}</option>
+                                ))}
+                            </select>
+
+                            {canViewAll && (
+                                <>
+                                    <div className="nl-drawer-sec-title" style={{ marginTop: '0.75rem' }}>Reassign</div>
+                                    <select
+                                        className="filter-select"
+                                        style={{ width: '100%' }}
+                                        value={lead.assigned_to || ''}
+                                        disabled={busy}
+                                        onChange={(e) => reassign(e.target.value)}
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {teamMembers.map((m) => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
+
+                            {canConvert && ALLOWED_NEXT[lead.status]?.includes('claim_started') && (
+                                <button className="btn-success" style={{ width: '100%', marginTop: '0.75rem' }} disabled={busy} onClick={convert}>
+                                    <ArrowRightCircle size={15} style={{ verticalAlign: '-3px' }} /> Convert to Claim
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </aside>
+        </div>
+    );
+}
