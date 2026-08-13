@@ -4,8 +4,11 @@ import { redirect } from "next/navigation";
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
-  const type = searchParams.get("type")  | null;
-  const next = searchParams.get("next") ?? "/";
+  const type = searchParams.get("type") ?? null;
+  // Default post-verify destination is the dashboard — the middleware then
+  // routes no-company users to onboarding (and invited members to accept).
+  // An email link that carries ?next=/accept-invite/... is honoured as-is.
+  const next = searchParams.get("next") ?? "/dashboard";
 
   if (token_hash && type) {
     const supabase = await createClient();
