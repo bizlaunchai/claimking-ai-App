@@ -17,6 +17,10 @@ const ClaimsManagement = () => {
     const router = useRouter();
     const goToDetail = (claimId) => router.push(`/dashboard/claims/${claimId}`);
     const { has } = usePermissions();
+    // Assignment is a management view — only users who can see all claims or
+    // assign them get the "Assigned To" column/chip. An own-scope user (e.g. an
+    // estimator) only ever sees their own claims, so it would be redundant.
+    const canSeeAssignment = has('view_all_claims') || has('assign_claims');
     // State declarations
     const [teamMembers, setTeamMembers] = useState([]);   // for the employee filter + reassign (view-all users)
     const [employeeFilter, setEmployeeFilter] = useState('all');
@@ -149,8 +153,16 @@ const ClaimsManagement = () => {
             claimNumber: c.claim_number || '',
             policyNumber: c.policy_number || '',
             assignedTo: c.assigned_to_user_id || null,
+            assignedName: c.assigned_to_name || null,
             updatedAt: c.updated_at,
-            needAction: stage === 1, // no claim # yet -> action required
+            // Needs-attention comes from the backend engine (Task 1.2), not a
+            // client-side guess — so the tab + count match the flagged claims.
+            needAction: !!c.action_required,
+            actionReason: c.action_reason || null,
+            stageEnteredAt: c.stage_entered_at || null,
+            daysInStage: c.stage_entered_at
+                ? Math.floor((Date.now() - new Date(c.stage_entered_at).getTime()) / 86400000)
+                : null,
             // Overdue = an active claim (not terminal) untouched for > 7 days
             overdue: stage < 10 && c.updated_at
                 ? (Date.now() - new Date(c.updated_at).getTime()) > 7 * 86400000
@@ -171,6 +183,35 @@ const ClaimsManagement = () => {
         if (h < 24) return `${h}h ago`;
         const d = Math.floor(h / 24);
         return `${d}d ago`;
+    };
+
+    // Resolve a claim's assignee into a display chip. Names come from the
+    // team-members list (loaded for view-all users); falls back to "You" for
+    // the current user, else a neutral label.
+    const assigneeInfo = (claim) => {
+        if (!claim.assignedTo) return { unassigned: true, label: 'Unassigned', initials: '' };
+        const isMe = claim.assignedTo === currentUserId;
+        // Name comes from the claim payload first (works for everyone, incl.
+        // own-scope users who can't load the team list), then the team list,
+        // then a sensible fallback.
+        const label = claim.assignedName
+            || teamMembers.find((x) => x.id === claim.assignedTo)?.name
+            || (isMe ? 'You' : 'Team member');
+        const initials = label === 'You'
+            ? 'ME'
+            : (label.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '•');
+        return { unassigned: false, label, initials };
+    };
+
+    // Options for an assign dropdown — the team list, plus the current assignee
+    // pinned on top when they aren't in the list (e.g. the viewer lacks
+    // view_team), so an assigned claim never falsely renders as "Unassigned".
+    const assignOptions = (claim) => {
+        const opts = [...teamMembers];
+        if (claim.assignedTo && !opts.some((m) => m.id === claim.assignedTo)) {
+            opts.unshift({ id: claim.assignedTo, name: claim.assignedName || 'Current assignee' });
+        }
+        return opts;
     };
 
     // Compute stat/analytics cards from the real claim list
@@ -416,6 +457,28 @@ const ClaimsManagement = () => {
                     {claim.overdue && <span className="claim-tag tag-urgent"><Clock size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Overdue</span>}
                     {claim.stage === 8 && <span className="claim-tag tag-urgent"><DollarSign size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Supplement</span>}
                 </div>
+                {canSeeAssignment && (() => {
+                    const a = assigneeInfo(claim);
+                    return (
+                        <div
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.4rem' }}
+                            title={a.unassigned ? 'Unassigned' : `Assigned to ${a.label}`}
+                        >
+                            {a.unassigned ? (
+                                <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontStyle: 'italic' }}>○ Unassigned</span>
+                            ) : (
+                                <>
+                                    <span style={{
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        width: 20, height: 20, borderRadius: '50%', background: '#1a1f3a',
+                                        color: '#fff', fontSize: '0.6rem', fontWeight: 700, flex: 'none',
+                                    }}>{a.initials}</span>
+                                    <span style={{ fontSize: '0.72rem', color: '#374151', fontWeight: 500 }}>{a.label}</span>
+                                </>
+                            )}
+                        </div>
+                    );
+                })()}
                 {claim.updatedAt && <div style={{fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.5rem'}}>Updated {timeAgo(claim.updatedAt)}</div>}
                 <div className="claim-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="claim-action-btn primary" onClick={() => goToDetail(claim.id)}>Open</button>
@@ -455,6 +518,42 @@ const ClaimsManagement = () => {
                 <div className="stage-cards">
                     {cardsHtml}
                 </div>
+            </div>
+        );
+    };
+
+    // Loading skeleton — mirrors the pipeline board so the layout doesn't jump
+    // when the real claims arrive. Shown while the initial fetch is in flight.
+    const renderSkeletonBoard = () => {
+        const stageCount = isMobile ? 1 : 4;
+        const cardCounts = [3, 2, 3, 1];
+        return (
+            <div className="claims-skeleton-board" aria-busy="true" aria-label="Loading claims">
+                {Array.from({ length: stageCount }, (_, s) => (
+                    <div key={s} className="claims-skeleton-stage">
+                        <div className="stage-header">
+                            <div style={{ flex: 1 }}>
+                                <div className="sk-line" style={{ width: '55%', height: 14, marginBottom: 8 }} />
+                                <div className="sk-line" style={{ width: '35%', height: 10 }} />
+                            </div>
+                            <div className="sk-line" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                        </div>
+                        {Array.from({ length: cardCounts[s % cardCounts.length] }, (_, c) => (
+                            <div key={c} className="claims-skeleton-card">
+                                <div className="sk-row" style={{ marginBottom: 10 }}>
+                                    <div className="sk-line" style={{ width: '40%', height: 12 }} />
+                                    <div className="sk-line" style={{ width: 10, height: 10, borderRadius: '50%' }} />
+                                </div>
+                                <div className="sk-line" style={{ width: '70%', height: 12, marginBottom: 8 }} />
+                                <div className="sk-line" style={{ width: '45%', height: 14, marginBottom: 10 }} />
+                                <div className="sk-row">
+                                    <div className="sk-line" style={{ width: 60, height: 20, borderRadius: 6 }} />
+                                    <div className="sk-line" style={{ width: 50, height: 20, borderRadius: 6 }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ))}
             </div>
         );
     };
@@ -630,6 +729,7 @@ const ClaimsManagement = () => {
                     <th>Amount</th>
                     <th>Damage Type</th>
                     <th>Priority</th>
+                    {canSeeAssignment && <th>Assigned To</th>}
                     <th>Stage</th>
                     <th>Actions</th>
                 </tr>
@@ -648,6 +748,38 @@ const ClaimsManagement = () => {
                   {claim.priority.charAt(0).toUpperCase() + claim.priority.slice(1)}
                 </span>
                         </td>
+                        {canSeeAssignment && (
+                        <td onClick={(e) => e.stopPropagation()}>
+                            {has('assign_claims') ? (
+                                <select
+                                    className="stage-selector"
+                                    value={claim.assignedTo || ''}
+                                    disabled={assigningId === claim.id}
+                                    onChange={(e) => reassignClaim(claim.id, e.target.value)}
+                                    title="Assign this claim"
+                                >
+                                    <option value="">Unassigned</option>
+                                    {assignOptions(claim).map((m) => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
+                            ) : (() => {
+                                const a = assigneeInfo(claim);
+                                return a.unassigned ? (
+                                    <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic' }}>Unassigned</span>
+                                ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={`Assigned to ${a.label}`}>
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                            width: 20, height: 20, borderRadius: '50%', background: '#1a1f3a',
+                                            color: '#fff', fontSize: '0.6rem', fontWeight: 700, flex: 'none',
+                                        }}>{a.initials}</span>
+                                        <span style={{ fontSize: '0.78rem', color: '#374151' }}>{a.label}</span>
+                                    </span>
+                                );
+                            })()}
+                        </td>
+                        )}
                         <td>
                             <select
                                 className="stage-selector"
@@ -663,15 +795,14 @@ const ClaimsManagement = () => {
                         </td>
                         <td>
                             <div className="table-actions">
-                                <button className="table-action-btn" onClick={() => viewClaim(claim.id)}>View</button>
-                                <button className="table-action-btn primary" onClick={() => processClaim(claim.id)}>Process</button>
+                                <button className="table-action-btn primary" onClick={() => viewClaim(claim.id)}>View</button>
                             </div>
                         </td>
                     </tr>
                 ))}
                 {filteredClaims.length === 0 && (
                     <tr>
-                        <td colSpan="9" style={{textAlign: 'center', padding: '2rem', color: '#6b7280'}}>
+                        <td colSpan={canSeeAssignment ? 9 : 8} style={{textAlign: 'center', padding: '2rem', color: '#6b7280'}}>
                             No claims found
                         </td>
                     </tr>
@@ -689,9 +820,9 @@ const ClaimsManagement = () => {
 
     // View claim details from list — open the dedicated detail page
     const viewClaim = (claimId) => goToDetail(claimId);
+    // (Process button removed — View opens the claim detail page.)
 
     // Process claim — same detail page (work hub)
-    const processClaim = (claimId) => goToDetail(claimId);
 
     // Update items per page
     const updateItemsPerPage = (value) => {
@@ -1260,8 +1391,11 @@ const ClaimsManagement = () => {
                     </div>
                 </div>
 
+                {/* Loading skeleton — replaces the active view during the initial fetch */}
+                {loading && renderSkeletonBoard()}
+
                 {/* Pipeline Board View (Grid) */}
-                {currentView === 'grid' && (
+                {!loading && currentView === 'grid' && (
                     <>
                         {/* Top scrollbar — mirrors the board's horizontal scroll */}
                         <div className="board-top-scroll" ref={topScrollRef} onScroll={onTopScroll}>
@@ -1283,7 +1417,7 @@ const ClaimsManagement = () => {
                 )}
 
                 {/* List View Table */}
-                {currentView === 'list' && (
+                {!loading && currentView === 'list' && (
                     <div className="list-view-table">
                         {selectedIds.size > 0 && (
                             <div className="bulk-action-bar">
@@ -1318,7 +1452,7 @@ const ClaimsManagement = () => {
                 )}
 
                 {/* Map View */}
-                {currentView === 'map' && (
+                {!loading && currentView === 'map' && (
                     <MapView claims={filteredClaims} onSelect={goToDetail} />
                 )}
             </div>
@@ -1477,9 +1611,16 @@ const ClaimsManagement = () => {
                                     <label>Status</label>
                                     <div className="detail-value">
                                         {selectedClaim.needAction ? (
-                                            <span style={{color: '#dc2626', fontWeight: 600}}>Action Required</span>
+                                            <span style={{color: '#dc2626', fontWeight: 600}}>
+                                                Action Required{selectedClaim.actionReason ? ` — ${selectedClaim.actionReason}` : ''}
+                                            </span>
                                         ) : (
                                             <span style={{color: '#16a34a', fontWeight: 600}}>In Progress</span>
+                                        )}
+                                        {selectedClaim.daysInStage != null && selectedClaim.stage < 10 && (
+                                            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 2 }}>
+                                                {selectedClaim.daysInStage} day{selectedClaim.daysInStage === 1 ? '' : 's'} in this stage
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -1494,7 +1635,7 @@ const ClaimsManagement = () => {
                                                 onChange={(e) => reassignClaim(selectedClaim.id, e.target.value)}
                                             >
                                                 <option value="">Unassigned</option>
-                                                {teamMembers.map(m => (
+                                                {assignOptions(selectedClaim).map(m => (
                                                     <option key={m.id} value={m.id}>{m.name}</option>
                                                 ))}
                                             </select>

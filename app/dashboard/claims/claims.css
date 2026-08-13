@@ -561,6 +561,60 @@
     50% { opacity: 0.6; }
 }
 
+/* ── Loading skeleton (shown while claims are being fetched) ── */
+@keyframes ck-skeleton-shimmer {
+    0%   { background-position: -420px 0; }
+    100% { background-position: 420px 0; }
+}
+
+.claims-skeleton-board {
+    display: flex;
+    gap: 1rem;
+    overflow: hidden;
+    padding-bottom: 1rem;
+    min-height: 400px;
+}
+
+.claims-skeleton-stage {
+    min-width: 280px;
+    background: #f9fafb;
+    border-radius: 12px;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.claims-skeleton-stage .stage-header {
+    margin-bottom: 1rem;
+}
+
+.sk-line {
+    border-radius: 6px;
+    background: #e9edf2;
+    background-image: linear-gradient(90deg, #e9edf2 0px, #f4f7fa 40px, #e9edf2 80px);
+    background-size: 420px 100%;
+    animation: ck-skeleton-shimmer 1.25s ease-in-out infinite;
+}
+
+.claims-skeleton-card {
+    background: #fff;
+    border: 1px solid #eef1f4;
+    border-radius: 12px;
+    padding: 0.9rem;
+    margin-bottom: 0.85rem;
+}
+
+.claims-skeleton-card .sk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sk-line { animation: none; }
+}
+
 .claim-client {
     font-weight: 600;
     color: #1f2937;
