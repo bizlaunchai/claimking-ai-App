@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '../../../lib/axiosInstance.js';
 import { createClient } from '@/lib/supabase/client';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import {
     Mail, MessageSquare, MessageSquareOff, RefreshCw, Loader2, Check, X,
     Copy, ClipboardList, Link2, AlertTriangle, Inbox, Reply,
@@ -46,6 +47,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const matchMethodLabel = {
+    claim_number:  'Claim # match',
     client_email:  'Email match',
     policy_number: 'Policy # match',
     address_match: 'Address match',
@@ -81,6 +83,9 @@ const ProviderLogo = ({ logo }) => {
 const EmailAssistant = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
+    // Only users who can view all claims see/work the unmatched queue (spec 3.2.6).
+    const { has } = usePermissions();
+    const canViewAllClaims = has('view_all_claims');
 
     const [isAdmin, setIsAdmin]           = useState(false);
     const [roleLoading, setRoleLoading]   = useState(true);
@@ -105,6 +110,13 @@ const EmailAssistant = () => {
     const [page, setPage]                         = useState(1);
     const [total, setTotal]                       = useState(0);
     const pageSize = 25;
+
+    // Assign-to-claim picker (unmatched queue, task 1.7) — replaces the raw
+    // "paste a client UUID" prompt with a searchable claim list.
+    const [assignPicker, setAssignPicker]         = useState({ open: false, messageId: null });
+    const [claimOptions, setClaimOptions]         = useState([]);
+    const [claimOptionsLoaded, setClaimOptionsLoaded] = useState(false);
+    const [claimQuery, setClaimQuery]             = useState('');
 
     // Settings tab state
     const [settings, setSettings]                 = useState(DEFAULT_SETTINGS);
@@ -170,6 +182,16 @@ const EmailAssistant = () => {
     }, []);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    // Company-wide mailbox connection health (task 1.8).
+    const [health, setHealth] = useState({ data: [], hasIssues: false });
+    const loadHealth = useCallback(async () => {
+        try {
+            const { data } = await axiosInstance.get('/email/connection-health', { suppressErrorToast: true });
+            setHealth({ data: data?.data || [], hasIssues: !!data?.hasIssues });
+        } catch { /* non-blocking */ }
+    }, []);
+    useEffect(() => { loadHealth(); }, [loadHealth]);
 
     // ── load current user's role to gate admin-only UI ────────────────────
     useEffect(() => {
@@ -650,12 +672,31 @@ const EmailAssistant = () => {
         setSettings(prev => ({ ...prev, custom_domains: prev.custom_domains.filter(x => x !== d) }));
 
     // ── per-message actions ───────────────────────────────────────────────
+    // Open the claim picker for an unmatched email; lazy-load the claim list once.
     const handleAssignPrompt = async (messageId) => {
-        const clientId = prompt('Enter Client ID to assign this email to:');
-        if (!clientId) return;
+        setAssignPicker({ open: true, messageId });
+        setClaimQuery('');
+        if (claimOptionsLoaded) return;
+        try {
+            const res = await axiosInstance.get('/client-portal', { suppressErrorToast: true });
+            const rows = res.data?.data || [];
+            setClaimOptions(rows.map(c => ({
+                id: c.id,
+                name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unnamed',
+                claim_number: c.claim_number || null,
+                address: c.address || null,
+            })));
+            setClaimOptionsLoaded(true);
+        } catch {/* interceptor */}
+    };
+
+    const handleAssignToClaim = async (clientId) => {
+        const { messageId } = assignPicker;
+        if (!messageId || !clientId) return;
+        setAssignPicker({ open: false, messageId: null });
         try {
             await axiosInstance.post(`/email/messages/${messageId}/assign`, { clientId });
-            toast.success('Email assigned to client');
+            toast.success('Email assigned to claim');
             loadMessages();
             loadSummary();
         } catch {/* interceptor */}
@@ -669,6 +710,18 @@ const EmailAssistant = () => {
             loadMessages();
             loadSummary();
         } catch {/* interceptor */}
+    };
+
+    // Show / hide a matched email on its claim's client portal (subject + preview).
+    const handleTogglePortal = async (messageId, next) => {
+        // Optimistic — flip locally, revert on failure.
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, portal_visible: next } : m));
+        try {
+            await axiosInstance.post(`/email/messages/${messageId}/portal-visibility`, { visible: next });
+            toast.success(next ? 'Email shared on client portal' : 'Email hidden from portal');
+        } catch {
+            setMessages(prev => prev.map(m => m.id === messageId ? { ...m, portal_visible: !next } : m));
+        }
     };
 
     // ── derived data ──────────────────────────────────────────────────────
@@ -840,6 +893,41 @@ const EmailAssistant = () => {
                                 })}
                             </div>
 
+                            {/* Mailbox connection health (task 1.8) — every connected
+                                mailbox in the company + a broken-mailbox alert. */}
+                            {health.data.length > 0 && (
+                                <div className="mailbox-health">
+                                    {health.hasIssues && (
+                                        <div className="mailbox-health-alert">
+                                            <AlertTriangle size={16} strokeWidth={2.5} style={{ verticalAlign: '-3px', marginRight: 6 }} />
+                                            A connected mailbox needs attention — emails may not be syncing. Reconnect it below.
+                                        </div>
+                                    )}
+                                    <div className="mailbox-health-list">
+                                        {health.data.map(mb => (
+                                            <div key={`${mb.provider}-${mb.user_id}`} className="mailbox-health-row">
+                                                <span className={`mailbox-health-dot ${mb.healthy ? 'ok' : 'bad'}`} />
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div className="mailbox-health-email">
+                                                        {mb.email_address || `${mb.provider} mailbox`}
+                                                        <span className="mailbox-health-provider">{mb.provider}</span>
+                                                    </div>
+                                                    <div className="mailbox-health-meta">
+                                                        {mb.healthy
+                                                            ? `Synced ${fmtRelative(mb.last_synced_at)}`
+                                                            : (mb.status === 'error'
+                                                                ? `Broken${mb.last_error ? ` — ${mb.last_error}` : ''}`
+                                                                : mb.stale
+                                                                    ? `No sync since ${fmtRelative(mb.last_synced_at)}`
+                                                                    : mb.status)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="forward-box">
                                 <div className="forward-box-icon"><Mail size={20} strokeWidth={2} /></div>
                                 <div className="forward-content">
@@ -981,7 +1069,8 @@ const EmailAssistant = () => {
                                 >
                                     <option value="all">All {activityChannel === 'sms' ? 'texts' : 'emails'}</option>
                                     <option value="matched">Matched</option>
-                                    <option value="unassigned">Unassigned</option>
+                                    {/* Unmatched queue is view-all-only (spec 3.2.6) */}
+                                    {canViewAllClaims && <option value="unassigned">Unassigned</option>}
                                 </select>
                                 {activityChannel === 'email' && (
                                     <select
@@ -1015,8 +1104,12 @@ const EmailAssistant = () => {
                                     <div className="email-list">
                                         {messages.map(m => {
                                             const expanded = !!expandedRows[m.id];
-                                            const displayName = m.from_name || m.from_email || '?';
-                                            const initial = (displayName.trim()[0] || '?').toUpperCase();
+                                            const outbound = m.direction === 'outbound';
+                                            // Sent mail: show who we sent it TO, not our own mailbox.
+                                            const displayName = outbound
+                                                ? (m.to_email || 'Recipient')
+                                                : (m.from_name || m.from_email || '?');
+                                            const initial = (String(displayName).trim()[0] || '?').toUpperCase();
                                             return (
                                             <div
                                                 key={m.id}
@@ -1037,6 +1130,9 @@ const EmailAssistant = () => {
                                                     <div className="email-row-main">
                                                         <div className="email-row-headline">
                                                             <span className="email-row-name">{displayName}</span>
+                                                            <span className={`source-badge source-${outbound ? 'outlook' : 'gmail'}`}>
+                                                                {outbound ? 'sent' : 'received'}
+                                                            </span>
                                                             {m.matched_company && (
                                                                 <span className="company-tag">{m.matched_company}</span>
                                                             )}
@@ -1056,14 +1152,28 @@ const EmailAssistant = () => {
                                                                 <div className="meta-method">
                                                                     {matchMethodLabel[m.match_method] || 'Auto-matched'}
                                                                 </div>
+                                                                <label
+                                                                    className="portal-share-toggle"
+                                                                    onClick={e => e.stopPropagation()}
+                                                                    title="Show this email (subject + preview) on the client portal"
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!m.portal_visible}
+                                                                        onChange={e => handleTogglePortal(m.id, e.target.checked)}
+                                                                    />
+                                                                    <span>{m.portal_visible ? 'On portal' : 'Show on portal'}</span>
+                                                                </label>
                                                             </>
                                                         ) : (
                                                             <>
                                                                 <span className="status-pill status-unassigned"><AlertTriangle size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />Unassigned</span>
+                                                                {canViewAllClaims && (
                                                                 <div className="meta-actions" onClick={e => e.stopPropagation()}>
                                                                     <button className="btn-assign" onClick={() => handleAssignPrompt(m.id)}>Assign</button>
                                                                     <button className="btn-ignore" onClick={() => handleIgnore(m.id)}>Ignore</button>
                                                                 </div>
+                                                                )}
                                                             </>
                                                         )}
                                                         <button
@@ -1083,7 +1193,8 @@ const EmailAssistant = () => {
                                                     <div className="email-row-detail">
                                                         <div className="email-detail-meta">
                                                             <span><strong>From:</strong> {m.from_name ? `${m.from_name} <${m.from_email}>` : m.from_email}</span>
-                                                            <span><strong>Received:</strong> {new Date(m.received_at).toLocaleString()}</span>
+                                                            {m.to_email && <span><strong>To:</strong> {m.to_email}</span>}
+                                                            <span><strong>{outbound ? 'Sent:' : 'Received:'}</strong> {new Date(m.received_at).toLocaleString()}</span>
                                                             {m.matched_company && (
                                                                 <span><strong>Company:</strong> {m.matched_company}</span>
                                                             )}
@@ -1684,6 +1795,58 @@ const EmailAssistant = () => {
                             <button className="primary" onClick={saveCampaign} disabled={savingCampaign}>
                                 {savingCampaign ? 'Saving…' : 'Save campaign'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Assign-to-claim picker for the unmatched queue (task 1.7) */}
+            {assignPicker.open && (
+                <div className="cmp-modal-overlay" onClick={() => setAssignPicker({ open: false, messageId: null })}>
+                    <div className="cmp-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+                        <div className="cmp-modal-head">
+                            <h3>Assign email to a claim</h3>
+                            <button className="cmp-modal-x" onClick={() => setAssignPicker({ open: false, messageId: null })}>×</button>
+                        </div>
+                        <div className="cmp-modal-body">
+                            <input
+                                className="search-input"
+                                autoFocus
+                                placeholder="Search by client name, claim #, or address…"
+                                value={claimQuery}
+                                onChange={e => setClaimQuery(e.target.value)}
+                                style={{ width: '100%', marginBottom: 12 }}
+                            />
+                            {!claimOptionsLoaded ? (
+                                <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>Loading claims…</p>
+                            ) : (() => {
+                                const q = claimQuery.trim().toLowerCase();
+                                const filtered = q
+                                    ? claimOptions.filter(c =>
+                                        c.name.toLowerCase().includes(q) ||
+                                        (c.claim_number || '').toLowerCase().includes(q) ||
+                                        (c.address || '').toLowerCase().includes(q))
+                                    : claimOptions;
+                                if (filtered.length === 0) {
+                                    return <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>No matching claims.</p>;
+                                }
+                                return (
+                                    <div style={{ maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {filtered.slice(0, 100).map(c => (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => handleAssignToClaim(c.id)}
+                                                style={{ textAlign: 'left', padding: '0.55rem 0.7rem', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', cursor: 'pointer' }}
+                                            >
+                                                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#111827' }}>{c.name}</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                                                    {[c.claim_number && `Claim ${c.claim_number}`, c.address].filter(Boolean).join(' · ') || 'No claim # / address'}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>

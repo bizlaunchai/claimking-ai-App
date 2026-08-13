@@ -70,6 +70,9 @@ const ClaimDetail = ({ id }) => {
     const [uploadingType, setUploadingType] = useState(null);
     const fileRefs = { estimate: useRef(null), measurement: useRef(null), photo: useRef(null) };
 
+    // Emails filed to this claim (task 1.7) — threaded, direction-tagged.
+    const [emailThreads, setEmailThreads] = useState([]);
+
     // Insurance Communication feed
     const [comms, setComms] = useState([]);
     const [commModalOpen, setCommModalOpen] = useState(false);
@@ -86,16 +89,18 @@ const ClaimDetail = ({ id }) => {
     const load = async () => {
         try {
             setLoading(true);
-            const [c, u, a, m] = await Promise.all([
+            const [c, u, a, m, e] = await Promise.all([
                 axiosInstance.get(`/client-portal/${id}`),
                 axiosInstance.get(`/client-portal/${id}/uploads`),
                 axiosInstance.get(`/client-portal/${id}/activity`),
                 axiosInstance.get(`/client-portal/${id}/communications`),
+                axiosInstance.get(`/client-portal/${id}/emails`, { suppressErrorToast: true }).catch(() => null),
             ]);
             setClaim(c.data?.data || null);
             setUploads(u.data?.data || []);
             setActivity(a.data?.data || []);
             setComms(m.data?.data || []);
+            setEmailThreads(e?.data?.data || []);
         } catch {
             // axiosInstance toasts
         } finally {
@@ -418,6 +423,60 @@ const ClaimDetail = ({ id }) => {
                                     </div>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    {/* Emails filed to this claim (task 1.7) — read-only,
+                        threaded, with inbound/outbound direction indicators.
+                        Populated by the Outlook/Gmail matcher. */}
+                    <div className="current-stage-info" style={{ marginBottom: 0 }}>
+                        <h3 className="current-stage-title" style={{ marginBottom: 0 }}>
+                            Emails ({emailThreads.reduce((n, t) => n + t.messages.length, 0)})
+                        </h3>
+                        <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '0.4rem 0 0.9rem' }}>
+                            Matched emails from your connected mailbox, grouped by conversation.
+                        </p>
+                        {emailThreads.length === 0 && (
+                            <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No emails matched to this claim yet.</p>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                            {emailThreads.map(thread => (
+                                <div key={thread.thread_id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                                    <div style={{ padding: '0.5rem 0.75rem', background: '#f3f4f6', fontWeight: 600, fontSize: '0.8rem', color: '#374151' }}>
+                                        {thread.subject || '(no subject)'}
+                                    </div>
+                                    {thread.messages.map(msg => {
+                                        const outbound = msg.direction === 'outbound';
+                                        return (
+                                            <div key={msg.id} style={{ display: 'flex', gap: '0.65rem', padding: '0.6rem 0.75rem', borderTop: '1px solid #f1f3f5' }}>
+                                                <span style={{ flexShrink: 0, alignSelf: 'flex-start', fontSize: '0.6rem', fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', padding: '0.25rem 0.45rem', borderRadius: 6, background: outbound ? '#eef2ff' : '#fef3c7', color: outbound ? '#3730a3' : '#92400e', whiteSpace: 'nowrap' }}>
+                                                    {outbound ? '↗ Sent' : '↙ Received'}
+                                                </span>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: '0.8rem', color: '#111827' }}>
+                                                        <strong>{outbound ? `To: ${msg.to_email || '—'}` : (msg.from_name || msg.from_email || '—')}</strong>
+                                                    </div>
+                                                    {msg.snippet && <div style={{ fontSize: '0.78rem', color: '#4b5563', marginTop: 2 }}>{msg.snippet}</div>}
+                                                    {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                                                            {msg.attachments.map((att, ai) => (
+                                                                <span key={ai} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.68rem', color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0.1rem 0.4rem' }}>
+                                                                    📎 {att.filename || att.name || 'attachment'}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 4, display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                                        <span>{new Date(msg.received_at).toLocaleString()}</span>
+                                                        <span>· {msg.source}</span>
+                                                        {msg.portal_visible && <span style={{ color: '#166534', fontWeight: 600 }}>· On portal</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
