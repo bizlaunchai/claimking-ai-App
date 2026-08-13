@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import "../claims.css";
 
 const STAGE_NAMES = [
@@ -77,6 +78,11 @@ const ClaimDetail = ({ id }) => {
     const [commSubmitting, setCommSubmitting] = useState(false);
     const commFileRef = useRef(null);
 
+    // Assignment (Task 1.3) — reassign from the detail page.
+    const { has } = usePermissions();
+    const [teamMembers, setTeamMembers] = useState([]);
+    const [assigning, setAssigning] = useState(false);
+
     const load = async () => {
         try {
             setLoading(true);
@@ -98,6 +104,35 @@ const ClaimDetail = ({ id }) => {
     };
 
     useEffect(() => { load(); }, [id]);
+
+    // Team members for the assign dropdown (only for users who can assign).
+    useEffect(() => {
+        if (!has('assign_claims')) return;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
+                const rows = res.data?.data || res.data || [];
+                setTeamMembers(rows.map(m => ({
+                    id: m.id || m.user_id,
+                    name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email || 'Member',
+                })).filter(m => m.id));
+            } catch { /* ignore */ }
+        })();
+    }, [has]);
+
+    const reassign = async (userId) => {
+        setAssigning(true);
+        try {
+            await axiosInstance.patch(`/client-portal/${id}/assign`, { user_id: userId || null });
+            setClaim(c => ({ ...c, assigned_to_user_id: userId || null }));
+            const who = userId ? (teamMembers.find(m => m.id === userId)?.name || 'team member') : 'Unassigned';
+            toast.success(userId ? `Assigned to ${who}.` : 'Claim unassigned.');
+        } catch {
+            toast.error('Could not update assignment.');
+        } finally {
+            setAssigning(false);
+        }
+    };
 
     const changeStage = async (newStage, reason) => {
         const prev = claim?.claim_status;
@@ -204,7 +239,29 @@ const ClaimDetail = ({ id }) => {
         } catch { /* toasted */ }
     };
 
-    if (loading) return <div style={{ padding: '2rem' }}>Loading claim…</div>;
+    if (loading) return (
+        <div className="main-container">
+            <style>{`
+                @keyframes ckShimmer { 0% { background-position: -680px 0; } 100% { background-position: 680px 0; } }
+                .ck-skel { background: linear-gradient(90deg, #eceef3 25%, #f6f7fa 37%, #eceef3 63%); background-size: 680px 100%; animation: ckShimmer 1.4s ease-in-out infinite; border-radius: 8px; }
+                @media (prefers-reduced-motion: reduce) { .ck-skel { animation: none; } }
+            `}</style>
+            <div style={{ padding: '1.75rem 2rem', maxWidth: 1100 }}>
+                <div className="ck-skel" style={{ width: 110, height: 13, marginBottom: 22 }} />
+                <div className="ck-skel" style={{ width: '42%', height: 30, marginBottom: 12 }} />
+                <div className="ck-skel" style={{ width: '62%', height: 14, marginBottom: 28 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 18, marginBottom: 28 }}>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i}>
+                            <div className="ck-skel" style={{ width: 72, height: 10, marginBottom: 9 }} />
+                            <div className="ck-skel" style={{ width: '80%', height: 16 }} />
+                        </div>
+                    ))}
+                </div>
+                <div className="ck-skel" style={{ width: '100%', height: 130, borderRadius: 12 }} />
+            </div>
+        </div>
+    );
     if (!claim) return (
         <div style={{ padding: '2rem' }}>
             <p>Claim not found.</p>
@@ -252,6 +309,34 @@ const ClaimDetail = ({ id }) => {
                             <div className="detail-group"><label>Email</label><div className="detail-value">{claim.email || '—'}</div></div>
                             <div className="detail-group"><label>Phone</label><div className="detail-value">{claim.phone || '—'}</div></div>
                             <div className="detail-group"><label>Adjuster</label><div className="detail-value">{claim.adjuster_name || '—'}{claim.adjuster_phone ? ` · ${claim.adjuster_phone}` : ''}</div></div>
+                            <div className="detail-group">
+                                <label>Assigned To</label>
+                                <div className="detail-value">
+                                    {has('assign_claims') ? (() => {
+                                        const opts = [...teamMembers];
+                                        if (claim.assigned_to_user_id && !opts.some(m => m.id === claim.assigned_to_user_id)) {
+                                            opts.unshift({ id: claim.assigned_to_user_id, name: claim.assigned_to_name || 'Current assignee' });
+                                        }
+                                        return (
+                                            <select
+                                                className="stage-selector"
+                                                value={claim.assigned_to_user_id || ''}
+                                                disabled={assigning}
+                                                onChange={(e) => reassign(e.target.value)}
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {opts.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                                ))}
+                                            </select>
+                                        );
+                                    })() : claim.assigned_to_user_id ? (
+                                        claim.assigned_to_name || teamMembers.find(m => m.id === claim.assigned_to_user_id)?.name || 'Assigned'
+                                    ) : (
+                                        <span style={{ color: '#9ca3af' }}>Unassigned</span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                         {claim.notes && <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#374151' }}><strong>Notes:</strong> {claim.notes}</p>}
                     </div>
