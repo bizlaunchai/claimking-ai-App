@@ -248,7 +248,15 @@ export default function NewLeads() {
             () => axiosInstance.patch(`/leads/${lead.id}/status`, { to, reason }),
             `Moved to ${STATUS_META[to]?.label || to}`,
         );
-    const doSchedule = (lead) => setStatus(lead, 'estimate_scheduled');
+    // Schedule → the real Scheduling page, prefilled + linked to this lead.
+    // Creating the appointment there flips the lead to Estimate Scheduled
+    // (server-side side-effect), so no interim status-move here.
+    const doSchedule = (lead) => {
+        const addr = [lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ');
+        const qs = new URLSearchParams({ lead_id: lead.id });
+        if (addr) qs.set('address', addr);
+        router.push(`/dashboard/schedule?${qs.toString()}`);
+    };
     const doEstimate = (lead) => setStatus(lead, 'estimate_sent');
     const doReassign = (lead, userId) =>
         withBusy(lead.id, () => axiosInstance.patch(`/leads/${lead.id}/assign`, { user_id: userId || null }), 'Reassigned');
