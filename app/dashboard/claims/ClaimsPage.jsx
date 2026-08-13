@@ -120,6 +120,20 @@ const ClaimsManagement = () => {
     const stagesPerView = 5;
     const totalStages = 12;
 
+    // Per-stage day thresholds — mirrors the backend attention engine defaults
+    // (claim-attention.service.ts). Card day-count turns amber at 50% of the
+    // threshold and red at 100% (spec 3.5). Stages without a day threshold
+    // (3, 7, and closed) have no ramp.
+    const STAGE_THRESHOLDS = { 1: 3, 2: 7, 4: 14, 5: 7, 6: 10, 8: 21, 9: 30 };
+    // Returns 'red' | 'amber' | null for a claim's days-in-stage.
+    const stageRamp = (claim) => {
+        const t = STAGE_THRESHOLDS[claim.stage];
+        if (!t || claim.daysInStage == null) return null;
+        if (claim.daysInStage >= t) return 'red';
+        if (claim.daysInStage >= t / 2) return 'amber';
+        return null;
+    };
+
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentUserId, setCurrentUserId] = useState(null);
@@ -479,6 +493,23 @@ const ClaimsManagement = () => {
                         </div>
                     );
                 })()}
+                {(() => {
+                    const ramp = stageRamp(claim);
+                    if (!ramp) return null;
+                    const style = ramp === 'red'
+                        ? { bg: '#fef2f2', fg: '#b91c1c', border: '#fecaca' }
+                        : { bg: '#fffbeb', fg: '#b45309', border: '#fde68a' };
+                    return (
+                        <div style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: '0.4rem',
+                            fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: 6,
+                            background: style.bg, color: style.fg, border: `1px solid ${style.border}`,
+                        }} title={`${claim.daysInStage} days in this stage`}>
+                            <Clock size={11} strokeWidth={2.5} style={{ verticalAlign: '-2px' }} />
+                            {claim.daysInStage}d in stage
+                        </div>
+                    );
+                })()}
                 {claim.updatedAt && <div style={{fontSize: '0.7rem', color: '#9ca3af', marginBottom: '0.5rem'}}>Updated {timeAgo(claim.updatedAt)}</div>}
                 <div className="claim-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="claim-action-btn primary" onClick={() => goToDetail(claim.id)}>Open</button>
@@ -597,10 +628,12 @@ const ClaimsManagement = () => {
     };
 
     // Apply a stage change to local state (optimistic), keeping the active filter.
+    // `needAction` is NOT guessed here — it's owned by the backend attention
+    // engine (task 1.2) and reconciled by the silent refetch after persist.
     const applyStageLocally = (claimId, newStage) => {
         const updatedClaims = allClaims.map(claim =>
             claim.id === claimId
-                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1], needAction: newStage === 1}
+                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1]}
                 : claim
         );
         setAllClaims(updatedClaims);
@@ -610,11 +643,13 @@ const ClaimsManagement = () => {
     };
 
     // Persist a stage change to the backend (client_portal.claim_status).
-    // Backend logs the activity event automatically on update.
+    // Backend logs the activity event + recomputes action_required on update,
+    // so we silently refetch to pick up the true attention state.
     const persistStage = async (claimId, newStage) => {
         try {
             await axiosInstance.put(`/client-portal/${claimId}`, { claim_status: newStage });
             toast.success(`Moved to ${newStage}. ${stageNames[newStage - 1]}`);
+            fetchClaims({ silent: true });
         } catch {
             toast.error('Could not save stage change — reverting.');
             fetchClaims(); // re-sync from server
@@ -652,7 +687,7 @@ const ClaimsManagement = () => {
         let updated = allClaims;
         ids.forEach(id => {
             updated = updated.map(c => c.id === id
-                ? { ...c, stage: newStage, stageName: stageNames[newStage - 1], needAction: newStage === 1 }
+                ? { ...c, stage: newStage, stageName: stageNames[newStage - 1] }
                 : c);
         });
         setAllClaims(updated);
