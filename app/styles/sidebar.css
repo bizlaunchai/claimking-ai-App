@@ -190,6 +190,25 @@
     justify-content: center;
 }
 
+/* Collapsed company card — driven off the reliable `.sidebar.collapsed` PARENT
+   class, not the card's own conditional class. If the card's `collapsed` class
+   / meta toggle ever falls out of sync with the sidebar state, the logo + name
+   + bell would render inside the 70px rail and spill past its right edge. This
+   pins the card to a centered chip and hard-clips anything wider so it can
+   never overflow the rail. */
+.sidebar.collapsed .sidebar-company {
+    width: 46px;
+    max-width: 46px;
+    /*margin: 0.75rem auto 0.25rem;*/
+    padding: 4px;
+    gap: 0;
+    justify-content: center;
+    overflow: hidden;
+}
+.sidebar.collapsed .sidebar-company-meta {
+    display: none !important;
+}
+
 .sidebar-company-logo {
     width: 38px;
     height: 38px;
@@ -809,6 +828,20 @@
 
     .sidebar.collapsed {
         width: 280px !important;
+    }
+
+    /* Mobile drawer is always full-width — undo the collapsed company chip so
+       the logo + name show normally. */
+    .sidebar.collapsed .sidebar-company {
+        width: auto;
+        max-width: none;
+        margin: 0.75rem 0.75rem 0.25rem;
+        padding: 0.625rem 0.75rem;
+        gap: 0.625rem;
+        overflow: visible;
+    }
+    .sidebar.collapsed .sidebar-company-meta {
+        display: flex !important;
     }
 
     .sidebar.collapsed .logo-text,

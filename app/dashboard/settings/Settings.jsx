@@ -567,7 +567,7 @@ const Settings = () => {
                                     </div>
 
                                     <label className="form-label" style={{ marginTop: 8 }}>Company Logo</label>
-                                    <p className="form-help" style={{ marginTop: 0 }}>Shown in every email header. Recommended: 500×500px PNG or SVG.</p>
+                                    <p className="form-help" style={{ marginTop: 0 }}>Shown in every email header. PNG or SVG, any shape — up to 700px wide (height scales automatically).</p>
                                     {logoBlobUrl && (
                                         <div className="brand-logo-current">
                                             <img src={logoBlobUrl} alt="Current company logo" />
@@ -575,8 +575,7 @@ const Settings = () => {
                                         </div>
                                     )}
                                     <FileUploader label='Click to upload Company Logo or drag and drop' files={files} setFiles={setFiles} allowedExtensions={['.png', '.svg']} maxSizeMB={1}
-                                                  recommendedSize={{width: 500, height: 500}}
-                                                  enforceRecommendedSize={true}
+                                                  maxWidth={700}
                                     />
 
                                     {/* Live preview — the real email, in the contractor's colours */}
