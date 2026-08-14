@@ -7,20 +7,25 @@ import {createClient} from "@/lib/supabase/client.js";
 const DEFAULT_ALLOWED = [".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx"];
 
 
-const validateImageSize = (dropzoneFile, recommendedWidth, recommendedHeight) => {
+// Logos come in all aspect ratios — never force a square/exact size. We only
+// cap the WIDTH (height stays auto), and SVG is skipped entirely since it's
+// resolution-independent.
+const validateMaxWidth = (dropzoneFile, maxWidth) => {
     return new Promise((resolve, reject) => {
         const file = dropzoneFile.file || dropzoneFile;
-        if (!file.type.startsWith("image/")) return resolve(true);
+        if (!file.type.startsWith("image/") || file.type === "image/svg+xml") return resolve(true);
         const img = new Image();
+        const url = URL.createObjectURL(file);
         img.onload = () => {
-            if (img.width !== recommendedWidth || img.height !== recommendedHeight) {
-                reject(new Error(`Image must be exactly ${recommendedWidth}x${recommendedHeight}px. Uploaded image is ${img.width}x${img.height}px.`));
+            URL.revokeObjectURL(url);
+            if (maxWidth && img.width > maxWidth) {
+                reject(new Error(`Logo is ${img.width}px wide — please use an image up to ${maxWidth}px wide (any height/shape is fine).`));
             } else {
                 resolve(true);
             }
         };
-        img.onerror = () => reject(new Error("Failed to load image for size validation"));
-        img.src = URL.createObjectURL(file);
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image for validation")); };
+        img.src = url;
     });
 };
 
@@ -34,8 +39,7 @@ export default function FileUploader({
                                          maxFiles = 1,
                                          label = "Drag & drop files here, or click/tap to browse",
                                          labelStyle = { fontSize: 16, marginBottom: 2 },
-                                         enforceRecommendedSize = false,
-                                         recommendedSize = null,
+                                         maxWidth = null,
                                          uploadFolderName = "",
                                      }) {
     const [token, setToken] = useState("");
@@ -97,8 +101,8 @@ export default function FileUploader({
                 const validatedFiles = [];
                 for (const f of incomingFiles) {
                     try {
-                        if (enforceRecommendedSize && recommendedSize) {
-                            await validateImageSize(f, recommendedSize.width, recommendedSize.height);
+                        if (maxWidth) {
+                            await validateMaxWidth(f, maxWidth);
                         }
                         validatedFiles.push({ ...f, id: f.id || crypto.randomUUID() });
                     } catch (err) {
@@ -156,9 +160,9 @@ export default function FileUploader({
                     <div style={{ fontSize: 12, color: "#666" }}>
                         Allowed file types: {allowedExtensions.join(", ")}
                     </div>
-                    {enforceRecommendedSize && recommendedSize && (
+                    {maxWidth && (
                         <div style={{ fontSize: 12, color: "#666" }}>
-                            Recommended Size: {recommendedSize.width}x{recommendedSize.height}px
+                            Any shape — up to {maxWidth}px wide (height auto)
                         </div>
                     )}
                 </div>
