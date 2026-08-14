@@ -39,21 +39,6 @@ const AnalyticsPage = () => {
         setShowDateDropdown(false);
     };
 
-    const exportAnalytics = () => {
-        const exportOptions = confirm(
-            'Export Analytics Report\n\n' +
-            'Choose format:\n' +
-            'OK = PDF (recommended)\n' +
-            'Cancel = Excel/CSV'
-        );
-        
-        if (exportOptions) {
-            alert('Generating PDF report...\nYour analytics report will download shortly.');
-        } else {
-            alert('Generating Excel report...\nYour analytics data will download shortly.');
-        }
-    };
-
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dateDropdownRef.current && !dateDropdownRef.current.contains(event.target)) {
@@ -108,9 +93,6 @@ const AnalyticsPage = () => {
                             ))}
                         </div>
                     </div>
-                    <button className="analytics-export-btn" onClick={exportAnalytics} title="Export Analytics">
-                        Export
-                    </button>
                     <div className="analytics-live-indicator">
                         <span className="analytics-live-dot"></span>
                         <span>Live</span>

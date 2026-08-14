@@ -26,6 +26,55 @@ const DashboardPage = () => {
         ]
     });
 
+    const [scope, setScope] = useState(null); // { claims:'all'|'own', leads:'all'|'own' }
+
+    // Real, server-side own-only-scoped dashboard numbers (task 5.1). An own-only
+    // user's totals reflect only their own pipeline — the backend enforces it.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/analytics/overview', { suppressErrorToast: true });
+                if (cancelled) return;
+                const d = res.data || {};
+                const c = d.claims || {};
+                const l = d.leads || {};
+                const money = (n) => '$' + (Number(n) || 0).toLocaleString();
+                const stageKeys = Object.keys(c.by_stage || {}).sort((a, b) => Number(a) - Number(b));
+                setScope(d.scope || null);
+                setDashboardData((prev) => ({
+                    ...prev,
+                    kpis: [
+                        { label: 'Total Claims Value', value: money(c.total_value), change: '', isPositive: true },
+                        { label: 'Active Claims', value: String(c.active ?? 0), change: '', isPositive: true },
+                        { label: 'Action Required', value: String(c.action_required ?? 0), change: '', isPositive: true },
+                        { label: 'Approval Rate', value: (c.approval_rate ?? 0) + '%', change: '', isPositive: true },
+                        { label: 'Total Leads', value: String(l.total ?? 0), change: '', isPositive: true },
+                        { label: 'Lead Conversion', value: (l.conversion_rate ?? 0) + '%', change: '', isPositive: true },
+                    ],
+                    claimsTrend: {
+                        labels: (c.trend || []).map((t) => t.label),
+                        values: (c.trend || []).map((t) => t.value),
+                    },
+                    claimTypes: {
+                        labels: stageKeys.map((s) => `Stage ${s}`),
+                        values: stageKeys.map((s) => c.by_stage[s]),
+                    },
+                    aiMetrics: [
+                        { value: String(c.total ?? 0), label: 'Total Claims' },
+                        { value: String(c.closed ?? 0), label: 'Closed Claims' },
+                        { value: String(l.hot ?? 0), label: 'Hot Leads' },
+                        { value: String(l.converted ?? 0), label: 'Leads Converted' },
+                        { value: money(c.approved_value), label: 'Approved Value' },
+                    ],
+                }));
+            } catch {
+                /* leave the zero-state defaults */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
     const claimsChartRef = useRef(null);
     const typesChartRef = useRef(null);
     const insuranceChartRef = useRef(null);
@@ -107,6 +156,14 @@ const DashboardPage = () => {
     return (
         <div className="dashboard-content">
             <div className="content-container">
+                {scope && (scope.claims === 'own' || scope.leads === 'own') && (
+                    <div style={{
+                        background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af',
+                        borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, marginBottom: 16,
+                    }}>
+                        📊 These numbers reflect <b>your own pipeline</b> only.
+                    </div>
+                )}
                 {/* KPI Cards (Always Visible) */}
                 <div className="kpi-grid">
                     {dashboardData.kpis.map((kpi, i) => (
