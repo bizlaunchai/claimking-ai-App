@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import { Link2, Copy } from 'lucide-react';
 import './schedule.css';
 
 // ─── Appointment types (color-coded per packet §5.4.3) ────────────────────
@@ -53,6 +55,7 @@ export default function Schedule() {
     const [team, setTeam] = useState([]);
     const [modal, setModal] = useState(null);           // { mode:'create'|'detail', appt? , prefill? }
     const [dragId, setDragId] = useState(null);
+    const [showLinks, setShowLinks] = useState(false);
 
     // Visible range for the fetch (widen to full weeks for month).
     const range = useMemo(() => {
@@ -197,6 +200,7 @@ export default function Schedule() {
                     <div className="page-subtitle">Estimates, inspections, adjuster meetings, installs & follow-ups — one calendar</div>
                 </div>
                 <div className="header-right">
+                    <button className="btn-secondary" onClick={() => setShowLinks((s) => !s)} title="Booking links"><Link2 size={15} style={{ verticalAlign: '-3px' }} /> Booking Links</button>
                     <button className="btn-secondary" onClick={load} title="Refresh"><RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh</button>
                     <button className="btn-primary" onClick={() => setModal({ mode: 'create' })}><Plus size={16} style={{ verticalAlign: '-3px' }} /> New Appointment</button>
                 </div>
@@ -225,6 +229,8 @@ export default function Schedule() {
                         ))}
                     </div>
                 </div>
+
+                {showLinks && <BookingLinks manageAll={manageAll} nameOf={nameOf} onClose={() => setShowLinks(false)} />}
 
                 {/* Legend */}
                 <div className="sched-legend">
@@ -613,6 +619,101 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                     <button className="btn-primary" disabled={busy} onClick={save}>Create</button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ==========================================================================
+// Booking Links panel — per-rep public /book/:slug URLs (task 2.12)
+// ==========================================================================
+function BookingLinks({ manageAll, nameOf, onClose }) {
+    const [rows, setRows] = useState(null);
+    const [meId, setMeId] = useState(null);
+    const [slug, setSlug] = useState('');
+    const [saving, setSaving] = useState(false);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+    const load = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/appointments/booking-links', { suppressErrorToast: true });
+            const list = res.data?.data || [];
+            setRows(list);
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            setMeId(user?.id || null);
+            const mine = list.find((r) => r.id === user?.id);
+            if (mine?.booking_slug) setSlug(mine.booking_slug);
+        } catch { setRows([]); }
+    }, []);
+    useEffect(() => { load(); }, [load]);
+
+    const displayName = (r) => r.full_name || `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.email || 'Member';
+    const mine = rows?.find((r) => r.id === meId);
+
+    const saveSlug = async () => {
+        setSaving(true);
+        try {
+            await axiosInstance.patch('/appointments/booking-link', { slug: slug.trim() || null });
+            toast.success('Booking link saved');
+            await load();
+        } catch (e) { toast.error(e?.userMessage || 'Could not save link'); }
+        finally { setSaving(false); }
+    };
+    const toggle = async (enabled) => {
+        setSaving(true);
+        try {
+            await axiosInstance.patch('/appointments/booking-link', { enabled });
+            toast.success(enabled ? 'Booking enabled' : 'Booking disabled');
+            await load();
+        } catch (e) { toast.error(e?.userMessage || 'Could not update'); }
+        finally { setSaving(false); }
+    };
+    const copy = (url) => { try { navigator.clipboard.writeText(url); toast.success('Copied'); } catch { /* noop */ } };
+
+    return (
+        <div className="bl-panel">
+            <div className="bl-head">
+                <span>Public Booking Links</span>
+                <button className="modal-close" onClick={onClose}>&times;</button>
+            </div>
+
+            {/* My link editor */}
+            <div className="bl-editor">
+                <label>Your booking link</label>
+                <div className="bl-editrow">
+                    <span className="bl-prefix">{origin}/book/</span>
+                    <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="your-name" disabled={saving} />
+                    <button className="btn-secondary" disabled={saving} onClick={saveSlug}>
+                        {saving ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+                {mine && (
+                    <label className="bl-toggle">
+                        <input type="checkbox" checked={!!mine.booking_enabled} disabled={saving} onChange={(e) => toggle(e.target.checked)} />
+                        Accept public bookings
+                    </label>
+                )}
+                <div className="bl-hint">3–40 chars: lowercase letters, numbers, dashes. Homeowners pick a slot and it lands on your calendar automatically.</div>
+            </div>
+
+            {/* Roster (manage-all) */}
+            {rows === null && <div className="bl-empty">Loading…</div>}
+            {rows?.length > 0 && (
+                <div className="bl-list">
+                    {rows.filter((r) => r.booking_slug).map((r) => {
+                        const url = `${origin}/book/${r.booking_slug}`;
+                        return (
+                            <div key={r.id} className="bl-row">
+                                <div className="bl-rep">{displayName(r)}{r.id === meId ? ' (you)' : ''}</div>
+                                <div className="bl-url">{url}</div>
+                                <span className={`bl-badge ${r.booking_enabled ? 'on' : 'off'}`}>{r.booking_enabled ? 'On' : 'Off'}</span>
+                                <button className="bl-copy" onClick={() => copy(url)}><Copy size={13} /> Copy</button>
+                            </div>
+                        );
+                    })}
+                    {!rows.some((r) => r.booking_slug) && <div className="bl-empty">No booking links set yet.</div>}
+                </div>
+            )}
         </div>
     );
 }
