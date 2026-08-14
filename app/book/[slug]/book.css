@@ -1,0 +1,92 @@
+/* Public booking page — self-contained, mobile-first. Scoped under .book-page. */
+.book-page {
+    min-height: 100vh; background: linear-gradient(160deg, #1a1f3a 0%, #2d3561 100%);
+    display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem 1rem 3rem;
+    color: #1f2937; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.book-page * { box-sizing: border-box; }
+.book-page .bk-card {
+    width: 100%; max-width: 460px; background: white; border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35); overflow: hidden; margin-top: 2rem;
+}
+.book-page .bk-header {
+    background: linear-gradient(135deg, #FDB813, #d4a000); color: #1a1f3a; padding: 1.5rem;
+    text-align: center;
+}
+.book-page .bk-logo {
+    max-height: 56px; max-width: 200px; width: auto; margin: 0 auto 0.75rem;
+    display: block; object-fit: contain;
+    background: white; border-radius: 8px; padding: 6px 10px;
+}
+.book-page .bk-brand { font-size: 1.4rem; font-weight: 800; }
+.book-page .bk-sub { font-size: 0.9rem; font-weight: 600; margin-top: 0.25rem; opacity: 0.85; }
+.book-page .bk-body { padding: 1.25rem 1.25rem 1.5rem; }
+.book-page .bk-footer { padding: 0.75rem; text-align: center; font-size: 0.7rem; color: #9ca3af; border-top: 1px solid #f3f4f6; }
+
+.book-page .bk-center { text-align: center; padding: 2rem 1rem; }
+.book-page .bk-center h2 { font-size: 1.15rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.5rem; }
+.book-page .bk-center p { color: #6b7280; font-size: 0.9rem; }
+.book-page .bk-muted { color: #9ca3af; font-size: 0.85rem; }
+
+/* Type pills */
+.book-page .bk-types { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.book-page .bk-type {
+    flex: 1; min-width: 120px; padding: 0.6rem; border: 2px solid #e5e7eb; border-radius: 10px;
+    background: white; font-weight: 600; font-size: 0.85rem; color: #374151; cursor: pointer;
+}
+.book-page .bk-type.active { border-color: #FDB813; background: #fef9e6; color: #1a1f3a; }
+
+/* Day nav */
+.book-page .bk-daynav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.875rem; }
+.book-page .bk-daybtn {
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid #e5e7eb; background: white;
+    font-size: 1.2rem; color: #1a1f3a; cursor: pointer;
+}
+.book-page .bk-daybtn:disabled { opacity: 0.4; cursor: default; }
+.book-page .bk-daylabel { font-size: 1rem; font-weight: 700; color: #1a1f3a; }
+
+/* Slots */
+.book-page .bk-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.book-page .bk-slot {
+    padding: 0.7rem 0.4rem; border: 1px solid #e5e7eb; border-radius: 10px; background: white;
+    font-weight: 700; font-size: 0.9rem; color: #1a1f3a; cursor: pointer;
+}
+.book-page .bk-slot:hover { border-color: #FDB813; background: #fef9e6; }
+
+/* Form */
+.book-page .bk-form { display: flex; flex-direction: column; }
+.book-page .bk-chosen {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    background: #f0fdf4; border: 1px solid #bbf7d0; color: #065f46; border-radius: 10px;
+    padding: 0.6rem 0.75rem; font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem;
+}
+.book-page .bk-change { background: none; border: none; color: #16a34a; font-weight: 700; cursor: pointer; font-size: 0.8rem; }
+.book-page .bk-form label { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin: 0.75rem 0 0.3rem; }
+.book-page .bk-form input, .book-page .bk-form textarea {
+    width: 100%; padding: 0.7rem 0.8rem; border: 1px solid #e5e7eb; border-radius: 10px;
+    font-size: 1rem; font-family: inherit; background: white;
+}
+.book-page .bk-form input:focus, .book-page .bk-form textarea:focus { outline: none; border-color: #FDB813; }
+.book-page .bk-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.book-page .bk-captcha { margin-top: 1rem; }
+.book-page .bk-err { color: #b91c1c; font-size: 0.82rem; font-weight: 600; margin-top: 0.75rem; }
+.book-page .bk-submit {
+    margin-top: 1.25rem; padding: 0.85rem; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #FDB813, #d4a000); color: #1a1f3a;
+    font-size: 1rem; font-weight: 800; cursor: pointer;
+}
+.book-page .bk-submit:disabled { opacity: 0.6; cursor: default; }
+
+/* Confirmation */
+.book-page .bk-done { text-align: center; padding: 1rem 0.5rem; }
+.book-page .bk-check {
+    width: 64px; height: 64px; margin: 0 auto 1rem; border-radius: 50%;
+    background: #16a34a; color: white; font-size: 2rem; display: flex; align-items: center; justify-content: center;
+}
+.book-page .bk-done h2 { font-size: 1.3rem; font-weight: 800; color: #1a1f3a; margin-bottom: 0.5rem; }
+.book-page .bk-done p { font-size: 0.95rem; margin-bottom: 0.4rem; }
+
+@media (max-width: 380px) {
+    .book-page .bk-slots { grid-template-columns: repeat(2, 1fr); }
+    .book-page .bk-grid2 { grid-template-columns: 1fr; }
+}

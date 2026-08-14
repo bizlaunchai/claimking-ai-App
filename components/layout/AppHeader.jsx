@@ -105,7 +105,8 @@ const AppHeader = () => {
         pathname.startsWith("/dashboard") ||
         pathname.startsWith("/portal") ||
         pathname.startsWith("/sign") ||
-        pathname.startsWith("/pay")
+        pathname.startsWith("/pay") ||
+        pathname.startsWith("/book")
     ){
         return null
     }

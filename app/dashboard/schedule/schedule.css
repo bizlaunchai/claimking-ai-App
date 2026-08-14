@@ -198,6 +198,29 @@
 .schedule-page .sched-sec-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; margin: 1rem 0 0.5rem; }
 .schedule-page .sched-note { background: #f9fafb; border: 1px solid #f3f4f6; border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.82rem; color: #374151; margin-top: 0.75rem; }
 
+/* Booking Links panel */
+.schedule-page .bl-panel { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; margin-bottom: 0.875rem; }
+.schedule-page .bl-head { display: flex; align-items: center; justify-content: space-between; font-size: 1rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.875rem; }
+.schedule-page .bl-editor { background: #f9fafb; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+.schedule-page .bl-editor > label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; margin-bottom: 0.4rem; }
+.schedule-page .bl-editrow { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.schedule-page .bl-prefix { font-family: 'Courier New', monospace; font-size: 0.82rem; color: #6b7280; }
+.schedule-page .bl-editrow input { flex: 1; min-width: 140px; padding: 0.5rem 0.65rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; font-family: 'Courier New', monospace; }
+.schedule-page .bl-editrow input:focus { outline: none; border-color: #FDB813; }
+.schedule-page .bl-toggle { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; font-size: 0.82rem; color: #374151; font-weight: 600; }
+.schedule-page .bl-toggle input { width: auto; }
+.schedule-page .bl-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 0.6rem; }
+.schedule-page .bl-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.schedule-page .bl-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid #f3f4f6; border-radius: 8px; flex-wrap: wrap; }
+.schedule-page .bl-rep { font-weight: 700; color: #1a1f3a; font-size: 0.85rem; min-width: 120px; }
+.schedule-page .bl-url { flex: 1; min-width: 180px; font-family: 'Courier New', monospace; font-size: 0.76rem; color: #4b5563; word-break: break-all; }
+.schedule-page .bl-badge { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; }
+.schedule-page .bl-badge.on { background: #d1fae5; color: #065f46; }
+.schedule-page .bl-badge.off { background: #e5e7eb; color: #6b7280; }
+.schedule-page .bl-copy { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 6px; background: white; font-size: 0.76rem; font-weight: 600; color: #374151; cursor: pointer; }
+.schedule-page .bl-copy:hover { border-color: #FDB813; background: #fef9e6; }
+.schedule-page .bl-empty { color: #9ca3af; font-size: 0.85rem; padding: 0.4rem 0; }
+
 @media (max-width: 768px) {
     .schedule-page .page-header { padding: 1.25rem 1rem; }
     .schedule-page .content { padding: 1rem; }
