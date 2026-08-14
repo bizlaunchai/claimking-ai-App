@@ -1,308 +1,127 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast as sonner } from 'sonner';
+import 'leaflet/dist/leaflet.css';
+import axiosInstance from '@/lib/axiosInstance';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import { Can } from '@/lib/permissions/Can';
 import './jobs-ready.css';
 
 /* =========================================================================
-   CONSTANTS
+   CONSTANTS  (task 3.9 — real /jobs API; see BUILD-PROGRESS.md)
    ========================================================================= */
-const REVIEW_LINK = 'https://www.roofgutternow.com/review-us';
-
-const DEFAULT_CHECKLIST = [
-    { label: 'Called client ahead of arrival', required: true },
-    { label: 'Took before photos of work area', required: true },
-    { label: 'Verified scope of work matches site', required: true },
-    { label: 'Completed the work per scope', required: true },
-    { label: 'Cleaned up site & magnet swept for nails', required: true },
-    { label: 'Took after photos of completed work', required: true },
-];
-
 const JOB_TYPES = [
     'Full Roof Replacement', 'Roof Repair', 'Gutter Replacement',
-    'Gutter Repair', 'Siding', 'Inspection', 'Other',
+    'Gutter Repair', 'Siding', 'Windows', 'Inspection', 'Other',
 ];
 
-let jobSeq = 1;
-const uid = (prefix) => prefix + '_' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+// Trade tags used for sub matching (packet §7.5 — must match sub.trades values).
+const TRADES = ['roofing', 'gutters', 'siding', 'windows', 'painting', 'general'];
 
-/* =========================================================================
-   SEED DATA
-   ========================================================================= */
-function buildJob(data) {
-    const checklist = DEFAULT_CHECKLIST.map((c) => ({
-        id: uid('chk'), label: c.label, required: c.required, done: data.status === 'completed',
-    }));
-    return {
-        id: 'JOB-' + String(jobSeq++).padStart(4, '0'),
-        address: data.address || '',
-        jobType: data.jobType || '',
-        scope: data.scope || '',
-        notes: data.notes || '',
-        jobCost: data.jobCost || 0,
-        pay: data.pay || 0,
-        materials: data.materials || [],
-        salesRepId: data.salesRepId || null,
-        status: data.status || 'available',
-        visibility: data.visibility || 'hidden',
-        ourPhotos: data.ourPhotos || [],
-        sitePhotos: data.sitePhotos || { before: [], during: [], after: [] },
-        checklist,
-        callAhead: {
-            done: data.status === 'completed',
-            at: data.status === 'completed' ? Date.now() - 3 * 86400000 : null,
-        },
-        claimedBy: data.claimedBy || null,
-        claimedByName: data.claimedByName || null,
-        claimedAt: data.claimedBy ? Date.now() : null,
-        completedAt: data.completedAt || null,
-        lastNotifiedAt: null,
-        notifyCount: 0,
-        createdAt: Date.now(),
-    };
-}
-
-const SEED_REPS = [
-    { id: 'rep_01', name: 'Tyler Brooks', phone: '(330) 555-0301', email: 'tyler@roofgutternow.com' },
-    { id: 'rep_02', name: 'Morgan Lee', phone: '(330) 555-0302', email: 'morgan@roofgutternow.com' },
-    { id: 'rep_03', name: 'Jordan Pierce', phone: '(330) 555-0303', email: 'jordan@roofgutternow.com' },
-    { id: 'rep_04', name: 'Casey Nguyen', phone: '(234) 555-0304', email: 'casey@roofgutternow.com' },
+const PERMIT_OPTIONS = [
+    ['not_required', 'Not required'],
+    ['pending', 'Pending'],
+    ['approved', 'Approved'],
+];
+const MATERIAL_OPTIONS = [
+    ['not_ordered', 'Not ordered'],
+    ['ordered', 'Ordered'],
+    ['confirmed', 'Confirmed'],
+    ['delivered', 'Delivered'],
 ];
 
-const SEED_SUBS = [
-    { id: 'sub_01', name: "Joe's Roofing Crew", contact: 'Joe Dalton', phone: '(330) 555-0142', email: 'joe@joesroofing.com', initials: 'JR', active: true },
-    { id: 'sub_02', name: 'Apex Exteriors', contact: 'Maria Lopez', phone: '(330) 555-0188', email: 'maria@apexext.com', initials: 'AE', active: true },
-    { id: 'sub_03', name: 'Buckeye Roof Pros', contact: 'Dale Witmer', phone: '(234) 555-0119', email: 'dale@buckeyeroofpros.com', initials: 'BR', active: true },
-    { id: 'sub_04', name: 'Summit Gutter Co.', contact: 'Tony Reyes', phone: '(330) 555-0204', email: 'tony@summitgutter.com', initials: 'SG', active: true },
-];
-
-function seedJobs() {
-    jobSeq = 1;
-    const seed = [
-        {
-            address: '482 Oakwood Dr, Doylestown, OH 44230',
-            jobType: 'Full Roof Replacement',
-            scope: 'Tear off 1 layer architectural shingles, install synthetic underlayment, ice & water shield on eaves/valleys, 30yr architectural shingles. Replace pipe boots and install ridge vent.',
-            notes: 'Gate code 1424. Dog in backyard — keep gate closed. Dumpster placed in driveway.',
-            jobCost: 9200, pay: 3800, salesRepId: 'rep_01', status: 'available', visibility: 'published',
-            materials: [
-                { id: 'm1', label: 'Architectural shingles (28 sq)', cost: 1820 },
-                { id: 'm2', label: 'Synthetic underlayment + ice & water', cost: 410 },
-                { id: 'm3', label: 'Ridge vent, boots, nails, misc', cost: 285 },
-                { id: 'm4', label: 'Dumpster rental', cost: 375 },
-            ],
-        },
-        {
-            address: '17 Birchwood Ln, Wadsworth, OH 44281',
-            jobType: 'Gutter Replacement',
-            scope: 'Remove and replace 180 LF of 5" K-style aluminum gutters and downspouts. Reattach 3 downspout extensions.',
-            notes: 'Steep front pitch — bring extra fall protection. Park on street, not driveway.',
-            jobCost: 3100, pay: 1450, salesRepId: 'rep_02', status: 'available', visibility: 'hidden',
-            materials: [
-                { id: 'm1', label: 'Aluminum gutter coil + downspouts', cost: 540 },
-                { id: 'm2', label: 'Hangers, sealant, fasteners', cost: 95 },
-            ],
-        },
-        {
-            address: '903 Maple Ridge Rd, Medina, OH 44256',
-            jobType: 'Roof Repair',
-            scope: 'Repair wind damage on north slope — approx 2 squares. Replace damaged decking (est. 2 sheets), match existing shingles.',
-            notes: 'Homeowner works from home, knock before starting power tools.',
-            jobCost: 2400, pay: 950, salesRepId: 'rep_01', status: 'in_progress', visibility: 'published', claimedBy: 'sub_01', claimedByName: "Joe's Roofing Crew",
-        },
-        {
-            address: '226 Sunset Blvd, Akron, OH 44302',
-            jobType: 'Full Roof Replacement',
-            scope: 'Tear off, re-deck as needed, install full system with 50yr shingles. Two-story, walkable pitch.',
-            notes: 'Materials delivered and staged in garage.',
-            jobCost: 12800, pay: 5200, salesRepId: 'rep_03', status: 'completed', visibility: 'published', claimedBy: 'sub_02', claimedByName: 'Apex Exteriors', completedAt: Date.now() - 3 * 86400000,
-            materials: [
-                { id: 'm1', label: '50yr shingles (34 sq)', cost: 2720 },
-                { id: 'm2', label: 'Decking replacement (6 sheets)', cost: 312 },
-                { id: 'm3', label: 'Underlayment, flashing, vents', cost: 540 },
-                { id: 'm4', label: 'Permit + dumpster', cost: 620 },
-            ],
-        },
-        {
-            address: '54 Cherry St, Barberton, OH 44203',
-            jobType: 'Roof Repair',
-            scope: 'Replace ~30 wind-lifted shingles, reseal flashing around chimney.',
-            notes: 'Ladder access on east side only.',
-            jobCost: 2900, pay: 1200, salesRepId: 'rep_02', status: 'completed', visibility: 'published', claimedBy: 'sub_01', claimedByName: "Joe's Roofing Crew", completedAt: Date.now() - 8 * 86400000,
-        },
-    ];
-    return seed.map(buildJob);
-}
+// readiness_state → pill class + label (packet §7.4).
+const STATE_META = {
+    blocked: ['pill-blocked', 'Blocked'],
+    ready: ['pill-available', 'Ready'],
+    scheduled: ['pill-claimed', 'Scheduled'],
+    in_production: ['pill-progress', 'In Production'],
+    punch_list: ['pill-progress', 'Punch List'],
+    complete: ['pill-completed', 'Complete'],
+};
 
 /* =========================================================================
    HELPERS
    ========================================================================= */
-const money = (n) => '$' + (n || 0).toLocaleString();
-const materialsTotal = (j) => (j.materials || []).reduce((s, m) => s + (Number(m.cost) || 0), 0);
-const jobProfit = (j) => (j.jobCost || 0) - (j.pay || 0) - materialsTotal(j);
-const statusLabel = (s) => ({ available: 'Available', claimed: 'Claimed', in_progress: 'In Progress', completed: 'Completed' }[s] || s);
+const money = (n) => '$' + (Number(n) || 0).toLocaleString();
+const tradeLabel = (t) => (t || '').replace(/_/g, ' ');
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
 
-function StatusPill({ status }) {
-    const map = {
-        available: ['pill-available', 'Available'],
-        claimed: ['pill-claimed', 'Claimed'],
-        in_progress: ['pill-progress', 'In Progress'],
-        completed: ['pill-completed', 'Completed'],
-    };
-    const [cls, label] = map[status] || map.available;
+function StatePill({ state }) {
+    const [cls, label] = STATE_META[state] || ['pill-blocked', state || '—'];
     return <span className={`job-status-pill ${cls}`}>{label}</span>;
 }
 
-function notifyMessage(jobList, repName) {
-    if (jobList.length === 1) {
-        const j = jobList[0];
-        const repLine = j.salesRepId && repName(j.salesRepId) !== 'Unassigned'
-            ? `\n\nQuestions? Contact ${repName(j.salesRepId)}.` : '';
-        return `New job available: ${j.jobType} at ${j.address} — ${money(j.pay)}.${repLine}\n\nFirst to claim gets it. Log in to claim:\nwww.roofgutternow.com/jobs`;
+function assignmentLabel(job, teamById) {
+    if (job.assignment_type === 'in_house') {
+        return '🧑‍💼 ' + (teamById[job.assigned_employee_id]?.full_name || 'In-house');
     }
-    const intro = `${jobList.length} new jobs are available:\n` + jobList.map((j) => `• ${j.jobType} — ${j.address} (${money(j.pay)})`).join('\n');
-    return `${intro}\n\nFirst to claim gets it. Log in to claim:\nwww.roofgutternow.com/jobs`;
-}
-
-/* =========================================================================
-   MATERIALS EDITOR (shared between create + detail)
-   ========================================================================= */
-function MaterialsEditor({ materials, jobCost, pay, onChange }) {
-    const [newLabel, setNewLabel] = useState('');
-    const [newCost, setNewCost] = useState('');
-    const mat = materials.reduce((s, m) => s + (Number(m.cost) || 0), 0);
-    const profit = (jobCost || 0) - (pay || 0) - mat;
-
-    const update = (id, field, value) => {
-        onChange(materials.map((m) => m.id === id ? { ...m, [field]: field === 'cost' ? (parseFloat(value) || 0) : value } : m));
-    };
-    const remove = (id) => onChange(materials.filter((m) => m.id !== id));
-    const add = () => {
-        const label = newLabel.trim();
-        const cost = parseFloat(newCost) || 0;
-        if (!label && !cost) return;
-        onChange([...materials, { id: uid('mat'), label: label || 'Expense', cost }]);
-        setNewLabel(''); setNewCost('');
-    };
-
-    return (
-        <>
-            <div className="mat-list">
-                {materials.length ? materials.map((m) => (
-                    <div className="mat-row" key={m.id}>
-                        <input className="mat-label" type="text" value={m.label} placeholder="Material / expense"
-                            onChange={(e) => update(m.id, 'label', e.target.value)} />
-                        <div className="mat-cost-wrap">
-                            <span className="mat-dollar">$</span>
-                            <input className="mat-cost" type="number" min="0" step="1" value={Number(m.cost) || 0}
-                                onChange={(e) => update(m.id, 'cost', e.target.value)} />
-                        </div>
-                        <button className="mat-remove" title="Remove" onClick={() => remove(m.id)}>&times;</button>
-                    </div>
-                )) : <div className="hint" style={{ padding: '0.25rem 0' }}>No material line items yet.</div>}
-            </div>
-            <div className="mat-add">
-                <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} type="text" placeholder="e.g. Shingles (28 sq)" id="newMatLabel" />
-                <div className="mat-cost-wrap">
-                    <span className="mat-dollar">$</span>
-                    <input value={newCost} onChange={(e) => setNewCost(e.target.value)} type="number" min="0" step="1" placeholder="0" id="newMatCost" />
-                </div>
-                <button className="btn btn-ghost" onClick={add}>Add</button>
-            </div>
-            <div className="profit-summary">
-                <div className="ps-line"><span>Job cost</span><span>{money(jobCost)}</span></div>
-                <div className="ps-line"><span>− Sub payout</span><span>−{money(pay)}</span></div>
-                <div className="ps-line"><span>− Materials &amp; expenses</span><span>−{money(mat)}</span></div>
-                <div className="ps-line ps-total"><span>Profit</span><span style={{ color: profit < 0 ? '#dc2626' : '#16a34a' }}>{money(profit)}</span></div>
-            </div>
-        </>
-    );
-}
-
-/* =========================================================================
-   PHOTO UPLOAD ZONE
-   ========================================================================= */
-function PhotoUploadZone({ photos, onChange }) {
-    const inputRef = useRef(null);
-    const addFiles = (files) => {
-        const arr = Array.from(files);
-        let loaded = [];
-        let pending = arr.length;
-        if (!pending) return;
-        arr.forEach((f) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                loaded.push(e.target.result);
-                pending--;
-                if (pending <= 0) onChange([...photos, ...loaded]);
-            };
-            reader.readAsDataURL(f);
-        });
-    };
-    return (
-        <>
-            <div className="upload-zone"
-                onClick={() => inputRef.current?.click()}
-                onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}>
-                <div className="uz-title">Click or drop photos here</div>
-                <div className="uz-sub">Damage photos, drone shots, measurement diagrams — JPG/PNG</div>
-                <input ref={inputRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
-                    onChange={(e) => addFiles(e.target.files)} />
-            </div>
-            {photos.length > 0 && (
-                <div className="thumb-row">
-                    {photos.map((p, i) => (
-                        <div className="thumb" key={i} style={{ backgroundImage: `url('${p}')` }}>
-                            <button className="x" onClick={() => onChange(photos.filter((_, idx) => idx !== i))}>&times;</button>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </>
-    );
+    if (job.assignment_type === 'subcontractor') return '👷 Subcontractor';
+    return 'Unassigned';
 }
 
 /* =========================================================================
    MODAL SHELL
    ========================================================================= */
-function Modal({ children, onClose }) {
+function Modal({ children, onClose, wide }) {
     return (
         <div className="modal open">
             <div className="modal-overlay" onClick={onClose}></div>
-            <div className="modal-content">{children}</div>
+            <div className="modal-content" style={wide ? { maxWidth: 920 } : undefined}>{children}</div>
         </div>
     );
 }
 
 /* =========================================================================
-   CREATE JOB MODAL
+   CREATE JOB MODAL  → POST /jobs
    ========================================================================= */
-function CreateJobModal({ reps, subs, onClose, onSave, toast }) {
+function CreateJobModal({ onClose, onSaved, toast }) {
     const [form, setForm] = useState({
-        address: '', jobType: JOB_TYPES[0], jobCost: '', pay: '',
-        salesRepId: '', visibility: 'hidden', assignId: '', scope: '', notes: '',
+        claim_id: '', address: '', job_type: JOB_TYPES[0], scope: '', notes: '',
+        job_cost: '', lat: '', lng: '', permit_status: 'not_required', material_order_status: 'not_ordered',
     });
-    const [materials, setMaterials] = useState([]);
-    const [ourPhotos, setOurPhotos] = useState([]);
-    const [customItems, setCustomItems] = useState([]);
-    const [customInput, setCustomInput] = useState('');
+    const [trades, setTrades] = useState([]);
+    const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+    const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
 
-    const save = () => {
-        const jobCost = parseInt(form.jobCost, 10) || 0;
-        const pay = parseInt(form.pay, 10) || 0;
-        if (!form.address.trim() || !form.scope.trim() || !pay || !jobCost) {
-            toast('Address, scope, job cost, and sub payout are required.', 'error');
+    const save = async () => {
+        if (!form.address.trim() && !form.claim_id.trim()) {
+            toast('Enter an address, or link a claim to pull one.', 'error');
             return;
         }
-        onSave({ ...form, jobCost, pay, materials, ourPhotos, customItems });
+        setSaving(true);
+        try {
+            const payload = {
+                job_type: form.job_type,
+                scope: form.scope.trim() || undefined,
+                notes: form.notes.trim() || undefined,
+                trades,
+                permit_status: form.permit_status,
+                material_order_status: form.material_order_status,
+            };
+            if (form.claim_id.trim()) payload.claim_id = form.claim_id.trim();
+            if (form.address.trim()) payload.address = form.address.trim();
+            if (form.lat !== '' && !isNaN(parseFloat(form.lat))) payload.lat = parseFloat(form.lat);
+            if (form.lng !== '' && !isNaN(parseFloat(form.lng))) payload.lng = parseFloat(form.lng);
+            if (form.job_cost !== '' && !isNaN(parseInt(form.job_cost, 10))) payload.job_cost = parseInt(form.job_cost, 10);
+
+            const res = await axiosInstance.post('/jobs', payload);
+            toast('Job created.', 'success');
+            onSaved(res.data?.data);
+        } catch (e) {
+            // interceptor toasts; keep the modal open
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
         <Modal onClose={onClose}>
             <div className="modal-head">
-                <div><h2>Add Job to Board</h2><div className="sub">Save as a hidden draft, publish to subs, or assign to a crew (no client info is shared)</div></div>
+                <div><h2>Add Job</h2><div className="sub">Link a claim (claim→job) or create a standalone retail/cash job.</div></div>
                 <button className="modal-close" onClick={onClose}>&times;</button>
             </div>
             <div className="modal-body">
@@ -310,408 +129,482 @@ function CreateJobModal({ reps, subs, onClose, onSave, toast }) {
                     <h3>Job Details</h3>
                     <div className="form-grid">
                         <div className="field full">
-                            <label>Property Address <span className="req">*</span></label>
+                            <label>Linked Claim ID <span className="hint" style={{ fontWeight: 400 }}>(optional — leave blank for a standalone job)</span></label>
+                            <input type="text" value={form.claim_id} onChange={(e) => set('claim_id', e.target.value)} placeholder="client_portals UUID (optional)" />
+                        </div>
+                        <div className="field full">
+                            <label>Property Address</label>
                             <input type="text" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, City, State ZIP" />
-                            <span className="hint">Subs see the address only — never the client's name or contact info.</span>
+                            <span className="hint">Pulled from the claim automatically when a claim is linked and this is left blank.</span>
                         </div>
                         <div className="field">
                             <label>Job Type</label>
-                            <select value={form.jobType} onChange={(e) => set('jobType', e.target.value)}>
+                            <select value={form.job_type} onChange={(e) => set('job_type', e.target.value)}>
                                 {JOB_TYPES.map((t) => <option key={t}>{t}</option>)}
                             </select>
                         </div>
-                        <div className="field">
-                            <label>Job Cost ($) <span className="req">*</span></label>
-                            <input type="number" value={form.jobCost} onChange={(e) => set('jobCost', e.target.value)} placeholder="0" min="0" step="50" />
-                            <span className="hint">What we bill / collect for the job (internal — never shown to subs).</span>
-                        </div>
-                        <div className="field">
-                            <label>Sub Payout ($) <span className="req">*</span></label>
-                            <input type="number" value={form.pay} onChange={(e) => set('pay', e.target.value)} placeholder="0" min="0" step="50" />
-                        </div>
-                        <div className="field">
-                            <label>Sales Rep</label>
-                            <select value={form.salesRepId} onChange={(e) => set('salesRepId', e.target.value)}>
-                                <option value="">Unassigned</option>
-                                {reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                            </select>
-                        </div>
-                        <div className="field">
-                            <label>Visibility</label>
-                            <select value={form.visibility} onChange={(e) => set('visibility', e.target.value)}>
-                                <option value="hidden">Hidden (draft — only our team)</option>
-                                <option value="published">Visible to subs</option>
-                            </select>
-                            <span className="hint">Start hidden and publish when ready, or make it visible now.</span>
-                        </div>
-                        <div className="field">
-                            <label>Assign to Crew</label>
-                            <select value={form.assignId} onChange={(e) => set('assignId', e.target.value)}>
-                                <option value="">Open to all subs</option>
-                                {subs.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            <span className="hint">Assigning hands it to one crew and makes it visible to them.</span>
-                        </div>
-                        <div className="field full">
-                            <label>Scope of Work <span className="req">*</span></label>
-                            <textarea value={form.scope} onChange={(e) => set('scope', e.target.value)} placeholder="Describe exactly what the sub needs to do..." />
-                        </div>
-                        <div className="field full">
-                            <label>Site Notes</label>
-                            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Gate codes, parking, pets, material staging, hazards..." />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="form-section">
-                    <h3>Our Photos <span style={{ fontWeight: 400, fontSize: '0.7rem', color: '#9ca3af', textTransform: 'none' }}>(from the claim file — shared with sub)</span></h3>
-                    <PhotoUploadZone photos={ourPhotos} onChange={setOurPhotos} />
-                </div>
-
-                <div className="form-section">
-                    <h3>Materials &amp; Expenses <span style={{ fontWeight: 400, fontSize: '0.7rem', color: '#9ca3af', textTransform: 'none' }}>(internal — used to calculate profit, never shown to subs)</span></h3>
-                    <MaterialsEditor materials={materials} jobCost={parseFloat(form.jobCost) || 0} pay={parseFloat(form.pay) || 0} onChange={setMaterials} />
-                </div>
-
-                <div className="form-section">
-                    <h3>Checklist</h3>
-                    <p className="hint" style={{ marginBottom: '0.6rem' }}>Every job includes the standard required checklist below. Add custom items specific to this job if needed.</p>
-                    <div className="checklist">
-                        {DEFAULT_CHECKLIST.map((c, i) => (
-                            <div className="check-item" key={i}>
-                                <div className="check-box"></div>
-                                <span className="check-label">{c.label}</span>
-                                {c.required && <span className="check-required">Required</span>}
+                        <Can permission="view_job_financials">
+                            <div className="field">
+                                <label>Job Cost ($) <span className="hint" style={{ fontWeight: 400 }}>(internal)</span></label>
+                                <input type="number" min="0" step="50" value={form.job_cost} onChange={(e) => set('job_cost', e.target.value)} placeholder="0" />
                             </div>
-                        ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                        <input type="text" value={customInput} onChange={(e) => setCustomInput(e.target.value)}
-                            placeholder="Add a custom checklist item..."
-                            style={{ flex: 1, padding: '0.6rem 0.85rem', border: '2px solid #e5e7eb', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.85rem' }} />
-                        <button className="btn btn-ghost" onClick={() => { if (customInput.trim()) { setCustomItems([...customItems, { label: customInput.trim(), required: false }]); setCustomInput(''); } }}>Add</button>
-                    </div>
-                    <div className="checklist" style={{ marginTop: '0.6rem' }}>
-                        {customItems.map((c, i) => (
-                            <div className="check-item" key={i}>
-                                <div className="check-box"></div>
-                                <span className="check-label">{c.label}</span>
-                                <button className="btn btn-ghost" style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem' }} onClick={() => setCustomItems(customItems.filter((_, idx) => idx !== i))}>Remove</button>
+                        </Can>
+                        <div className="field"><label>Latitude</label><input type="number" step="0.0001" value={form.lat} onChange={(e) => set('lat', e.target.value)} placeholder="e.g. 41.0812" /></div>
+                        <div className="field"><label>Longitude</label><input type="number" step="0.0001" value={form.lng} onChange={(e) => set('lng', e.target.value)} placeholder="e.g. -81.5190" /></div>
+                        <div className="field"><label>Permit Status</label><select value={form.permit_status} onChange={(e) => set('permit_status', e.target.value)}>{PERMIT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+                        <div className="field"><label>Materials</label><select value={form.material_order_status} onChange={(e) => set('material_order_status', e.target.value)}>{MATERIAL_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+                        <div className="field full">
+                            <label>Trades <span className="hint" style={{ fontWeight: 400 }}>(used to match subs)</span></label>
+                            <div className="trade-chips">
+                                {TRADES.map((t) => (
+                                    <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>
+                                ))}
                             </div>
-                        ))}
+                        </div>
+                        <div className="field full"><label>Scope of Work</label><textarea value={form.scope} onChange={(e) => set('scope', e.target.value)} placeholder="Describe exactly what needs to be done..." /></div>
+                        <div className="field full"><label>Site Notes</label><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Gate codes, parking, pets, staging, hazards..." /></div>
                     </div>
                 </div>
             </div>
             <div className="modal-foot">
-                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={save}>Save Job</button>
+                <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Create Job'}</button>
             </div>
         </Modal>
     );
 }
 
 /* =========================================================================
-   ADMIN JOB DETAIL MODAL
+   FIND SUBS (dispatch) MODAL  → GET /subs/match + POST /jobs/:id/dispatch
    ========================================================================= */
-function AdminJobModal({ job, reps, subs, repName, onClose, onSaveDetails, onUpdate, onDelete, onToggleVisibility, onAssign, onNotify }) {
-    const [edit, setEdit] = useState({
-        address: job.address, jobType: job.jobType, salesRepId: job.salesRepId || '',
-        jobCost: job.jobCost || 0, pay: job.pay || 0, scope: job.scope, notes: job.notes,
-    });
-    const setE = (k, v) => setEdit((s) => ({ ...s, [k]: v }));
-    const rep = reps.find((r) => r.id === job.salesRepId);
-    const isDone = job.status === 'completed';
+function DispatchModal({ job, onClose, onDispatched, toast }) {
+    const mapRef = useRef(null);
+    const layerRef = useRef(null);
+    const [trade, setTrade] = useState((job.trades && job.trades[0]) || 'roofing');
+    const [maxMiles, setMaxMiles] = useState('');
+    const [pay, setPay] = useState('');
+    const [scope, setScope] = useState(job.scope || '');
+    const [expiresHours, setExpiresHours] = useState('24');
+    const [matches, setMatches] = useState([]);
+    const [selected, setSelected] = useState(new Set());
+    const [searching, setSearching] = useState(false);
+    const [sending, setSending] = useState(false);
+
+    const hasCoords = job.lat != null && job.lng != null;
+
+    const runMatch = useCallback(async () => {
+        if (!hasCoords) { toast('This job has no map location (lat/lng). Add coordinates on the job first.', 'warn'); return; }
+        setSearching(true);
+        try {
+            const res = await axiosInstance.get('/subs/match', {
+                params: { lat: job.lat, lng: job.lng, trade, max_miles: maxMiles || undefined },
+            });
+            const rows = res.data?.data || [];
+            setMatches(rows);
+            setSelected(new Set(rows.map((r) => r.id)));
+            if (!rows.length) toast('No compliant, in-range subs for this trade.', 'info');
+        } catch (e) { /* interceptor */ } finally { setSearching(false); }
+    }, [hasCoords, job.lat, job.lng, trade, maxMiles, toast]);
+
+    // Draw the map + pins whenever matches change.
+    useEffect(() => {
+        if (!hasCoords) return;
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById('dispatchMap');
+            if (!el) return;
+            if (!mapRef.current || !el._leaflet_id) {
+                if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                mapRef.current = L.map('dispatchMap').setView([job.lat, job.lng], 9);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(mapRef.current);
+            }
+            const map = mapRef.current;
+            if (layerRef.current) { layerRef.current.remove(); layerRef.current = null; }
+            const group = L.layerGroup().addTo(map);
+            layerRef.current = group;
+
+            // Job pin (gold).
+            L.circleMarker([job.lat, job.lng], { radius: 9, color: '#b8860b', fillColor: '#FDB813', fillOpacity: 0.95, weight: 2 })
+                .bindPopup(`<strong>Job site</strong><br/>${job.job_number}`).addTo(group);
+
+            const pts = [[job.lat, job.lng]];
+            for (const s of matches) {
+                if (s.home_lat == null || s.home_lng == null) continue;
+                const on = selected.has(s.id);
+                const m = L.circleMarker([s.home_lat, s.home_lng], {
+                    radius: 7, color: on ? '#166534' : '#6b7280', fillColor: on ? '#22c55e' : '#d1d5db', fillOpacity: 0.85, weight: 2,
+                });
+                m.bindPopup(`<strong>${s.business_name}</strong><br/>${s.distance_miles} mi · ⭐ ${s.rating ?? '—'}`);
+                m.addTo(group);
+                pts.push([s.home_lat, s.home_lng]);
+            }
+            if (pts.length > 1) { try { map.fitBounds(pts, { padding: [40, 40], maxZoom: 11 }); } catch { /* */ } }
+        })();
+        return () => { cancelled = true; };
+    }, [matches, selected, hasCoords, job.lat, job.lng, job.job_number]);
+
+    useEffect(() => () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } }, []);
+
+    const toggleSub = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+    const send = async () => {
+        const payAmount = parseFloat(pay);
+        if (isNaN(payAmount) || payAmount <= 0) { toast('Enter a payout amount.', 'error'); return; }
+        if (!scope.trim()) { toast('Add a scope summary for the offer.', 'error'); return; }
+        const sub_ids = [...selected];
+        if (!sub_ids.length) { toast('Select at least one sub to notify.', 'error'); return; }
+        setSending(true);
+        try {
+            await axiosInstance.post(`/jobs/${job.id}/dispatch`, {
+                pay_amount: payAmount,
+                scope_summary: scope.trim(),
+                sub_ids,
+                trade,
+                expires_hours: parseInt(expiresHours, 10) || 24,
+            });
+            toast(`Offer sent to ${sub_ids.length} sub(s). First to accept wins.`, 'success');
+            onDispatched();
+        } catch (e) { /* interceptor */ } finally { setSending(false); }
+    };
 
     return (
-        <Modal onClose={onClose}>
+        <Modal onClose={onClose} wide>
             <div className="modal-head">
-                <div><h2>{job.id} — {job.jobType}</h2><div className="sub">{job.address}</div></div>
+                <div><h2>Find Subs — Dispatch Offer</h2><div className="sub">{job.job_number} · {job.address || 'No address'}</div></div>
                 <button className="modal-close" onClick={onClose}>&times;</button>
             </div>
             <div className="modal-body">
-                <div className="detail-grid" style={{ marginBottom: '1.25rem' }}>
-                    <div className="detail-item"><div className="dl">Status</div><div className="dv"><StatusPill status={job.status} /></div></div>
-                    <div className="detail-item"><div className="dl">Visibility</div><div className="dv">{job.visibility === 'published' ? <span style={{ color: '#16a34a' }}>● Visible to subs</span> : <span style={{ color: '#9ca3af' }}>● Hidden (draft)</span>}</div></div>
-                    <div className="detail-item"><div className="dl">Job Cost</div><div className="dv">{money(job.jobCost)}</div></div>
-                    <div className="detail-item"><div className="dl">Sub Payout</div><div className="dv">{money(job.pay)}</div></div>
-                    <div className="detail-item"><div className="dl">Materials</div><div className="dv">{money(materialsTotal(job))}</div></div>
-                    <div className="detail-item"><div className="dl">Profit</div><div className="dv" style={{ color: jobProfit(job) < 0 ? '#dc2626' : '#16a34a', fontWeight: 800 }}>{money(jobProfit(job))}</div></div>
-                    <div className="detail-item"><div className="dl">Sales Rep</div><div className="dv">{repName(job.salesRepId)}</div></div>
-                    <div className="detail-item"><div className="dl">Assigned Crew</div><div className="dv">{job.claimedByName || '—'}</div></div>
+                <div className="form-section">
+                    <h3>Match Criteria</h3>
+                    <div className="form-grid">
+                        <div className="field"><label>Trade</label><select value={trade} onChange={(e) => setTrade(e.target.value)}>{TRADES.map((t) => <option key={t} value={t}>{tradeLabel(t)}</option>)}</select></div>
+                        <div className="field"><label>Max distance (mi) <span className="hint" style={{ fontWeight: 400 }}>(optional)</span></label><input type="number" min="1" value={maxMiles} onChange={(e) => setMaxMiles(e.target.value)} placeholder="Sub's own radius" /></div>
+                        <div className="field" style={{ alignSelf: 'end' }}>
+                            <button className="btn btn-secondary btn-block" onClick={runMatch} disabled={searching || !hasCoords}>{searching ? 'Searching…' : '🔍 Find Matching Subs'}</button>
+                        </div>
+                    </div>
+                    {!hasCoords && <div className="hint" style={{ color: '#dc2626' }}>This job has no lat/lng. Add coordinates on the job before dispatching.</div>}
                 </div>
 
-                {!isDone && (
+                {hasCoords && (
                     <div className="form-section">
-                        <h3>Edit Job Details</h3>
-                        <div className="form-grid">
-                            <div className="field full"><label>Property Address</label><input type="text" value={edit.address} onChange={(e) => setE('address', e.target.value)} /></div>
-                            <div className="field">
-                                <label>Job Type</label>
-                                <select value={edit.jobType} onChange={(e) => setE('jobType', e.target.value)}>
-                                    {JOB_TYPES.map((t) => <option key={t}>{t}</option>)}
-                                </select>
-                            </div>
-                            <div className="field">
-                                <label>Sales Rep</label>
-                                <select value={edit.salesRepId} onChange={(e) => setE('salesRepId', e.target.value)}>
-                                    <option value="">Unassigned</option>
-                                    {reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="field"><label>Job Cost ($)</label><input type="number" min="0" step="50" value={edit.jobCost} onChange={(e) => setE('jobCost', e.target.value)} /></div>
-                            <div className="field"><label>Sub Payout ($)</label><input type="number" min="0" step="50" value={edit.pay} onChange={(e) => setE('pay', e.target.value)} /></div>
-                            <div className="field full"><label>Scope of Work</label><textarea value={edit.scope} onChange={(e) => setE('scope', e.target.value)} /></div>
-                            <div className="field full"><label>Site Notes</label><textarea value={edit.notes} onChange={(e) => setE('notes', e.target.value)} /></div>
-                        </div>
-                        <button className="btn btn-primary" onClick={() => onSaveDetails(job.id, {
-                            address: edit.address.trim(), jobType: edit.jobType, salesRepId: edit.salesRepId || null,
-                            jobCost: parseInt(edit.jobCost, 10) || 0, pay: parseInt(edit.pay, 10) || 0,
-                            scope: edit.scope.trim(), notes: edit.notes,
-                        })}>Save Changes</button>
-                    </div>
-                )}
-
-                {!isDone && (
-                    <div className="form-section">
-                        <h3>Visibility &amp; Assignment</h3>
-                        <div className="assign-controls">
-                            <div className="assign-toggle-row">
-                                <div>
-                                    <div className="assign-toggle-label">Show to subcontractors</div>
-                                    <div className="assign-toggle-hint">{job.visibility === 'published' ? 'Subs can see and claim this job.' : 'Hidden — only your team can see this job.'}</div>
-                                </div>
-                                <button className={`vis-switch ${job.visibility === 'published' ? 'on' : ''}`} onClick={() => onToggleVisibility(job.id)} aria-label="Toggle visibility">
-                                    <span className="vis-knob"></span>
-                                </button>
-                            </div>
-                            <div className="assign-crew-row">
-                                <label className="assign-toggle-label">Assign directly to a crew</label>
-                                <select value={job.claimedBy || ''} onChange={(e) => onAssign(job.id, e.target.value)}>
-                                    <option value="">— Open to all subs —</option>
-                                    {subs.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                                <div className="assign-toggle-hint">Assigning hands the job to one crew and makes it visible to them.</div>
-                            </div>
-                        </div>
+                        <h3>Coverage Map</h3>
+                        <div id="dispatchMap" className="dispatch-map" />
                     </div>
                 )}
 
                 <div className="form-section">
-                    <h3>Materials &amp; Expenses <span style={{ fontWeight: 400, fontSize: '0.7rem', color: '#9ca3af', textTransform: 'none' }}>(internal — never shown to subs)</span></h3>
-                    <MaterialsEditor materials={job.materials || []} jobCost={job.jobCost} pay={job.pay} onChange={(mats) => onUpdate(job.id, { materials: mats })} />
+                    <h3>Matched Subs ({matches.length})</h3>
+                    {!matches.length ? (
+                        <div className="hint">Run a match to see compliant, in-range subs. Non-compliant (expired COI, etc.) subs are excluded server-side.</div>
+                    ) : (
+                        <div className="dispatch-sub-list">
+                            {matches.map((s) => (
+                                <div className={`dispatch-sub ${selected.has(s.id) ? 'sel' : ''}`} key={s.id} onClick={() => toggleSub(s.id)}>
+                                    <div className="ds-check">{selected.has(s.id) ? '✓' : ''}</div>
+                                    <div style={{ flex: 1 }}>
+                                        <div className="ds-name">{s.business_name}</div>
+                                        <div className="ds-meta">{s.distance_miles} mi away · ⭐ {s.rating ?? '—'} · {(s.trades || []).map(tradeLabel).join(', ')}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {rep && (
-                    <div className="form-section"><h3>Sales Rep Contact</h3>
-                        <div className="rep-contact">
-                            <div className="rep-contact-name">{rep.name}</div>
-                            <div className="rep-contact-row">📞 <a href={`tel:${rep.phone}`}>{rep.phone}</a> &nbsp;·&nbsp; ✉️ <a href={`mailto:${rep.email}`}>{rep.email}</a></div>
+                <div className="form-section">
+                    <h3>Offer Terms</h3>
+                    <div className="form-grid">
+                        <div className="field"><label>Sub Payout ($) <span className="req">*</span></label><input type="number" min="0" step="50" value={pay} onChange={(e) => setPay(e.target.value)} placeholder="0" /></div>
+                        <div className="field"><label>Offer expires in (hours)</label><input type="number" min="1" max="168" value={expiresHours} onChange={(e) => setExpiresHours(e.target.value)} /></div>
+                        <div className="field full"><label>Scope summary (shown pre-accept) <span className="req">*</span></label><textarea value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What the sub sees before accepting — no address or client name." /></div>
+                    </div>
+                    <div className="msg-preview" style={{ marginTop: '0.5rem' }}>
+                        Pre-accept the sub sees: <strong>pay {pay ? money(pay) : '$—'}</strong>, area <strong>{job.area_hint || 'City, ST'}</strong>, distance, scope + photos. Address, client name &amp; phone reveal <strong>only</strong> after they accept.
+                    </div>
+                </div>
+            </div>
+            <div className="modal-foot">
+                <button className="btn btn-ghost" onClick={onClose} disabled={sending}>Cancel</button>
+                <button className="btn btn-primary" onClick={send} disabled={sending || !selected.size}>{sending ? 'Sending…' : `📣 Send Offer to ${selected.size} Sub(s)`}</button>
+            </div>
+        </Modal>
+    );
+}
+
+/* =========================================================================
+   DISPATCH TRACKER  (recipient grid)  → GET /jobs/:id/dispatch
+   ========================================================================= */
+function DispatchTracker({ job, canDispatch, toast, onChanged }) {
+    const [dispatch, setDispatch] = useState(undefined); // undefined=loading, null=none
+    const [cancelling, setCancelling] = useState(false);
+
+    const load = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get(`/jobs/${job.id}/dispatch`, { suppressErrorToast: true });
+            setDispatch(res.data?.data ?? null);
+        } catch { setDispatch(null); }
+    }, [job.id]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const cancel = async () => {
+        setCancelling(true);
+        try {
+            await axiosInstance.post(`/jobs/${job.id}/dispatch/cancel`);
+            toast('Dispatch cancelled.', 'success');
+            await load();
+            onChanged?.();
+        } catch { /* */ } finally { setCancelling(false); }
+    };
+
+    if (dispatch === undefined) return <div className="hint">Loading dispatch…</div>;
+    if (dispatch === null) return <div className="hint">No dispatch sent for this job yet.</div>;
+
+    const respMeta = { accepted: ['green', 'Accepted'], declined: ['red', 'Declined'], no_response: ['muted', 'No response'] };
+    return (
+        <div>
+            <div className="detail-grid" style={{ marginBottom: '0.75rem' }}>
+                <div className="detail-item"><div className="dl">Status</div><div className="dv" style={{ textTransform: 'capitalize' }}>{dispatch.status}</div></div>
+                <div className="detail-item"><div className="dl">Pay Offered</div><div className="dv">{money(dispatch.pay_amount)}</div></div>
+                <div className="detail-item"><div className="dl">Area</div><div className="dv">{dispatch.area_label || '—'}</div></div>
+                <div className="detail-item"><div className="dl">Expires</div><div className="dv">{fmtDateTime(dispatch.expires_at)}</div></div>
+            </div>
+            <div className="dispatch-track">
+                <div className="dt-head"><div>Sub</div><div>Dist</div><div>Notified</div><div>Viewed</div><div>Response</div></div>
+                {(dispatch.recipients || []).map((r) => {
+                    const [cls, label] = respMeta[r.response] || ['muted', r.response];
+                    return (
+                        <div className="dt-row" key={r.sub_id}>
+                            <div className="dt-name">{r.sub?.business_name || '—'}</div>
+                            <div>{r.distance_miles != null ? `${r.distance_miles} mi` : '—'}</div>
+                            <div>{r.notified_email_at ? '✉️' : ''}{r.notified_sms_at ? ' 💬' : ''}{!r.notified_email_at && !r.notified_sms_at ? '—' : ''}</div>
+                            <div>{r.viewed_at ? '👁' : '—'}</div>
+                            <div className={`jr-money ${cls}`} style={{ textAlign: 'left', fontWeight: 700 }}>{label}</div>
+                        </div>
+                    );
+                })}
+            </div>
+            {canDispatch && dispatch.status === 'open' && (
+                <button className="btn btn-ghost" style={{ marginTop: '0.75rem' }} onClick={cancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : 'Cancel Dispatch'}</button>
+            )}
+        </div>
+    );
+}
+
+/* =========================================================================
+   JOB DETAIL / MANAGE MODAL
+   ========================================================================= */
+function JobModal({ jobId, team, onClose, onChanged, toast }) {
+    const { has } = usePermissions();
+    const canDispatch = has('dispatch_subs');
+    const canFin = has('view_job_financials');
+
+    const [job, setJob] = useState(null);
+    const [checklist, setChecklist] = useState([]);
+    const [edit, setEdit] = useState(null);
+    const [busy, setBusy] = useState('');
+    const [showDispatch, setShowDispatch] = useState(false);
+    const [schedDate, setSchedDate] = useState('');
+    const [newItem, setNewItem] = useState('');
+
+    const load = useCallback(async () => {
+        try {
+            const [jr, cl] = await Promise.all([
+                axiosInstance.get(`/jobs/${jobId}`, { suppressErrorToast: true }),
+                axiosInstance.get(`/jobs/${jobId}/checklist`, { suppressErrorToast: true }).catch(() => ({ data: { data: [] } })),
+            ]);
+            const j = jr.data?.data;
+            setJob(j);
+            setChecklist(cl.data?.data || []);
+            setEdit({
+                address: j.address || '', job_type: j.job_type || '', scope: j.scope || '', notes: j.notes || '',
+                job_cost: j.job_cost ?? '', permit_status: j.permit_status || 'not_required',
+                material_order_status: j.material_order_status || 'not_ordered', trades: j.trades || [],
+                lat: j.lat ?? '', lng: j.lng ?? '',
+            });
+        } catch { /* */ }
+    }, [jobId]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const withBusy = async (key, fn, okMsg) => {
+        setBusy(key);
+        try { await fn(); if (okMsg) toast(okMsg, 'success'); await load(); onChanged?.(); }
+        catch { /* interceptor */ } finally { setBusy(''); }
+    };
+
+    if (!job || !edit) {
+        return <Modal onClose={onClose}><div className="modal-body" style={{ padding: '3rem', textAlign: 'center' }}><div className="hint">Loading job…</div></div></Modal>;
+    }
+
+    const setE = (k, v) => setEdit((s) => ({ ...s, [k]: v }));
+    const toggleTrade = (t) => setEdit((s) => ({ ...s, trades: s.trades.includes(t) ? s.trades.filter((x) => x !== t) : [...s.trades, t] }));
+    const blockers = job.readiness_blockers || [];
+    const isReady = job.readiness_state === 'ready' || job.readiness_state === 'scheduled';
+    const isDone = job.readiness_state === 'complete';
+
+    const saveDetails = () => withBusy('save', () => axiosInstance.patch(`/jobs/${jobId}`, {
+        address: edit.address.trim() || undefined,
+        job_type: edit.job_type || undefined,
+        scope: edit.scope.trim() || undefined,
+        notes: edit.notes || undefined,
+        trades: edit.trades,
+        permit_status: edit.permit_status,
+        material_order_status: edit.material_order_status,
+        lat: edit.lat !== '' && !isNaN(parseFloat(edit.lat)) ? parseFloat(edit.lat) : undefined,
+        lng: edit.lng !== '' && !isNaN(parseFloat(edit.lng)) ? parseFloat(edit.lng) : undefined,
+        ...(canFin && edit.job_cost !== '' ? { job_cost: parseInt(edit.job_cost, 10) || 0 } : {}),
+    }), 'Job saved.');
+
+    const toggleGate = (field, val) => withBusy(field, () => axiosInstance.patch(`/jobs/${jobId}`, { [field]: val }), 'Updated.');
+    const assign = (employee_id) => withBusy('assign', () => axiosInstance.post(`/jobs/${jobId}/assign`, employee_id ? { type: 'in_house', employee_id } : { type: 'unassigned' }), 'Assignment updated.');
+
+    const schedule = async () => {
+        if (!schedDate) { toast('Pick a date/time first.', 'error'); return; }
+        setBusy('schedule');
+        try {
+            await axiosInstance.post(`/jobs/${jobId}/schedule`, { scheduled_start: new Date(schedDate).toISOString() });
+            toast('Job scheduled.', 'success');
+            await load(); onChanged?.();
+        } catch (e) {
+            const bl = e?.response?.data?.blockers;
+            if (Array.isArray(bl) && bl.length) toast('Still blocked: ' + bl.join(', '), 'error');
+        } finally { setBusy(''); }
+    };
+
+    const complete = () => withBusy('complete', () => axiosInstance.post(`/jobs/${jobId}/complete`), 'Job marked complete.');
+    const addChecklist = () => { if (!newItem.trim()) return; withBusy('chk', () => axiosInstance.post(`/jobs/${jobId}/checklist`, { label: newItem.trim() }).then(() => setNewItem(''))); };
+    const toggleChecklist = (item) => withBusy('chk' + item.id, () => axiosInstance.patch(`/jobs/${jobId}/checklist/${item.id}`, { done: !item.done }));
+
+    return (
+        <Modal onClose={onClose} wide>
+            <div className="modal-head">
+                <div><h2>{job.job_number} — {job.job_type || 'Job'}</h2><div className="sub">{job.address || 'No address'}{job.claim_id ? ' · claim-linked' : ' · standalone'}</div></div>
+                <button className="modal-close" onClick={onClose}>&times;</button>
+            </div>
+            <div className="modal-body">
+                <div className="detail-grid" style={{ marginBottom: '1.25rem' }}>
+                    <div className="detail-item"><div className="dl">Readiness</div><div className="dv"><StatePill state={job.readiness_state} /></div></div>
+                    <div className="detail-item"><div className="dl">Assignment</div><div className="dv">{assignmentLabel(job, team.byId)}</div></div>
+                    <div className="detail-item"><div className="dl">Scheduled</div><div className="dv">{fmtDate(job.scheduled_start)}</div></div>
+                    <Can permission="view_job_financials"><div className="detail-item"><div className="dl">Job Cost</div><div className="dv">{job.job_cost != null ? money(job.job_cost) : '—'}</div></div></Can>
+                </div>
+
+                {/* READINESS / BLOCKERS */}
+                {!isDone && (
+                    <div className="form-section">
+                        <h3>Readiness Gates</h3>
+                        {blockers.length ? (
+                            <div className="blocker-list">
+                                {blockers.map((b, i) => <div className="blocker-chip" key={i}>⛔ {b}</div>)}
+                                <div className="hint" style={{ marginTop: '0.4rem' }}>Clear each blocker below (contract / payment / permit / materials) — claim-side gates (approval, estimate, measurement) resolve on the linked claim.</div>
+                            </div>
+                        ) : (
+                            <div className="ready-banner">✓ All gates cleared — this job is ready to schedule &amp; dispatch.</div>
+                        )}
+                        <div className="gate-toggles">
+                            <label className={`gate-toggle ${job.contract_signed_at ? 'on' : ''}`}>
+                                <input type="checkbox" checked={!!job.contract_signed_at} disabled={busy === 'contract_signed'} onChange={(e) => toggleGate('contract_signed', e.target.checked)} />
+                                <span>Contract signed{job.contract_signed_at ? ` · ${fmtDate(job.contract_signed_at)}` : ''}</span>
+                            </label>
+                            <label className={`gate-toggle ${job.first_payment_received_at ? 'on' : ''}`}>
+                                <input type="checkbox" checked={!!job.first_payment_received_at} disabled={busy === 'first_payment_received'} onChange={(e) => toggleGate('first_payment_received', e.target.checked)} />
+                                <span>First payment received{job.first_payment_received_at ? ` · ${fmtDate(job.first_payment_received_at)}` : ''}</span>
+                            </label>
                         </div>
                     </div>
                 )}
 
-                {isDone && (
-                    <>
-                        <div className="form-section"><h3>Scope of Work</h3><p style={{ fontSize: '0.875rem', color: '#374151', whiteSpace: 'pre-wrap' }}>{job.scope}</p></div>
-                        {job.notes && <div className="form-section"><h3>Site Notes</h3><p style={{ fontSize: '0.875rem', color: '#374151', whiteSpace: 'pre-wrap' }}>{job.notes}</p></div>}
-                    </>
+                {/* SCHEDULE + ASSIGN + DISPATCH */}
+                {!isDone && (
+                    <div className="form-section">
+                        <h3>Schedule &amp; Crew</h3>
+                        <div className="form-grid">
+                            <div className="field">
+                                <label>Assign In-House Employee</label>
+                                <select value={job.assignment_type === 'in_house' ? (job.assigned_employee_id || '') : ''} disabled={busy === 'assign'} onChange={(e) => assign(e.target.value)}>
+                                    <option value="">— Unassigned —</option>
+                                    {team.list.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+                                </select>
+                                {job.assignment_type === 'subcontractor' && <span className="hint">Currently assigned to a subcontractor (via accepted dispatch).</span>}
+                            </div>
+                            <div className="field">
+                                <label>Schedule Start</label>
+                                <input type="datetime-local" value={schedDate} onChange={(e) => setSchedDate(e.target.value)} />
+                            </div>
+                            <div className="field" style={{ alignSelf: 'end' }}>
+                                <button className="btn btn-secondary btn-block" onClick={schedule} disabled={busy === 'schedule' || !isReady} title={!isReady ? 'Clear all blockers first' : ''}>
+                                    {busy === 'schedule' ? 'Scheduling…' : '📅 Schedule Job'}
+                                </button>
+                                {!isReady && <span className="hint" style={{ color: '#dc2626' }}>Blocked jobs can’t be scheduled.</span>}
+                            </div>
+                        </div>
+                        {canDispatch && (
+                            <button className="btn btn-primary" style={{ marginTop: '0.5rem' }} onClick={() => setShowDispatch(true)} disabled={!isReady} title={!isReady ? 'Job must be ready first' : ''}>
+                                👷 Find Subs &amp; Dispatch
+                            </button>
+                        )}
+                    </div>
                 )}
 
-                <div className="form-section"><h3>Our Photos ({job.ourPhotos.length})</h3>
-                    {job.ourPhotos.length ? (
-                        <div className="photo-gallery">{job.ourPhotos.map((p, i) => <div className="g" key={i} style={{ backgroundImage: `url('${p}')` }}></div>)}</div>
-                    ) : <div className="hint">No photos attached</div>}
+                {/* DISPATCH TRACKER */}
+                <div className="form-section">
+                    <h3>Dispatch Tracker</h3>
+                    <DispatchTracker job={job} canDispatch={canDispatch} toast={toast} onChanged={load} />
                 </div>
 
-                <div className="form-section"><h3>Call Ahead</h3>
-                    <div className={`callahead-row ${job.callAhead.done ? 'done' : ''}`}>
-                        <div className="check-box" style={job.callAhead.done ? { background: '#16a34a', borderColor: '#16a34a' } : undefined}>{job.callAhead.done ? '✓' : ''}</div>
-                        <span style={{ fontSize: '0.85rem' }}>{job.callAhead.done ? 'Sub logged call-ahead' : 'Not yet logged by sub'}</span>
+                {/* EDIT DETAILS */}
+                {!isDone && (
+                    <div className="form-section">
+                        <h3>Edit Details</h3>
+                        <div className="form-grid">
+                            <div className="field full"><label>Address</label><input type="text" value={edit.address} onChange={(e) => setE('address', e.target.value)} /></div>
+                            <div className="field"><label>Job Type</label><select value={edit.job_type} onChange={(e) => setE('job_type', e.target.value)}>{JOB_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+                            <Can permission="view_job_financials"><div className="field"><label>Job Cost ($)</label><input type="number" min="0" step="50" value={edit.job_cost} onChange={(e) => setE('job_cost', e.target.value)} /></div></Can>
+                            <div className="field"><label>Latitude</label><input type="number" step="0.0001" value={edit.lat} onChange={(e) => setE('lat', e.target.value)} /></div>
+                            <div className="field"><label>Longitude</label><input type="number" step="0.0001" value={edit.lng} onChange={(e) => setE('lng', e.target.value)} /></div>
+                            <div className="field"><label>Permit</label><select value={edit.permit_status} onChange={(e) => setE('permit_status', e.target.value)}>{PERMIT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+                            <div className="field"><label>Materials</label><select value={edit.material_order_status} onChange={(e) => setE('material_order_status', e.target.value)}>{MATERIAL_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+                            <div className="field full">
+                                <label>Trades</label>
+                                <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${edit.trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+                            </div>
+                            <div className="field full"><label>Scope</label><textarea value={edit.scope} onChange={(e) => setE('scope', e.target.value)} /></div>
+                            <div className="field full"><label>Site Notes</label><textarea value={edit.notes} onChange={(e) => setE('notes', e.target.value)} /></div>
+                        </div>
+                        <button className="btn btn-primary" onClick={saveDetails} disabled={busy === 'save'}>{busy === 'save' ? 'Saving…' : 'Save Changes'}</button>
                     </div>
-                </div>
+                )}
 
-                <div className="form-section"><h3>Checklist Progress</h3>
+                {/* CHECKLIST */}
+                <div className="form-section">
+                    <h3>Checklist</h3>
                     <div className="checklist">
-                        {job.checklist.map((c) => (
-                            <div className={`check-item ${c.done ? 'done' : ''}`} key={c.id}>
+                        {checklist.length ? checklist.map((c) => (
+                            <div className={`check-item ${c.done ? 'done' : ''}`} key={c.id} onClick={() => toggleChecklist(c)} style={{ cursor: 'pointer' }}>
                                 <div className="check-box">{c.done ? '✓' : ''}</div>
                                 <span className="check-label">{c.label}</span>
                                 {c.required && <span className="check-required">Required</span>}
                             </div>
-                        ))}
+                        )) : <div className="hint">No checklist items yet.</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add a checklist item..." style={{ flex: 1, padding: '0.6rem 0.85rem', border: '2px solid #e5e7eb', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.85rem' }} />
+                        <button className="btn btn-ghost" onClick={addChecklist} disabled={busy === 'chk'}>Add</button>
                     </div>
                 </div>
-
-                <div className="form-section"><h3>Sub Site Photos</h3>
-                    {['before', 'during', 'after'].map((phase) => {
-                        const arr = job.sitePhotos[phase] || [];
-                        return (
-                            <div style={{ marginBottom: '0.75rem' }} key={phase}>
-                                <div className="dl" style={{ marginBottom: '0.3rem' }}>{phase} photos ({arr.length})</div>
-                                {arr.length ? <div className="photo-gallery">{arr.map((p, i) => <div className="g" key={i} style={{ backgroundImage: `url('${p}')` }}></div>)}</div> : <div className="hint">None uploaded yet</div>}
-                            </div>
-                        );
-                    })}
-                </div>
             </div>
             <div className="modal-foot">
-                {!isDone && <button className="btn btn-ghost" onClick={() => onDelete(job.id)}>Delete Job</button>}
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                {job.status === 'available' && job.visibility === 'published' && !job.claimedBy && (
-                    <button className="btn btn-primary" onClick={() => onNotify(job.id)}>📣 Notify Subs</button>
-                )}
+                <button className="btn btn-ghost" onClick={onClose}>Close</button>
+                {!isDone && <button className="btn btn-success" onClick={complete} disabled={busy === 'complete'}>{busy === 'complete' ? 'Completing…' : '✓ Mark Complete'}</button>}
             </div>
-        </Modal>
-    );
-}
 
-/* =========================================================================
-   NOTIFY (single job) MODAL
-   ========================================================================= */
-function NotifyJobModal({ job, subs, repName, onClose, onSend }) {
-    const msg = notifyMessage([job], repName);
-    return (
-        <Modal onClose={onClose}>
-            <div className="modal-head">
-                <div><h2>Notify Subs — Job Available</h2><div className="sub">{job.address}</div></div>
-                <button className="modal-close" onClick={onClose}>&times;</button>
-            </div>
-            <div className="modal-body">
-                <div className="form-section">
-                    <h3>Recipients ({subs.length})</h3>
-                    <p className="hint">This text/notification goes to every active subcontractor at once.</p>
-                    <div className="recipient-chips">{subs.map((s) => <span className="recipient-chip" key={s.id}>{s.name}</span>)}</div>
-                </div>
-                <div className="form-section">
-                    <h3>Message Preview</h3>
-                    <div className="msg-preview">{msg}</div>
-                </div>
-            </div>
-            <div className="modal-foot">
-                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={() => onSend([job.id])}>Send to {subs.length} Subs</button>
-            </div>
-        </Modal>
-    );
-}
-
-/* =========================================================================
-   NOTIFY ALL MODAL
-   ========================================================================= */
-function NotifyAllModal({ available, subs, repName, onClose, onSend }) {
-    const [selection, setSelection] = useState(new Set(available.map((j) => j.id)));
-    const chosen = available.filter((j) => selection.has(j.id));
-    const toggle = (id) => {
-        const next = new Set(selection);
-        if (next.has(id)) next.delete(id); else next.add(id);
-        setSelection(next);
-    };
-    return (
-        <Modal onClose={onClose}>
-            <div className="modal-head">
-                <div><h2>Notify Subs of Available Jobs</h2><div className="sub">Broadcast to all {subs.length} active subcontractors</div></div>
-                <button className="modal-close" onClick={onClose}>&times;</button>
-            </div>
-            <div className="modal-body">
-                <div className="form-section">
-                    <h3>Select Jobs ({available.length})</h3>
-                    <div className="notify-job-list">
-                        {available.map((j) => (
-                            <div className={`notify-job ${selection.has(j.id) ? 'sel' : ''}`} key={j.id} onClick={() => toggle(j.id)}>
-                                <div className="nj-check">{selection.has(j.id) ? '✓' : ''}</div>
-                                <div><div className="nj-addr">{j.address}</div><div className="nj-meta">{j.jobType}</div></div>
-                                <div className="nj-pay">{money(j.pay)}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="form-section">
-                    <h3>Recipients ({subs.length})</h3>
-                    <div className="recipient-chips">{subs.map((s) => <span className="recipient-chip" key={s.id}>{s.name}</span>)}</div>
-                </div>
-                <div className="form-section">
-                    <h3>Message Preview</h3>
-                    <div className="msg-preview">{chosen.length ? notifyMessage(chosen, repName) : '(Select at least one job)'}</div>
-                </div>
-            </div>
-            <div className="modal-foot">
-                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" disabled={!chosen.length} onClick={() => onSend([...selection])}>Send Broadcast</button>
-            </div>
-        </Modal>
-    );
-}
-
-/* =========================================================================
-   SUB DETAIL MODAL
-   ========================================================================= */
-function SubDetailModal({ sub, jobs, onClose, onMessage }) {
-    const subJobs = jobs.filter((j) => j.claimedBy === sub.id);
-    const active = subJobs.filter((j) => j.status !== 'completed');
-    const done = subJobs.filter((j) => j.status === 'completed');
-    const earned = done.reduce((s, j) => s + j.pay, 0);
-    const pending = active.reduce((s, j) => s + j.pay, 0);
-
-    const rows = (arr) => arr.length ? arr.map((j) => (
-        <div className="notify-job" style={{ cursor: 'default' }} key={j.id}>
-            <div><div className="nj-addr">{j.address}</div><div className="nj-meta">{j.jobType} · {statusLabel(j.status)}</div></div>
-            <div className="nj-pay">{money(j.pay)}</div>
-        </div>
-    )) : <div className="hint">None</div>;
-
-    return (
-        <Modal onClose={onClose}>
-            <div className="modal-head">
-                <div><h2>{sub.name}</h2><div className="sub">{sub.contact} · {sub.phone} · {sub.email}</div></div>
-                <button className="modal-close" onClick={onClose}>&times;</button>
-            </div>
-            <div className="modal-body">
-                <div className="detail-grid" style={{ marginBottom: '1.25rem' }}>
-                    <div className="detail-item"><div className="dl">Active Jobs</div><div className="dv">{active.length}</div></div>
-                    <div className="detail-item"><div className="dl">Completed</div><div className="dv">{done.length}</div></div>
-                    <div className="detail-item"><div className="dl">Earned (paid)</div><div className="dv" style={{ color: '#16a34a' }}>{money(earned)}</div></div>
-                    <div className="detail-item"><div className="dl">Pending Payout</div><div className="dv">{money(pending)}</div></div>
-                </div>
-                <div className="form-section"><h3>Active Jobs</h3><div className="notify-job-list">{rows(active)}</div></div>
-                <div className="form-section"><h3>Completed (Payment History)</h3><div className="notify-job-list">{rows(done)}</div></div>
-            </div>
-            <div className="modal-foot">
-                <button className="btn btn-secondary" onClick={onClose}>Close</button>
-                <button className="btn btn-primary" onClick={() => onMessage(sub.id)}>Message {sub.name}</button>
-            </div>
-        </Modal>
-    );
-}
-
-/* =========================================================================
-   ADD SUB MODAL
-   ========================================================================= */
-function AddSubModal({ onClose, onSave, toast }) {
-    const [f, setF] = useState({ name: '', contact: '', phone: '', email: '' });
-    const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-    const save = () => {
-        if (!f.name.trim() || !f.phone.trim()) { toast('Name and phone are required.', 'error'); return; }
-        onSave(f);
-    };
-    return (
-        <Modal onClose={onClose}>
-            <div className="modal-head">
-                <div><h2>Add Subcontractor</h2><div className="sub">They'll get a login to claim jobs from the board</div></div>
-                <button className="modal-close" onClick={onClose}>&times;</button>
-            </div>
-            <div className="modal-body">
-                <div className="form-grid">
-                    <div className="field full"><label>Company / Crew Name <span className="req">*</span></label><input type="text" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Apex Exteriors" /></div>
-                    <div className="field"><label>Contact Name</label><input type="text" value={f.contact} onChange={(e) => set('contact', e.target.value)} placeholder="Full name" /></div>
-                    <div className="field"><label>Phone <span className="req">*</span></label><input type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
-                    <div className="field full"><label>Email</label><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="crew@email.com" /></div>
-                </div>
-                <div className="hint" style={{ marginTop: '0.75rem' }}>An invite link is sent so they can set a password and access the jobs board.</div>
-            </div>
-            <div className="modal-foot">
-                <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={save}>Add &amp; Send Invite</button>
-            </div>
+            {showDispatch && (
+                <DispatchModal job={job} toast={toast} onClose={() => setShowDispatch(false)} onDispatched={() => { setShowDispatch(false); load(); onChanged?.(); }} />
+            )}
         </Modal>
     );
 }
@@ -720,358 +613,142 @@ function AddSubModal({ onClose, onSave, toast }) {
    MAIN COMPONENT
    ========================================================================= */
 export default function JobsReady() {
-    const [jobs, setJobs] = useState(() => seedJobs());
-    const [subs, setSubs] = useState(SEED_SUBS);
-    const [reps] = useState(SEED_REPS);
-
-    const [view, setView] = useState('board');
-    const [adminFilter, setAdminFilter] = useState('all');
-    const [repFilter, setRepFilter] = useState('all');
-    const [layout, setLayout] = useState('grid');
-
+    const [jobs, setJobs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [stateFilter, setStateFilter] = useState('all');
+    const [assignedFilter, setAssignedFilter] = useState('all');
+    const [team, setTeam] = useState({ list: [], byId: {} });
     const [modal, setModal] = useState(null); // { type, id }
 
-    // Route all in-page feedback through the central sonner Toaster (top-center,
-    // richColors) so it matches every other screen. `type` picks the matching
-    // sonner method; anything else falls back to a neutral info toast.
-    const toast = (msg, type = "") => {
-        if (type === "success") sonner.success(msg);
-        else if (type === "error") sonner.error(msg);
-        else if (type === "warn" || type === "warning") sonner.warning(msg);
+    const toast = (msg, type = '') => {
+        if (type === 'success') sonner.success(msg);
+        else if (type === 'error') sonner.error(msg);
+        else if (type === 'warn' || type === 'warning') sonner.warning(msg);
         else sonner.info(msg);
     };
 
-    const getRep = (id) => reps.find((r) => r.id === id) || null;
-    const repName = (id) => { const r = getRep(id); return r ? r.name : 'Unassigned'; };
-    const getJob = (id) => jobs.find((j) => j.id === id);
-    const activeSubs = () => subs.filter((s) => s.active);
-    const patchJob = (id, patch) => setJobs((js) => js.map((j) => j.id === id ? { ...j, ...patch } : j));
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = { pageSize: 100 };
+            if (stateFilter !== 'all') params.state = stateFilter;
+            if (assignedFilter !== 'all') params.assigned = assignedFilter;
+            const res = await axiosInstance.get('/jobs', { params });
+            setJobs(res.data?.data || []);
+        } catch { setJobs([]); } finally { setLoading(false); }
+    }, [stateFilter, assignedFilter]);
 
-    /* ---- Board derived ---- */
-    const filtered = useMemo(() => {
-        let list = jobs.slice();
-        if (adminFilter !== 'all') list = list.filter((j) => j.status === adminFilter);
-        if (repFilter !== 'all') list = list.filter((j) => repFilter === '__none__' ? !j.salesRepId : j.salesRepId === repFilter);
-        return list;
-    }, [jobs, adminFilter, repFilter]);
+    useEffect(() => { load(); }, [load]);
 
-    const hasUnassigned = jobs.some((j) => !j.salesRepId);
-    const openPayout = jobs.filter((j) => j.status !== 'completed').reduce((s, j) => s + j.pay, 0);
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
+                const list = res.data?.data || res.data || [];
+                setTeam({ list, byId: Object.fromEntries(list.map((m) => [m.id, m])) });
+            } catch { /* degrade */ }
+        })();
+    }, []);
 
-    /* ---- Actions ---- */
-    const toggleVisibility = (id) => {
-        const j = getJob(id); if (!j) return;
-        const nv = j.visibility === 'published' ? 'hidden' : 'published';
-        patchJob(id, { visibility: nv });
-        toast(nv === 'published' ? 'Job is now visible to subs.' : 'Job hidden from subs.', 'success');
-    };
-
-    const assignToCrew = (id, subId) => {
-        const j = getJob(id); if (!j) return;
-        const s = subs.find((x) => x.id === subId);
-        if (!subId || !s) {
-            patchJob(id, { claimedBy: null, claimedByName: null, claimedAt: null, status: j.status === 'claimed' ? 'available' : j.status });
-            toast('Job unassigned — back in the open pool.', 'success');
-        } else {
-            patchJob(id, {
-                claimedBy: s.id, claimedByName: s.name, claimedAt: Date.now(),
-                status: j.status === 'available' ? 'claimed' : j.status,
-                visibility: j.visibility !== 'published' ? 'published' : j.visibility,
-            });
-            toast(`Assigned to ${s.name}.`, 'success');
+    const counts = useMemo(() => {
+        const c = { total: jobs.length, blocked: 0, ready: 0, active: 0, complete: 0 };
+        for (const j of jobs) {
+            if (j.readiness_state === 'blocked') c.blocked++;
+            else if (j.readiness_state === 'ready') c.ready++;
+            else if (j.readiness_state === 'complete') c.complete++;
+            else c.active++; // scheduled / in_production / punch_list
         }
-    };
+        return c;
+    }, [jobs]);
 
-    const saveJobDetails = (id, patch) => {
-        if (!patch.address || !patch.scope) { toast('Address and scope are required.', 'error'); return; }
-        patchJob(id, patch);
-        toast('Job details saved.', 'success');
-    };
-
-    const deleteJob = (id) => {
-        setJobs((js) => js.filter((j) => j.id !== id));
-        setModal(null);
-        toast('Job removed.', 'success');
-    };
-
-    const saveNewJob = (data) => {
-        const job = buildJob({
-            address: data.address.trim(), jobType: data.jobType, scope: data.scope.trim(), notes: data.notes,
-            jobCost: data.jobCost, pay: data.pay, salesRepId: data.salesRepId || null,
-            materials: data.materials.map((m) => ({ id: m.id, label: m.label, cost: Number(m.cost) || 0 })),
-            status: 'available', visibility: data.visibility, ourPhotos: data.ourPhotos.slice(),
-        });
-        const assignSub = subs.find((s) => s.id === data.assignId) || null;
-        if (assignSub) {
-            job.claimedBy = assignSub.id; job.claimedByName = assignSub.name;
-            job.claimedAt = Date.now(); job.status = 'claimed'; job.visibility = 'published';
-        }
-        data.customItems.forEach((c) => job.checklist.push({ id: uid('chk'), label: c.label, required: c.required, done: false }));
-        setJobs((js) => [job, ...js]);
-        setModal(null);
-        toast(assignSub ? `Job created and assigned to ${assignSub.name}.`
-            : job.visibility === 'published' ? 'Job published — visible to subs.'
-                : 'Job saved as hidden draft.', 'success');
-    };
-
-    const sendNotify = (ids) => {
-        const n = activeSubs().length;
-        const now = Date.now();
-        setJobs((js) => js.map((j) => ids.includes(j.id) ? { ...j, lastNotifiedAt: now, notifyCount: n } : j));
-        setModal(null);
-        toast(`📣 Sent to ${n} subs — ${ids.length} job(s) broadcast as available.`, 'success');
-    };
-
-    const openNotifyJob = (id) => {
-        const j = getJob(id); if (!j) return;
-        if (j.status !== 'available' || j.claimedBy) { toast('Only unclaimed jobs can be broadcast.', 'warn'); return; }
-        if (j.visibility !== 'published') { toast('Publish this job to subs before broadcasting it.', 'warn'); return; }
-        setModal({ type: 'notifyJob', id });
-    };
-
-    const openNotifyAll = () => {
-        const available = jobs.filter((j) => j.status === 'available' && j.visibility === 'published' && !j.claimedBy);
-        if (!available.length) { toast('No published, unassigned jobs to broadcast right now.', 'warn'); return; }
-        setModal({ type: 'notifyAll' });
-    };
-
-    const saveNewSub = (f) => {
-        const initials = f.name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-        setSubs((ss) => [...ss, { id: uid('sub'), name: f.name.trim(), contact: f.contact.trim(), phone: f.phone.trim(), email: f.email.trim(), initials, active: true }]);
-        setModal(null);
-        toast(`${f.name.trim()} added and invite sent.`, 'success');
-    };
-
-    const messageSub = (subId) => {
-        const s = subs.find((x) => x.id === subId); if (!s) return;
-        toast(`Message sent to ${s.name} (${s.phone}).`, 'success');
-    };
-
-    /* ---- Subs derived ---- */
-    const workingSet = new Set(jobs.filter((j) => j.status === 'in_progress' || j.status === 'claimed').map((j) => j.claimedBy));
-    const inProgressCount = jobs.filter((j) => j.status === 'in_progress' || j.status === 'claimed').length;
-    const totalPaid = jobs.filter((j) => j.status === 'completed').reduce((s, j) => s + j.pay, 0);
-
-    /* ---- Render board card ---- */
     const renderCard = (j) => {
-        const mat = materialsTotal(j);
-        const profit = jobProfit(j);
+        const blockers = j.readiness_blockers || [];
         return (
-            <div className={`job-card ${j.visibility === 'hidden' ? 'is-hidden' : ''}`} key={j.id}>
-                <div className="job-thumb" style={j.ourPhotos[0] ? { backgroundImage: `url('${j.ourPhotos[0]}')` } : undefined}>
-                    <StatusPill status={j.status} />
-                    {j.visibility === 'hidden' && <span className="hidden-badge">🔒 Hidden</span>}
-                    {j.ourPhotos.length ? <span className="job-photo-count">📷 {j.ourPhotos.length}</span> : <span className="placeholder">No photos attached</span>}
-                </div>
+            <div className="job-card" key={j.id}>
                 <div className="job-body">
-                    <span className="job-id">{j.id}</span>
-                    <div className="job-address">{j.address}</div>
-                    <span className="job-type-tag">{j.jobType}</span>
-                    <div className="job-scope">{j.scope}</div>
-                    <div className="cost-row cost-row-4">
-                        <div className="cost-cell"><div className="cost-val">{money(j.jobCost)}</div><div className="cost-label">Job cost</div></div>
-                        <div className="cost-cell"><div className="cost-val">{money(j.pay)}</div><div className="cost-label">Sub pay</div></div>
-                        <div className="cost-cell"><div className="cost-val">{money(mat)}</div><div className="cost-label">Materials</div></div>
-                        <div className="cost-cell"><div className={`cost-val ${profit < 0 ? 'red' : 'green'}`}>{money(profit)}</div><div className="cost-label">Profit</div></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="job-id">{j.job_number}</span>
+                        <StatePill state={j.readiness_state} />
                     </div>
-                    <div className="job-meta-row">
-                        <span className="rep-chip">🧑‍💼 {repName(j.salesRepId)}</span>
-                        {j.claimedByName ? <span className="job-claimed-by">👷 {j.claimedByName}</span> : <span className="job-claimed-by">Unassigned</span>}
-                    </div>
-                    {j.status === 'available' && j.lastNotifiedAt && (
-                        <div style={{ fontSize: '0.7rem', color: '#16a34a', marginTop: '0.4rem' }}>✓ Notified {j.notifyCount} sub(s)</div>
+                    <div className="job-address">{j.address || 'No address'}</div>
+                    {j.job_type && <span className="job-type-tag">{j.job_type}</span>}
+                    {(j.trades || []).length > 0 && (
+                        <div className="card-trades">{(j.trades || []).map((t) => <span className="trade-mini" key={t}>{tradeLabel(t)}</span>)}</div>
                     )}
+                    {j.readiness_state === 'blocked' && blockers.length > 0 && (
+                        <div className="blocker-list" style={{ marginTop: '0.5rem' }}>
+                            {blockers.slice(0, 3).map((b, i) => <span className="blocker-chip sm" key={i}>⛔ {b}</span>)}
+                            {blockers.length > 3 && <span className="blocker-chip sm">+{blockers.length - 3} more</span>}
+                        </div>
+                    )}
+                    <div className="job-meta-row">
+                        <span className="rep-chip">{assignmentLabel(j, team.byId)}</span>
+                        <Can permission="view_job_financials">{j.job_cost != null && <span className="job-claimed-by">{money(j.job_cost)} cost</span>}</Can>
+                    </div>
                 </div>
                 <div className="job-card-actions">
-                    <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setModal({ type: 'adminJob', id: j.id })}>View / Edit</button>
-                    {j.status === 'available' && j.visibility === 'published' && !j.claimedBy ? (
-                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => openNotifyJob(j.id)}>📣 Notify Subs</button>
-                    ) : (j.status === 'available' && j.visibility === 'hidden' ? (
-                        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => toggleVisibility(j.id)}>Publish</button>
-                    ) : null)}
+                    <button className="btn btn-primary btn-block" onClick={() => setModal({ type: 'job', id: j.id })}>Manage</button>
                 </div>
             </div>
         );
     };
-
-    const renderRow = (j) => {
-        const mat = materialsTotal(j);
-        const profit = jobProfit(j);
-        return (
-            <div className={`job-row ${j.visibility === 'hidden' ? 'row-hidden' : ''}`} key={j.id}>
-                <div className="jr-id">{j.id}</div>
-                <div className="jr-addr" title={j.address}>{j.address}</div>
-                <div><div className="jr-type">{j.jobType}</div><div className="jr-rep">🧑‍💼 {repName(j.salesRepId)}</div></div>
-                <div className="jr-money muted"><span className="jr-cell-label">Job cost</span>{money(j.jobCost)}</div>
-                <div className="jr-money muted"><span className="jr-cell-label">Sub pay</span>{money(j.pay)}</div>
-                <div className="jr-money muted"><span className="jr-cell-label">Materials</span>{money(mat)}</div>
-                <div className={`jr-money ${profit < 0 ? 'red' : 'green'}`}><span className="jr-cell-label">Profit</span>{money(profit)}</div>
-                <div>
-                    <span className="jr-cell-label">Status</span><StatusPill status={j.status} />{' '}
-                    {j.visibility === 'published' ? <span className="vis-tag pub">Visible</span> : <span className="vis-tag hid">Hidden</span>}
-                    {j.claimedByName && <div className="jr-rep">👷 {j.claimedByName}</div>}
-                </div>
-                <div className="jr-actions">
-                    <button className={`jr-icon-btn ${j.visibility === 'published' ? 'on' : ''}`} title={j.visibility === 'published' ? 'Hide from subs' : 'Show to subs'} onClick={() => toggleVisibility(j.id)}>{j.visibility === 'published' ? '👁' : '🔒'}</button>
-                    <button className="jr-icon-btn" title="View / Edit" onClick={() => setModal({ type: 'adminJob', id: j.id })}>✎</button>
-                    {j.status === 'available' && j.visibility === 'published' && !j.claimedBy && (
-                        <button className="jr-icon-btn notify" title="Notify Subs" onClick={() => openNotifyJob(j.id)}>📣</button>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    const modalJob = modal && modal.id ? getJob(modal.id) : null;
-    const modalSub = modal && modal.type === 'subDetail' ? subs.find((s) => s.id === modal.id) : null;
-    const availableForBroadcast = jobs.filter((j) => j.status === 'available' && j.visibility === 'published' && !j.claimedBy);
 
     return (
         <div className="subjobs">
-            {/* HEADER */}
             <div className="header-section">
                 <div className="header-content">
                     <div className="header-left">
                         <div>
-                            <div className="page-title">{view === 'board' ? 'Jobs Ready' : 'Subcontractors'}</div>
-                            <div className="page-subtitle">{view === 'board' ? 'Publish and manage subcontractor jobs' : 'Your crews, their jobs and payouts'}</div>
+                            <div className="page-title">Jobs Ready</div>
+                            <div className="page-subtitle">Readiness gating, scheduling, and subcontractor dispatch</div>
                         </div>
-                    </div>
-                    <div className="view-switch">
-                        <button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Jobs Board</button>
-                        <button className={view === 'subs' ? 'active' : ''} onClick={() => setView('subs')}>Subcontractors</button>
                     </div>
                 </div>
             </div>
 
-            {/* JOBS BOARD VIEW */}
-            {view === 'board' && (
-                <div className="content view active">
-                    <div className="stats-row">
-                        <div className="stat-card"><div className="stat-value">{jobs.length}</div><div className="stat-label">Total Jobs</div></div>
-                        <div className="stat-card"><div className="stat-value">{jobs.filter((j) => j.status === 'available').length}</div><div className="stat-label">Available</div></div>
-                        <div className="stat-card"><div className="stat-value">{jobs.filter((j) => j.status === 'claimed' || j.status === 'in_progress').length}</div><div className="stat-label">Claimed / In Progress</div></div>
-                        <div className="stat-card"><div className="stat-value">{jobs.filter((j) => j.status === 'completed').length}</div><div className="stat-label">Completed</div></div>
-                        <div className="stat-card"><div className="stat-value green">{money(openPayout)}</div><div className="stat-label">Open Payout</div></div>
-                    </div>
-
-                    <div className="toolbar">
-                        <div className="section-title">Jobs Board</div>
-                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <div className="filter-tabs">
-                                {[['all', 'All'], ['available', 'Available'], ['claimed', 'Claimed'], ['in_progress', 'In Progress'], ['completed', 'Completed']].map(([f, label]) => (
-                                    <button key={f} className={`filter-tab ${adminFilter === f ? 'active' : ''}`} onClick={() => setAdminFilter(f)}>{label}</button>
-                                ))}
-                            </div>
-                            <select className="rep-filter" value={repFilter} onChange={(e) => setRepFilter(e.target.value)} aria-label="Filter by sales rep">
-                                <option value="all">All Sales Reps</option>
-                                {reps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                {hasUnassigned && <option value="__none__">Unassigned</option>}
-                            </select>
-                            <div className="layout-toggle" role="group" aria-label="Layout">
-                                <button className={`layout-btn ${layout === 'grid' ? 'active' : ''}`} onClick={() => setLayout('grid')} title="Grid view">▦</button>
-                                <button className={`layout-btn ${layout === 'list' ? 'active' : ''}`} onClick={() => setLayout('list')} title="List view">☰</button>
-                            </div>
-                            <button className="btn btn-secondary" onClick={openNotifyAll}>📣 Notify Subs of Available Jobs</button>
-                            <button className="btn btn-primary" onClick={() => setModal({ type: 'createJob' })}>+ Add Job</button>
-                        </div>
-                    </div>
-
-                    {!filtered.length ? (
-                        <div className="empty">No jobs match this filter.</div>
-                    ) : layout === 'list' ? (
-                        <div className="job-list">
-                            <div className="job-list-head">
-                                <div>Job</div><div>Address</div><div>Type / Rep</div>
-                                <div style={{ textAlign: 'right' }}>Job Cost</div><div style={{ textAlign: 'right' }}>Sub Pay</div>
-                                <div style={{ textAlign: 'right' }}>Materials</div><div style={{ textAlign: 'right' }}>Profit</div>
-                                <div>Status / Crew</div><div style={{ textAlign: 'right' }}>Actions</div>
-                            </div>
-                            {filtered.map(renderRow)}
-                        </div>
-                    ) : (
-                        <div className="job-grid">{filtered.map(renderCard)}</div>
-                    )}
+            <div className="content view active">
+                <div className="stats-row">
+                    <div className="stat-card"><div className="stat-value">{counts.total}</div><div className="stat-label">Total Jobs</div></div>
+                    <div className="stat-card"><div className="stat-value" style={{ color: '#dc2626' }}>{counts.blocked}</div><div className="stat-label">Blocked</div></div>
+                    <div className="stat-card"><div className="stat-value green">{counts.ready}</div><div className="stat-label">Ready</div></div>
+                    <div className="stat-card"><div className="stat-value">{counts.active}</div><div className="stat-label">Scheduled / In Prod</div></div>
+                    <div className="stat-card"><div className="stat-value">{counts.complete}</div><div className="stat-label">Complete</div></div>
                 </div>
-            )}
 
-            {/* SUBCONTRACTORS VIEW */}
-            {view === 'subs' && (
-                <div className="content view active">
-                    <div className="stats-row">
-                        <div className="stat-card"><div className="stat-value">{subs.filter((s) => s.active).length}</div><div className="stat-label">Active Subs</div></div>
-                        <div className="stat-card"><div className="stat-value">{workingSet.size}</div><div className="stat-label">Currently Working</div></div>
-                        <div className="stat-card"><div className="stat-value">{inProgressCount}</div><div className="stat-label">Jobs In Progress</div></div>
-                        <div className="stat-card"><div className="stat-value green">{money(totalPaid)}</div><div className="stat-label">Total Paid Out</div></div>
-                    </div>
-
-                    <div className="toolbar">
-                        <div className="section-title">Subcontractors</div>
-                        <button className="btn btn-primary" onClick={() => setModal({ type: 'addSub' })}>+ Add Subcontractor</button>
-                    </div>
-
-                    {!subs.length ? (
-                        <div className="empty">No subcontractors yet. Click "+ Add Subcontractor".</div>
-                    ) : (
-                        <div className="sub-roster">
-                            {subs.map((s) => {
-                                const subJobs = jobs.filter((j) => j.claimedBy === s.id);
-                                const active = subJobs.filter((j) => j.status !== 'completed');
-                                const done = subJobs.filter((j) => j.status === 'completed');
-                                const earned = done.reduce((sum, j) => sum + j.pay, 0);
-                                const isWorking = workingSet.has(s.id);
-                                return (
-                                    <div className="sub-card" key={s.id}>
-                                        <div className="sub-card-head">
-                                            <div className="sub-avatar-lg">{s.initials}</div>
-                                            <div style={{ flex: 1 }}>
-                                                <div className="sub-name">{s.name}</div>
-                                                <div className="sub-contact">{s.contact} &middot; {s.phone}</div>
-                                                <div className="sub-contact"><span className={`sub-status-dot ${isWorking ? 'dot-working' : 'dot-idle'}`}></span>{isWorking ? 'Currently working' : 'Idle'}</div>
-                                            </div>
-                                        </div>
-                                        <div className="sub-metrics">
-                                            <div className="sub-metric"><div className="m-val">{active.length}</div><div className="m-label">Active</div></div>
-                                            <div className="sub-metric"><div className="m-val">{done.length}</div><div className="m-label">Completed</div></div>
-                                            <div className="sub-metric"><div className="m-val green">{money(earned)}</div><div className="m-label">Paid</div></div>
-                                        </div>
-                                        <div className="sub-card-actions">
-                                            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setModal({ type: 'subDetail', id: s.id })}>View Jobs</button>
-                                            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => messageSub(s.id)}>Message</button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                <div className="toolbar">
+                    <div className="section-title">Jobs Board</div>
+                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div className="filter-tabs">
+                            {[['all', 'All'], ['blocked', 'Blocked'], ['ready', 'Ready'], ['scheduled', 'Scheduled'], ['in_production', 'In Production'], ['complete', 'Complete']].map(([f, label]) => (
+                                <button key={f} className={`filter-tab ${stateFilter === f ? 'active' : ''}`} onClick={() => setStateFilter(f)}>{label}</button>
+                            ))}
                         </div>
-                    )}
+                        <select className="rep-filter" value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)} aria-label="Filter by assignment">
+                            <option value="all">All Assignments</option>
+                            <option value="unassigned">Unassigned</option>
+                            <option value="in_house">In-House</option>
+                            <option value="subcontractor">Subcontractor</option>
+                        </select>
+                        <button className="btn btn-primary" onClick={() => setModal({ type: 'create' })}>+ Add Job</button>
+                    </div>
                 </div>
-            )}
 
-            {/* MODALS */}
-            {modal?.type === 'createJob' && (
-                <CreateJobModal reps={reps} subs={subs} onClose={() => setModal(null)} onSave={saveNewJob} toast={toast} />
+                {loading ? (
+                    <div className="job-grid">
+                        {[0, 1, 2, 3].map((i) => <div className="job-card" key={i} style={{ height: 180 }}><div className="sk-shimmer" style={{ height: '100%', borderRadius: 14 }} /></div>)}
+                    </div>
+                ) : !jobs.length ? (
+                    <div className="empty">No jobs match this filter. Click “+ Add Job” to create one.</div>
+                ) : (
+                    <div className="job-grid">{jobs.map(renderCard)}</div>
+                )}
+            </div>
+
+            {modal?.type === 'create' && (
+                <CreateJobModal toast={toast} onClose={() => setModal(null)} onSaved={(j) => { setModal(null); load(); if (j?.id) setModal({ type: 'job', id: j.id }); }} />
             )}
-            {modal?.type === 'adminJob' && modalJob && (
-                <AdminJobModal job={modalJob} reps={reps} subs={subs} repName={repName}
-                    onClose={() => setModal(null)}
-                    onSaveDetails={saveJobDetails}
-                    onUpdate={patchJob}
-                    onDelete={deleteJob}
-                    onToggleVisibility={toggleVisibility}
-                    onAssign={assignToCrew}
-                    onNotify={openNotifyJob} />
-            )}
-            {modal?.type === 'notifyJob' && modalJob && (
-                <NotifyJobModal job={modalJob} subs={activeSubs()} repName={repName} onClose={() => setModal(null)} onSend={sendNotify} />
-            )}
-            {modal?.type === 'notifyAll' && (
-                <NotifyAllModal available={availableForBroadcast} subs={activeSubs()} repName={repName} onClose={() => setModal(null)} onSend={sendNotify} />
-            )}
-            {modal?.type === 'subDetail' && modalSub && (
-                <SubDetailModal sub={modalSub} jobs={jobs} onClose={() => setModal(null)} onMessage={messageSub} />
-            )}
-            {modal?.type === 'addSub' && (
-                <AddSubModal onClose={() => setModal(null)} onSave={saveNewSub} toast={toast} />
+            {modal?.type === 'job' && (
+                <JobModal jobId={modal.id} team={team} toast={toast} onClose={() => setModal(null)} onChanged={load} />
             )}
         </div>
     );
