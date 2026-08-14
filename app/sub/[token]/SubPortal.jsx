@@ -1,0 +1,431 @@
+'use client';
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { toast as sonner } from 'sonner';
+import 'leaflet/dist/leaflet.css';
+import axiosInstance from '@/lib/axiosInstance';
+import './sub-portal.css';
+
+/* =========================================================================
+   Public subcontractor portal + onboarding wizard (task 3.9 Part C)
+   token IS the credential — no auth. Talks to /sub-portal/:token/*.
+   ========================================================================= */
+const TRADES = ['roofing', 'gutters', 'siding', 'windows', 'painting', 'general'];
+const DOC_LABELS = {
+    w9: 'W-9',
+    coi_general_liability: 'COI — General Liability',
+    additional_insured_endorsement: 'Additional Insured Endorsement',
+    coi_workers_comp: 'COI — Workers Comp',
+    subcontractor_agreement: 'Subcontractor Agreement',
+    bank_ach: 'Bank / ACH',
+    license: 'License',
+};
+const DOC_STATUS = {
+    missing: ['ds-grey', 'Missing'], uploaded: ['ds-blue', 'Uploaded'],
+    approved: ['ds-green', 'Approved'], rejected: ['ds-red', 'Rejected'], expired: ['ds-red', 'Expired'],
+};
+
+const money = (n) => '$' + (Number(n) || 0).toLocaleString();
+const tradeLabel = (t) => (t || '').replace(/_/g, ' ');
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+
+const toast = (msg, type = '') => {
+    if (type === 'success') sonner.success(msg);
+    else if (type === 'error') sonner.error(msg);
+    else if (type === 'warn') sonner.warning(msg);
+    else sonner.info(msg);
+};
+
+/* ── pin-drop map for the wizard ── */
+function PinMap({ lat, lng, onPick }) {
+    const mapRef = useRef(null);
+    const markerRef = useRef(null);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById('pinMap');
+            if (!el) return;
+            if (!mapRef.current || !el._leaflet_id) {
+                if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                mapRef.current = L.map('pinMap').setView([lat ?? 39.8283, lng ?? -98.5795], lat != null ? 11 : 4);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(mapRef.current);
+                mapRef.current.on('click', (e) => {
+                    const { lat: la, lng: ln } = e.latlng;
+                    onPick(Math.round(la * 1e6) / 1e6, Math.round(ln * 1e6) / 1e6);
+                });
+            }
+            const map = mapRef.current;
+            if (lat != null && lng != null) {
+                if (markerRef.current) markerRef.current.setLatLng([lat, lng]);
+                else markerRef.current = L.marker([lat, lng]).addTo(map);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [lat, lng, onPick]);
+    useEffect(() => () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } }, []);
+    return <div id="pinMap" className="pin-map" />;
+}
+
+/* ── document uploader row ── */
+function DocRow({ token, doc, onUploaded }) {
+    const inputRef = useRef(null);
+    const [busy, setBusy] = useState(false);
+    const [cls, label] = DOC_STATUS[doc.status] || ['ds-grey', doc.status];
+
+    const upload = async (file) => {
+        if (!file) return;
+        setBusy(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            await axiosInstance.post(`/sub-portal/${token}/documents/${doc.doc_type}`, fd);
+            toast('Uploaded.', 'success');
+            onUploaded();
+        } catch { /* */ } finally { setBusy(false); }
+    };
+
+    const isAgreement = doc.doc_type === 'subcontractor_agreement';
+    return (
+        <div className="doc-row">
+            <div style={{ flex: 1 }}>
+                <div className="doc-name">{DOC_LABELS[doc.doc_type] || doc.doc_type}</div>
+                {doc.rejection_reason && <div className="doc-note err">Rejected: {doc.rejection_reason}</div>}
+                {doc.expires_at && <div className="doc-note">Expires {fmtDate(doc.expires_at)}</div>}
+            </div>
+            <span className={`doc-status ${cls}`}>{label}</span>
+            {isAgreement ? (
+                <button className="btn btn-sm btn-secondary" disabled={busy} onClick={async () => {
+                    setBusy(true);
+                    try { await axiosInstance.post(`/sub-portal/${token}/sign-agreement`, {}); toast('Agreement signed.', 'success'); onUploaded(); }
+                    catch { /* */ } finally { setBusy(false); }
+                }}>{busy ? '…' : (['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign')}</button>
+            ) : (
+                <>
+                    <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
+                    <button className="btn btn-sm btn-secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? '…' : (doc.status === 'missing' ? 'Upload' : 'Replace')}</button>
+                </>
+            )}
+        </div>
+    );
+}
+
+/* =========================================================================
+   ONBOARDING WIZARD  (status: invited / onboarding / pending_review)
+   ========================================================================= */
+function Wizard({ token, portal, reload }) {
+    const p = portal.profile || {};
+    const [form, setForm] = useState({
+        business_name: p.business_name || '', contact_name: p.contact_name || '', phone: p.phone || '',
+        service_radius_miles: p.service_radius_miles || 25,
+    });
+    const [pin, setPin] = useState({ lat: p.home_lat ?? null, lng: p.home_lng ?? null });
+    const [trades, setTrades] = useState(p.trades || []);
+    const [savingInfo, setSavingInfo] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+    const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
+
+    const saveInfo = async () => {
+        if (!form.business_name.trim()) { toast('Business name is required.', 'error'); return; }
+        if (pin.lat == null) { toast('Tap the map to drop your home pin.', 'error'); return; }
+        if (!trades.length) { toast('Pick at least one trade.', 'error'); return; }
+        setSavingInfo(true);
+        try {
+            await axiosInstance.post(`/sub-portal/${token}/onboarding`, {
+                business_name: form.business_name.trim(), contact_name: form.contact_name.trim() || undefined,
+                phone: form.phone.trim() || undefined, home_lat: pin.lat, home_lng: pin.lng,
+                service_radius_miles: Number(form.service_radius_miles) || 25, trades,
+            });
+            toast('Profile saved.', 'success');
+            reload();
+        } catch { /* */ } finally { setSavingInfo(false); }
+    };
+
+    const submit = async () => {
+        setSubmitting(true);
+        try {
+            await axiosInstance.post(`/sub-portal/${token}/submit`);
+            toast('Submitted for review!', 'success');
+            reload();
+        } catch { /* */ } finally { setSubmitting(false); }
+    };
+
+    if (portal.status === 'pending_review') {
+        return (
+            <div className="wizard">
+                <div className="review-banner">⏳ Your application is under review. We’ll notify you once you’re approved to receive job offers.</div>
+                <div className="card">
+                    <h3>Your Documents</h3>
+                    <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="wizard">
+            <div className="wizard-intro">Complete your setup to start receiving job offers. It takes about 5 minutes.</div>
+
+            <div className="card">
+                <h3>1 · Business Info</h3>
+                <div className="field"><label>Business / Crew Name</label><input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} placeholder="e.g. Apex Exteriors" /></div>
+                <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} placeholder="Your name" /></div>
+                <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
+            </div>
+
+            <div className="card">
+                <h3>2 · Service Area</h3>
+                <p className="muted">Tap the map to drop your home base pin. We only send you jobs within your radius.</p>
+                <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
+                <div className="pin-readout">{pin.lat != null ? `📍 ${pin.lat}, ${pin.lng}` : 'No pin set — tap the map.'}</div>
+                <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
+            </div>
+
+            <div className="card">
+                <h3>3 · Trades</h3>
+                <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+            </div>
+
+            <button className="btn btn-primary btn-block" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? 'Saving…' : 'Save Profile'}</button>
+
+            <div className="card">
+                <h3>4 · Documents</h3>
+                <p className="muted">Upload each required document. Insurance certificates (COIs) are checked for expiry.</p>
+                <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
+            </div>
+
+            <button className="btn btn-success btn-block" onClick={submit} disabled={submitting || !portal.ready_to_submit}>
+                {submitting ? 'Submitting…' : portal.ready_to_submit ? 'Submit for Review' : 'Upload all required docs first'}
+            </button>
+        </div>
+    );
+}
+
+/* =========================================================================
+   OFFER CARD  (accept-to-reveal)
+   ========================================================================= */
+function OfferCard({ token, offer, onResponded }) {
+    const [detail, setDetail] = useState(null);
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState('');
+
+    const view = async () => {
+        if (open) { setOpen(false); return; }
+        try {
+            const res = await axiosInstance.get(`/sub-portal/${token}/offers/${offer.dispatch_id}`, { suppressErrorToast: true });
+            setDetail(res.data?.data);
+            setOpen(true);
+        } catch { /* */ }
+    };
+
+    const respond = async (action) => {
+        setBusy(action);
+        try {
+            const res = await axiosInstance.post(`/sub-portal/${token}/dispatch/${offer.dispatch_id}/respond`, { action });
+            if (action === 'accept') { setDetail((d) => ({ ...(d || {}), ...(res.data?.data || {}), response: 'accepted' })); toast('Accepted! Job details revealed below.', 'success'); }
+            else toast('Declined.', 'info');
+            onResponded();
+        } catch { /* interceptor shows "already filled" etc. */ } finally { setBusy(''); }
+    };
+
+    const accepted = detail?.response === 'accepted';
+    return (
+        <div className="offer-card">
+            <div className="offer-top">
+                <div>
+                    <div className="offer-pay">{money(offer.pay_amount)}</div>
+                    <div className="offer-meta">{tradeLabel(offer.trade)} · {offer.area_label} · {offer.distance_miles != null ? `${offer.distance_miles} mi` : 'nearby'}</div>
+                </div>
+                <div className="offer-exp">Expires {fmtDateTime(offer.expires_at)}</div>
+            </div>
+            {open && detail && (
+                <div className="offer-detail">
+                    <div className="offer-scope">{detail.scope_summary}</div>
+                    {(detail.photos || []).length > 0 && <div className="muted">📷 {detail.photos.length} photo(s) attached</div>}
+                    {accepted && (
+                        <div className="reveal">
+                            <div className="reveal-title">✓ You accepted — full details:</div>
+                            <div><strong>Address:</strong> {detail.address || '—'}</div>
+                            <div><strong>Client:</strong> {detail.client_name || '—'} · {detail.client_phone || '—'}</div>
+                            {detail.access_notes && <div><strong>Access:</strong> {detail.access_notes}</div>}
+                            <div><strong>Scheduled:</strong> {fmtDateTime(detail.scheduled_start)}</div>
+                        </div>
+                    )}
+                </div>
+            )}
+            <div className="offer-actions">
+                <button className="btn btn-sm btn-ghost" onClick={view}>{open ? 'Hide' : 'View'}</button>
+                {!accepted && (
+                    <>
+                        <button className="btn btn-sm btn-ghost" onClick={() => respond('decline')} disabled={!!busy}>{busy === 'decline' ? '…' : 'Decline'}</button>
+                        <button className="btn btn-sm btn-success" onClick={() => respond('accept')} disabled={!!busy}>{busy === 'accept' ? '…' : 'Accept'}</button>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ── job status updater + photo upload ── */
+function JobCard({ token, job, reload }) {
+    const inputRef = useRef(null);
+    const [busy, setBusy] = useState('');
+    const photos = Array.isArray(job.completion_photos) ? job.completion_photos : [];
+
+    const setStatus = async (status) => {
+        setBusy('status');
+        try { await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/status`, { status }); toast('Status updated.', 'success'); reload(); }
+        catch { /* */ } finally { setBusy(''); }
+    };
+    const uploadPhoto = async (file) => {
+        if (!file) return;
+        setBusy('photo');
+        try { const fd = new FormData(); fd.append('file', file); fd.append('phase', 'completion'); await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/photos`, fd); toast('Photo added.', 'success'); reload(); }
+        catch { /* */ } finally { setBusy(''); }
+    };
+
+    const steps = [['on_my_way', 'On My Way'], ['started', 'Started'], ['complete', 'Complete']];
+    return (
+        <div className="job-card">
+            <div className="jc-top">
+                <div className="jc-num">{job.job_number}</div>
+                <span className="jc-state">{(job.readiness_state || '').replace(/_/g, ' ')}</span>
+            </div>
+            <div className="jc-addr">{job.address || '—'}</div>
+            {job.scope && <div className="jc-scope">{job.scope}</div>}
+            {job.scheduled_start && <div className="muted">📅 {fmtDateTime(job.scheduled_start)}</div>}
+
+            <div className="jc-steps">
+                {steps.map(([s, label]) => (
+                    <button key={s} className={`step-btn ${job.sub_progress === s ? 'on' : ''}`} disabled={busy === 'status'} onClick={() => setStatus(s)}>{label}</button>
+                ))}
+            </div>
+
+            <div className="jc-photos">
+                <div className="muted">Completion photos ({photos.length}) — required before marking complete.</div>
+                <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+                <button className="btn btn-sm btn-ghost" disabled={busy === 'photo'} onClick={() => inputRef.current?.click()}>{busy === 'photo' ? 'Uploading…' : '📷 Add Photo'}</button>
+            </div>
+        </div>
+    );
+}
+
+/* =========================================================================
+   ACTIVE PORTAL  (tabs)
+   ========================================================================= */
+function ActivePortal({ token, portal, reload }) {
+    const [tab, setTab] = useState('offers');
+    const [offers, setOffers] = useState([]);
+    const [jobs, setJobs] = useState([]);
+    const [payments, setPayments] = useState({ payments: [], ytd_paid: 0 });
+    const [loading, setLoading] = useState(true);
+
+    const loadTab = useCallback(async () => {
+        setLoading(true);
+        try {
+            if (tab === 'offers') { const r = await axiosInstance.get(`/sub-portal/${token}/offers`, { suppressErrorToast: true }); setOffers(r.data?.data || []); }
+            else if (tab === 'jobs') { const r = await axiosInstance.get(`/sub-portal/${token}/jobs`, { suppressErrorToast: true }); setJobs(r.data?.data || []); }
+            else if (tab === 'payments') { const r = await axiosInstance.get(`/sub-portal/${token}/payments`, { suppressErrorToast: true }); setPayments(r.data?.data || { payments: [], ytd_paid: 0 }); }
+        } catch { /* */ } finally { setLoading(false); }
+    }, [tab, token]);
+    useEffect(() => { loadTab(); }, [loadTab]);
+
+    const TABS = [['offers', 'Offers'], ['jobs', 'My Jobs'], ['payments', 'Pay'], ['docs', 'Docs'], ['profile', 'Profile']];
+
+    return (
+        <div className="active-portal">
+            <div className="tab-bar">
+                {TABS.map(([t, label]) => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{label}</button>)}
+            </div>
+            <div className="tab-body">
+                {loading && ['offers', 'jobs', 'payments'].includes(tab) ? (
+                    <div className="muted" style={{ padding: '2rem', textAlign: 'center' }}>Loading…</div>
+                ) : tab === 'offers' ? (
+                    offers.length ? offers.map((o) => <OfferCard key={o.dispatch_id} token={token} offer={o} onResponded={loadTab} />) : <div className="empty">No open offers right now.</div>
+                ) : tab === 'jobs' ? (
+                    jobs.length ? jobs.map((j) => <JobCard key={j.id} token={token} job={j} reload={loadTab} />) : <div className="empty">No jobs assigned yet.</div>
+                ) : tab === 'payments' ? (
+                    <>
+                        <div className="ytd-card">YTD Paid<span>{money(payments.ytd_paid)}</span></div>
+                        {(payments.payments || []).length ? payments.payments.map((p) => (
+                            <div className="pay-row" key={p.id}><span>{money(p.amount)} · {p.method || '—'}</span><span className="muted">{fmtDate(p.paid_at || p.created_at)} · {p.status}</span></div>
+                        )) : <div className="empty">No payments yet.</div>}
+                    </>
+                ) : tab === 'docs' ? (
+                    <div className="card"><h3>My Documents</h3><div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div></div>
+                ) : (
+                    <ProfileTab token={token} portal={portal} reload={reload} />
+                )}
+            </div>
+        </div>
+    );
+}
+
+function ProfileTab({ token, portal, reload }) {
+    const p = portal.profile || {};
+    const [form, setForm] = useState({ business_name: p.business_name || '', contact_name: p.contact_name || '', phone: p.phone || '', service_radius_miles: p.service_radius_miles || 25 });
+    const [pin, setPin] = useState({ lat: p.home_lat ?? null, lng: p.home_lng ?? null });
+    const [trades, setTrades] = useState(p.trades || []);
+    const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+    const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            await axiosInstance.post(`/sub-portal/${token}/onboarding`, {
+                business_name: form.business_name.trim(), contact_name: form.contact_name.trim() || undefined, phone: form.phone.trim() || undefined,
+                home_lat: pin.lat ?? undefined, home_lng: pin.lng ?? undefined, service_radius_miles: Number(form.service_radius_miles) || 25, trades,
+            });
+            toast('Profile updated.', 'success'); reload();
+        } catch { /* */ } finally { setSaving(false); }
+    };
+
+    return (
+        <div className="card">
+            <h3>My Profile</h3>
+            <div className="field"><label>Business Name</label><input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} /></div>
+            <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
+            <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+            <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
+            <p className="muted" style={{ marginTop: '0.5rem' }}>Tap the map to move your home base.</p>
+            <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
+            <div className="pin-readout">{pin.lat != null ? `📍 ${pin.lat}, ${pin.lng}` : 'No pin set'}</div>
+            <div style={{ marginTop: '0.75rem' }}><label className="field-label">Trades</label><div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div></div>
+            <button className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</button>
+        </div>
+    );
+}
+
+/* =========================================================================
+   ROOT
+   ========================================================================= */
+export default function SubPortal({ token }) {
+    const [portal, setPortal] = useState(undefined); // undefined=loading, null=not found
+    const load = useCallback(async () => {
+        try { const res = await axiosInstance.get(`/sub-portal/${token}`, { suppressErrorToast: true }); setPortal(res.data?.data); }
+        catch { setPortal(null); }
+    }, [token]);
+    useEffect(() => { load(); }, [load]);
+
+    if (portal === undefined) return <div className="sub-portal"><div className="sp-loading">Loading your portal…</div></div>;
+    if (portal === null) return <div className="sub-portal"><div className="sp-error">This link is invalid or has expired. Please contact the company that invited you.</div></div>;
+
+    const name = portal.profile?.business_name || 'Contractor';
+    return (
+        <div className="sub-portal">
+            <div className="sp-header">
+                <div className="sp-brand">👷 Contractor Portal</div>
+                <div className="sp-name">{name}{portal.status === 'suspended' && <span className="sp-suspended">Suspended</span>}</div>
+            </div>
+            <div className="sp-content">
+                {portal.status === 'active'
+                    ? <ActivePortal token={token} portal={portal} reload={load} />
+                    : <Wizard token={token} portal={portal} reload={load} />}
+            </div>
+        </div>
+    );
+}
