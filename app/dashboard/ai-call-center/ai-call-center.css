@@ -592,3 +592,24 @@
     .ai-call-center .page-title { font-size: 1.25rem; }
     .ai-call-center .trend-bars { height: 160px; }
 }
+
+/* ── Task 4.6 additions — intent/outcome badges, funnel, tabs ── */
+.ai-call-center .cc-tabs { display: inline-flex; background: #f0f0f0; border-radius: 8px; padding: 3px; }
+.ai-call-center .cc-tabs button { border: none; background: transparent; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; }
+.ai-call-center .cc-tabs button.active { background: #fff; color: #1a1f3a; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+.ai-call-center .intent-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: none; }
+.ai-call-center .intent-new_lead { background: #dcfce7; color: #166534; }
+.ai-call-center .intent-existing_client { background: #dbeafe; color: #1e40af; }
+.ai-call-center .intent-vendor { background: #fef3c7; color: #92400e; }
+.ai-call-center .intent-spam { background: #fee2e2; color: #991b1b; }
+.ai-call-center .intent-support { background: #ede9fe; color: #5b21b6; }
+.ai-call-center .outcome-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; }
+
+.ai-call-center .funnel-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; }
+.ai-call-center .funnel-step { text-align: center; min-width: 90px; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 12px; padding: 14px 18px; }
+.ai-call-center .funnel-val { font-size: 1.6rem; font-weight: 800; color: #1a1f3a; }
+.ai-call-center .funnel-label { font-size: 0.72rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
+.ai-call-center .funnel-arrow { font-size: 1.3rem; color: #FDB813; font-weight: 700; }
+.ai-call-center .funnel-sources { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; justify-content: center; }
+.ai-call-center .funnel-src { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; background: #f9fafb; border-radius: 999px; padding: 5px 12px; }

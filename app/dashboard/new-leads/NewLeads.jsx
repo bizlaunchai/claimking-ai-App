@@ -803,6 +803,22 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
         if (res.data?.claim_id) { onClose(); router.push('/dashboard/claims'); }
     }, 'Converted — claim created');
 
+    // Callback via RingCentral RingOut — rings the rep's phone, then the lead;
+    // logs the touch + auto-advances New → Contacted (§4.2 / task 4.4).
+    const callLead = async () => {
+        setBusy(true);
+        try {
+            const res = await axiosInstance.post(`/leads/${leadId}/call`, {});
+            toast.success(res.data?.message || 'Ringing your phone…');
+            await load();
+            onChanged();
+        } catch (e) {
+            toast.error(e?.userMessage || 'Could not place the call');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const rec = lead ? recordingUrl(lead) : null;
     const nextStatuses = lead ? (ALLOWED_NEXT[lead.status] || []).filter((s) => !REASON_REQUIRED.has(s)) : [];
 
@@ -831,7 +847,18 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
                         {/* Contact */}
                         <div className="nl-drawer-sec">
                             <div className="nl-drawer-sec-title">Contact</div>
-                            <div className="nl-kv"><span>Phone</span><b className="lead-phone">{lead.phone || '—'}</b></div>
+                            <div className="nl-kv">
+                                <span>Phone</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <b className="lead-phone">{lead.phone || '—'}</b>
+                                    {lead.phone && (
+                                        <button className="filter-select" style={{ padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}
+                                            disabled={busy} onClick={callLead} title="Ring your phone, then connect the lead">
+                                            📞 Call
+                                        </button>
+                                    )}
+                                </span>
+                            </div>
                             <div className="nl-kv"><span>Email</span><b>{lead.email || '—'}</b></div>
                             <div className="nl-kv"><span>Address</span><b>{[lead.address_line1, lead.city, lead.state, lead.zip].filter(Boolean).join(', ') || '—'}</b></div>
                             <div className="nl-kv"><span>Damage</span><b>{lead.damage_type || '—'}</b></div>

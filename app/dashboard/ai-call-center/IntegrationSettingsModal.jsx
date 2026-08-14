@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import AgentMappingSection from './AgentMappingSection';
 
 /**
  * IntegrationSettingsModal — RingCentral + Call Tracking Metrics setup.
@@ -280,6 +281,9 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                             {ctmSt === 'error' && <Banner status="error" error={ctmErr} />}
                         </div>
                     </div>
+
+                    {/* Answered By — extension → employee mapping (task 4.3) */}
+                    <AgentMappingSection open={open} />
                 </div>
             </div>
         </div>

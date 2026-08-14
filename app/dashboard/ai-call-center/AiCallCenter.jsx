@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
-import { Phone, Target, Timer, BarChart3, Settings } from 'lucide-react';
+import { Phone, Target, Timer, BarChart3, Settings, Upload, Link2, Lock } from 'lucide-react';
 import IntegrationSettingsModal from './IntegrationSettingsModal';
+import CallImportModal from './CallImportModal';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import "./ai-call-center.css"
 
 const PAGE_SIZE = 10;
@@ -11,7 +13,27 @@ const PAGE_SIZE = 10;
 const SOURCE_LABEL = {
     ringcentral: 'RingCentral',
     ctm: 'CTM',
+    csv_import: 'Imported',
 };
+
+const INTENT_LABEL = {
+    new_lead: 'New Lead', existing_client: 'Existing Client', vendor: 'Vendor', spam: 'Spam', support: 'Support',
+};
+const OUTCOME_LABEL = {
+    appointment_set: 'Appointment Set', callback_requested: 'Callback', info_only: 'Info Only',
+    not_interested: 'Not Interested', wrong_number: 'Wrong Number', other: 'Other',
+};
+const INTENT_OPTIONS = Object.keys(INTENT_LABEL);
+const OUTCOME_OPTIONS = Object.keys(OUTCOME_LABEL);
+
+function IntentBadge({ intent }) {
+    if (!intent) return null;
+    return <span className={`intent-badge intent-${intent}`}>{INTENT_LABEL[intent] || intent}</span>;
+}
+function OutcomeBadge({ outcome }) {
+    if (!outcome) return null;
+    return <span className="outcome-badge">{OUTCOME_LABEL[outcome] || outcome}</span>;
+}
 
 function formatDuration(seconds) {
     const s = Number(seconds) || 0;
@@ -45,8 +67,21 @@ const AICallCenter = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedCall, setSelectedCall] = useState(null);
     const [sourceFilter, setSourceFilter] = useState('all');
+    const [intentFilter, setIntentFilter] = useState('all');
+    const [activeTab, setActiveTab] = useState('all'); // all | unmatched
     const [unassignedOnly, setUnassignedOnly] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showImport, setShowImport] = useState(false);
+    const [funnel, setFunnel] = useState(null);
+    const [savingCorrection, setSavingCorrection] = useState(false);
+    const [callbackFor, setCallbackFor] = useState(null); // call being called back
+    const [callbackPhone, setCallbackPhone] = useState('');
+    const [callbackBusy, setCallbackBusy] = useState(false);
+
+    const { has } = usePermissions();
+    const canListen = has('listen_recordings');
+    const canImport = has('import_call_data');
+    const canCorrect = has('use_call_center');
 
     const [summary, setSummary] = useState(null);
     const [trend, setTrend] = useState([]);
@@ -86,6 +121,8 @@ const AICallCenter = () => {
                 offset: (currentPage - 1) * PAGE_SIZE,
             };
             if (sourceFilter !== 'all') params.source = sourceFilter;
+            if (intentFilter !== 'all') params.intent = intentFilter;
+            if (activeTab === 'unmatched') params.matched = 'unmatched';
             if (unassignedOnly) params.unassigned = 'true';
             const res = await axiosInstance.get('/api/calls', { params });
             setCalls(res.data?.data || []);
@@ -97,10 +134,41 @@ const AICallCenter = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, sourceFilter, unassignedOnly]);
+    }, [currentPage, sourceFilter, intentFilter, activeTab, unassignedOnly]);
 
-    useEffect(() => { loadSummary(); loadTrend(); }, [loadSummary, loadTrend]);
+    const loadFunnel = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/api/calls/funnel', { params: { days: 30 }, suppressErrorToast: true });
+            setFunnel(res.data);
+        } catch { /* silent */ }
+    }, []);
+
+    useEffect(() => { loadSummary(); loadTrend(); loadFunnel(); }, [loadSummary, loadTrend, loadFunnel]);
     useEffect(() => { loadCalls(); }, [loadCalls]);
+
+    // Callback bridge (§6.6.3): rings the rep's phone first, then the caller.
+    const doCallback = useCallback(async () => {
+        if (!callbackFor) return;
+        setCallbackBusy(true);
+        try {
+            const res = await axiosInstance.post(`/api/calls/${callbackFor.id}/callback`, {
+                from_phone: callbackPhone.trim() || undefined,
+            });
+            toast.success(res.data?.message || 'Ringing your phone…');
+            setCallbackFor(null); setCallbackPhone('');
+        } catch { /* interceptor */ } finally { setCallbackBusy(false); }
+    }, [callbackFor, callbackPhone]);
+
+    // Correct a call's intent/outcome or link it to a record (§6.6).
+    const correctCall = useCallback(async (id, patch) => {
+        setSavingCorrection(true);
+        try {
+            await axiosInstance.patch(`/api/calls/${id}`, patch);
+            setCalls((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+            setSelectedCall((sc) => (sc && sc.id === id ? { ...sc, ...patch } : sc));
+            toast.success('Call updated');
+        } catch { /* interceptor */ } finally { setSavingCorrection(false); }
+    }, []);
 
     const [refreshing, setRefreshing] = useState(false);
     const [lastRefreshed, setLastRefreshed] = useState(null);
@@ -286,6 +354,17 @@ const AICallCenter = () => {
                             <Settings size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 4 }} />
                             Settings
                         </button>
+                        {canImport && (
+                            <button
+                                type="button"
+                                onClick={() => setShowImport(true)}
+                                className="refresh-btn"
+                                title="Import historical call data (CSV)"
+                            >
+                                <Upload size={16} strokeWidth={2} style={{ verticalAlign: '-3px', marginRight: 4 }} />
+                                Import
+                            </button>
+                        )}
                     </div>
                     <span className="page-subtitle">
                         Unified RingCentral + Call Tracking Metrics
@@ -293,6 +372,10 @@ const AICallCenter = () => {
                     </span>
                 </div>
                 <div className="header-filters">
+                    <div className="cc-tabs">
+                        <button className={activeTab === 'all' ? 'active' : ''} onClick={() => { setActiveTab('all'); setCurrentPage(1); }}>All Calls</button>
+                        <button className={activeTab === 'unmatched' ? 'active' : ''} onClick={() => { setActiveTab('unmatched'); setCurrentPage(1); }}>Unmatched</button>
+                    </div>
                     <select
                         value={sourceFilter}
                         onChange={e => { setSourceFilter(e.target.value); setCurrentPage(1); }}
@@ -301,6 +384,15 @@ const AICallCenter = () => {
                         <option value="all">All Sources</option>
                         <option value="ringcentral">RingCentral</option>
                         <option value="ctm">Call Tracking Metrics</option>
+                        <option value="csv_import">Imported</option>
+                    </select>
+                    <select
+                        value={intentFilter}
+                        onChange={e => { setIntentFilter(e.target.value); setCurrentPage(1); }}
+                        className="filter-select"
+                    >
+                        <option value="all">All Intents</option>
+                        {INTENT_OPTIONS.map(i => <option key={i} value={i}>{INTENT_LABEL[i]}</option>)}
                     </select>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
                         <input
@@ -401,9 +493,46 @@ const AICallCenter = () => {
                 </div>
             </div>
 
+            {funnel && funnel.totals && (
+                <div className="card">
+                    <div className="card-header">
+                        <h2 className="card-title">Attribution Funnel</h2>
+                        <p className="card-subtitle">Calls → leads → appointments · last 30 days</p>
+                    </div>
+                    <div className="card-body">
+                        <div className="funnel-row">
+                            {[
+                                ['Calls', funnel.totals.calls],
+                                ['Matched', funnel.totals.matched],
+                                ['New Leads', funnel.totals.leads],
+                                ['Appointments', funnel.totals.appointments],
+                            ].map(([label, val], i) => (
+                                <React.Fragment key={label}>
+                                    {i > 0 && <div className="funnel-arrow">→</div>}
+                                    <div className="funnel-step">
+                                        <div className="funnel-val">{val}</div>
+                                        <div className="funnel-label">{label}</div>
+                                    </div>
+                                </React.Fragment>
+                            ))}
+                        </div>
+                        {funnel.by_source?.length > 0 && (
+                            <div className="funnel-sources">
+                                {funnel.by_source.map((s) => (
+                                    <div className="funnel-src" key={s.source}>
+                                        <SourceBadge source={s.source} />
+                                        <span>{s.calls} calls · {s.leads} leads · {s.appointments} appts</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <div className="card">
                 <div className="card-header">
-                    <h2 className="card-title">Recent Call History</h2>
+                    <h2 className="card-title">{activeTab === 'unmatched' ? 'Unmatched Calls' : 'Recent Call History'}</h2>
                     <p className="card-subtitle">
                         {loading ? 'Loading…' : `${totalCalls} call${totalCalls === 1 ? '' : 's'}`}
                     </p>
@@ -434,6 +563,13 @@ const AICallCenter = () => {
                                         {call.caller_name || (call.client_id ? 'Existing Client' : 'Unknown Caller')}
                                     </div>
                                     <div className="caller-phone">{call.caller_number || '—'}</div>
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                                        <IntentBadge intent={call.ai_intent} />
+                                        <OutcomeBadge outcome={call.ai_outcome} />
+                                    </div>
+                                    {call.answered_by_name && (
+                                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Answered by {call.answered_by_name}</div>
+                                    )}
                                 </div>
                                 <div className="call-duration">{formatDuration(call.duration_seconds)}</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -441,6 +577,9 @@ const AICallCenter = () => {
                                     <span style={{ fontSize: 12, color: '#6b7280' }}>
                                         {call.status}{call.needs_assignment ? ' · unassigned' : ''}
                                     </span>
+                                    {(call.client_id || call.lead_id) && (
+                                        <span style={{ fontSize: 11, color: '#166534' }}>● {call.client_id ? 'Linked to claim' : 'Linked to lead'}</span>
+                                    )}
                                 </div>
                             </div>
                             {expandedNotes.includes(call.id) && (
@@ -467,11 +606,16 @@ const AICallCenter = () => {
                                         </div>
                                         <div className="note-item">
                                             <div className="note-label">&nbsp;</div>
-                                            <div className="note-value">
+                                            <div className="note-value" style={{ display: 'flex', gap: 8 }}>
                                                 <button
                                                     className="pagination-btn"
                                                     onClick={(e) => { e.stopPropagation(); openCallDetails(call); }}
                                                 >View Details</button>
+                                                <button
+                                                    className="pagination-btn"
+                                                    onClick={(e) => { e.stopPropagation(); setCallbackFor(call); setCallbackPhone(''); }}
+                                                    title="Ring your phone, then connect the caller"
+                                                >📞 Callback</button>
                                             </div>
                                         </div>
                                     </div>
@@ -504,7 +648,11 @@ const AICallCenter = () => {
                     <div className="bg-white rounded-xl w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
                         <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
                             <h2 className="text-xl font-bold text-gray-800">Call Details</h2>
-                            <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md" onClick={closeModal}>×</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button className="pagination-btn" onClick={() => { setCallbackFor(selectedCall); setCallbackPhone(''); }}
+                                    title="Ring your phone, then connect the caller">📞 Callback</button>
+                                <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500 flex items-center justify-center hover:bg-gray-100 rounded-md" onClick={closeModal}>×</button>
+                            </div>
                         </div>
                         <div className="p-6">
                             <div className="detail-section">
@@ -543,32 +691,93 @@ const AICallCenter = () => {
                                 </div>
                             </div>
 
+                            {/* AI analysis + manual correction (§6.6) */}
+                            <div className="detail-section">
+                                <div className="detail-label">AI Analysis</div>
+                                <div className="detail-content">
+                                    {selectedCall.ai_summary
+                                        ? <div style={{ fontSize: 14, color: '#374151', marginBottom: 10 }}>{selectedCall.ai_summary}</div>
+                                        : <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 10 }}>
+                                            {selectedCall.analysis_status === 'failed' ? 'Analysis failed.'
+                                                : selectedCall.analysis_status === 'skipped' ? 'Analysis skipped (transcription cap).'
+                                                : selectedCall.recording_s3_key ? 'Analysis pending…' : 'No recording to analyze.'}
+                                          </div>}
+                                    <div className="detail-row">
+                                        <div className="detail-key">Intent:</div>
+                                        <div className="detail-value">
+                                            {canCorrect ? (
+                                                <select value={selectedCall.ai_intent || ''} disabled={savingCorrection}
+                                                    onChange={(e) => correctCall(selectedCall.id, { ai_intent: e.target.value })}
+                                                    className="filter-select" style={{ padding: '4px 8px' }}>
+                                                    <option value="">—</option>
+                                                    {INTENT_OPTIONS.map(i => <option key={i} value={i}>{INTENT_LABEL[i]}</option>)}
+                                                </select>
+                                            ) : <IntentBadge intent={selectedCall.ai_intent} />}
+                                        </div>
+                                    </div>
+                                    <div className="detail-row">
+                                        <div className="detail-key">Outcome:</div>
+                                        <div className="detail-value">
+                                            {canCorrect ? (
+                                                <select value={selectedCall.ai_outcome || ''} disabled={savingCorrection}
+                                                    onChange={(e) => correctCall(selectedCall.id, { ai_outcome: e.target.value })}
+                                                    className="filter-select" style={{ padding: '4px 8px' }}>
+                                                    <option value="">—</option>
+                                                    {OUTCOME_OPTIONS.map(o => <option key={o} value={o}>{OUTCOME_LABEL[o]}</option>)}
+                                                </select>
+                                            ) : <OutcomeBadge outcome={selectedCall.ai_outcome} />}
+                                        </div>
+                                    </div>
+                                    {selectedCall.answered_by_name && (
+                                        <div className="detail-row"><div className="detail-key">Answered By:</div><div className="detail-value">{selectedCall.answered_by_name}</div></div>
+                                    )}
+                                    {selectedCall.ai_extracted && (
+                                        <div style={{ marginTop: 8, background: '#f9fafb', borderRadius: 8, padding: 10 }}>
+                                            {Object.entries(selectedCall.ai_extracted).filter(([, v]) => v).map(([k, v]) => (
+                                                <div key={k} className="detail-row"><div className="detail-key" style={{ textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}:</div><div className="detail-value">{String(v)}</div></div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {!selectedCall.client_id && !selectedCall.lead_id && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#b45309', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <Link2 size={13} /> Unmatched — link this call to a claim or lead from the record it belongs to.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {selectedCall.transcript && (
+                                <div className="detail-section">
+                                    <div className="detail-label">Transcript</div>
+                                    <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto', background: '#f9fafb', borderRadius: 8, padding: 12 }}>
+                                        {selectedCall.transcript}
+                                    </div>
+                                </div>
+                            )}
+
                             {selectedCall.recording_s3_key && (
                                 <div className="detail-section">
                                     <div className="detail-label">Call Recording</div>
-                                    <div className="recording-player">
-                                        {recordingCallId === selectedCall.id && recordingUrl ? (
-                                            <audio
-                                                controls
-                                                autoPlay
-                                                src={recordingUrl}
-                                                style={{ width: '100%' }}
-                                            />
-                                        ) : (
-                                            <>
-                                                <button
-                                                    className="play-button"
-                                                    disabled={recordingLoading}
-                                                    onClick={() => playRecording(selectedCall)}
-                                                >
-                                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                                                </button>
-                                                <div style={{ fontSize: 12, color: '#6b7280' }}>
-                                                    {recordingLoading ? 'Loading…' : 'Click to play'}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
+                                    {canListen ? (
+                                        <div className="recording-player">
+                                            {recordingCallId === selectedCall.id && recordingUrl ? (
+                                                <audio controls autoPlay src={recordingUrl} style={{ width: '100%' }} />
+                                            ) : (
+                                                <>
+                                                    <button className="play-button" disabled={recordingLoading} onClick={() => playRecording(selectedCall)}>
+                                                        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                                    </button>
+                                                    <div style={{ fontSize: 12, color: '#6b7280' }}>
+                                                        {recordingLoading ? 'Loading…' : 'Click to play'}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 8, background: '#f9fafb', borderRadius: 8, padding: 12 }}>
+                                            <Lock size={14} /> You don&apos;t have permission to listen to recordings. The transcript above is available.
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -576,7 +785,35 @@ const AICallCenter = () => {
                 </div>
             )}
 
+            {callbackFor && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4" onClick={() => !callbackBusy && setCallbackFor(null)}>
+                    <div className="bg-white rounded-xl w-full max-w-[420px] shadow-[0_20px_60px_rgba(0,0,0,0.3)]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-gray-200">
+                            <h2 className="text-lg font-bold text-gray-800" style={{ margin: 0 }}>Place a Callback</h2>
+                        </div>
+                        <div className="p-6">
+                            <p style={{ fontSize: 14, color: '#374151', marginBottom: 14 }}>
+                                RingCentral will ring <b>your phone</b> first, then connect{' '}
+                                <b>{callbackFor.direction === 'inbound' ? (callbackFor.caller_number || 'the caller') : (callbackFor.callee_number || 'the number')}</b>.
+                            </p>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Your callback number</label>
+                            <input value={callbackPhone} onChange={(e) => setCallbackPhone(e.target.value)}
+                                placeholder="Leave blank to use your account phone"
+                                style={{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', fontSize: 14 }} />
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                            <button className="pagination-btn" disabled={callbackBusy} onClick={() => setCallbackFor(null)}>Cancel</button>
+                            <button className="pagination-btn" disabled={callbackBusy} onClick={doCallback}
+                                style={{ background: '#16a34a', color: '#fff', borderColor: '#16a34a' }}>
+                                {callbackBusy ? 'Ringing…' : '📞 Ring my phone'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <IntegrationSettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+            <CallImportModal open={showImport} onClose={() => setShowImport(false)} onImported={() => { loadCalls(); loadSummary(); loadFunnel(); }} />
             </div>
         </div>
     );
