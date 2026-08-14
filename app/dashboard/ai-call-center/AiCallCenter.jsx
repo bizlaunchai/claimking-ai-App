@@ -82,6 +82,9 @@ const AICallCenter = () => {
     const canListen = has('listen_recordings');
     const canImport = has('import_call_data');
     const canCorrect = has('use_call_center');
+    // Call history is its own switch (§6.5): a user may reach the page without
+    // being allowed to see the call log itself.
+    const canViewLog = has('view_call_log');
 
     const [summary, setSummary] = useState(null);
     const [trend, setTrend] = useState([]);
@@ -114,6 +117,7 @@ const AICallCenter = () => {
     }, []);
 
     const loadCalls = useCallback(async () => {
+        if (!canViewLog) { setCalls([]); setTotalCalls(0); setLoading(false); return; }
         setLoading(true);
         try {
             const params = {
@@ -134,7 +138,7 @@ const AICallCenter = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, sourceFilter, intentFilter, activeTab, unassignedOnly]);
+    }, [currentPage, sourceFilter, intentFilter, activeTab, unassignedOnly, canViewLog]);
 
     const loadFunnel = useCallback(async () => {
         try {
@@ -537,6 +541,11 @@ const AICallCenter = () => {
                         {loading ? 'Loading…' : `${totalCalls} call${totalCalls === 1 ? '' : 's'}`}
                     </p>
                 </div>
+                {!canViewLog ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+                        You don’t have permission to view the call history. Ask an admin for “View call log &amp; history”.
+                    </div>
+                ) : (
                 <div className="call-table">
                     <div className="call-header">
                         <div>DATE & TIME</div>
@@ -624,6 +633,7 @@ const AICallCenter = () => {
                         </React.Fragment>
                     ))}
                 </div>
+                )}
 
                 {totalCalls > PAGE_SIZE && (
                     <div className="pagination-container">

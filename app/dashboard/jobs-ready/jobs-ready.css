@@ -470,3 +470,12 @@
 .subjobs .dt-head { background: #f9fafb; font-weight: 700; color: #6b7280; text-transform: uppercase; font-size: 0.66rem; letter-spacing: 0.4px; }
 .subjobs .dt-row { border-top: 1px solid #f0f0f0; }
 .subjobs .dt-name { font-weight: 700; color: #1a1f3a; }
+
+/* Task 5.4 — mobile: keep wide grids from breaking the layout */
+.subjobs .dispatch-track { overflow-x: auto; }
+.subjobs .dt-head, .subjobs .dt-row { min-width: 460px; }
+@media (max-width: 640px) {
+    .subjobs .modal-content { max-width: 96vw; }
+    .subjobs .detail-grid { grid-template-columns: 1fr 1fr; }
+    .subjobs .dispatch-map { height: 240px; }
+}
