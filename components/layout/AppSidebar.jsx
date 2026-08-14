@@ -172,8 +172,12 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                 resizeHandleRef.current.style.left = '70px';
                 sidebarRef.current.style.width = '70px';
             } else {
-                sidebarRef.current.style.width = '250px';
-                resizeHandleRef.current.style.left = `${250 - 8}px`;
+                // Must match the CSS .sidebar width (280px) AND the content's
+                // marginLeft in DashboardLayoutClient. A smaller value here (was
+                // 250) left a ~30px gap between the sidebar and the content on
+                // every page.
+                sidebarRef.current.style.width = '280px';
+                resizeHandleRef.current.style.left = `${280 - 8}px`;
             }
         }
     }, [isCollapsed, isMobile]);
