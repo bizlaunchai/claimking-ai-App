@@ -11,7 +11,8 @@ const AppFooter = () => {
         pathname.startsWith("/portal") ||
         pathname.startsWith("/sign") ||
         pathname.startsWith("/pay") ||
-        pathname.startsWith("/book")
+        pathname.startsWith("/book") ||
+        pathname.startsWith("/sub")
     ){
         return null
     }

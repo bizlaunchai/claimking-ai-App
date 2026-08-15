@@ -7,12 +7,14 @@
 .sub-portal .sp-loading, .sub-portal .sp-error { max-width: 480px; margin: 4rem auto; padding: 2rem; text-align: center; background: #fff; border-radius: 14px; color: #6b7280; }
 .sub-portal .sp-error { color: #b91c1c; }
 
-.sub-portal .sp-header { background: #1a1f3a; color: #fff; padding: 1rem 1.25rem; position: sticky; top: 0; z-index: 10; }
+.sub-portal .sp-header { background: #1a1f3a; color: #fff; padding: 1rem 1.25rem; position: sticky; top: 0; z-index: 1100; }
 .sub-portal .sp-brand { font-size: 0.72rem; letter-spacing: 0.5px; text-transform: uppercase; color: #FDB813; font-weight: 700; }
 .sub-portal .sp-name { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
 .sub-portal .sp-suspended { font-size: 0.6rem; background: #dc2626; color: #fff; padding: 0.15rem 0.5rem; border-radius: 6px; text-transform: uppercase; }
 
-.sub-portal .sp-content { max-width: 560px; margin: 0 auto; padding: 1rem; }
+.sub-portal .sp-content { max-width: 1140px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+/* the active (post-approval) portal stays a single narrow mobile-style column */
+.sub-portal .active-portal { max-width: 600px; margin: 0 auto; }
 
 .sub-portal .btn { border: none; border-radius: 10px; padding: 0.65rem 1.1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; font-family: inherit; transition: all 0.15s ease; }
 .sub-portal .btn-sm { padding: 0.45rem 0.8rem; font-size: 0.78rem; }
@@ -38,8 +40,15 @@
 .sub-portal .trade-chip { padding: 0.4rem 0.8rem; border-radius: 16px; border: 2px solid #e5e7eb; background: #fff; font-size: 0.8rem; font-weight: 600; color: #6b7280; cursor: pointer; text-transform: capitalize; }
 .sub-portal .trade-chip.on { background: #1a1f3a; border-color: #1a1f3a; color: #fff; }
 
-.sub-portal .pin-map { width: 100%; height: 260px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; margin: 0.5rem 0; }
+/* position+z-index makes the map its own stacking context so Leaflet's internal
+   z-indexes (zoom control = 1000, panes ≤700) stay INSIDE the map box and can't
+   paint over the sticky header when the page scrolls. */
+.sub-portal .pin-map { width: 100%; height: 260px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; margin: 0.5rem 0; position: relative; z-index: 0; }
 .sub-portal .pin-readout { font-size: 0.78rem; color: #374151; font-weight: 600; margin-bottom: 0.5rem; }
+.sub-portal .pin-readout.set { color: #047857; }
+/* self-contained SVG pin marker — strip Leaflet's divIcon default box so only the pin shows */
+.ck-pin-icon { background: none; border: none; }
+.ck-pin-icon svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
 
 .sub-portal .wizard-intro, .sub-portal .review-banner { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 12px; padding: 0.9rem 1.1rem; font-size: 0.85rem; margin-bottom: 1rem; }
 .sub-portal .review-banner { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
@@ -50,6 +59,36 @@
 .sub-portal .doc-note { font-size: 0.68rem; color: #6b7280; }
 .sub-portal .doc-note.err { color: #dc2626; }
 .sub-portal .doc-status { font-size: 0.62rem; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 6px; text-transform: uppercase; white-space: nowrap; }
+/* keep the button width stable between "Upload" and the "Uploading…" spinner state so the row doesn't jump */
+.sub-portal .btn-busy { min-width: 104px; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
+.sub-portal .btn-busy:disabled { opacity: 0.9; cursor: progress; }
+.sub-portal .doc-spin { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: docspin 0.6s linear infinite; flex: none; }
+.sub-portal .doc-spin.dark { border-color: rgba(26,31,58,0.3); border-top-color: #1a1f3a; }
+@keyframes docspin { to { transform: rotate(360deg); } }
+
+/* "Save your business details" block — a labeled card so the save action reads
+   as a clear step, not a stray full-width gold bar floating between cards. */
+.sub-portal .wizard-save { background: #fff; border: 1px solid #eef0f4; border-radius: 14px; padding: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.sub-portal .wizard-save-title { font-size: 0.95rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.2rem; }
+.sub-portal .wizard-save .btn { flex: none; white-space: nowrap; }
+@media (max-width: 560px) { .sub-portal .wizard-save { flex-direction: column; align-items: stretch; } .sub-portal .wizard-save .btn { width: 100%; } }
+
+/* ── onboarding wizard: two meaningful columns on desktop ──
+   Left = your business profile (who you are / where you work).
+   Right = compliance documents + submit. Collapses to one column on mobile. */
+.sub-portal .wizard-intro { max-width: 760px; margin-left: auto; margin-right: auto; text-align: center; }
+.sub-portal .wizard-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 1.5rem; align-items: start; }
+.sub-portal .wizard-col { display: flex; flex-direction: column; min-width: 0; }
+.sub-portal .col-head { display: flex; align-items: baseline; gap: 0.6rem; margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }
+.sub-portal .col-head h2 { font-size: 1.05rem; font-weight: 800; color: #1a1f3a; margin: 0; }
+.sub-portal .col-kicker { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #fff; background: #1a1f3a; padding: 0.2rem 0.5rem; border-radius: 6px; }
+.sub-portal .col-count { margin-left: auto; font-size: 0.72rem; font-weight: 700; color: #6b7280; background: #eef0f4; padding: 0.2rem 0.55rem; border-radius: 999px; }
+/* on the desktop grid the submit button anchors to the bottom of the docs column */
+.sub-portal .wizard-col .btn-block { margin-top: auto; }
+@media (max-width: 860px) {
+  .sub-portal .wizard-grid { grid-template-columns: 1fr; gap: 0; }
+  .sub-portal .wizard-col .btn-block { margin-top: 0.75rem; }
+}
 .sub-portal .ds-grey { background: #f3f4f6; color: #6b7280; }
 .sub-portal .ds-blue { background: #dbeafe; color: #1e40af; }
 .sub-portal .ds-green { background: #dcfce7; color: #166534; }
@@ -88,3 +127,20 @@
 .sub-portal .ytd-card { background: #1a1f3a; color: #fff; border-radius: 14px; padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.85rem; }
 .sub-portal .ytd-card span { font-size: 1.5rem; font-weight: 800; color: #FDB813; }
 .sub-portal .pay-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; }
+
+/* ── subcontractor agreement e-sign modal ── */
+.sign-modal-wrap { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.sign-modal-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.55); }
+.sign-modal { position: relative; background: #fff; border-radius: 16px; width: min(520px, 100%); max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+.sign-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid #eef0f4; }
+.sign-modal-head h3 { font-size: 1.05rem; font-weight: 800; color: #1a1f3a; margin: 0; }
+.sign-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #9ca3af; cursor: pointer; }
+.sign-modal-body { padding: 1.1rem 1.25rem; overflow-y: auto; }
+.sign-modal-foot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.25rem; border-top: 1px solid #eef0f4; }
+.agreement-text { background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.85rem 1rem; max-height: 180px; overflow-y: auto; font-size: 0.82rem; line-height: 1.5; margin-bottom: 1rem; }
+.agreement-text p { margin: 0 0 0.5rem; }
+.sig-pad-box { border: 2px dashed #cbd5e1; border-radius: 10px; background: #fff; overflow: hidden; }
+.sig-clear { margin-top: 0.4rem; border: none; background: none; color: #1d4ed8; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 0; }
+.sig-clear:disabled { color: #cbd5e1; cursor: default; }
+.agree-row { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; color: #374151; margin-top: 0.85rem; cursor: pointer; }
+.agree-row input { margin-top: 0.15rem; accent-color: #1a1f3a; }
