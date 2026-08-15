@@ -148,22 +148,33 @@ export default function PortalView() {
     const search = useSearchParams();
     const token = params?.token;
 
+    // Deep-link params (QA Q0.2). Every client notification links to the exact
+    // spot: a specific record (estimate/analysis/mockup/document) or, failing
+    // a record, a section via `?focus=<tab>`. The backend builds these from one
+    // shared helper (portal-deep-link.ts) so every notify path stays consistent.
     const analysisId = search?.get('analysis') || undefined;
     const estimateId = search?.get('estimate') || undefined;
+    const mockupId = search?.get('mockup') || undefined;
+    const documentId = search?.get('document') || undefined;
+    const focusTab = search?.get('focus') || undefined;
 
     const [state, setState] = useState({ loading: true, client: null, error: null });
     // Which section group is on screen. Tabs keep the page short and scannable
     // instead of a single very long scroll — homeowners open this on phones.
     const [activeTab, setActiveTab] = useState('overview');
 
-    // Deep link (?estimate=<id>) — open straight to the Estimate tab so the
-    // shared estimate is what the client sees first, instead of landing on
-    // Overview and having to hunt for it. Done in an effect (not the initial
-    // useState) so the server-rendered 'overview' and the client's first
-    // render agree — flipping the tab post-mount avoids a hydration mismatch.
+    // Open straight to the tab the notification was about, so the client lands
+    // on the item instead of Overview. A specific-record param wins; otherwise
+    // the explicit `?focus=<tab>` decides. Done in an effect (not the initial
+    // useState) so the server-rendered 'overview' and the client's first render
+    // agree — flipping the tab post-mount avoids a hydration mismatch.
     useEffect(() => {
-        if (estimateId) setActiveTab('estimate');
-    }, [estimateId]);
+        const valid = ['overview', 'estimate', 'insurance', 'documents', 'mockups', 'messages'];
+        if (estimateId || analysisId) setActiveTab('estimate');
+        else if (mockupId) setActiveTab('mockups');
+        else if (documentId) setActiveTab('documents');
+        else if (focusTab && valid.includes(focusTab)) setActiveTab(focusTab);
+    }, [estimateId, analysisId, mockupId, documentId, focusTab]);
 
     useEffect(() => {
         if (!token) return;
@@ -502,7 +513,7 @@ export default function PortalView() {
                         title="3D Mockups"
                         subtitle="Color and material previews of your finished roof"
                     >
-                        <PortalMockups />
+                        <PortalMockups highlightId={mockupId} />
                     </SectionCard>
                 )}
 
