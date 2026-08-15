@@ -479,3 +479,12 @@
     .subjobs .detail-grid { grid-template-columns: 1fr 1fr; }
     .subjobs .dispatch-map { height: 240px; }
 }
+
+/* Drag-to-Completed (Q2.10) */
+.subjobs .job-card[draggable="true"] { cursor: grab; }
+.subjobs .job-card.dragging { opacity: 0.5; }
+.subjobs .filter-tab.droppable { border: 1px dashed #16a34a; color: #16a34a; }
+.subjobs .filter-tab.drop-target { background: #16a34a; color: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,0.2); }
+.subjobs .complete-reqs .req-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
+.subjobs .complete-reqs .req-row.ok { background: #ecfdf5; color: #166534; }
+.subjobs .complete-reqs .req-row.warn { background: #fffbeb; color: #92400e; }

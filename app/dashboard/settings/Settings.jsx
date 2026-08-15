@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import StripeConnectCard from "./StripeConnectCard.jsx";
 import EmailBrandPreview from "./EmailBrandPreview.jsx";
 import US_STATES from "@/lib/data/usStates.json";
+import Can from "@/lib/permissions/Can";
 
 const FileUploader = dynamic(
     () => import("@/utiles/FileUploader"),
@@ -2287,7 +2288,10 @@ const Settings = () => {
                                         </select>
                                     </div>
                                     <div className="btn-group">
-                                        <button className="btn btn-outline">Export All Data</button>
+                                        {/* Q0.3: full-data export gated by export permission. */}
+                                        <Can permission="export_client_data">
+                                            <button className="btn btn-outline">Export All Data</button>
+                                        </Can>
                                         <button className="btn btn-outline">Request Data Deletion</button>
                                     </div>
                                 </div>

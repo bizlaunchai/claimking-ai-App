@@ -610,6 +610,71 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
 }
 
 /* =========================================================================
+   COMPLETE CONFIRM (Q2.10) — drag-to-Completed checks the completion
+   requirements (checklist done + completion photos) as a confirm step.
+   ========================================================================= */
+function CompleteConfirmModal({ jobId, jobNumber, toast, onClose, onDone }) {
+    const [data, setData] = useState(null);
+    const [busy, setBusy] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            const [jr, cr] = await Promise.all([
+                axiosInstance.get(`/jobs/${jobId}`, { suppressErrorToast: true }).catch(() => null),
+                axiosInstance.get(`/jobs/${jobId}/checklist`, { suppressErrorToast: true }).catch(() => ({ data: { data: [] } })),
+            ]);
+            if (alive) setData({ job: jr?.data?.data || {}, checklist: cr?.data?.data || [] });
+        })();
+        return () => { alive = false; };
+    }, [jobId]);
+
+    const loading = !data;
+    const checklist = data?.checklist || [];
+    const openItems = checklist.filter((c) => !c.done);
+    const photos = data?.job?.completion_photos || [];
+    const missing = openItems.length > 0 || photos.length === 0;
+
+    const complete = async () => {
+        setBusy(true);
+        try {
+            await axiosInstance.post(`/jobs/${jobId}/complete`);
+            toast('Job marked complete.', 'success');
+            onDone();
+        } catch { /* interceptor toasts */ } finally { setBusy(false); }
+    };
+
+    return (
+        <Modal onClose={busy ? () => {} : onClose}>
+            <div className="modal-head">
+                <div><h3 style={{ margin: 0 }}>Complete {jobNumber || 'job'}?</h3><div className="hint">Drag-to-Completed confirmation</div></div>
+                <button className="modal-close" onClick={onClose}>&times;</button>
+            </div>
+            <div className="modal-body">
+                {loading ? <div className="hint">Checking completion requirements…</div> : (
+                    <div className="complete-reqs">
+                        <div className={`req-row ${openItems.length ? 'warn' : 'ok'}`}>
+                            <span>{openItems.length ? '⚠' : '✓'}</span>
+                            {openItems.length ? `${openItems.length} checklist item${openItems.length > 1 ? 's' : ''} still open` : `Checklist complete${checklist.length ? ` (${checklist.length})` : ''}`}
+                        </div>
+                        <div className={`req-row ${photos.length ? 'ok' : 'warn'}`}>
+                            <span>{photos.length ? '✓' : '⚠'}</span>
+                            {photos.length ? `${photos.length} completion photo${photos.length > 1 ? 's' : ''}` : 'No completion photos added'}
+                        </div>
+                        <p className="hint" style={{ marginTop: '0.75rem' }}>
+                            {missing ? 'These are recommended — you can still complete the job, or cancel to finish them first.' : 'All completion requirements are met.'}
+                        </p>
+                    </div>
+                )}
+            </div>
+            <div className="modal-foot">
+                <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+                <button className="btn btn-success" onClick={complete} disabled={busy || loading}>{busy ? 'Completing…' : '✓ Complete job'}</button>
+            </div>
+        </Modal>
+    );
+}
+
+/* =========================================================================
    MAIN COMPONENT
    ========================================================================= */
 export default function JobsReady() {
@@ -619,6 +684,9 @@ export default function JobsReady() {
     const [assignedFilter, setAssignedFilter] = useState('all');
     const [team, setTeam] = useState({ list: [], byId: {} });
     const [modal, setModal] = useState(null); // { type, id }
+    const [dragJobId, setDragJobId] = useState(null); // Q2.10 drag-to-Completed
+    const [dropActive, setDropActive] = useState(false);
+    const [completeJob, setCompleteJob] = useState(null); // { id, job_number } pending confirm
 
     const toast = (msg, type = '') => {
         if (type === 'success') sonner.success(msg);
@@ -663,8 +731,16 @@ export default function JobsReady() {
 
     const renderCard = (j) => {
         const blockers = j.readiness_blockers || [];
+        const canComplete = j.readiness_state !== 'complete' && j.readiness_state !== 'blocked';
         return (
-            <div className="job-card" key={j.id}>
+            <div
+                className={`job-card ${dragJobId === j.id ? 'dragging' : ''}`}
+                key={j.id}
+                draggable={canComplete}
+                onDragStart={canComplete ? (e) => { setDragJobId(j.id); e.dataTransfer.effectAllowed = 'move'; } : undefined}
+                onDragEnd={() => { setDragJobId(null); setDropActive(false); }}
+                title={canComplete ? 'Drag to the Complete tab to finish this job' : undefined}
+            >
                 <div className="job-body">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="job-id">{j.job_number}</span>
@@ -719,9 +795,24 @@ export default function JobsReady() {
                     <div className="section-title">Jobs Board</div>
                     <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <div className="filter-tabs">
-                            {[['all', 'All'], ['blocked', 'Blocked'], ['ready', 'Ready'], ['scheduled', 'Scheduled'], ['in_production', 'In Production'], ['complete', 'Complete']].map(([f, label]) => (
-                                <button key={f} className={`filter-tab ${stateFilter === f ? 'active' : ''}`} onClick={() => setStateFilter(f)}>{label}</button>
-                            ))}
+                            {[['all', 'All'], ['blocked', 'Blocked'], ['ready', 'Ready'], ['scheduled', 'Scheduled'], ['in_production', 'In Production'], ['complete', 'Complete']].map(([f, label]) => {
+                                const isCompleteDrop = f === 'complete' && dragJobId;
+                                return (
+                                    <button
+                                        key={f}
+                                        className={`filter-tab ${stateFilter === f ? 'active' : ''} ${isCompleteDrop && dropActive ? 'drop-target' : ''} ${f === 'complete' && dragJobId ? 'droppable' : ''}`}
+                                        onClick={() => setStateFilter(f)}
+                                        onDragOver={isCompleteDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropActive(true); } : undefined}
+                                        onDragLeave={isCompleteDrop ? () => setDropActive(false) : undefined}
+                                        onDrop={isCompleteDrop ? (e) => {
+                                            e.preventDefault();
+                                            const job = jobs.find((x) => x.id === dragJobId);
+                                            setDropActive(false); setDragJobId(null);
+                                            if (job) setCompleteJob({ id: job.id, job_number: job.job_number });
+                                        } : undefined}
+                                    >{label}</button>
+                                );
+                            })}
                         </div>
                         <select className="rep-filter" value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)} aria-label="Filter by assignment">
                             <option value="all">All Assignments</option>
@@ -749,6 +840,15 @@ export default function JobsReady() {
             )}
             {modal?.type === 'job' && (
                 <JobModal jobId={modal.id} team={team} toast={toast} onClose={() => setModal(null)} onChanged={load} />
+            )}
+            {completeJob && (
+                <CompleteConfirmModal
+                    jobId={completeJob.id}
+                    jobNumber={completeJob.job_number}
+                    toast={toast}
+                    onClose={() => setCompleteJob(null)}
+                    onDone={() => { setCompleteJob(null); load(); }}
+                />
             )}
         </div>
     );
