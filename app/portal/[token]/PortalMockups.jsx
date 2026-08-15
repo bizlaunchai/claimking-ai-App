@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'next/navigation';
 import axiosInstance from '@/lib/axiosInstance';
@@ -38,13 +38,16 @@ const apiOrigin = () => {
     return base.replace(/\/+$/, '');
 };
 
-export default function PortalMockups() {
+export default function PortalMockups({ highlightId }) {
     const params = useParams();
     const token = params?.token;
 
     const [items, setItems]     = useState([]);
     const [loading, setLoading] = useState(true);
     const [lightbox, setLightbox] = useState(null); // currently-open image url
+    // Q0.2: when a "mockup ready" notification deep-links here (?mockup=<id>),
+    // scroll that card into view and ring it so the client sees the exact one.
+    const highlightRef = useRef(null);
 
     useEffect(() => {
         if (!token) return;
@@ -65,6 +68,13 @@ export default function PortalMockups() {
         })();
         return () => { cancelled = true; };
     }, [token]);
+
+    // Once loaded, bring the deep-linked mockup into view.
+    useEffect(() => {
+        if (!loading && highlightId && highlightRef.current) {
+            highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [loading, highlightId]);
 
     // Close the lightbox on Escape and lock body scroll while it's open.
     useEffect(() => {
@@ -112,18 +122,20 @@ export default function PortalMockups() {
                     const imgSrc = m.version?.image_url
                         ? `${apiOrigin()}${m.version.image_url}`
                         : null;
+                    const isHighlight = highlightId && m.id === highlightId;
                     return (
                         <div
                             key={m.id}
+                            ref={isHighlight ? highlightRef : null}
                             onClick={() => imgSrc && setLightbox(imgSrc)}
                             style={{
                                 cursor: imgSrc ? 'zoom-in' : 'default',
                                 background: '#fff',
-                                border: '1px solid #eef0f4',
+                                border: isHighlight ? '2px solid #FDB813' : '1px solid #eef0f4',
                                 borderRadius: 12,
                                 overflow: 'hidden',
                                 transition: 'transform 0.18s ease, box-shadow 0.18s ease',
-                                boxShadow: '0 2px 6px rgba(15,23,42,0.04)',
+                                boxShadow: isHighlight ? '0 0 0 3px rgba(253,184,19,0.2)' : '0 2px 6px rgba(15,23,42,0.04)',
                             }}
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-2px)';
