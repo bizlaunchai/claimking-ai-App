@@ -24,18 +24,21 @@
 }
 .new-leads-page .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(253, 184, 19, 0.4); }
 .new-leads-page .btn-secondary {
-    padding: 0.5rem 0.875rem; background: white; color: #1a1f3a;
+    padding: 0.625rem 1rem; background: white; color: #1a1f3a;
     border: 1px solid #e5e7eb; border-radius: 6px;
     font-weight: 500; cursor: pointer; font-size: 0.875rem;
+    display: inline-flex; align-items: center; gap: 0.5rem; white-space: nowrap;
     transition: all 0.2s ease;
 }
 .new-leads-page .btn-secondary:hover { border-color: #FDB813; background: #fef9e6; }
 .new-leads-page .btn-success {
-    padding: 0.5rem 0.875rem; background: #16a34a; color: white;
+    padding: 0.6rem 0.875rem; background: #16a34a; color: white;
     border: none; border-radius: 6px;
     font-weight: 600; cursor: pointer; font-size: 0.875rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
     transition: all 0.2s ease; white-space: nowrap;
 }
+.new-leads-page .btn-success:disabled { opacity: 0.6; cursor: default; }
 .new-leads-page .btn-success:hover { background: #15803d; }
 
 /* Pipeline tab nav */
@@ -744,3 +747,36 @@
     .new-leads-page .nl-view-btn { flex: 1; justify-content: center; }
     .new-leads-page .nl-drawer { width: 100%; }
 }
+
+/* + New Lead quick-create modal (Q1.2) */
+.new-leads-page .modal-box.nl-create-box { max-width: 600px; }
+.new-leads-page .nl-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem 1rem; }
+.new-leads-page .nl-form-grid .nl-col-2 { grid-column: 1 / -1; }
+.new-leads-page .nl-field label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; margin-bottom: 0.35rem; }
+.new-leads-page .nl-field input, .new-leads-page .nl-field select, .new-leads-page .nl-field textarea { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.88rem; font-family: inherit; background: white; }
+.new-leads-page .nl-field input:focus, .new-leads-page .nl-field select:focus, .new-leads-page .nl-field textarea:focus { outline: none; border-color: #FDB813; }
+.new-leads-page .nl-field-3 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.new-leads-page .modal-body .nl-create-box, .new-leads-page .nl-create-box .modal-body { }
+@media (max-width: 560px) { .new-leads-page .nl-form-grid { grid-template-columns: 1fr; } }
+
+/* Clickable status badge + dropdown (Q1.3) */
+.new-leads-page .nl-status-menu-wrap { position: relative; display: inline-block; }
+.new-leads-page .nl-status-trigger { display: inline-flex; align-items: center; gap: 0.3rem; background: none; border: none; padding: 0; cursor: default; font: inherit; }
+/* clickable = an obvious dropdown button: bordered container + a dark caret chip */
+.new-leads-page .nl-status-trigger.clickable { cursor: pointer; padding: 3px 4px 3px 5px; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; transition: border-color 0.12s, box-shadow 0.12s; }
+.new-leads-page .nl-status-trigger.clickable:hover { border-color: #FDB813; box-shadow: 0 0 0 3px rgba(253,184,19,0.15); }
+.new-leads-page .nl-status-trigger.clickable .nl-status-caret { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: #1a1f3a; color: #fff; }
+.new-leads-page .nl-status-trigger:disabled { opacity: 0.5; cursor: default; }
+.new-leads-page .nl-status-caret { color: #6b7280; flex: none; }
+.nl-status-dropdown { background: white; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.16); padding: 0.3rem; min-width: 200px; z-index: 60; max-height: 60vh; overflow-y: auto; }
+.nl-status-dropdown .nl-status-dd-head { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; padding: 0.35rem 0.55rem 0.25rem; }
+.nl-status-dropdown .nl-status-dd-item { display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.55rem; border: none; background: transparent; border-radius: 7px; font-size: 0.82rem; color: #374151; cursor: pointer; text-align: left; }
+.nl-status-dropdown .nl-status-dd-item:hover { background: #f3f4f6; }
+.nl-status-dropdown .nl-dd-note { margin-left: auto; font-size: 0.62rem; color: #b45309; background: #fef3c7; padding: 0.05rem 0.35rem; border-radius: 999px; text-transform: uppercase; font-weight: 700; }
+.nl-status-dropdown .nl-kdot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+.new-leads-page .nl-kcard-status { margin: 0.5rem 0 0.15rem; }
+
+/* Drawer loading spinner (Q1.3 polish) */
+.nl-drawer-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem; padding: 4rem 1rem; color: #6b7280; font-size: 0.85rem; font-weight: 500; }
+.nl-spinner { width: 30px; height: 30px; border: 3px solid #e5e7eb; border-top-color: #1a1f3a; border-radius: 50%; animation: nl-spin 0.7s linear infinite; }
+@keyframes nl-spin { to { transform: rotate(360deg); } }

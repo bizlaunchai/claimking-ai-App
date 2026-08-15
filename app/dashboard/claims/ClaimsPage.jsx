@@ -33,6 +33,10 @@ const ClaimsManagement = () => {
     const [currentTab, setCurrentTab] = useState('all');
     const [currentStage, setCurrentStage] = useState(0);
     const [visibleGridItems, setVisibleGridItems] = useState(10);
+    // Per-stage "show N" count for the board columns (Q4.5): each column starts at
+    // 10 and grows via "Show 10 more" / "Show all". Keyed by stage number.
+    const [stageVisible, setStageVisible] = useState({});
+    const GRID_PAGE = 10;
     const [currentStageScroll, setCurrentStageScroll] = useState(0);
     const [selectedClaim, setSelectedClaim] = useState(null);
     const [showClaimModal, setShowClaimModal] = useState(false);
@@ -161,6 +165,16 @@ const ClaimsManagement = () => {
             stageName: stageNames[stage - 1] || 'Unknown',
             claimNumber: c.claim_number || '',
             policyNumber: c.policy_number || '',
+            // Fuller detail for the claim modal (Q4.6): carrier + adjuster + key
+            // dates + amounts, so "what's the state of this claim" is answered
+            // without opening the full record.
+            adjusterName: c.adjuster_name || '',
+            adjusterPhone: c.adjuster_phone || '',
+            adjusterEmail: c.adjuster_email || '',
+            dateOfLoss: c.date_of_loss || null,
+            approvedAmount: Number(c.approved_amount) || 0,
+            paidAmount: Number(c.paid_amount) || 0,
+            createdAt: c.created_at || null,
             assignedTo: c.assigned_to_user_id || null,
             assignedName: c.assigned_to_name || null,
             updatedAt: c.updated_at,
@@ -416,7 +430,7 @@ const ClaimsManagement = () => {
         window.addEventListener('resize', measure);
         const tid = setTimeout(measure, 100); // after layout settles
         return () => { window.removeEventListener('resize', measure); clearTimeout(tid); };
-    }, [filteredClaims, currentView, visibleGridItems, isMobile, currentStage]);
+    }, [filteredClaims, currentView, visibleGridItems, stageVisible, isMobile, currentStage]);
 
     // Two-way scroll sync between the top bar and the board.
     const onTopScroll = () => {
@@ -456,6 +470,7 @@ const ClaimsManagement = () => {
         setFilteredClaims(computeFiltered(allClaims, stage, tab, search));
         setCurrentPage(1);
         setVisibleGridItems(10);
+        setStageVisible({});
     };
 
     // Search box handler
@@ -540,13 +555,36 @@ const ClaimsManagement = () => {
     // Create stage column
     const createStageColumn = (stageNum) => {
         const stageClaims = filteredClaims.filter(c => c.stage === stageNum);
-        const visibleClaims = stageClaims.slice(0, visibleGridItems);
+        const shown = stageVisible[stageNum] ?? GRID_PAGE;
+        const visibleClaims = stageClaims.slice(0, shown);
 
         let cardsHtml = visibleClaims.map(claim => createClaimCard(claim));
 
         if (visibleClaims.length === 0) {
             cardsHtml = <div style={{padding: '1rem', color: '#6b7280', textAlign: 'center'}}>No claims</div>;
         }
+
+        // Per-column pagination (Q4.5): 10 at a time, with "Show 10 more" + "Show
+        // all"; collapse back once fully expanded. Only when the column has >10.
+        const remaining = stageClaims.length - visibleClaims.length;
+        const paginator = stageClaims.length > GRID_PAGE && (
+            <div className="stage-pager">
+                {remaining > 0 ? (
+                    <>
+                        <button className="stage-pager-btn" onClick={() => setStageVisible(v => ({ ...v, [stageNum]: shown + GRID_PAGE }))}>
+                            Show {Math.min(GRID_PAGE, remaining)} more
+                        </button>
+                        <button className="stage-pager-btn link" onClick={() => setStageVisible(v => ({ ...v, [stageNum]: stageClaims.length }))}>
+                            Show all ({stageClaims.length})
+                        </button>
+                    </>
+                ) : (
+                    <button className="stage-pager-btn link" onClick={() => setStageVisible(v => ({ ...v, [stageNum]: GRID_PAGE }))}>
+                        Show less
+                    </button>
+                )}
+            </div>
+        );
 
         return (
             <div key={stageNum}
@@ -566,6 +604,7 @@ const ClaimsManagement = () => {
                 </div>
                 <div className="stage-cards">
                     {cardsHtml}
+                    {paginator}
                 </div>
             </div>
         );
@@ -887,6 +926,7 @@ const ClaimsManagement = () => {
     const showMoreGrid = () => {
         if (visibleGridItems >= filteredClaims.length) {
             setVisibleGridItems(10);
+        setStageVisible({});
         } else {
             setVisibleGridItems(prev => prev + 10);
         }
@@ -1212,6 +1252,7 @@ const ClaimsManagement = () => {
             setCurrentStage(0);
             setCurrentPage(1);
             setVisibleGridItems(10);
+        setStageVisible({});
             await fetchClaims();
         } catch (err) {
             const msg = err?.response?.data?.message;
@@ -1480,15 +1521,8 @@ const ClaimsManagement = () => {
                         <div className="pipeline-board" id="pipelineView" ref={boardRef} onScroll={onBoardScroll}>
                             {renderGridView()}
                         </div>
-
-                        {/* Show More Button for Grid View */}
-                        {filteredClaims.length > 10 && (
-                            <div className="show-more-container">
-                                <button className="show-more-btn" onClick={showMoreGrid}>
-                                    {visibleGridItems >= filteredClaims.length ? 'Show Less' : `Show More (${Math.min(10, filteredClaims.length - visibleGridItems)})`}
-                                </button>
-                            </div>
-                        )}
+                        {/* Per-column "Show 10 more / Show all" now lives inside each
+                            stage column (Q4.5) — the old global Show-More was removed. */}
                     </>
                 )}
 
@@ -1660,15 +1694,50 @@ const ClaimsManagement = () => {
                                     <div className="detail-value">{selectedClaim.address}</div>
                                 </div>
                                 <div className="detail-group">
-                                    <label>Claim Amount</label>
+                                    <label>Claim Amount (RCV)</label>
                                     <div className="detail-value" style={{color: '#16a34a', fontWeight: 600}}>
                                         ${selectedClaim.amount.toLocaleString()}
                                     </div>
                                 </div>
+                                {selectedClaim.approvedAmount > 0 && (
+                                    <div className="detail-group">
+                                        <label>Approved</label>
+                                        <div className="detail-value" style={{ fontWeight: 600 }}>${selectedClaim.approvedAmount.toLocaleString()}</div>
+                                    </div>
+                                )}
+                                {selectedClaim.paidAmount > 0 && (
+                                    <div className="detail-group">
+                                        <label>Paid</label>
+                                        <div className="detail-value" style={{ fontWeight: 600 }}>${selectedClaim.paidAmount.toLocaleString()}</div>
+                                    </div>
+                                )}
                                 <div className="detail-group">
                                     <label>Damage Type</label>
                                     <div className="detail-value">{selectedClaim.damageType}</div>
                                 </div>
+                                <div className="detail-group">
+                                    <label>Insurance Carrier</label>
+                                    <div className="detail-value">{selectedClaim.insurer || '—'}</div>
+                                </div>
+                                {selectedClaim.policyNumber && (
+                                    <div className="detail-group">
+                                        <label>Policy #</label>
+                                        <div className="detail-value">{selectedClaim.policyNumber}</div>
+                                    </div>
+                                )}
+                                <div className="detail-group">
+                                    <label>Adjuster</label>
+                                    <div className="detail-value">
+                                        {selectedClaim.adjusterName || '—'}
+                                        {selectedClaim.adjusterPhone && <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{selectedClaim.adjusterPhone}</div>}
+                                    </div>
+                                </div>
+                                {selectedClaim.dateOfLoss && (
+                                    <div className="detail-group">
+                                        <label>Date of Loss</label>
+                                        <div className="detail-value">{new Date(selectedClaim.dateOfLoss).toLocaleDateString()}</div>
+                                    </div>
+                                )}
                                 <div className="detail-group">
                                     <label>Priority</label>
                                     <div className="detail-value">
@@ -1718,9 +1787,16 @@ const ClaimsManagement = () => {
                                         </div>
                                     </div>
                                 )}
+                                <div className="detail-group">
+                                    <label>Latest Activity</label>
+                                    <div className="detail-value">
+                                        {selectedClaim.updatedAt ? `Updated ${timeAgo(selectedClaim.updatedAt)}` : '—'}
+                                        {selectedClaim.createdAt && <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Opened {new Date(selectedClaim.createdAt).toLocaleDateString()}</div>}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2 flex-wrap">
                             <button className="modal-btn secondary" onClick={closeModal}>
                                 Close
                             </button>
@@ -1729,6 +1805,13 @@ const ClaimsManagement = () => {
                                 onClick={() => showMoveStageMenu(selectedClaim.id)}
                             >
                                 Move to Different Stage
+                            </button>
+                            <button
+                                className="modal-btn primary"
+                                style={{ background: '#1a1f3a' }}
+                                onClick={() => { const id = selectedClaim.id; closeModal(); goToDetail(id); }}
+                            >
+                                See Client Profile →
                             </button>
                         </div>
                     </div>
