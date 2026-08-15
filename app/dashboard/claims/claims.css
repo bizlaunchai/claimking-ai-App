@@ -1897,3 +1897,10 @@
 .claim-map-spinner { width: 22px; height: 22px; border: 3px solid rgba(26,31,58,0.2); border-top-color: #1a1f3a; border-radius: 50%; animation: claim-map-spin 0.7s linear infinite; display: inline-block; }
 .claim-map-spinner.sm { width: 13px; height: 13px; border-width: 2px; }
 @keyframes claim-map-spin { to { transform: rotate(360deg); } }
+
+/* Per-column pagination in the pipeline board (Q4.5) */
+.stage-pager { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem 0.25rem 0.25rem; }
+.stage-pager-btn { width: 100%; padding: 0.5rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; font-size: 0.78rem; font-weight: 600; color: #1a1f3a; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+.stage-pager-btn:hover { border-color: #FDB813; background: #fffdf5; }
+.stage-pager-btn.link { border: none; background: none; color: #6b7280; font-weight: 600; padding: 0.25rem; }
+.stage-pager-btn.link:hover { color: #1a1f3a; background: none; text-decoration: underline; }

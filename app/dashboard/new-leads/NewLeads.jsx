@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
     Flame, Sun, Snowflake, Phone, MessageSquare, CalendarPlus, FileText,
     ArrowRightCircle, MoreHorizontal, X, MapPin, LayoutGrid, List as ListIcon,
-    RefreshCw, CloudLightning, Clock, UserPlus, Ban, ThumbsDown, Eye,
+    RefreshCw, CloudLightning, Clock, UserPlus, Ban, ThumbsDown, Eye, Plus, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
@@ -108,13 +108,61 @@ const ScoreBadge = ({ score }) => {
         warm: <><Sun size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />WARM</>,
         cold: <><Snowflake size={12} strokeWidth={2.5} style={{ verticalAlign: '-2px', marginRight: 3 }} />COLD</>,
     };
-    const s = (score || 'cold').toLowerCase();
+    // lead_score is a 0–100 number from the backend (band thresholds match
+    // lead-enrichment.service: ≥75 Hot, ≥50 Warm, else Cold). Older/seed rows may
+    // carry a band string or null — handle all three without crashing.
+    const s = typeof score === 'number'
+        ? (score >= 75 ? 'hot' : score >= 50 ? 'warm' : 'cold')
+        : String(score || 'cold').toLowerCase();
     return <span className={`lead-score ${s}`}>{map[s] || map.cold}</span>;
 };
 const StatusPill = ({ status }) => {
     const m = STATUS_META[status] || { label: status, cls: 'unknown' };
     return <span className={`nl-status-pill ${m.cls}`}>{m.label}</span>;
 };
+
+// Clickable status badge (Q1.3) — the current status as a button that drops a
+// menu of allowed next statuses. Fixed-positioned so it isn't clipped by the
+// table/board overflow. Reason-required moves (Decline / DNC) route through the
+// same reason modal via onChange. The server re-validates every transition.
+function StatusMenu({ lead, onChange, disabled }) {
+    const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState(null);
+    const nexts = ALLOWED_NEXT[lead.status] || [];
+    const toggle = (e) => {
+        e.stopPropagation();
+        if (open || !nexts.length) { setOpen(false); return; }
+        const r = e.currentTarget.getBoundingClientRect();
+        setPos({ top: r.bottom + 4, left: r.left });
+        setOpen(true);
+    };
+    useEffect(() => {
+        if (!open) return;
+        const close = () => setOpen(false);
+        window.addEventListener('click', close);
+        window.addEventListener('scroll', close, true);
+        return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
+    }, [open]);
+    return (
+        <span className="nl-status-menu-wrap" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className={`nl-status-trigger ${nexts.length ? 'clickable' : ''}`} onClick={toggle} disabled={disabled} title={nexts.length ? 'Change status' : 'No moves available'}>
+                <StatusPill status={lead.status} />
+                {!!nexts.length && <ChevronDown size={12} className="nl-status-caret" />}
+            </button>
+            {open && nexts.length > 0 && (
+                <div className="nl-status-dropdown" style={{ position: 'fixed', top: pos?.top, left: pos?.left }}>
+                    <div className="nl-status-dd-head">Move to…</div>
+                    {nexts.map((s) => (
+                        <button key={s} type="button" className="nl-status-dd-item" onClick={() => { setOpen(false); onChange(lead, s); }}>
+                            <span className={`nl-kdot ${STATUS_META[s].cls}`} /> {STATUS_META[s].label}
+                            {REASON_REQUIRED.has(s) && <span className="nl-dd-note">reason</span>}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </span>
+    );
+}
 
 // ==========================================================================
 // Page
@@ -140,6 +188,7 @@ export default function NewLeads() {
     const [menuId, setMenuId] = useState(null);           // open overflow menu
     const [reasonModal, setReasonModal] = useState(null); // { lead, to }
     const [drawerId, setDrawerId] = useState(null);       // open detail drawer
+    const [showCreate, setShowCreate] = useState(false);  // + New Lead modal (Q1.2)
 
     const nameOf = useCallback(
         (userId) => teamMembers.find((m) => m.id === userId)?.name || (userId ? 'Team member' : 'Unassigned'),
@@ -277,6 +326,13 @@ export default function NewLeads() {
         setReasonModal(null);
         setStatus(lead, to, reason);
     };
+    // Click-to-change status (Q1.3): reason-required moves route through the modal,
+    // everything else applies immediately. Shared by the Queue + Kanban badges.
+    const changeStatus = (lead, to) => {
+        if (!to || to === lead.status) return;
+        if (REASON_REQUIRED.has(to)) askReason(lead, to);
+        else setStatus(lead, to);
+    };
 
     // ── stats derived from the (unfiltered) board counts ──────────────────────
     const stat = (k) => board[k] ?? 0;
@@ -295,6 +351,9 @@ export default function NewLeads() {
                 <div className="header-right">
                     <button className="btn-secondary" onClick={refresh} title="Refresh">
                         <RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh
+                    </button>
+                    <button className="btn-primary" onClick={() => setShowCreate(true)}>
+                        <Plus size={16} style={{ verticalAlign: '-3px' }} /> New Lead
                     </button>
                 </div>
             </div>
@@ -364,14 +423,14 @@ export default function NewLeads() {
                             </select>
                         )}
                     </div>
-                    <div className="nl-view-toggle">
-                        <button className={`nl-view-btn ${view === 'queue' ? 'active' : ''}`} onClick={() => setView('queue')}>
-                            <ListIcon size={15} /> Queue
+                    <div className="nl-view-toggle" role="tablist" aria-label="Lead view">
+                        <button className={`nl-view-btn ${view === 'queue' ? 'active' : ''}`} onClick={() => setView('queue')} title="List — every lead in a table you can scan and act on">
+                            <ListIcon size={15} /> List
                         </button>
-                        <button className={`nl-view-btn ${view === 'kanban' ? 'active' : ''}`} onClick={() => setView('kanban')}>
-                            <LayoutGrid size={15} /> Kanban
+                        <button className={`nl-view-btn ${view === 'kanban' ? 'active' : ''}`} onClick={() => setView('kanban')} title="Board — pipeline columns by status; drag or click a card to move it between stages">
+                            <LayoutGrid size={15} /> Board
                         </button>
-                        <button className={`nl-view-btn ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')}>
+                        <button className={`nl-view-btn ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')} title="Map — leads plotted by their address">
                             <MapPin size={15} /> Map
                         </button>
                     </div>
@@ -397,6 +456,7 @@ export default function NewLeads() {
                         onReassign={doReassign}
                         onDecline={(l) => askReason(l, 'declined')}
                         onDnc={(l) => askReason(l, 'do_not_contact')}
+                        onChangeStatus={changeStatus}
                         onView={(l) => setDrawerId(l.id)}
                     />
                 )}
@@ -406,6 +466,7 @@ export default function NewLeads() {
                         rows={filtered}
                         busyId={busyId}
                         onMove={(lead, to) => setStatus(lead, to)}
+                        onChangeStatus={changeStatus}
                         onOpen={(l) => setDrawerId(l.id)}
                     />
                 )}
@@ -434,6 +495,98 @@ export default function NewLeads() {
                     onChanged={refresh}
                 />
             )}
+
+            {/* + New Lead quick-create (Q1.2) */}
+            {showCreate && (
+                <NewLeadModal
+                    canViewAll={canViewAll}
+                    teamMembers={teamMembers}
+                    onClose={() => setShowCreate(false)}
+                    onCreated={(status) => { setShowCreate(false); if (status && status !== tab && tab !== 'hot') setTab(status); refresh(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+// ==========================================================================
+// + New Lead quick-create modal (Q1.2) — status selectable at creation so Nate
+// can backfill leads directly into any stage. Address is plain fields for now;
+// swaps to the shared Google-Places component when Q0.1 lands.
+// ==========================================================================
+const CREATE_SOURCES = [
+    ['manual', 'Manual'], ['referral', 'Referral'], ['web_form', 'Website Form'],
+    ['facebook', 'Facebook'], ['ai_call', 'Phone / AI Call'],
+];
+function NewLeadModal({ canViewAll, teamMembers, onClose, onCreated }) {
+    const [f, setF] = useState({
+        first_name: '', last_name: '', phone: '', email: '',
+        address_line1: '', city: '', state: '', zip: '',
+        damage_type: '', source: 'manual', status: 'new', notes: '', assigned_to: '',
+    });
+    const [busy, setBusy] = useState(false);
+    const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+    const submit = async () => {
+        if (!f.first_name.trim() && !f.last_name.trim() && !f.phone.trim() && !f.email.trim()) {
+            toast.error('Add at least a name, phone, or email.');
+            return;
+        }
+        setBusy(true);
+        try {
+            const payload = { source: f.source, status: f.status };
+            ['first_name', 'last_name', 'phone', 'email', 'address_line1', 'city', 'state', 'zip', 'damage_type', 'notes'].forEach((k) => {
+                if (f[k]?.trim()) payload[k] = f[k].trim();
+            });
+            if (canViewAll && f.assigned_to) payload.assigned_to = f.assigned_to;
+            const res = await axiosInstance.post('/leads', payload);
+            if (res.data?.duplicate) {
+                toast.warning(res.data.message || 'This looks like an existing record.');
+            } else {
+                toast.success(`Lead created${f.status !== 'new' ? ` in ${STATUS_META[f.status]?.label}` : ''}.`);
+            }
+            onCreated(f.status);
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Could not create the lead.');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="modal-backdrop active" onClick={busy ? undefined : onClose}>
+            <div className="modal-box nl-create-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title">New Lead</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <div className="nl-form-grid">
+                        <div className="nl-field"><label>First name</label><input value={f.first_name} onChange={(e) => set('first_name', e.target.value)} placeholder="Jane" /></div>
+                        <div className="nl-field"><label>Last name</label><input value={f.last_name} onChange={(e) => set('last_name', e.target.value)} placeholder="Doe" /></div>
+                        <div className="nl-field"><label>Phone</label><input type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
+                        <div className="nl-field"><label>Email</label><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="jane@email.com" /></div>
+                        <div className="nl-field nl-col-2"><label>Address</label><input value={f.address_line1} onChange={(e) => set('address_line1', e.target.value)} placeholder="123 Main St" /></div>
+                        <div className="nl-field"><label>City</label><input value={f.city} onChange={(e) => set('city', e.target.value)} placeholder="Akron" /></div>
+                        <div className="nl-field nl-field-3">
+                            <div><label>State</label><input value={f.state} onChange={(e) => set('state', e.target.value)} placeholder="OH" /></div>
+                            <div><label>ZIP</label><input value={f.zip} onChange={(e) => set('zip', e.target.value)} placeholder="44301" /></div>
+                        </div>
+                        <div className="nl-field"><label>Damage type</label><input value={f.damage_type} onChange={(e) => set('damage_type', e.target.value)} placeholder="Roof / Hail" /></div>
+                        <div className="nl-field"><label>Source</label><select value={f.source} onChange={(e) => set('source', e.target.value)}>{CREATE_SOURCES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+                        <div className="nl-field"><label>Status</label><select value={f.status} onChange={(e) => set('status', e.target.value)}>{PIPELINE.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}</select></div>
+                        {canViewAll && (
+                            <div className="nl-field"><label>Assign to</label><select value={f.assigned_to} onChange={(e) => set('assigned_to', e.target.value)}><option value="">Me</option>{teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+                        )}
+                        <div className="nl-field nl-col-2"><label>Notes</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} rows={2} placeholder="Anything worth noting…" /></div>
+                    </div>
+                    {f.status === 'do_not_contact' && <div className="help">Do Not Contact suppresses all outreach company-wide.</div>}
+                </div>
+                <div className="modal-footer">
+                    <button className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+                    <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? 'Creating…' : 'Create Lead'}</button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -443,8 +596,28 @@ export default function NewLeads() {
 // ==========================================================================
 function QueueView({
     loading, rows, busyId, menuId, setMenuId, canConvert, canViewAll, teamMembers, nameOf,
-    onCall, onText, onSchedule, onEstimate, onConvert, onReassign, onDecline, onDnc, onView,
+    onCall, onText, onSchedule, onEstimate, onConvert, onReassign, onDecline, onDnc, onChangeStatus, onView,
 }) {
+    // Fixed-position anchor for the overflow menu — the table's overflow:hidden /
+    // overflow-x:auto would otherwise CLIP an absolutely-positioned dropdown (only
+    // the first item showed). Captured from the button's rect on open.
+    const [menuPos, setMenuPos] = useState(null);
+    const openMenu = (id, e) => {
+        e.stopPropagation(); // don't let this click reach the window-close listener
+        if (menuId === id) { setMenuId(null); return; }
+        const r = e.currentTarget.getBoundingClientRect();
+        setMenuPos({ top: r.bottom + 4, left: r.left });
+        setMenuId(id);
+    };
+    // Close the overflow menu on any outside click or scroll (the menu itself
+    // stops propagation, so in-menu clicks are safe).
+    useEffect(() => {
+        if (!menuId) return;
+        const close = () => setMenuId(null);
+        window.addEventListener('click', close);
+        window.addEventListener('scroll', close, true);
+        return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
+    }, [menuId, setMenuId]);
     if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
     if (!rows.length) return <div className="nl-panel"><div className="empty-state">No leads in this view.</div></div>;
 
@@ -496,12 +669,12 @@ function QueueView({
                                                 <button
                                                     className="nl-act more"
                                                     title="More"
-                                                    onClick={() => setMenuId(menuId === l.id ? null : l.id)}
+                                                    onClick={(e) => openMenu(l.id, e)}
                                                 >
                                                     <MoreHorizontal size={14} />
                                                 </button>
                                                 {menuId === l.id && (
-                                                    <div className="nl-menu">
+                                                    <div className="nl-menu" style={{ position: 'fixed', top: menuPos?.top, left: menuPos?.left }}>
                                                         <button onClick={() => { setMenuId(null); onView(l); }}>
                                                             <Eye size={13} /> View details
                                                         </button>
@@ -519,12 +692,16 @@ function QueueView({
                                                                 </select>
                                                             </div>
                                                         )}
-                                                        <button className="danger" onClick={() => onDecline(l)}>
-                                                            <ThumbsDown size={13} /> Decline
-                                                        </button>
-                                                        <button className="danger" onClick={() => onDnc(l)}>
-                                                            <Ban size={13} /> Do Not Contact
-                                                        </button>
+                                                        {ALLOWED_NEXT[l.status]?.includes('declined') && (
+                                                            <button className="danger" onClick={() => onDecline(l)}>
+                                                                <ThumbsDown size={13} /> Decline
+                                                            </button>
+                                                        )}
+                                                        {ALLOWED_NEXT[l.status]?.includes('do_not_contact') && (
+                                                            <button className="danger" onClick={() => onDnc(l)}>
+                                                                <Ban size={13} /> Do Not Contact
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -547,7 +724,7 @@ function QueueView({
                                     <td><ScoreBadge score={l.lead_score} /></td>
 
                                     {/* Status */}
-                                    <td><StatusPill status={l.status} /></td>
+                                    <td><StatusMenu lead={l} onChange={onChangeStatus} disabled={busyId === l.id} /></td>
 
                                     {/* Assigned */}
                                     <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{nameOf(l.assigned_to)}</td>
@@ -575,7 +752,7 @@ function QueueView({
 // ==========================================================================
 // Kanban view (task 2.8) — HTML5 drag to change status
 // ==========================================================================
-function KanbanView({ loading, rows, busyId, onMove, onOpen }) {
+function KanbanView({ loading, rows, busyId, onMove, onChangeStatus, onOpen }) {
     const [dragId, setDragId] = useState(null);
     const [overCol, setOverCol] = useState(null);
 
@@ -630,6 +807,7 @@ function KanbanView({ loading, rows, busyId, onMove, onOpen }) {
                                 </div>
                                 <div className="nl-kcard-meta">{sourceInfo(l.source).label}</div>
                                 {l.phone && <div className="lead-phone" style={{ fontSize: '0.72rem' }}>{l.phone}</div>}
+                                <div className="nl-kcard-status"><StatusMenu lead={l} onChange={onChangeStatus} disabled={busyId === l.id} /></div>
                                 <div className="nl-kcard-foot">
                                     {l.storm_event_id && <span className="nl-storm-chip"><CloudLightning size={11} /> Storm</span>}
                                     <span>{fmtRelative(l.created_at)}</span>
@@ -830,7 +1008,7 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
-                {loading && <div className="empty-state">Loading…</div>}
+                {loading && <div className="nl-drawer-loading"><span className="nl-spinner" /><span>Loading lead…</span></div>}
                 {!loading && !lead && <div className="empty-state">Lead not found.</div>}
 
                 {!loading && lead && (
