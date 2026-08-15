@@ -80,6 +80,7 @@ const PERMISSION_CATALOG = [
         { key: 'convert_job', label: 'Convert Job to Claim' },
         { key: 'dispatch_subs', label: 'Dispatch Jobs to Subcontractors' },
         { key: 'manage_subs', label: 'Manage Subcontractors & Onboarding' },
+        { key: 'approve_sub_requests', label: 'Approve Sub Job Requests' },
         { key: 'view_job_financials', label: 'View Job Cost / Profit' },
     ]},
     { group: 'Scheduling', items: [

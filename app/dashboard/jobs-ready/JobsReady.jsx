@@ -83,6 +83,8 @@ function CreateJobModal({ onClose, onSaved, toast }) {
         job_cost: '', lat: '', lng: '', permit_status: 'not_required', material_order_status: 'not_ordered',
     });
     const [trades, setTrades] = useState([]);
+    const [windows, setWindows] = useState([]); // Q2.9 availability windows
+    const [completeBy, setCompleteBy] = useState('');
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
@@ -177,6 +179,10 @@ function CreateJobModal({ onClose, onSaved, toast }) {
             if (form.lat !== '' && !isNaN(parseFloat(form.lat))) payload.lat = parseFloat(form.lat);
             if (form.lng !== '' && !isNaN(parseFloat(form.lng))) payload.lng = parseFloat(form.lng);
             if (form.job_cost !== '' && !isNaN(parseInt(form.job_cost, 10))) payload.job_cost = parseInt(form.job_cost, 10);
+            // Q2.9 — availability windows + deadline (no scheduled_start here; the sub sets it).
+            const cleanWindows = cleanupWindows(windows);
+            if (cleanWindows.length) payload.availability_windows = cleanWindows;
+            if (completeBy) payload.complete_by = completeBy;
 
             const res = await axiosInstance.post('/jobs', payload);
             toast('Job created.', 'success');
@@ -305,6 +311,9 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                         </div>
                         <div className="field full"><label>Scope of Work</label><textarea value={form.scope} onChange={(e) => set('scope', e.target.value)} placeholder="Describe exactly what needs to be done..." /></div>
                         <div className="field full"><label>Site Notes</label><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Gate codes, parking, pets, staging, hazards..." /></div>
+                        <div className="field full">
+                            <AvailabilityWindowsEditor windows={windows} setWindows={setWindows} completeBy={completeBy} setCompleteBy={setCompleteBy} />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -313,6 +322,43 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                 <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Create Job'}</button>
             </div>
         </Modal>
+    );
+}
+
+/* =========================================================================
+   Q2.9 — AVAILABILITY WINDOWS EDITOR (shared: Add Job + Manage Job)
+   We do NOT pick a start date here — the sub sets the actual date on their
+   accepted job. We record the windows they must work within + a complete-by
+   deadline, both shown to the sub AND on the client portal for that job.
+   ========================================================================= */
+function cleanupWindows(windows) {
+    return (windows || [])
+        .filter((w) => w && w.start)
+        .map((w) => ({ start: w.start, end: w.end || w.start, note: (w.note || '').trim() || undefined }));
+}
+
+function AvailabilityWindowsEditor({ windows, setWindows, completeBy, setCompleteBy }) {
+    const add = () => setWindows([...(windows || []), { start: '', end: '', note: '' }]);
+    const upd = (i, k, v) => setWindows(windows.map((w, idx) => idx === i ? { ...w, [k]: v } : w));
+    const rm = (i) => setWindows(windows.filter((_, idx) => idx !== i));
+    return (
+        <div className="avail-editor">
+            <label>Availability windows <span className="hint">(optional — dates the crew must work within; leave empty for “any date”)</span></label>
+            {(windows || []).map((w, i) => (
+                <div className="avail-row" key={i}>
+                    <input type="date" value={w.start || ''} onChange={(e) => upd(i, 'start', e.target.value)} aria-label="Window start" />
+                    <span className="avail-to">to</span>
+                    <input type="date" value={w.end || ''} min={w.start || undefined} onChange={(e) => upd(i, 'end', e.target.value)} aria-label="Window end" />
+                    <input type="text" className="avail-note" value={w.note || ''} onChange={(e) => upd(i, 'note', e.target.value)} placeholder="Note e.g. HOA only Mon–Wed" />
+                    <button type="button" className="btn btn-xs btn-ghost" onClick={() => rm(i)} title="Remove window">✕</button>
+                </div>
+            ))}
+            <button type="button" className="btn btn-sm btn-ghost avail-add" onClick={add}>+ Add window</button>
+            <div className="avail-deadline">
+                <label>Complete-by deadline <span className="hint">(optional)</span></label>
+                <input type="date" value={completeBy || ''} onChange={(e) => setCompleteBy(e.target.value)} />
+            </div>
+        </div>
     );
 }
 
@@ -406,7 +452,7 @@ function DispatchModal({ job, onClose, onDispatched, toast }) {
                 trade,
                 expires_hours: parseInt(expiresHours, 10) || 24,
             });
-            toast(`Offer sent to ${sub_ids.length} sub(s). First to accept wins.`, 'success');
+            toast(`Offer sent to ${sub_ids.length} sub(s). Accepts come in as requests to approve (auto-accept subs win instantly).`, 'success');
             onDispatched();
         } catch (e) { /* interceptor */ } finally { setSending(false); }
     };
@@ -479,9 +525,10 @@ function DispatchModal({ job, onClose, onDispatched, toast }) {
 /* =========================================================================
    DISPATCH TRACKER  (recipient grid)  → GET /jobs/:id/dispatch
    ========================================================================= */
-function DispatchTracker({ job, canDispatch, toast, onChanged }) {
+function DispatchTracker({ job, canDispatch, canApprove, toast, onChanged }) {
     const [dispatch, setDispatch] = useState(undefined); // undefined=loading, null=none
     const [cancelling, setCancelling] = useState(false);
+    const [acting, setActing] = useState(''); // `${subId}:${approve|deny}`
 
     const load = useCallback(async () => {
         try {
@@ -502,10 +549,27 @@ function DispatchTracker({ job, canDispatch, toast, onChanged }) {
         } catch { /* */ } finally { setCancelling(false); }
     };
 
+    // Q2.11 — approve (fills the job, first-approved-wins) or deny one request.
+    const act = async (subId, kind) => {
+        setActing(`${subId}:${kind}`);
+        try {
+            await axiosInstance.post(`/jobs/${job.id}/dispatch/${kind}`, { sub_id: subId });
+            toast(kind === 'approve' ? 'Request approved — job assigned.' : 'Request denied.', kind === 'approve' ? 'success' : 'info');
+            await load();
+            onChanged?.();
+        } catch { /* interceptor shows "already filled" etc. */ } finally { setActing(''); }
+    };
+
     if (dispatch === undefined) return <div className="hint">Loading dispatch…</div>;
     if (dispatch === null) return <div className="hint">No dispatch sent for this job yet.</div>;
 
-    const respMeta = { accepted: ['green', 'Accepted'], declined: ['red', 'Declined'], no_response: ['muted', 'No response'] };
+    const respMeta = {
+        accepted: ['green', 'Accepted'],
+        requested: ['amber', 'Requested'],
+        declined: ['red', 'Declined'],
+        no_response: ['muted', 'No response'],
+    };
+    const pending = (dispatch.recipients || []).filter((r) => r.response === 'requested');
     return (
         <div>
             <div className="detail-grid" style={{ marginBottom: '0.75rem' }}>
@@ -514,17 +578,29 @@ function DispatchTracker({ job, canDispatch, toast, onChanged }) {
                 <div className="detail-item"><div className="dl">Area</div><div className="dv">{dispatch.area_label || '—'}</div></div>
                 <div className="detail-item"><div className="dl">Expires</div><div className="dv">{fmtDateTime(dispatch.expires_at)}</div></div>
             </div>
+            {dispatch.status === 'open' && pending.length > 0 && (
+                <div className="dispatch-request-banner">⏳ <strong>{pending.length} request{pending.length > 1 ? 's' : ''} awaiting approval.</strong> {canApprove ? 'Approve one to assign the job — the rest are auto-declined.' : 'A user with approval permission must review these.'}</div>
+            )}
             <div className="dispatch-track">
                 <div className="dt-head"><div>Sub</div><div>Dist</div><div>Notified</div><div>Viewed</div><div>Response</div></div>
                 {(dispatch.recipients || []).map((r) => {
                     const [cls, label] = respMeta[r.response] || ['muted', r.response];
+                    const showActions = canApprove && dispatch.status === 'open' && r.response === 'requested';
                     return (
                         <div className="dt-row" key={r.sub_id}>
                             <div className="dt-name">{r.sub?.business_name || '—'}</div>
                             <div>{r.distance_miles != null ? `${r.distance_miles} mi` : '—'}</div>
                             <div>{r.notified_email_at ? '✉️' : ''}{r.notified_sms_at ? ' 💬' : ''}{!r.notified_email_at && !r.notified_sms_at ? '—' : ''}</div>
                             <div>{r.viewed_at ? '👁' : '—'}</div>
-                            <div className={`jr-money ${cls}`} style={{ textAlign: 'left', fontWeight: 700 }}>{label}</div>
+                            <div className={`jr-money ${cls}`} style={{ textAlign: 'left', fontWeight: 700 }}>
+                                {label}
+                                {showActions && (
+                                    <div className="dt-actions">
+                                        <button className="btn btn-xs btn-success" onClick={() => act(r.sub_id, 'approve')} disabled={!!acting}>{acting === `${r.sub_id}:approve` ? '…' : 'Approve'}</button>
+                                        <button className="btn btn-xs btn-ghost" onClick={() => act(r.sub_id, 'deny')} disabled={!!acting}>{acting === `${r.sub_id}:deny` ? '…' : 'Deny'}</button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     );
                 })}
@@ -542,6 +618,7 @@ function DispatchTracker({ job, canDispatch, toast, onChanged }) {
 function JobModal({ jobId, team, onClose, onChanged, toast }) {
     const { has } = usePermissions();
     const canDispatch = has('dispatch_subs');
+    const canApprove = has('approve_sub_requests');
     const canFin = has('view_job_financials');
 
     const [job, setJob] = useState(null);
@@ -566,6 +643,10 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
                 job_cost: j.job_cost ?? '', permit_status: j.permit_status || 'not_required',
                 material_order_status: j.material_order_status || 'not_ordered', trades: j.trades || [],
                 lat: j.lat ?? '', lng: j.lng ?? '',
+                windows: (Array.isArray(j.availability_windows) ? j.availability_windows : []).map((w) => ({
+                    start: String(w.start || '').slice(0, 10), end: String(w.end || '').slice(0, 10), note: w.note || '',
+                })),
+                completeBy: j.complete_by ? String(j.complete_by).slice(0, 10) : '',
             });
         } catch { /* */ }
     }, [jobId]);
@@ -599,6 +680,8 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
         lat: edit.lat !== '' && !isNaN(parseFloat(edit.lat)) ? parseFloat(edit.lat) : undefined,
         lng: edit.lng !== '' && !isNaN(parseFloat(edit.lng)) ? parseFloat(edit.lng) : undefined,
         ...(canFin && edit.job_cost !== '' ? { job_cost: parseInt(edit.job_cost, 10) || 0 } : {}),
+        availability_windows: cleanupWindows(edit.windows), // Q2.9 — [] clears
+        complete_by: edit.completeBy || null,
     }), 'Job saved.');
 
     const toggleGate = (field, val) => withBusy(field, () => axiosInstance.patch(`/jobs/${jobId}`, { [field]: val }), 'Updated.');
@@ -674,14 +757,22 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
                                 {job.assignment_type === 'subcontractor' && <span className="hint">Currently assigned to a subcontractor (via accepted dispatch).</span>}
                             </div>
                             <div className="field">
-                                <label>Schedule Start</label>
+                                <label>Set Date (internal)</label>
                                 <input type="datetime-local" value={schedDate} onChange={(e) => setSchedDate(e.target.value)} />
+                                <span className="hint">The sub usually sets this on their accepted job. Setting it here must fall inside the windows below.</span>
                             </div>
                             <div className="field" style={{ alignSelf: 'end' }}>
                                 <button className="btn btn-secondary btn-block" onClick={schedule} disabled={busy === 'schedule' || !isReady} title={!isReady ? 'Clear all blockers first' : ''}>
                                     {busy === 'schedule' ? 'Scheduling…' : '📅 Schedule Job'}
                                 </button>
                                 {!isReady && <span className="hint" style={{ color: '#dc2626' }}>Blocked jobs can’t be scheduled.</span>}
+                            </div>
+                            <div className="field full">
+                                <AvailabilityWindowsEditor
+                                    windows={edit.windows} setWindows={(v) => setE('windows', v)}
+                                    completeBy={edit.completeBy} setCompleteBy={(v) => setE('completeBy', v)}
+                                />
+                                <button className="btn btn-sm btn-ghost" style={{ marginTop: '0.5rem' }} onClick={saveDetails} disabled={busy === 'save'}>{busy === 'save' ? 'Saving…' : 'Save windows & deadline'}</button>
                             </div>
                         </div>
                         {canDispatch && (
@@ -695,7 +786,7 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
                 {/* DISPATCH TRACKER */}
                 <div className="form-section">
                     <h3>Dispatch Tracker</h3>
-                    <DispatchTracker job={job} canDispatch={canDispatch} toast={toast} onChanged={load} />
+                    <DispatchTracker job={job} canDispatch={canDispatch} canApprove={canApprove} toast={toast} onChanged={load} />
                 </div>
 
                 {/* EDIT DETAILS */}
