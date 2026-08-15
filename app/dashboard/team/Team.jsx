@@ -95,6 +95,13 @@ const PERMISSION_CATALOG = [
         { key: 'delete_claim', label: 'Delete / Archive Claim' },
         { key: 'move_claim_stage', label: 'Move Claim Between Stages' },
     ]},
+    // Q0.3: export is ONE app-wide permission — it gates every export surface
+    // (Active Claims CSV, Clients CSV, Settings "Export All Data", Storm canvass
+    // list). It gets its own group so it doesn't read as belonging to any single
+    // module. Module-specific exports (analytics, audit log) keep their own keys.
+    { group: 'Data Export', items: [
+        { key: 'export_client_data', label: 'Export Client / Claim Data (CSV) — all export surfaces' },
+    ]},
     { group: 'Supplements', items: [
         { key: 'create_supplement', label: 'Create Supplements' },
         { key: 'send_supplement', label: 'Send Supplement to Adjuster' },

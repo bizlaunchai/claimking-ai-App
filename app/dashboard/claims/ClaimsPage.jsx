@@ -762,10 +762,55 @@ const ClaimsManagement = () => {
         fetchClaims({ silent: true });
     };
 
+    // "Notify client" (Q4.4) — stage moves are silent; this explicitly emails +
+    // texts the homeowner the current stage with a deep link to their claim.
+    const [notifyingId, setNotifyingId] = useState(null);
+    const notifyClient = async (claimId) => {
+        setNotifyingId(claimId);
+        try {
+            const res = await axiosInstance.post(`/client-portal/${claimId}/notify`);
+            const d = res.data || {};
+            if (d.email || d.sms) {
+                toast.success(`Client notified (${[d.email && 'email', d.sms && 'SMS'].filter(Boolean).join(' + ')}).`);
+            } else {
+                toast.warning(d.errors?.length ? `Nothing sent — ${d.errors.join('; ')}` : 'Nothing sent — no contact info on file.');
+            }
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Could not notify the client.');
+        } finally { setNotifyingId(null); }
+    };
+
+    // Bulk notify — with a count confirmation (Q4.4 + Q4.7 guard).
+    const bulkNotify = async () => {
+        const ids = [...selectedIds];
+        if (!ids.length) return;
+        if (!window.confirm(`Email + text ${ids.length} client${ids.length > 1 ? 's' : ''} their current claim status?`)) return;
+        let ok = 0;
+        for (const id of ids) {
+            try { const r = await axiosInstance.post(`/client-portal/${id}/notify`); if (r.data?.email || r.data?.sms) ok++; } catch { /* skip */ }
+        }
+        toast.success(`Notified ${ok}/${ids.length} client${ids.length > 1 ? 's' : ''}.`);
+        clearSelection();
+    };
+
+    // Q0.3: server-enforced export gate. Every claims export first hits the
+    // permission-guarded /client-portal/export endpoint, so a user without
+    // `export_client_data` is refused server-side (403 → interceptor toast)
+    // and no CSV is produced — not merely a hidden button.
+    const authorizeExport = async () => {
+        try {
+            await axiosInstance.get('/client-portal/export');
+            return true;
+        } catch {
+            return false; // axiosInstance toasts the 403; nothing downloaded.
+        }
+    };
+
     // Bulk export selected claims to CSV
-    const bulkExport = () => {
+    const bulkExport = async () => {
         const rows = allClaims.filter(c => selectedIds.has(c.id));
         if (!rows.length) return;
+        if (!(await authorizeExport())) return;
         const headers = ['Claim ID', 'Client Name', 'Address', 'Amount', 'Damage Type', 'Priority', 'Stage'];
         const csv = [
             headers.join(','),
@@ -1043,7 +1088,8 @@ const ClaimsManagement = () => {
     };
 
     // Export functions
-    const exportClaims = () => {
+    const exportClaims = async () => {
+        if (!(await authorizeExport())) return;
         const headers = ['Claim ID', 'Client Name', 'Address', 'Amount', 'Damage Type', 'Priority', 'Stage'];
         const csvContent = [
             headers.join(','),
@@ -1324,6 +1370,8 @@ const ClaimsManagement = () => {
                         </svg>
                         New Claim
                     </button>
+                    {/* Q0.3: export is gated by `export_client_data`. */}
+                    {has('export_client_data') && (
                     <button className="quick-action-btn" onClick={exportClaims}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <path
@@ -1332,6 +1380,7 @@ const ClaimsManagement = () => {
                         </svg>
                         Export
                     </button>
+                    )}
                 </div>
             </div>
 
@@ -1538,7 +1587,10 @@ const ClaimsManagement = () => {
                                         <option key={idx + 1} value={idx + 1}>{idx + 1}. {name}</option>
                                     ))}
                                 </select>
-                                <button className="table-action-btn" onClick={bulkExport}>Export selected</button>
+                                <button className="table-action-btn" onClick={bulkNotify}>🔔 Notify clients</button>
+                                {has('export_client_data') && (
+                                    <button className="table-action-btn" onClick={bulkExport}>Export selected</button>
+                                )}
                                 <button className="table-action-btn" onClick={clearSelection}>Clear</button>
                             </div>
                         )}
@@ -1572,6 +1624,7 @@ const ClaimsManagement = () => {
                 <div className="analytics-header">
                     <h2 className="analytics-title">Pipeline Analytics</h2>
                     <div className="analytics-actions">
+                        {has('export_client_data') && (
                         <button className="analytics-btn" onClick={exportPipeline}>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                                 <path
@@ -1579,6 +1632,7 @@ const ClaimsManagement = () => {
                             </svg>
                             Export Pipeline
                         </button>
+                        )}
                         <button className="analytics-btn" onClick={bulkUpdate}>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                                 <path
@@ -1805,6 +1859,15 @@ const ClaimsManagement = () => {
                                 onClick={() => showMoveStageMenu(selectedClaim.id)}
                             >
                                 Move to Different Stage
+                            </button>
+                            <button
+                                className="modal-btn primary"
+                                style={{ background: '#16a34a' }}
+                                disabled={notifyingId === selectedClaim.id}
+                                onClick={() => notifyClient(selectedClaim.id)}
+                                title="Email + text this client their current claim status with a portal link"
+                            >
+                                {notifyingId === selectedClaim.id ? 'Notifying…' : '🔔 Notify client'}
                             </button>
                             <button
                                 className="modal-btn primary"

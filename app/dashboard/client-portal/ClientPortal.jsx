@@ -302,12 +302,18 @@ const ClientPortal = () => {
      */
     const exportClients = async (scope) => {
         try {
+            // Q0.3: rows come from the permission-guarded /client-portal/export
+            // endpoint, so the server refuses (403) without `export_client_data`
+            // and no file is produced. For 'filtered' we still fetch the
+            // authoritative rows, then narrow to the ids visible on screen.
+            const res = await axiosInstance.get('/client-portal/export');
+            const allRows = res.data?.data ?? [];
             let rows;
             if (scope === 'all') {
-                const res = await axiosInstance.get('/client-portal');
-                rows = res.data?.data ?? [];
+                rows = allRows;
             } else {
-                rows = filteredClients;
+                const visibleIds = new Set(filteredClients.map((c) => c.id));
+                rows = allRows.filter((c) => visibleIds.has(c.id));
             }
 
             if (!rows.length) {
@@ -571,7 +577,8 @@ const ClientPortal = () => {
                             Bulk Import
                         </button>
                         </Can>
-                        <Can permission="manage_portal_links">
+                        {/* Q0.3: export is its own controlled permission. */}
+                        <Can permission="export_client_data">
                         <button className="btn btn-secondary" onClick={() => setShowExport(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>

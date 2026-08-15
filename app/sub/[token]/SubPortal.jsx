@@ -386,12 +386,43 @@ function JobCard({ token, job, reload }) {
         catch { /* */ } finally { setBusy(''); }
     };
 
+    // Q0.3: a sub may PRINT one job at a time (own accepted job only) — never a
+    // list, never an export. This prints just this single card's job.
+    const printJob = () => {
+        const esc = (v) => String(v ?? '—').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        const row = (l, v) => `<tr><th style="text-align:left;padding:6px 12px 6px 0;color:#555;white-space:nowrap;vertical-align:top">${l}</th><td style="padding:6px 0">${esc(v)}</td></tr>`;
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Job ${esc(job.job_number)}</title>
+            <style>body{font-family:system-ui,Arial,sans-serif;color:#111;margin:32px;max-width:640px}
+            h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;font-weight:600;color:#888;margin:0 0 20px;text-transform:uppercase;letter-spacing:.05em}
+            table{border-collapse:collapse;width:100%}</style></head><body>
+            <h1>Job ${esc(job.job_number)}</h1><h2>Accepted job — work order</h2>
+            <table>
+              ${row('Status', (job.readiness_state || '').replace(/_/g, ' '))}
+              ${row('Address', job.address)}
+              ${row('Scope of work', job.scope)}
+              ${job.scheduled_start ? row('Scheduled', fmtDateTime(job.scheduled_start)) : ''}
+              ${row('Progress', (job.sub_progress || 'not started').replace(/_/g, ' '))}
+              ${row('Completion photos', `${photos.length} on file`)}
+            </table>
+            <p style="margin-top:32px;font-size:12px;color:#999">Printed ${new Date().toLocaleString()}</p>
+            </body></html>`;
+        const w = window.open('', '_blank', 'width=720,height=800');
+        if (!w) { toast('Allow pop-ups to print this job.', 'error'); return; }
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        w.print();
+    };
+
     const steps = [['on_my_way', 'On My Way'], ['started', 'Started'], ['complete', 'Complete']];
     return (
         <div className="job-card">
             <div className="jc-top">
                 <div className="jc-num">{job.job_number}</div>
-                <span className="jc-state">{(job.readiness_state || '').replace(/_/g, ' ')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="jc-state">{(job.readiness_state || '').replace(/_/g, ' ')}</span>
+                    <button className="btn btn-sm btn-ghost" onClick={printJob} title="Print this job">🖨 Print</button>
+                </div>
             </div>
             <div className="jc-addr">{job.address || '—'}</div>
             {job.scope && <div className="jc-scope">{job.scope}</div>}

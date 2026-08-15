@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import './storm-tracking.css';
 import 'leaflet/dist/leaflet.css';
 
@@ -514,6 +515,7 @@ const RANGE_PRESETS = [
 const isoDaysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
 
 const HistoryTab = () => {
+    const { has } = usePermissions();
     const [preset, setPreset] = useState('30d');
     const [customFrom, setCustomFrom] = useState('');
     const [customTo, setCustomTo] = useState('');
@@ -771,7 +773,8 @@ const HistoryTab = () => {
                                     <div style={{ fontWeight: 600, color: '#1a1f3a' }}>
                                         {homes.length} client{homes.length === 1 ? '' : 's'} within 25 miles
                                     </div>
-                                    {homes.length > 0 && (
+                                    {/* Q0.3: canvass list is homeowner PII — export-gated. */}
+                                    {homes.length > 0 && has('export_client_data') && (
                                         <button className="control-btn" onClick={() => exportCanvassList(homes, selected)}>
                                             Export canvass list (CSV)
                                         </button>
