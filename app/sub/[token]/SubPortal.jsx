@@ -207,6 +207,42 @@ function Wizard({ token, portal, reload }) {
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
 
+    // Q2.4 — resumable onboarding. The form already loads from the saved profile
+    // (portal.profile), so a returning sub picks up where they left off. This
+    // adds silent, debounced AUTO-SAVE of partial progress as they type — no
+    // validation, no toast — so half-finished work survives a refresh/close even
+    // if they never hit "Save details". The explicit Save/Submit still gate the
+    // fully-validated steps.
+    const [autoSave, setAutoSave] = useState('idle'); // 'idle' | 'saving' | 'saved'
+    const autoTimer = useRef(null);
+    const skipFirst = useRef(true);
+    const buildPartial = () => {
+        const out = {};
+        if (form.business_name.trim()) out.business_name = form.business_name.trim();
+        if (form.contact_name.trim()) out.contact_name = form.contact_name.trim();
+        if (form.phone.trim()) out.phone = form.phone.trim();
+        if (pin.lat != null) { out.home_lat = pin.lat; out.home_lng = pin.lng; }
+        out.service_radius_miles = Number(form.service_radius_miles) || 25;
+        if (trades.length) out.trades = trades;
+        return out;
+    };
+    useEffect(() => {
+        // Don't fire on the initial render (nothing changed yet).
+        if (skipFirst.current) { skipFirst.current = false; return; }
+        const payload = buildPartial();
+        if (Object.keys(payload).length <= 1) return; // only radius → nothing meaningful yet
+        if (autoTimer.current) clearTimeout(autoTimer.current);
+        setAutoSave('saving');
+        autoTimer.current = setTimeout(async () => {
+            try {
+                await axiosInstance.post(`/sub-portal/${token}/onboarding`, payload, { suppressErrorToast: true });
+                setAutoSave('saved');
+            } catch { setAutoSave('idle'); }
+        }, 900);
+        return () => autoTimer.current && clearTimeout(autoTimer.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [form.business_name, form.contact_name, form.phone, form.service_radius_miles, pin.lat, pin.lng, trades]);
+
     const saveInfo = async () => {
         if (!form.business_name.trim()) { toast('Business name is required.', 'error'); return; }
         if (pin.lat == null) { toast('Tap the map to drop your home pin.', 'error'); return; }
@@ -278,8 +314,12 @@ function Wizard({ token, portal, reload }) {
 
                     <div className="wizard-save">
                         <div>
-                            <div className="wizard-save-title">Save your business details</div>
-                            <p className="muted">Stores your info, service area, and trades so you don’t lose them. You can keep editing and upload documents before submitting.</p>
+                            <div className="wizard-save-title">
+                                Save your business details
+                                {autoSave === 'saving' && <span className="autosave-badge saving"> · Saving…</span>}
+                                {autoSave === 'saved' && <span className="autosave-badge saved"> · ✓ Progress saved</span>}
+                            </div>
+                            <p className="muted">Your progress saves automatically as you type — you can close this and come back to your emailed link anytime. Hit Save to finish this step, then upload documents before submitting.</p>
                         </div>
                         <button className="btn btn-primary btn-busy" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? <><span className="doc-spin dark" />Saving…</> : '💾 Save details'}</button>
                     </div>
