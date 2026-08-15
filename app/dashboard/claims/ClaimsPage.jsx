@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import { fetchStages, allStages, stageLabel } from '@/lib/stages';
 import { Flame, Clock, DollarSign, AlertTriangle } from 'lucide-react';
 import "./claims.css"
 import MapView from "@/app/dashboard/claims/MapView.jsx";
@@ -116,8 +117,13 @@ const ClaimsManagement = () => {
         'Cold Claims / Lost'
     ];
 
+    // Q4.2 — effective stages incl. custom (fetched once; re-render on load).
+    const [, setStagesVer] = useState(0);
+    useEffect(() => { fetchStages().then(() => setStagesVer((v) => v + 1)); }, []);
+    const orderedStageNums = allStages().map((s) => s.num);
+
     const stagesPerView = 5;
-    const totalStages = 12;
+    const totalStages = orderedStageNums.length;
 
     // Per-stage day thresholds — mirrors the backend attention engine defaults
     // (claim-attention.service.ts). Card day-count turns amber at 50% of the
@@ -162,7 +168,7 @@ const ClaimsManagement = () => {
             insurer: c.insurance_carrier || c.insurance_company || '',
             priority: c.priority || 'medium',
             stage,
-            stageName: stageNames[stage - 1] || 'Unknown',
+            stageName: stageLabel(stage) || 'Unknown',
             claimNumber: c.claim_number || '',
             policyNumber: c.policy_number || '',
             // Fuller detail for the claim modal (Q4.6): carrier + adjuster + key
@@ -595,7 +601,7 @@ const ClaimsManagement = () => {
                 <div className="stage-header">
                     <div className="stage-info">
                         <div className="stage-number">{stageNum}</div>
-                        <div className="stage-title">{stageNames[stageNum - 1]}</div>
+                        <div className="stage-title">{stageLabel(stageNum)}</div>
                         <div className="stage-stats">
                             <span className="stage-count">{stageClaims.length}</span> claims •
                             <span className="stage-value">${stageClaims.reduce((sum, c) => sum + c.amount, 0).toLocaleString()}</span>
@@ -651,7 +657,7 @@ const ClaimsManagement = () => {
         if (isMobile && currentStage > 0) {
             return createStageColumn(currentStage);
         } else {
-            return Array.from({ length: totalStages }, (_, i) => i + 1).map(stageNum =>
+            return orderedStageNums.map(stageNum =>
                 createStageColumn(stageNum)
             );
         }
@@ -690,7 +696,7 @@ const ClaimsManagement = () => {
     const applyStageLocally = (claimId, newStage) => {
         const updatedClaims = allClaims.map(claim =>
             claim.id === claimId
-                ? {...claim, stage: newStage, stageName: stageNames[newStage - 1]}
+                ? {...claim, stage: newStage, stageName: stageLabel(newStage)}
                 : claim
         );
         setAllClaims(updatedClaims);
@@ -705,7 +711,7 @@ const ClaimsManagement = () => {
     const persistStage = async (claimId, newStage) => {
         try {
             await axiosInstance.put(`/client-portal/${claimId}`, { claim_status: newStage });
-            toast.success(`Moved to ${newStage}. ${stageNames[newStage - 1]}`);
+            toast.success(`Moved to ${newStage}. ${stageLabel(newStage)}`);
             fetchClaims({ silent: true });
         } catch {
             toast.error('Could not save stage change — reverting.');
@@ -744,7 +750,7 @@ const ClaimsManagement = () => {
         let updated = allClaims;
         ids.forEach(id => {
             updated = updated.map(c => c.id === id
-                ? { ...c, stage: newStage, stageName: stageNames[newStage - 1] }
+                ? { ...c, stage: newStage, stageName: stageLabel(newStage) }
                 : c);
         });
         setAllClaims(updated);
@@ -758,7 +764,7 @@ const ClaimsManagement = () => {
             try { await axiosInstance.put(`/client-portal/${id}`, { claim_status: newStage }); ok++; }
             catch { /* toasted */ }
         }
-        toast.success(`Moved ${ok}/${ids.length} claims to ${stageNames[newStage - 1]}.`);
+        toast.success(`Moved ${ok}/${ids.length} claims to ${stageLabel(newStage)}.`);
         fetchClaims({ silent: true });
     };
 
@@ -943,9 +949,9 @@ const ClaimsManagement = () => {
                                 value={claim.stage}
                                 onChange={(e) => moveToStage(claim.id, parseInt(e.target.value))}
                             >
-                                {stageNames.map((name, idx) => (
-                                    <option key={idx + 1} value={idx + 1}>
-                                        {idx + 1}. {name}
+                                {allStages().map((s) => (
+                                    <option key={s.num} value={s.num}>
+                                        {s.num}. {s.label}
                                     </option>
                                 ))}
                             </select>
@@ -1275,7 +1281,7 @@ const ClaimsManagement = () => {
         try {
             const res = await axiosInstance.post('/client-portal', payload);
             const newId = res?.data?.data?.id;
-            toast.success(`Claim created for ${ncForm.clientName.trim()} — "${stageNames[claimStatus - 1]}".`);
+            toast.success(`Claim created for ${ncForm.clientName.trim()} — "${stageLabel(claimStatus)}".`);
 
             // Assign to the selected team member — reuses the permission-checked
             // assign endpoint (same as the board's reassign). Non-fatal: the
@@ -1353,7 +1359,7 @@ const ClaimsManagement = () => {
             const stageClaims = allClaims.filter(c => c.stage === currentStage);
             const totalValue = stageClaims.reduce((sum, c) => sum + c.amount, 0);
             return {
-                title: `Stage ${currentStage}: ${stageNames[currentStage - 1]}`,
+                title: `Stage ${currentStage}: ${stageLabel(currentStage)}`,
                 stats: `${stageClaims.length} claims • $${totalValue.toLocaleString()} total value • Showing ${getShowingCount()} of ${stageClaims.length}`
             };
         }
@@ -1475,7 +1481,7 @@ const ClaimsManagement = () => {
 
                 <div className="stage-nav-container">
                     <div className="stage-nav-scroll" style={{transform: getStageTransform()}}>
-                        {Array.from({length: totalStages}, (_, i) => i + 1).map(stageNum => (
+                        {orderedStageNums.map(stageNum => (
                             <button
                                 key={stageNum}
                                 className={`stage-nav-btn ${currentStage === stageNum ? 'active' : ''}`}
@@ -1603,8 +1609,8 @@ const ClaimsManagement = () => {
                                 <span className="bulk-count">{selectedIds.size} selected</span>
                                 <select className="stage-selector" defaultValue="" onChange={(e) => { if (e.target.value) { bulkMove(parseInt(e.target.value, 10)); e.target.value = ''; } }}>
                                     <option value="" disabled>Move to stage…</option>
-                                    {stageNames.map((name, idx) => (
-                                        <option key={idx + 1} value={idx + 1}>{idx + 1}. {name}</option>
+                                    {allStages().map((s) => (
+                                        <option key={s.num} value={s.num}>{s.num}. {s.label}</option>
                                     ))}
                                 </select>
                                 <button className="table-action-btn" onClick={bulkNotify}>🔔 Notify clients</button>
@@ -1901,14 +1907,14 @@ const ClaimsManagement = () => {
                         <div className="p-6">
                             <p>Select a new stage for claim <strong>{moveMenuClaimId}</strong>:</p>
                             <div className="stage-options">
-                                {Array.from({length: totalStages}, (_, i) => i + 1).map(stageNum => (
+                                {orderedStageNums.map(stageNum => (
                                     <button
                                         key={stageNum}
                                         className="stage-option"
                                         onClick={() => moveClaimToStage(moveMenuClaimId, stageNum)}
                                     >
                                         <div className="stage-option-number">{stageNum}</div>
-                                        <div className="stage-option-name">{stageNames[stageNum - 1]}</div>
+                                        <div className="stage-option-name">{stageLabel(stageNum)}</div>
                                     </button>
                                 ))}
                             </div>
