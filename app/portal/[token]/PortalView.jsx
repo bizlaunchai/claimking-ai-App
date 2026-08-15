@@ -30,7 +30,7 @@ const STAGE_LABEL = {
     2:  'Awaiting Initial Inspection',
     3:  'Scheduled Inspection',
     4:  'In Progress',
-    5:  'Tile Sample Required',
+    5:  'ITEL Sample Required',
     6:  'Reinspection Requested',
     7:  'Partial Approval',
     8:  'Supplementing',

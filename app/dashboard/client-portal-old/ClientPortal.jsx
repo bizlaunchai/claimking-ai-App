@@ -25,7 +25,7 @@ const STATUS_MAP = {
     2:  '2. Awaiting Initial Inspection',
     3:  '3. Scheduled Inspection',
     4:  '4. In Progress',
-    5:  '5. Tile Sample Required',
+    5:  '5. ITEL Sample Required',
     6:  '6. Reinspection Requested',
     7:  '7. Partial Approval',
     8:  '8. Supplementing',
@@ -42,7 +42,7 @@ const statusOptions = [
     { value: '2',  label: '2. Awaiting Initial' },
     { value: '3',  label: '3. Scheduled' },
     { value: '4',  label: '4. In Progress' },
-    { value: '5',  label: '5. Tile Sample' },
+    { value: '5',  label: '5. ITEL Sample' },
     { value: '6',  label: '6. Reinspection' },
     { value: '7',  label: '7. Partial' },
     { value: '8',  label: '8. Supplementing' },
@@ -60,7 +60,7 @@ const sortOptions = [
 ];
 
 // CSS class for the colored status pill — reuses existing classes from
-// clientPortal.css. New stages (Awaiting Initial / Tile Sample /
+// clientPortal.css. New stages (Awaiting Initial / ITEL Sample /
 // Reinspection) get fresh visual buckets that don't collide with the
 // terminal-state styling of Completed/Declined/Cold.
 const getStatusClass = (statusNum) => {
@@ -69,7 +69,7 @@ const getStatusClass = (statusNum) => {
         2:  'status-scheduled',         // awaiting initial = scheduled-ish
         3:  'status-scheduled',
         4:  'status-in-progress',
-        5:  'status-in-progress',       // tile sample = mid-pipeline
+        5:  'status-in-progress',       // ITEL sample = mid-pipeline
         6:  'status-in-progress',       // reinspection  = mid-pipeline
         7:  'status-partial',
         8:  'status-supplementing',

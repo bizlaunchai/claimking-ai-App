@@ -11,7 +11,7 @@ const STAGE_NAMES = [
     'Awaiting Initial Inspection',
     'Scheduled Inspection',
     'In Progress',
-    'Tile Sample Required',
+    'ITEL Sample Required',
     'Reinspection Requested',
     'Partial Approval',
     'Supplementing',

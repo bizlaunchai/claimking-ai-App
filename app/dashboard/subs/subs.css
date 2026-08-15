@@ -60,10 +60,16 @@
 .subs-page .compliance-tag { font-size: 0.68rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 8px; }
 .subs-page .compliance-tag.ok { background: #dcfce7; color: #166534; }
 .subs-page .compliance-tag.bad { background: #fef2f2; color: #b91c1c; }
+.subs-page .compliance-tag.warn { background: #fef3c7; color: #92400e; }
 .subs-page .rating-tag { font-size: 0.72rem; color: #b45309; font-weight: 600; }
 
-.subs-page .sk-shimmer { background: linear-gradient(90deg,#f0f0f0 25%,#e4e4e7 37%,#f0f0f0 63%); background-size: 400% 100%; animation: subs-sh 1.4s ease infinite; }
+.subs-page .sk-shimmer, .drawer-skel .sk-shimmer { background: linear-gradient(90deg,#f0f0f0 25%,#e4e4e7 37%,#f0f0f0 63%); background-size: 400% 100%; animation: subs-sh 1.4s ease infinite; }
 @keyframes subs-sh { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+/* drawer skeleton bits (drawer renders outside .subs-page, so scope on .drawer-skel too) */
+.drawer-skel .sk-line { border-radius: 6px; }
+.drawer-skel .sk-block { border-radius: 10px; }
+.drawer-skel .sk-pill { width: 92px; height: 24px; border-radius: 999px; }
+.drawer-skel .sk-row { display: flex; gap: 0.6rem; }
 
 .subs-page .trade-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .subs-page .trade-chip { padding: 0.3rem 0.7rem; border-radius: 14px; border: 2px solid #e5e7eb; background: #fff; font-size: 0.75rem; font-weight: 600; color: #6b7280; cursor: pointer; text-transform: capitalize; }
@@ -106,6 +112,35 @@
 .subs-page .kv-grid > div { display: flex; flex-direction: column; }
 .subs-page .kv-l { font-size: 0.68rem; color: #9ca3af; text-transform: uppercase; }
 .subs-page .kv-v { font-size: 0.85rem; color: #1f2937; font-weight: 600; }
+
+/* identity header: avatar + actionable contact chips */
+.subs-page .drawer-ident { display: flex; gap: 0.85rem; align-items: flex-start; min-width: 0; }
+.subs-page .drawer-avatar { flex: none; width: 46px; height: 46px; border-radius: 12px; background: #1a1f3a; color: #FDB813; font-weight: 800; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+.subs-page .contact-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.subs-page .contact-chip { font-size: 0.72rem; font-weight: 600; color: #1f2937; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; padding: 0.25rem 0.6rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; }
+.subs-page .contact-chip:hover { background: #e9ebef; }
+
+/* contextual "what to do now" banner */
+.subs-page .drawer-cue { font-size: 0.8rem; border-radius: 10px; padding: 0.65rem 0.85rem; margin-bottom: 1.1rem; line-height: 1.4; }
+.subs-page .drawer-cue.cue-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.subs-page .drawer-cue.cue-red { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.subs-page .drawer-cue.cue-green { background: #ecfdf5; color: #166534; border: 1px solid #bbf7d0; }
+
+/* service-area mini map + facts */
+.subs-page .mini-map { width: 100%; height: 170px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; position: relative; z-index: 0; }
+.subs-page .mini-map.empty { display: flex; align-items: center; justify-content: center; height: 88px; background: #f9fafb; color: #9ca3af; font-size: 0.8rem; }
+.mini-pin-icon { background: none; border: none; }
+.mini-pin-icon svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }
+.subs-page .area-facts { display: flex; align-items: center; gap: 0.75rem; margin: 0.6rem 0; flex-wrap: wrap; }
+.subs-page .area-fact { font-size: 0.8rem; color: #374151; }
+.subs-page .area-fact b { color: #1a1f3a; }
+.subs-page .area-fact.link { color: #1d4ed8; text-decoration: none; font-weight: 600; }
+.subs-page .area-fact.link:hover { text-decoration: underline; }
+.subs-page .area-trades { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.subs-page .trade-chip-sm { font-size: 0.72rem; font-weight: 600; color: #3730a3; background: #eef2ff; border-radius: 999px; padding: 0.2rem 0.6rem; text-transform: capitalize; }
+
+/* section-header inline count (e.g. "3/7 approved") */
+.subs-page .sec-count { font-size: 0.68rem; font-weight: 700; color: #6b7280; text-transform: none; letter-spacing: 0; margin-left: 0.5rem; }
 
 .subs-page .doc-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .subs-page .doc-row { display: flex; align-items: center; gap: 0.6rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.6rem 0.85rem; }

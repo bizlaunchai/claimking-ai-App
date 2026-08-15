@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast as sonner } from 'sonner';
 import 'leaflet/dist/leaflet.css';
 import axiosInstance from '@/lib/axiosInstance';
+import SignaturePad from '@/components/signature/SignaturePad';
 import './sub-portal.css';
 
 /* =========================================================================
@@ -37,10 +38,20 @@ const toast = (msg, type = '') => {
     else sonner.info(msg);
 };
 
-/* ── pin-drop map for the wizard ── */
+/* ── pin-drop map for the wizard ──
+   Uses a self-contained SVG divIcon so the marker never depends on Leaflet's
+   default marker-icon.png (which 404s under the Next bundler → the broken
+   "question-mark" image Nate reported). No CDN/asset path involved. */
+const PIN_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">' +
+    '<path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.7 23.3 0 15 0z" fill="#1a1f3a"/>' +
+    '<circle cx="15" cy="15" r="5.5" fill="#ffffff"/></svg>';
+
 function PinMap({ lat, lng, onPick }) {
     const mapRef = useRef(null);
     const markerRef = useRef(null);
+    const onPickRef = useRef(onPick);
+    onPickRef.current = onPick; // click handler is attached once — always call the latest onPick
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -50,29 +61,100 @@ function PinMap({ lat, lng, onPick }) {
             if (!el) return;
             if (!mapRef.current || !el._leaflet_id) {
                 if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
-                mapRef.current = L.map('pinMap').setView([lat ?? 39.8283, lng ?? -98.5795], lat != null ? 11 : 4);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(mapRef.current);
-                mapRef.current.on('click', (e) => {
+                const map = L.map('pinMap').setView([lat ?? 39.8283, lng ?? -98.5795], lat != null ? 11 : 4);
+                mapRef.current = map;
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map);
+                map.on('click', (e) => {
                     const { lat: la, lng: ln } = e.latlng;
-                    onPick(Math.round(la * 1e6) / 1e6, Math.round(ln * 1e6) / 1e6);
+                    onPickRef.current(Math.round(la * 1e6) / 1e6, Math.round(ln * 1e6) / 1e6);
                 });
+                // The map usually mounts inside a wizard card that was just laid
+                // out, so at init its container can still measure 0px — leaving
+                // tiles blank AND taps landing on the wrong pixel (or nowhere), so
+                // the pin never registers and the "drop pin" validation never
+                // clears. Re-measure once the layout settles.
+                setTimeout(() => { if (!cancelled && mapRef.current) mapRef.current.invalidateSize(); }, 150);
             }
             const map = mapRef.current;
             if (lat != null && lng != null) {
+                const icon = L.divIcon({ className: 'ck-pin-icon', html: PIN_SVG, iconSize: [30, 42], iconAnchor: [15, 42] });
                 if (markerRef.current) markerRef.current.setLatLng([lat, lng]);
-                else markerRef.current = L.marker([lat, lng]).addTo(map);
+                else markerRef.current = L.marker([lat, lng], { icon }).addTo(map);
             }
         })();
         return () => { cancelled = true; };
-    }, [lat, lng, onPick]);
+    }, [lat, lng]);
     useEffect(() => () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } }, []);
     return <div id="pinMap" className="pin-map" />;
+}
+
+/* ── subcontractor agreement e-sign modal ── */
+const AGREEMENT_PREVIEW = [
+    'You are agreeing to the Subcontractor Agreement with the contracting company.',
+    'Independent contractor — you handle your own taxes, insurance, tools, and crew.',
+    'Maintain general liability + workers’ comp insurance and provide current certificates.',
+    'Perform work professionally, to code, per each accepted job’s scope.',
+    'Payment per accepted job on satisfactory completion.',
+    'Keep client & pricing information confidential; don’t solicit the company’s clients directly.',
+    'Either party may terminate with written notice.',
+];
+function SignAgreementModal({ token, onClose, onSigned, toast }) {
+    const padRef = useRef(null);
+    const [name, setName] = useState('');
+    const [agreed, setAgreed] = useState(false);
+    const [empty, setEmpty] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    const sign = async () => {
+        if (!name.trim()) { toast('Type your legal name to sign.', 'error'); return; }
+        if (!agreed) { toast('Please check the box to agree.', 'error'); return; }
+        if (padRef.current?.isEmpty()) { toast('Please draw your signature.', 'error'); return; }
+        setBusy(true);
+        try {
+            const signature = padRef.current.toDataURL('image/png');
+            await axiosInstance.post(`/sub-portal/${token}/sign-agreement`, { signer_name: name.trim(), signature });
+            toast('Agreement signed.', 'success');
+            onSigned();
+        } catch { /* interceptor shows the error */ } finally { setBusy(false); }
+    };
+
+    return (
+        <div className="sign-modal-wrap">
+            <div className="sign-modal-overlay" onClick={busy ? undefined : onClose} />
+            <div className="sign-modal" role="dialog" aria-modal="true">
+                <div className="sign-modal-head">
+                    <h3>Subcontractor Agreement</h3>
+                    <button className="sign-close" onClick={onClose} disabled={busy}>&times;</button>
+                </div>
+                <div className="sign-modal-body">
+                    <div className="agreement-text">
+                        {AGREEMENT_PREVIEW.map((c, i) => <p key={i}>{i === 0 ? c : `${i}. ${c}`}</p>)}
+                        <p className="muted">The full agreement is recorded with your signature.</p>
+                    </div>
+                    <div className="field"><label>Your legal name</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full legal name" /></div>
+                    <div className="field">
+                        <label>Signature</label>
+                        <div className="sig-pad-box">
+                            <SignaturePad ref={padRef} height={160} onChange={({ isEmpty }) => setEmpty(isEmpty)} />
+                        </div>
+                        <button type="button" className="sig-clear" onClick={() => { padRef.current?.clear(); setEmpty(true); }} disabled={empty || busy}>Clear</button>
+                    </div>
+                    <label className="agree-row"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> I have read and agree to the Subcontractor Agreement.</label>
+                </div>
+                <div className="sign-modal-foot">
+                    <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+                    <button className="btn btn-primary btn-busy" onClick={sign} disabled={busy || !name.trim() || !agreed || empty}>{busy ? <><span className="doc-spin dark" />Signing…</> : '✍ Sign Agreement'}</button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 /* ── document uploader row ── */
 function DocRow({ token, doc, onUploaded }) {
     const inputRef = useRef(null);
     const [busy, setBusy] = useState(false);
+    const [showSign, setShowSign] = useState(false);
     const [cls, label] = DOC_STATUS[doc.status] || ['ds-grey', doc.status];
 
     const upload = async (file) => {
@@ -97,17 +179,14 @@ function DocRow({ token, doc, onUploaded }) {
             </div>
             <span className={`doc-status ${cls}`}>{label}</span>
             {isAgreement ? (
-                <button className="btn btn-sm btn-secondary" disabled={busy} onClick={async () => {
-                    setBusy(true);
-                    try { await axiosInstance.post(`/sub-portal/${token}/sign-agreement`, {}); toast('Agreement signed.', 'success'); onUploaded(); }
-                    catch { /* */ } finally { setBusy(false); }
-                }}>{busy ? '…' : (['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign')}</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowSign(true)}>{['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign'}</button>
             ) : (
                 <>
-                    <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
-                    <button className="btn btn-sm btn-secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? '…' : (doc.status === 'missing' ? 'Upload' : 'Replace')}</button>
+                    <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
+                    <button className="btn btn-sm btn-secondary btn-busy" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? <><span className="doc-spin" />Uploading…</> : (doc.status === 'missing' ? 'Upload' : 'Replace')}</button>
                 </>
             )}
+            {showSign && <SignAgreementModal token={token} toast={toast} onClose={() => setShowSign(false)} onSigned={() => { setShowSign(false); onUploaded(); }} />}
         </div>
     );
 }
@@ -165,41 +244,61 @@ function Wizard({ token, portal, reload }) {
         );
     }
 
+    const docsDone = (portal.documents || []).filter((d) => ['uploaded', 'approved'].includes(d.status)).length;
+    const docsTotal = (portal.documents || []).length;
     return (
         <div className="wizard">
             <div className="wizard-intro">Complete your setup to start receiving job offers. It takes about 5 minutes.</div>
 
-            <div className="card">
-                <h3>1 · Business Info</h3>
-                <div className="field"><label>Business / Crew Name</label><input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} placeholder="e.g. Apex Exteriors" /></div>
-                <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} placeholder="Your name" /></div>
-                <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
+            <div className="wizard-grid">
+                {/* LEFT — who you are & where you work */}
+                <section className="wizard-col">
+                    <div className="col-head"><span className="col-kicker">Step 1</span><h2>Your business profile</h2></div>
+
+                    <div className="card">
+                        <h3>Business Info</h3>
+                        <div className="field"><label>Business / Crew Name</label><input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} placeholder="e.g. Apex Exteriors" /></div>
+                        <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} placeholder="Your name" /></div>
+                        <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
+                    </div>
+
+                    <div className="card">
+                        <h3>Service Area</h3>
+                        <p className="muted">Tap the map to drop your home base pin. We only send you jobs within your radius.</p>
+                        <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
+                        <div className={`pin-readout ${pin.lat != null ? 'set' : ''}`}>{pin.lat != null ? `✓ Pin dropped — ${pin.lat}, ${pin.lng}` : 'No pin set — tap the map.'}</div>
+                        <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
+                    </div>
+
+                    <div className="card">
+                        <h3>Trades</h3>
+                        <p className="muted">Pick every trade your crew works.</p>
+                        <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+                    </div>
+
+                    <div className="wizard-save">
+                        <div>
+                            <div className="wizard-save-title">Save your business details</div>
+                            <p className="muted">Stores your info, service area, and trades so you don’t lose them. You can keep editing and upload documents before submitting.</p>
+                        </div>
+                        <button className="btn btn-primary btn-busy" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? <><span className="doc-spin dark" />Saving…</> : '💾 Save details'}</button>
+                    </div>
+                </section>
+
+                {/* RIGHT — paperwork & submit */}
+                <section className="wizard-col">
+                    <div className="col-head"><span className="col-kicker">Step 2</span><h2>Compliance documents</h2><span className="col-count">{docsDone}/{docsTotal} done</span></div>
+
+                    <div className="card">
+                        <p className="muted" style={{ marginTop: 0 }}>Upload each required document. Insurance certificates (COIs) are checked for expiry.</p>
+                        <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
+                    </div>
+
+                    <button className="btn btn-success btn-block" onClick={submit} disabled={submitting || !portal.ready_to_submit}>
+                        {submitting ? 'Submitting…' : portal.ready_to_submit ? 'Submit for Review' : 'Upload all required docs first'}
+                    </button>
+                </section>
             </div>
-
-            <div className="card">
-                <h3>2 · Service Area</h3>
-                <p className="muted">Tap the map to drop your home base pin. We only send you jobs within your radius.</p>
-                <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
-                <div className="pin-readout">{pin.lat != null ? `📍 ${pin.lat}, ${pin.lng}` : 'No pin set — tap the map.'}</div>
-                <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
-            </div>
-
-            <div className="card">
-                <h3>3 · Trades</h3>
-                <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
-            </div>
-
-            <button className="btn btn-primary btn-block" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? 'Saving…' : 'Save Profile'}</button>
-
-            <div className="card">
-                <h3>4 · Documents</h3>
-                <p className="muted">Upload each required document. Insurance certificates (COIs) are checked for expiry.</p>
-                <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
-            </div>
-
-            <button className="btn btn-success btn-block" onClick={submit} disabled={submitting || !portal.ready_to_submit}>
-                {submitting ? 'Submitting…' : portal.ready_to_submit ? 'Submit for Review' : 'Upload all required docs first'}
-            </button>
         </div>
     );
 }
@@ -393,7 +492,7 @@ function ProfileTab({ token, portal, reload }) {
             <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
             <p className="muted" style={{ marginTop: '0.5rem' }}>Tap the map to move your home base.</p>
             <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
-            <div className="pin-readout">{pin.lat != null ? `📍 ${pin.lat}, ${pin.lng}` : 'No pin set'}</div>
+            <div className={`pin-readout ${pin.lat != null ? 'set' : ''}`}>{pin.lat != null ? `✓ Pin dropped — ${pin.lat}, ${pin.lng}` : 'No pin set'}</div>
             <div style={{ marginTop: '0.75rem' }}><label className="field-label">Trades</label><div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div></div>
             <button className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</button>
         </div>

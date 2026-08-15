@@ -1886,3 +1886,14 @@
     overflow-y: hidden;
     margin-bottom: 0.5rem;
 }
+
+/* QA Q4.3 — Leaflet map pin (strip the default div-icon white box) */
+.claim-pin-icon { background: none; border: none; }
+.claim-pin-icon svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }
+
+/* Claims map loader (QA Q4.3) */
+.claim-map-loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(238,240,244,0.75); backdrop-filter: blur(1px); border-radius: 12px; color: #1a1f3a; font-weight: 600; font-size: 0.9rem; z-index: 500; }
+.claim-map-geocoding { position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.95); border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-radius: 999px; padding: 6px 12px; font-size: 0.76rem; font-weight: 600; color: #374151; z-index: 500; }
+.claim-map-spinner { width: 22px; height: 22px; border: 3px solid rgba(26,31,58,0.2); border-top-color: #1a1f3a; border-radius: 50%; animation: claim-map-spin 0.7s linear infinite; display: inline-block; }
+.claim-map-spinner.sm { width: 13px; height: 13px; border-width: 2px; }
+@keyframes claim-map-spin { to { transform: rotate(360deg); } }
