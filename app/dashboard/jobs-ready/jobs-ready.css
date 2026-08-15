@@ -488,3 +488,40 @@
 .subjobs .complete-reqs .req-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
 .subjobs .complete-reqs .req-row.ok { background: #ecfdf5; color: #166534; }
 .subjobs .complete-reqs .req-row.warn { background: #fffbeb; color: #92400e; }
+
+/* ── Add Job: existing-client picker + estimate view (QA Q2.8) ──────────── */
+.jobsrc-toggle { display: inline-flex; background: #f3f4f6; border-radius: 8px; padding: 3px; gap: 3px; }
+.jobsrc-btn { border: none; background: transparent; padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; color: #6b7280; cursor: pointer; }
+.jobsrc-btn.on { background: #fff; color: #1a1f3a; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+.client-results { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 4px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); overflow: hidden; }
+.client-result { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 0.55rem 0.85rem; background: #fff; border: none; border-bottom: 1px solid #f3f4f6; cursor: pointer; }
+.client-result:last-child { border-bottom: none; }
+.client-result:hover { background: #f9fafb; }
+.client-result.muted { color: #9ca3af; font-size: 0.8rem; cursor: default; }
+.cr-name { font-size: 0.88rem; font-weight: 600; color: #1a1f3a; }
+.cr-addr { font-size: 0.75rem; color: #6b7280; }
+
+.picked-client { margin-top: 0.75rem; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0.9rem 1rem; background: #fafafa; }
+.pc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.pc-name { font-size: 0.95rem; font-weight: 700; color: #1a1f3a; }
+.pc-addr { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
+.pc-est-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #9ca3af; margin: 0.9rem 0 0.5rem; }
+.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
+
+.est-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.est-card { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; text-align: left; padding: 0.6rem 0.85rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+.est-card:hover { border-color: #9ca3af; }
+.est-card.on { border-color: #1a1f3a; background: #f5f6fa; box-shadow: inset 0 0 0 1px #1a1f3a; }
+.est-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.est-title { font-size: 0.85rem; font-weight: 600; color: #1a1f3a; }
+.est-meta { font-size: 0.72rem; color: #6b7280; }
+.est-total { font-size: 0.9rem; font-weight: 700; color: #16a34a; white-space: nowrap; }
+
+/* Q2.8 estimate list polish — capped to 5 with show-more, check on selected */
+.est-list { max-height: none; }
+.est-card.on .est-title { color: #1a1f3a; }
+.est-check { flex: none; margin-left: 8px; width: 20px; height: 20px; border-radius: 50%; background: #1a1f3a; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.est-card.no-est { border-style: dashed; }
+.est-more { align-self: flex-start; background: none; border: none; padding: 0.15rem 0.1rem; font-size: 0.8rem; font-weight: 600; color: #2563eb; cursor: pointer; }
+.est-more:hover { text-decoration: underline; }
