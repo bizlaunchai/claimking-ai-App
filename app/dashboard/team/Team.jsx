@@ -95,6 +95,7 @@ const PERMISSION_CATALOG = [
         { key: 'edit_claim', label: 'Edit Active Claim' },
         { key: 'delete_claim', label: 'Delete / Archive Claim' },
         { key: 'move_claim_stage', label: 'Move Claim Between Stages' },
+        { key: 'manage_stages', label: 'Rename / Add / Reorder Pipeline Stages' },
     ]},
     // Q0.3: export is ONE app-wide permission — it gates every export surface
     // (Active Claims CSV, Clients CSV, Settings "Export All Data", Storm canvass

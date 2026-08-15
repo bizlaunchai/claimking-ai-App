@@ -59,11 +59,23 @@ const STATUS_MAP = {
 // is called from deep inside render paths that aren't components. The cache
 // starts EMPTY so the server HTML and the first client render match — the fetch
 // fills it and bumps a version counter to re-render.
-let stageOverridesCache = { labels: {}, hidden: [] };
+// Q4.2 — default behavior category + stale threshold per built-in stage (mirror
+// of stage-config.service on the backend) so the editor can diff against them.
+const DEFAULT_STAGE_CATEGORY = { 1: 'active', 2: 'active', 3: 'active', 4: 'active', 5: 'active', 6: 'active', 7: 'approved', 8: 'approved', 9: 'approved', 10: 'closed_won', 11: 'closed_lost', 12: 'closed_lost' };
+const DEFAULT_STAGE_STALE = { 1: 3, 2: 7, 3: null, 4: 14, 5: 7, 6: 10, 7: null, 8: 21, 9: 30, 10: null, 11: null, 12: null };
+const CATEGORY_LABELS = { active: 'Active (open)', approved: 'Approved-to-build', closed_won: 'Closed — won', closed_lost: 'Closed — lost' };
+
+let stageOverridesCache = { labels: {}, hidden: [], effective: [] };
 const setStageOverridesCache = (o) => {
+    // Q4.2 — `effective` is the resolved list incl. custom stages; fold its
+    // labels into the label map so stageLabel() resolves custom ids too.
+    const effective = Array.isArray(o?.effective) ? o.effective : [];
+    const labels = { ...(o?.labels ?? {}) };
+    for (const s of effective) if (s.custom) labels[String(s.num)] = s.label;
     stageOverridesCache = {
-        labels: o?.labels ?? {},
+        labels,
         hidden: Array.isArray(o?.hidden) ? o.hidden : [],
+        effective,
     };
     return stageOverridesCache;
 };
@@ -1641,88 +1653,114 @@ const ExportClientsModal = ({
     );
 };
 
-// CK-FIX Jul-22: rename or hide pipeline stages. Saved locally now;
-// TODO(backend): persist per company + reflect in client portal + emails.
-// True add/remove needs the claim_status DB constraint widened (see handoff).
+// Q4.2 — full stage editor: rename any stage, hide, set behavior category +
+// stale threshold, ADD custom stages, and reorder (move up/down). Custom stages
+// get integer ids ≥ 13; automations key off the CATEGORY (backend), so a custom
+// stage slots in without breaking job-ready / stale rules.
 const StageManagerModal = ({ isOpen, onClose, onSaved }) => {
-    const [overrides, setOverrides] = useState({ labels: {}, hidden: [] });
+    // rows: editable effective list [{num,label,category,stale_days,custom,hidden}]
+    const [rows, setRows] = useState([]);
     const [saving, setSaving] = useState(false);
-    // Re-fetch on open so two admins editing stages see each other's work.
+
     useEffect(() => {
         if (!isOpen) return;
         let cancelled = false;
         fetchStageOverrides().then((o) => {
-            if (!cancelled) setOverrides({ labels: { ...(o.labels ?? {}) }, hidden: [...(o.hidden ?? [])] });
+            if (cancelled) return;
+            const hidden = new Set(o.hidden || []);
+            const eff = (o.effective || []).map((s) => ({
+                num: s.num, label: s.label, category: s.category,
+                stale_days: s.stale_days, custom: s.custom, hidden: hidden.has(s.num),
+            }));
+            setRows(eff);
         });
         return () => { cancelled = true; };
     }, [isOpen]);
-    const setLabel = (n, v) => setOverrides((o) => ({ ...o, labels: { ...(o.labels || {}), [n]: v } }));
-    const toggleHidden = (n) => setOverrides((o) => {
-        const h = new Set(o.hidden || []);
-        h.has(n) ? h.delete(n) : h.add(n);
-        return { ...o, hidden: [...h] };
+
+    const upd = (i, k, v) => setRows((rs) => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+    const move = (i, dir) => setRows((rs) => {
+        const j = i + dir;
+        if (j < 0 || j >= rs.length) return rs;
+        const copy = rs.slice(); const t = copy[i]; copy[i] = copy[j]; copy[j] = t; return copy;
     });
+    const addCustom = () => setRows((rs) => {
+        const maxId = rs.reduce((m, r) => Math.max(m, r.num), 12);
+        const id = Math.max(13, maxId + 1);
+        return [...rs, { num: id, label: 'New Stage', category: 'active', stale_days: null, custom: true, hidden: false }];
+    });
+    const removeCustom = (i) => setRows((rs) => rs.filter((_, idx) => idx !== i));
+
+    const buildPayload = () => {
+        const labels = {}, categories = {}, stale_days = {}, custom = [], hidden = [], order = [];
+        rows.forEach((r) => {
+            order.push(r.num);
+            if (r.hidden) hidden.push(r.num);
+            if (r.custom) {
+                custom.push({ id: r.num, label: r.label, category: r.category, stale_days: r.stale_days });
+            } else {
+                const defLabel = (STATUS_MAP[r.num] || '').replace(/^\d+\.\s*/, '');
+                if (r.label && r.label !== STATUS_MAP[r.num] && r.label !== defLabel) labels[String(r.num)] = r.label;
+                if (r.category && r.category !== DEFAULT_STAGE_CATEGORY[r.num]) categories[String(r.num)] = r.category;
+                const defStale = DEFAULT_STAGE_STALE[r.num] ?? null;
+                if (r.stale_days !== defStale) stale_days[String(r.num)] = r.stale_days;
+            }
+        });
+        return { labels, categories, stale_days, custom, hidden, order };
+    };
+
     const persist = async (payload, message) => {
         setSaving(true);
         try {
             const res = await axiosInstance.put('/client-portal/stage-overrides', payload);
             setStageOverridesCache(res.data?.data);
-            setOverrides({
-                labels: { ...(res.data?.data?.labels ?? {}) },
-                hidden: [...(res.data?.data?.hidden ?? [])],
-            });
             onSaved?.();
             toast.success(message);
             return true;
-        } catch {
-            return false;   // axios interceptor already surfaced the error
-        } finally {
-            setSaving(false);
-        }
+        } catch { return false; } finally { setSaving(false); }
     };
-    const save = async () => {
-        if (await persist(overrides, 'Stages updated')) onClose();
-    };
-    const reset = () => persist({ labels: {}, hidden: [] }, 'Stages reset to defaults');
+    const save = async () => { if (await persist(buildPayload(), 'Stages updated')) onClose(); };
+    const reset = async () => { if (await persist({ labels: {}, hidden: [], custom: [], categories: {}, stale_days: {}, order: [] }, 'Stages reset to defaults')) onClose(); };
+
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-[560px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+            <div className="bg-white rounded-xl w-full max-w-[720px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
                 <div className="flex justify-between items-center px-6 py-5 border-b border-gray-200">
                     <h2 className="text-lg font-bold text-gray-800">Manage Pipeline Stages</h2>
                     <button className="w-8 h-8 border-0 bg-transparent cursor-pointer text-2xl text-gray-500" onClick={onClose}>&times;</button>
                 </div>
                 <div className="p-6">
                     <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
-                        Rename any stage or hide the ones you do not use. Hidden stages disappear from the filter bar but existing clients keep their status.
+                        Rename, reorder, hide, or add custom stages. Each stage’s <strong>behavior</strong> controls the automations
+                        (approved-to-build → job-ready; closed → archive), so a custom stage slots in without breaking anything.
+                        <strong> Stale</strong> = flag “needs attention” after N days (blank = never).
                     </p>
-                    {Object.entries(STATUS_MAP).map(([num, def]) => {
-                        const n = parseInt(num);
-                        const hidden = (overrides.hidden || []).includes(n);
-                        return (
-                            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                <span style={{ width: 26, fontSize: 12.5, fontWeight: 700, color: '#6b7280' }}>{n}.</span>
-                                <input
-                                    type="text"
-                                    value={(overrides.labels && overrides.labels[n]) ?? def.replace(/^\d+\.\s*/, '')}
-                                    onChange={(e) => setLabel(n, e.target.value)}
-                                    style={{ flex: 1, padding: '7px 10px', opacity: hidden ? 0.45 : 1 }}
-                                />
-                                <button type="button" onClick={() => toggleHidden(n)}
-                                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, cursor: 'pointer', border: '1px solid #e5e7eb', background: hidden ? '#fee2e2' : '#fff', color: hidden ? '#dc2626' : '#374151', fontWeight: 600 }}>
-                                    {hidden ? 'Hidden' : 'Hide'}
-                                </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {rows.map((r, i) => (
+                            <div key={r.num} style={{ display: 'grid', gridTemplateColumns: '20px 1.6fr 1.1fr 64px 92px', gap: 8, alignItems: 'center', padding: '6px', border: '1px solid #eef0f4', borderRadius: 8, background: r.hidden ? '#fafafa' : '#fff', opacity: r.hidden ? 0.6 : 1 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <button type="button" onClick={() => move(i, -1)} title="Move up" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}>▲</button>
+                                    <button type="button" onClick={() => move(i, 1)} title="Move down" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}>▼</button>
+                                </div>
+                                <input type="text" value={r.label} onChange={(e) => upd(i, 'label', e.target.value)} style={{ padding: '6px 8px', fontSize: 13 }} placeholder="Stage name" />
+                                <select value={r.category} onChange={(e) => upd(i, 'category', e.target.value)} style={{ padding: '6px 4px', fontSize: 12 }}>
+                                    {Object.entries(CATEGORY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                </select>
+                                <input type="number" min="0" value={r.stale_days ?? ''} onChange={(e) => upd(i, 'stale_days', e.target.value === '' ? null : Number(e.target.value))} placeholder="—" title="Stale after N days" style={{ padding: '6px 4px', fontSize: 12, width: '100%' }} />
+                                <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                    <button type="button" onClick={() => upd(i, 'hidden', !r.hidden)} title={r.hidden ? 'Unhide' : 'Hide'} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', border: '1px solid #e5e7eb', background: r.hidden ? '#fee2e2' : '#fff', color: r.hidden ? '#dc2626' : '#374151', fontWeight: 600 }}>{r.hidden ? 'Hidden' : 'Hide'}</button>
+                                    {r.custom && <button type="button" onClick={() => removeCustom(i)} title="Delete custom stage" style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', fontWeight: 700 }}>✕</button>}
+                                </div>
                             </div>
-                        );
-                    })}
+                        ))}
+                    </div>
+                    <button type="button" onClick={addCustom} className="btn btn-outline" style={{ marginTop: 12, fontSize: 13 }}>+ Add custom stage</button>
                 </div>
                 <div className="p-6 border-t border-gray-200 flex justify-between gap-3">
                     <button className="btn btn-outline" onClick={reset} disabled={saving}>Reset Defaults</button>
                     <div style={{ display: 'flex', gap: 10 }}>
                         <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
-                        <button className="btn btn-primary" onClick={save} disabled={saving}>
-                            {saving ? 'Saving…' : 'Save Stages'}
-                        </button>
+                        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Stages'}</button>
                     </div>
                 </div>
             </div>
