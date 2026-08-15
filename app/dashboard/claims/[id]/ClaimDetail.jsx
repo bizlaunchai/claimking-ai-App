@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import { fetchStages, stageLabel, pickableStages, isClosedStage } from '@/lib/stages';
 import "../claims.css";
 
 const STAGE_NAMES = [
@@ -66,6 +67,9 @@ const COMM_BADGE = Object.fromEntries(COMM_TYPES.map(t => [t.key, t]));
 const ClaimDetail = ({ id }) => {
     const [claim, setClaim] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Q4.2 — pull the company's effective stages (incl. custom) for the picker + labels.
+    const [, setStagesVer] = useState(0);
+    useEffect(() => { fetchStages().then(() => setStagesVer((v) => v + 1)); }, []);
     const [uploads, setUploads] = useState([]);
     const [activity, setActivity] = useState([]);
     const [uploadingType, setUploadingType] = useState(null);
@@ -169,7 +173,7 @@ const ClaimDetail = ({ id }) => {
             const body = { claim_status: newStage };
             if (reason) body.status_change_reason = reason;
             await axiosInstance.put(`/client-portal/${id}`, body);
-            toast.success(`Moved to ${newStage}. ${STAGE_NAMES[newStage - 1]}`);
+            toast.success(`Moved to ${newStage}. ${stageLabel(newStage)}`);
             load();
         } catch {
             setClaim(c => ({ ...c, claim_status: prev }));
@@ -298,7 +302,7 @@ const ClaimDetail = ({ id }) => {
     );
 
     const stage = claim.claim_status || 1;
-    const closed = stage === 11 || stage === 12;
+    const closed = isClosedStage(stage);
     const carrier = claim.insurance_carrier || claim.insurance_company || '—';
     const isPhoto = (u) => (u.content_type || '').startsWith('image/');
 
@@ -312,7 +316,7 @@ const ClaimDetail = ({ id }) => {
                         <div className="cd-hero-sub">
                             <span>{claim.claim_number || 'Pending claim #'}</span>
                             {(claim.address || claim.city) && <span>· {claim.address}{claim.city ? `, ${claim.city}` : ''}{claim.state ? `, ${claim.state}` : ''}</span>}
-                            <span className={`cd-chip ${closed ? 'closed' : 'stage'}`}>Stage {stage}: {STAGE_NAMES[stage - 1]}</span>
+                            <span className={`cd-chip ${closed ? 'closed' : 'stage'}`}>Stage {stage}: {stageLabel(stage)}</span>
                             <span className={`cd-chip priority-${claim.priority || 'medium'}`}>{(claim.priority || 'medium')} priority</span>
                         </div>
                     </div>
@@ -335,7 +339,7 @@ const ClaimDetail = ({ id }) => {
                     Terminal stages (11 Declined / 12 Lost) show a closed banner. */}
                 {closed ? (
                     <div className="cd-progress-label" style={{ marginTop: '1rem' }}>
-                        This claim is closed — <strong style={{ color: '#fca5a5' }}>{STAGE_NAMES[stage - 1]}</strong>.
+                        This claim is closed — <strong style={{ color: '#fca5a5' }}>{stageLabel(stage)}</strong>.
                     </div>
                 ) : (
                     <>
@@ -346,7 +350,7 @@ const ClaimDetail = ({ id }) => {
                                 return <div key={n} className={`cd-progress-seg ${cls}`} />;
                             })}
                         </div>
-                        <div className="cd-progress-label">Stage {stage} of 10 · {STAGE_NAMES[stage - 1]}</div>
+                        <div className="cd-progress-label">Stage {stage} · {stageLabel(stage)}</div>
                     </>
                 )}
             </div>
@@ -376,7 +380,7 @@ const ClaimDetail = ({ id }) => {
                             Claim details
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <select className="stage-selector" style={{ minWidth: 200 }} value={stage} onChange={(e) => changeStage(parseInt(e.target.value, 10))}>
-                                    {STAGE_NAMES.map((n, i) => <option key={i + 1} value={i + 1}>{i + 1}. {n}</option>)}
+                                    {pickableStages(stage).map((s) => <option key={s.num} value={s.num}>{s.num}. {s.label}</option>)}
                                 </select>
                                 {closed && (
                                     <button className="cd-btn gold" onClick={reopenClaim}>Reopen</button>

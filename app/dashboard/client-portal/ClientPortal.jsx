@@ -575,11 +575,15 @@ const ClientPortal = () => {
                             Add New Client
                         </button>
                         </Can>
-                        <Can permission="manage_portal_links">
-                        {/* CK-FIX Jul-22: stage rename/hide manager */}
+                        {/* Q4.2: stage editor is gated on manage_stages (matches the
+                            save endpoint) so the button never shows to someone who'd
+                            just hit a 403 on save. */}
+                        <Can permission="manage_stages">
                         <button className="btn btn-secondary" onClick={() => setShowStageManager(true)}>
                             Manage Stages
                         </button>
+                        </Can>
+                        <Can permission="manage_portal_links">
                         <button className="btn btn-secondary" onClick={() => setShowBulkImport(true)}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
