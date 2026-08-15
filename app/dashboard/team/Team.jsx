@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import './team.css';
 
 // Map a role slug to the badge label rendered in the table.
@@ -874,18 +874,10 @@ const RolesPermissionsEditor = ({ onSave }) => {
         Object.fromEntries(PERMISSION_CATALOG.map((g) => [g.group, true])),
     );
 
-    // On phones a 6-column matrix is unusable — collapse to one role at a time,
-    // chosen via a segmented control, so each cell is a big tap target.
-    const [isMobile, setIsMobile] = useState(false);
-    const [mobileRole, setMobileRole] = useState('estimator');
-    useEffect(() => {
-        const mq = window.matchMedia('(max-width: 768px)');
-        const apply = () => setIsMobile(mq.matches);
-        apply();
-        mq.addEventListener('change', apply);
-        return () => mq.removeEventListener('change', apply);
-    }, []);
-    const displayRoles = isMobile ? [mobileRole] : ROLES;
+    // Role-first editing: pick ONE role via the tabs, then flip a single switch
+    // per permission. Same flow on every viewport — far clearer than a
+    // 5-column matrix with per-role grant/deny mini-buttons. Admin is locked.
+    const [activeRole, setActiveRole] = useState('estimator');
 
     const toggleGroup = (g) => setCollapsed((p) => ({ ...p, [g]: !p[g] }));
     const expandAll = () => setCollapsed({});
@@ -979,16 +971,14 @@ const RolesPermissionsEditor = ({ onSave }) => {
         setDirty(true);
     };
 
-    const renderCell = (role, key) => {
-        if (!matrix) return <td className="perm-cell perm-cross">…</td>;
-        const v = matrix[role][key];
-        if (v === undefined || v === false) {
-            return <td className="perm-cell perm-cross" onClick={() => togglePerm(role, key)}>—</td>;
-        }
-        if (v === true) {
-            return <td className="perm-cell perm-check" onClick={() => togglePerm(role, key)}><Check size={15} strokeWidth={3} /></td>;
-        }
-        return <td className="perm-cell" onClick={() => togglePerm(role, key)}><span className="perm-scope">{v}</span></td>;
+    // A single on/off switch for one permission on the active role. Scope
+    // values (e.g. "assigned", "own") read as ON and show a scope pill; the
+    // role editor grants/removes the flag — scope granularity stays as seeded.
+    const renderSwitch = (role, key) => {
+        const v = matrix?.[role]?.[key];
+        const scope = typeof v === 'string' && v.length > 0 ? v : null;
+        const on = v === true || !!scope;
+        return { on, scope };
     };
 
     if (loading || !matrix) {
@@ -1008,7 +998,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
             <div className="perms-header">
                 <div>
                     <div className="perms-title">Role Permissions</div>
-                    <div className="perms-subtitle">Click any cell to toggle. Admin always has full access.</div>
+                    <div className="perms-subtitle">Pick a role, then switch each permission on or off. Admin always has full access.</div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     {dirty && <span className="perms-dirty-badge">Unsaved changes</span>}
@@ -1033,33 +1023,33 @@ const RolesPermissionsEditor = ({ onSave }) => {
                 </div>
             </div>
 
-            {isMobile && (
-                <div className="perms-role-switcher">
-                    <span className="perms-role-switcher-label">Editing role</span>
-                    <div className="perms-role-tabs">
-                        {ROLES.map((r) => (
-                            <button
-                                key={r}
-                                type="button"
-                                className={`perms-role-tab ${mobileRole === r ? 'active' : ''}`}
-                                onClick={() => setMobileRole(r)}
-                            >
-                                {ROLE_LABELS[r]}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
+            {/* Role picker — edit one role at a time. */}
+            <div className="rp-tabs" role="tablist" aria-label="Role to edit">
+                {ROLES.map((r) => {
+                    const on = activeRole === r;
+                    return (
+                        <button
+                            key={r}
+                            type="button"
+                            role="tab"
+                            aria-selected={on}
+                            className={`rp-tab ${on ? 'active' : ''}`}
+                            onClick={() => setActiveRole(r)}
+                        >
+                            {ROLE_LABELS[r]}
+                            {r === 'admin' && <span className="rp-tab-count">· full</span>}
+                        </button>
+                    );
+                })}
+            </div>
 
-            <div className="perms-table-scroll">
-            <table className="perms-table">
-                <thead>
-                    <tr>
-                        <th>Permission</th>
-                        {displayRoles.map((r) => <th key={r}>{ROLE_LABELS[r]}</th>)}
-                    </tr>
-                </thead>
-                <tbody>
+            {activeRole === 'admin' ? (
+                <div className="rp-admin-note">
+                    <Lock size={16} />
+                    Admin always has full access to every permission — there is nothing to edit here.
+                </div>
+            ) : (
+                <div>
                     {PERMISSION_CATALOG.map((group) => {
                         const visibleItems = q
                             ? group.items.filter(
@@ -1071,74 +1061,62 @@ const RolesPermissionsEditor = ({ onSave }) => {
                         if (visibleItems.length === 0) return null;
                         // Force-expand while searching so matches are visible.
                         const isCollapsed = q ? false : !!collapsed[group.group];
+                        const granted = groupCount(group, activeRole);
+                        const total = group.items.length;
+                        const allOn = granted === total;
+                        const countClass = granted === 0 ? 'none' : allOn ? 'all' : 'some';
 
                         return (
-                            <React.Fragment key={group.group}>
-                                <tr className="perms-section-row">
-                                    <td
-                                        className="perms-section-name"
-                                        onClick={() => !q && toggleGroup(group.group)}
-                                        role="button"
-                                        tabIndex={0}
-                                        onKeyDown={(e) => {
-                                            if ((e.key === 'Enter' || e.key === ' ') && !q) {
-                                                e.preventDefault();
-                                                toggleGroup(group.group);
-                                            }
-                                        }}
-                                    >
-                                        <span className={`perms-section-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
-                                        <span className="perms-section-label">{group.group}</span>
-                                        <span className="perms-section-meta">{group.items.length} permission{group.items.length > 1 ? 's' : ''}</span>
-                                    </td>
-                                    {displayRoles.map((r) => {
-                                        const granted = groupCount(group, r);
-                                        const total = group.items.length;
-                                        const allOn = granted === total;
-                                        const allOff = granted === 0;
-                                        return (
-                                            <td key={r} className="perms-section-rolecell" onClick={(e) => e.stopPropagation()}>
-                                                {r === 'admin' ? (
-                                                    <span className="perms-section-count locked" title="Admin always has full access">{total}/{total}</span>
-                                                ) : (
-                                                    <div className="perms-section-bulk">
-                                                        <span className={`perms-section-count ${allOff ? 'none' : allOn ? 'all' : 'partial'}`}>
-                                                            {granted}/{total}
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            className="bulk-btn grant"
-                                                            title={`Grant all ${group.group} permissions to ${ROLE_LABELS[r]}`}
-                                                            onClick={() => applyGroupForRole(group, r, true)}
-                                                            disabled={allOn}
-                                                        ><Check size={14} strokeWidth={3} /></button>
-                                                        <button
-                                                            type="button"
-                                                            className="bulk-btn deny"
-                                                            title={`Deny all ${group.group} permissions for ${ROLE_LABELS[r]}`}
-                                                            onClick={() => applyGroupForRole(group, r, false)}
-                                                            disabled={allOff}
-                                                        >×</button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                                {!isCollapsed && visibleItems.map((item) => (
-                                    <tr key={item.key}>
-                                        <td className="perms-item-label">{item.label}</td>
-                                        {displayRoles.map((r) => (
-                                            <React.Fragment key={r}>{renderCell(r, item.key)}</React.Fragment>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </React.Fragment>
+                            <div className="rp-group" key={group.group}>
+                                <div
+                                    className="rp-group-head"
+                                    onClick={() => !q && toggleGroup(group.group)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if ((e.key === 'Enter' || e.key === ' ') && !q) {
+                                            e.preventDefault();
+                                            toggleGroup(group.group);
+                                        }
+                                    }}
+                                >
+                                    <span className={`rp-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
+                                    <span className="rp-group-name">{group.group}</span>
+                                    <span className={`rp-count ${countClass}`}>{granted} of {total} on</span>
+                                    <button
+                                        type="button"
+                                        className={`rp-switch master ${allOn ? 'on' : ''}`}
+                                        role="switch"
+                                        aria-checked={allOn}
+                                        aria-label={`Turn ${allOn ? 'off' : 'on'} all ${group.group} permissions`}
+                                        title={allOn ? 'Turn all off' : 'Turn all on'}
+                                        onClick={(e) => { e.stopPropagation(); applyGroupForRole(group, activeRole, !allOn); }}
+                                    />
+                                </div>
+                                {!isCollapsed && visibleItems.map((item) => {
+                                    const { on, scope } = renderSwitch(activeRole, item.key);
+                                    return (
+                                        <div className="rp-row" key={item.key}>
+                                            <span className="rp-row-label">
+                                                {item.label}
+                                                {scope && <span className="rp-scope">{scope}</span>}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className={`rp-switch ${on ? 'on' : ''}`}
+                                                role="switch"
+                                                aria-checked={on}
+                                                aria-label={item.label}
+                                                onClick={() => togglePerm(activeRole, item.key)}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         );
                     })}
-                </tbody>
-            </table>
-            </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1237,13 +1215,17 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
         return roleDefaults[key] ? 'grant' : 'deny';
     };
 
-    // Bulk-apply Grant or Deny to every item in a group. Items whose target
-    // value matches the role default get their override cleared (so we never
-    // store redundant overrides).
+    // Bulk-apply to every item in a group. target 'role' clears all overrides
+    // (back to role defaults). For 'grant'/'deny', items whose target matches
+    // the role default get their override cleared (never store redundant ones).
     const applyGroup = (group, target) => {
         setOverrides((prev) => {
             const next = { ...prev };
             for (const item of group.items) {
+                if (target === 'role') {
+                    delete next[item.key];
+                    continue;
+                }
                 const roleVal = !!roleDefaults[item.key];
                 const matchesDefault =
                     (target === 'grant' && roleVal) ||
@@ -1347,10 +1329,11 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                             const isCollapsed = q ? false : !!collapsed[group.group];
                             const { granted, overridden, total } = groupStats(group);
 
+                            const countClass = granted === 0 ? 'none' : granted === total ? 'all' : 'some';
                             return (
-                                <div key={group.group} className="user-perm-group">
+                                <div key={group.group} className="rp-group">
                                     <div
-                                        className="user-perm-group-header"
+                                        className="rp-group-head"
                                         role="button"
                                         tabIndex={0}
                                         onClick={() => !q && toggleGroup(group.group)}
@@ -1361,35 +1344,27 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                                             }
                                         }}
                                     >
-                                        <span className={`user-perm-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
-                                        <span className="user-perm-group-title">{group.group}</span>
-                                        <span className="user-perm-group-count">
-                                            {granted}/{total} granted
-                                            {overridden > 0 && (
-                                                <span className="user-perm-group-overrides"> · {overridden} override{overridden > 1 ? 's' : ''}</span>
-                                            )}
-                                        </span>
-                                        <span className="user-perm-group-bulk" onClick={(e) => e.stopPropagation()}>
-                                            <button
-                                                type="button"
-                                                className="btn-xs grant"
-                                                onClick={() => applyGroup(group, 'grant')}
-                                                title="Grant all in this group"
-                                            >Grant all</button>
-                                            <button
-                                                type="button"
-                                                className="btn-xs deny"
-                                                onClick={() => applyGroup(group, 'deny')}
-                                                title="Deny all in this group"
-                                            >Deny all</button>
-                                        </span>
+                                        <span className={`rp-chevron ${isCollapsed ? 'collapsed' : ''}`} aria-hidden="true">▾</span>
+                                        <span className="rp-group-name">{group.group}</span>
+                                        {overridden > 0 && (
+                                            <span className="up-override-badge">{overridden} override{overridden > 1 ? 's' : ''}</span>
+                                        )}
+                                        <span className={`rp-count ${countClass}`}>{granted} of {total} on</span>
                                     </div>
 
+                                    {!isCollapsed && (
+                                        <div className="up-bulk">
+                                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 600 }}>Set all:</span>
+                                            <button type="button" className="up-bulk-btn allow" onClick={() => applyGroup(group, 'grant')}>Allow</button>
+                                            <button type="button" className="up-bulk-btn block" onClick={() => applyGroup(group, 'deny')}>Block</button>
+                                            <button type="button" className="up-bulk-btn" onClick={() => applyGroup(group, 'role')}>Use role</button>
+                                        </div>
+                                    )}
+
                                     {!isCollapsed && visibleItems.map((item) => {
-                                        const roleVal = roleDefaults[item.key];
-                                        const ovr = overrides[item.key];
+                                        const roleDefaultIsGrant = !!roleDefaults[item.key];
+                                        const ovr = overrides[item.key]; // 'grant' | 'deny' | undefined
                                         const eff = effective(item.key);
-                                        const roleDefaultIsGrant = !!roleVal;
                                         const handleClick = (target) => {
                                             const matchesDefault =
                                                 (target === 'grant' && roleDefaultIsGrant) ||
@@ -1397,22 +1372,30 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                                             setOverride(item.key, matchesDefault ? 'role' : target);
                                         };
                                         return (
-                                            <div key={item.key} className="user-perm-row">
-                                                <div className="user-perm-label">{item.label}</div>
-                                                <span className={`perm-source ${ovr ? 'override' : ''}`}>
-                                                    {ovr ? 'Override' : 'Role default'}
-                                                </span>
-                                                <div className="seg">
+                                            <div key={item.key} className="up-row">
+                                                <div className="up-row-main">
+                                                    <span className="up-row-label">
+                                                        {item.label}
+                                                        {ovr && <span className="up-override-badge">override</span>}
+                                                    </span>
+                                                    <span className="up-row-hint">
+                                                        Role default: {roleDefaultIsGrant ? 'Allowed' : 'Blocked'}
+                                                        {ovr && (
+                                                            <button type="button" className="up-reset" onClick={() => setOverride(item.key, 'role')}>· reset to role</button>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="seg up-seg">
                                                     <button
                                                         type="button"
                                                         className={`seg-btn ${eff === 'grant' ? 'active grant' : ''}`}
                                                         onClick={() => handleClick('grant')}
-                                                    >Grant</button>
+                                                    >Allow</button>
                                                     <button
                                                         type="button"
                                                         className={`seg-btn ${eff === 'deny' ? 'active deny' : ''}`}
                                                         onClick={() => handleClick('deny')}
-                                                    >Deny</button>
+                                                    >Block</button>
                                                 </div>
                                             </div>
                                         );
