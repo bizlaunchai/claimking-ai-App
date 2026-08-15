@@ -18,6 +18,83 @@ const FileUploader = dynamic(
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const NOTIF_PAGE_SIZE = 10;
 
+// QA Q1.1 — Website / Zapier lead-intake key. Shows the intake URL + this
+// company's key so Nate can wire up a "Webhooks by Zapier" (or website form)
+// POST. The key alone identifies the company; regenerate rotates it.
+function IntakeKeyCard({ token }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [rotating, setRotating] = useState(false);
+    const [reveal, setReveal] = useState(false);
+
+    useEffect(() => {
+        if (!token) return;
+        (async () => {
+            try {
+                const res = await fetch(`${API_URL}/integrations/intake-key`, { headers: { Authorization: `Bearer ${token}` } });
+                if (res.ok) setData(await res.json());
+            } catch { /* */ } finally { setLoading(false); }
+        })();
+    }, [token]);
+
+    const copy = (text, label) => { navigator.clipboard?.writeText(text); toast.success(`${label} copied`); };
+    const regenerate = async () => {
+        if (!confirm('Rotate the intake key? Any existing Zapier/website connection using the old key will stop working until you update it.')) return;
+        setRotating(true);
+        try {
+            const res = await fetch(`${API_URL}/integrations/intake-key/regenerate`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) { setData(await res.json()); setReveal(true); toast.success('New intake key generated'); }
+            else toast.error('Could not regenerate the key');
+        } catch { toast.error('Could not regenerate the key'); } finally { setRotating(false); }
+    };
+
+    const masked = data?.api_key ? data.api_key.slice(0, 12) + '••••••••••••••••' : '';
+    return (
+        <div className="settings-section">
+            <h3 className="section-title">Website / Zapier Lead Intake</h3>
+            <p className="setting-description" style={{ marginBottom: '0.75rem' }}>
+                Send website-form leads straight into New Leads via Zapier (“Webhooks by Zapier”) or any tool that can POST JSON.
+                Retry-safe — a resent submission won’t create a duplicate. See <strong>ZAPIER-INTAKE-GUIDE.md</strong> for a step-by-step setup.
+            </p>
+            {loading ? <div className="setting-description">Loading…</div> : !data ? (
+                <div className="setting-description">Couldn’t load your intake key. You need the “Manage API settings” permission.</div>
+            ) : (
+                <div className="intake-key-box">
+                    <div className="intake-row">
+                        <span className="intake-lbl">Intake URL (POST)</span>
+                        <code className="intake-val">{data.intake_url}</code>
+                        <button type="button" className="btn-secondary" onClick={() => copy(data.intake_url, 'URL')}>Copy</button>
+                    </div>
+                    <div className="intake-row">
+                        <span className="intake-lbl">API key (header <code>x-ck-intake-key</code>)</span>
+                        <code className="intake-val">{reveal ? data.api_key : masked}</code>
+                        <button type="button" className="btn-secondary" onClick={() => setReveal((v) => !v)}>{reveal ? 'Hide' : 'Show'}</button>
+                        <button type="button" className="btn-secondary" onClick={() => copy(data.api_key, 'Key')}>Copy</button>
+                    </div>
+                    <div className="intake-row">
+                        <span className="intake-lbl">Last received</span>
+                        <span className="intake-val">{data.last_used_at ? new Date(data.last_used_at).toLocaleString() : 'No leads received yet'}</span>
+                    </div>
+                    <div className="intake-actions">
+                        <button type="button" className="btn-secondary" onClick={regenerate} disabled={rotating}>{rotating ? 'Rotating…' : '↻ Regenerate key'}</button>
+                    </div>
+                    <div className="intake-fields">
+                        <strong>Body fields (JSON):</strong> first_name, last_name, phone, email, address_line1, city, state, zip, damage_type, source, source_detail. Unknown fields are ignored; <code>source</code> defaults to <code>web_form</code>.
+                    </div>
+                </div>
+            )}
+            <style jsx>{`
+                .intake-key-box { border: 1px solid var(--border, #e5e7eb); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+                .intake-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+                .intake-lbl { font-size: 0.78rem; font-weight: 700; color: #6b7280; min-width: 210px; }
+                .intake-val { font-size: 0.82rem; word-break: break-all; background: #f9fafb; padding: 0.3rem 0.5rem; border-radius: 6px; flex: 1; }
+                .intake-fields { font-size: 0.78rem; color: #4b5563; margin-top: 0.4rem; line-height: 1.5; }
+                .intake-actions { margin-top: 0.2rem; }
+            `}</style>
+        </div>
+    );
+}
+
 // The 5-slot brand palette default — mirrors the backend DB column default
 // (sql/96) and the legacy hard-coded email colours, so the preview and every
 // sent email match even before a contractor customises anything.
@@ -1335,6 +1412,8 @@ const Settings = () => {
                                         </div>
                                     </div>
                                 </div>
+                                <IntakeKeyCard token={token} />
+
                                 <div className="settings-section">
                                     <h3 className="section-title">Communication Integrations</h3>
                                     <div className="toggle-group">

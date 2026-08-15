@@ -224,10 +224,15 @@ const MINI_PIN_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 30 42">' +
     '<path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.7 23.3 0 15 0z" fill="#1a1f3a"/>' +
     '<circle cx="15" cy="15" r="5.5" fill="#ffffff"/></svg>';
-function MiniMap({ lat, lng, radiusMiles }) {
+function MiniMap({ pins, lat, lng, radiusMiles }) {
     const mapRef = useRef(null);
+    // Prefer the multi-pin list (Q2.2); fall back to the legacy single pin.
+    const effPins = (Array.isArray(pins) && pins.length)
+        ? pins
+        : (lat != null && lng != null ? [{ lat, lng, radius_miles: radiusMiles }] : []);
+    const sig = JSON.stringify(effPins.map((p) => [p.lat, p.lng, p.radius_miles]));
     useEffect(() => {
-        if (lat == null || lng == null) return;
+        if (!effPins.length) return;
         let cancelled = false;
         (async () => {
             const L = (await import('leaflet')).default || (await import('leaflet'));
@@ -236,24 +241,30 @@ function MiniMap({ lat, lng, radiusMiles }) {
             if (!el || el._leaflet_id) return;
             const map = L.map('subMiniMap', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false });
             mapRef.current = map;
-            // set an initial view FIRST so the map is "loaded" (has a pixel origin);
-            // fitBounds before that + before the container has size throws
-            // "layerPointToLatLng of undefined".
-            map.setView([lat, lng], 9);
+            map.setView([effPins[0].lat, effPins[0].lng], 9);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            const circle = L.circle([lat, lng], { radius: (Number(radiusMiles) || 25) * 1609.34, color: '#FDB813', fillColor: '#FDB813', fillOpacity: 0.12, weight: 1.5 }).addTo(map);
             const icon = L.divIcon({ className: 'mini-pin-icon', html: MINI_PIN_SVG, iconSize: [26, 36], iconAnchor: [13, 36] });
-            L.marker([lat, lng], { icon }).addTo(map);
-            // fit to the radius only after the container is laid out + re-measured.
+            const circles = [];
+            effPins.forEach((p) => {
+                if (p.lat == null || p.lng == null) return;
+                const c = L.circle([p.lat, p.lng], { radius: (Number(p.radius_miles) || 25) * 1609.34, color: '#FDB813', fillColor: '#FDB813', fillOpacity: 0.12, weight: 1.5 }).addTo(map);
+                L.marker([p.lat, p.lng], { icon }).addTo(map);
+                circles.push(c);
+            });
             setTimeout(() => {
                 if (cancelled || !mapRef.current) return;
                 mapRef.current.invalidateSize();
-                try { mapRef.current.fitBounds(circle.getBounds(), { padding: [12, 12] }); } catch { /* container not ready — the setView above is a safe fallback */ }
+                try {
+                    let bounds = circles[0].getBounds();
+                    circles.slice(1).forEach((c) => { bounds = bounds.extend(c.getBounds()); });
+                    mapRef.current.fitBounds(bounds, { padding: [12, 12] });
+                } catch { /* container not ready — the setView above is a safe fallback */ }
             }, 200);
         })();
         return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-    }, [lat, lng, radiusMiles]);
-    if (lat == null || lng == null) return <div className="mini-map empty">No service-area pin set yet.</div>;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sig]);
+    if (!effPins.length) return <div className="mini-map empty">No service-area pin set yet.</div>;
     return <div id="subMiniMap" className="mini-map" />;
 }
 
@@ -381,11 +392,17 @@ function SubDrawer({ subId, onClose, onChanged, toast }) {
                             </div>
 
                             <div className="drawer-section">
-                                <h4>Service Area</h4>
-                                <MiniMap lat={data.home_lat} lng={data.home_lng} radiusMiles={data.service_radius_miles} />
+                                <h4>Service Area {(data.pins || []).length > 1 ? <span className="sec-count">{data.pins.length} pins</span> : null}</h4>
+                                <MiniMap pins={data.pins} lat={data.home_lat} lng={data.home_lng} radiusMiles={data.service_radius_miles} />
                                 <div className="area-facts">
-                                    <span className="area-fact"><b>{data.service_radius_miles || '—'} mi</b> radius</span>
-                                    {data.home_lat != null && <a className="area-fact link" href={`https://www.google.com/maps?q=${data.home_lat},${data.home_lng}`} target="_blank" rel="noopener noreferrer">📍 Open in Maps</a>}
+                                    {(data.pins || []).length ? (data.pins || []).map((p, i) => (
+                                        <a key={p.id || i} className="area-fact link" href={`https://www.google.com/maps?q=${p.lat},${p.lng}`} target="_blank" rel="noopener noreferrer">📍 {p.label || `Pin ${i + 1}`} · <b>{p.radius_miles} mi</b></a>
+                                    )) : (
+                                        <>
+                                            <span className="area-fact"><b>{data.service_radius_miles || '—'} mi</b> radius</span>
+                                            {data.home_lat != null && <a className="area-fact link" href={`https://www.google.com/maps?q=${data.home_lat},${data.home_lng}`} target="_blank" rel="noopener noreferrer">📍 Open in Maps</a>}
+                                        </>
+                                    )}
                                 </div>
                                 <div className="area-trades">{(data.trades || []).length ? (data.trades || []).map((t) => <span key={t} className="trade-chip-sm">{tradeLabel(t)}</span>) : <span className="hint">No trades listed</span>}</div>
                             </div>

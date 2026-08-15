@@ -88,6 +88,86 @@ function PinMap({ lat, lng, onPick }) {
     return <div id="pinMap" className="pin-map" />;
 }
 
+/* ── Q2.2 multi-pin map ──
+   Renders EVERY pin as a marker + its own radius circle; clicking empty map
+   adds a new pin. A sub with several locations sees all their coverage at once.
+   `mapId` lets the wizard and the profile-edit reuse it without colliding. */
+function MultiPinMap({ pins, onAddPin, mapId = 'multiPinMap' }) {
+    const mapRef = useRef(null);
+    const layerRef = useRef(null);
+    const onAddRef = useRef(onAddPin);
+    onAddRef.current = onAddPin;
+    const sig = JSON.stringify((pins || []).map((p) => [p.lat, p.lng, p.radius_miles]));
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById(mapId);
+            if (!el) return;
+            if (!mapRef.current || !el._leaflet_id) {
+                if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                const first = (pins || []).find((p) => p.lat != null);
+                const map = L.map(mapId).setView(first ? [first.lat, first.lng] : [39.8283, -98.5795], first ? 8 : 4);
+                mapRef.current = map;
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map);
+                layerRef.current = L.layerGroup().addTo(map);
+                map.on('click', (e) => {
+                    const { lat, lng } = e.latlng;
+                    onAddRef.current(Math.round(lat * 1e6) / 1e6, Math.round(lng * 1e6) / 1e6);
+                });
+                setTimeout(() => { if (!cancelled && mapRef.current) mapRef.current.invalidateSize(); }, 150);
+            }
+            const layer = layerRef.current;
+            if (!layer) return;
+            layer.clearLayers();
+            const icon = L.divIcon({ className: 'ck-pin-icon', html: PIN_SVG, iconSize: [30, 42], iconAnchor: [15, 42] });
+            (pins || []).forEach((p) => {
+                if (p.lat == null || p.lng == null) return;
+                L.marker([p.lat, p.lng], { icon }).addTo(layer);
+                L.circle([p.lat, p.lng], {
+                    radius: (Number(p.radius_miles) || 30) * 1609.34,
+                    color: '#1a1f3a', weight: 1, fillColor: '#1a1f3a', fillOpacity: 0.08,
+                }).addTo(layer);
+            });
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sig, mapId]);
+    useEffect(() => () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } }, []);
+    return <div id={mapId} className="pin-map" />;
+}
+
+/* Shared editor: the multi-pin map + a list where each pin gets its own radius
+   slider, label, and remove. Used by the onboarding wizard and profile edit. */
+function ServicePinsEditor({ pins, setPins, mapId }) {
+    const addPin = (lat, lng) => setPins([...(pins || []), { label: '', lat, lng, radius_miles: 30 }]);
+    const updPin = (i, k, v) => setPins(pins.map((p, idx) => idx === i ? { ...p, [k]: v } : p));
+    const rmPin = (i) => setPins(pins.filter((_, idx) => idx !== i));
+    return (
+        <div className="pins-editor">
+            <p className="muted">Tap the map to add a service location. Add one per area your crew covers — you’ll be matched to jobs inside <strong>any</strong> pin’s radius.</p>
+            <MultiPinMap pins={pins} onAddPin={addPin} mapId={mapId} />
+            {(pins || []).length === 0 && <div className="pin-readout">No pins yet — tap the map to add your first.</div>}
+            <div className="pins-list">
+                {(pins || []).map((p, i) => (
+                    <div className="pin-item" key={p.id || i}>
+                        <div className="pin-item-head">
+                            <span className="pin-item-badge">📍 {i + 1}</span>
+                            <input className="pin-item-label" value={p.label || ''} onChange={(e) => updPin(i, 'label', e.target.value)} placeholder={`Location ${i + 1} (e.g. Akron)`} />
+                            <button type="button" className="btn btn-xs btn-ghost" onClick={() => rmPin(i)} title="Remove pin">✕</button>
+                        </div>
+                        <div className="pin-item-coords muted">{p.lat}, {p.lng}</div>
+                        <label className="pin-item-radius">Radius: <strong>{p.radius_miles || 30} mi</strong>
+                            <input type="range" min="1" max="100" step="1" value={p.radius_miles || 30} onChange={(e) => updPin(i, 'radius_miles', Number(e.target.value))} />
+                        </label>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 /* ── subcontractor agreement e-sign modal ── */
 const AGREEMENT_PREVIEW = [
     'You are agreeing to the Subcontractor Agreement with the contracting company.',
@@ -194,13 +274,23 @@ function DocRow({ token, doc, onUploaded }) {
 /* =========================================================================
    ONBOARDING WIZARD  (status: invited / onboarding / pending_review)
    ========================================================================= */
+function seedPins(portal) {
+    const p = portal.profile || {};
+    if (Array.isArray(portal.pins) && portal.pins.length) {
+        return portal.pins.map((x) => ({ id: x.id, label: x.label || '', lat: x.lat, lng: x.lng, radius_miles: x.radius_miles || 30 }));
+    }
+    if (p.home_lat != null && p.home_lng != null) {
+        return [{ label: 'Primary', lat: p.home_lat, lng: p.home_lng, radius_miles: p.service_radius_miles || 30 }];
+    }
+    return [];
+}
+
 function Wizard({ token, portal, reload }) {
     const p = portal.profile || {};
     const [form, setForm] = useState({
         business_name: p.business_name || '', contact_name: p.contact_name || '', phone: p.phone || '',
-        service_radius_miles: p.service_radius_miles || 25,
     });
-    const [pin, setPin] = useState({ lat: p.home_lat ?? null, lng: p.home_lng ?? null });
+    const [pins, setPins] = useState(() => seedPins(portal)); // Q2.2 multi-pin
     const [trades, setTrades] = useState(p.trades || []);
     const [savingInfo, setSavingInfo] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -221,16 +311,16 @@ function Wizard({ token, portal, reload }) {
         if (form.business_name.trim()) out.business_name = form.business_name.trim();
         if (form.contact_name.trim()) out.contact_name = form.contact_name.trim();
         if (form.phone.trim()) out.phone = form.phone.trim();
-        if (pin.lat != null) { out.home_lat = pin.lat; out.home_lng = pin.lng; }
-        out.service_radius_miles = Number(form.service_radius_miles) || 25;
+        if (pins.length) out.pins = pins;
         if (trades.length) out.trades = trades;
         return out;
     };
+    const pinsSig = JSON.stringify(pins.map((p) => [p.lat, p.lng, p.radius_miles, p.label]));
     useEffect(() => {
         // Don't fire on the initial render (nothing changed yet).
         if (skipFirst.current) { skipFirst.current = false; return; }
         const payload = buildPartial();
-        if (Object.keys(payload).length <= 1) return; // only radius → nothing meaningful yet
+        if (Object.keys(payload).length === 0) return;
         if (autoTimer.current) clearTimeout(autoTimer.current);
         setAutoSave('saving');
         autoTimer.current = setTimeout(async () => {
@@ -241,18 +331,17 @@ function Wizard({ token, portal, reload }) {
         }, 900);
         return () => autoTimer.current && clearTimeout(autoTimer.current);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [form.business_name, form.contact_name, form.phone, form.service_radius_miles, pin.lat, pin.lng, trades]);
+    }, [form.business_name, form.contact_name, form.phone, pinsSig, trades]);
 
     const saveInfo = async () => {
         if (!form.business_name.trim()) { toast('Business name is required.', 'error'); return; }
-        if (pin.lat == null) { toast('Tap the map to drop your home pin.', 'error'); return; }
+        if (!pins.length) { toast('Tap the map to add at least one service pin.', 'error'); return; }
         if (!trades.length) { toast('Pick at least one trade.', 'error'); return; }
         setSavingInfo(true);
         try {
             await axiosInstance.post(`/sub-portal/${token}/onboarding`, {
                 business_name: form.business_name.trim(), contact_name: form.contact_name.trim() || undefined,
-                phone: form.phone.trim() || undefined, home_lat: pin.lat, home_lng: pin.lng,
-                service_radius_miles: Number(form.service_radius_miles) || 25, trades,
+                phone: form.phone.trim() || undefined, pins, trades,
             });
             toast('Profile saved.', 'success');
             reload();
@@ -300,10 +389,7 @@ function Wizard({ token, portal, reload }) {
 
                     <div className="card">
                         <h3>Service Area</h3>
-                        <p className="muted">Tap the map to drop your home base pin. We only send you jobs within your radius.</p>
-                        <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
-                        <div className={`pin-readout ${pin.lat != null ? 'set' : ''}`}>{pin.lat != null ? `✓ Pin dropped — ${pin.lat}, ${pin.lng}` : 'No pin set — tap the map.'}</div>
-                        <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
+                        <ServicePinsEditor pins={pins} setPins={setPins} mapId="wizardPinMap" />
                     </div>
 
                     <div className="card">
@@ -585,19 +671,20 @@ function ActivePortal({ token, portal, reload }) {
 
 function ProfileTab({ token, portal, reload }) {
     const p = portal.profile || {};
-    const [form, setForm] = useState({ business_name: p.business_name || '', contact_name: p.contact_name || '', phone: p.phone || '', service_radius_miles: p.service_radius_miles || 25 });
-    const [pin, setPin] = useState({ lat: p.home_lat ?? null, lng: p.home_lng ?? null });
+    const [form, setForm] = useState({ business_name: p.business_name || '', contact_name: p.contact_name || '', phone: p.phone || '' });
+    const [pins, setPins] = useState(() => seedPins(portal)); // Q2.2 multi-pin
     const [trades, setTrades] = useState(p.trades || []);
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
 
     const save = async () => {
+        if (!pins.length) { toast('Add at least one service pin.', 'error'); return; }
         setSaving(true);
         try {
             await axiosInstance.post(`/sub-portal/${token}/onboarding`, {
                 business_name: form.business_name.trim(), contact_name: form.contact_name.trim() || undefined, phone: form.phone.trim() || undefined,
-                home_lat: pin.lat ?? undefined, home_lng: pin.lng ?? undefined, service_radius_miles: Number(form.service_radius_miles) || 25, trades,
+                pins, trades,
             });
             toast('Profile updated.', 'success'); reload();
         } catch { /* */ } finally { setSaving(false); }
@@ -609,10 +696,7 @@ function ProfileTab({ token, portal, reload }) {
             <div className="field"><label>Business Name</label><input value={form.business_name} onChange={(e) => set('business_name', e.target.value)} /></div>
             <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
             <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-            <div className="field"><label>Service radius: {form.service_radius_miles} mi</label><input type="range" min="5" max="100" step="5" value={form.service_radius_miles} onChange={(e) => set('service_radius_miles', e.target.value)} /></div>
-            <p className="muted" style={{ marginTop: '0.5rem' }}>Tap the map to move your home base.</p>
-            <PinMap lat={pin.lat} lng={pin.lng} onPick={(lat, lng) => setPin({ lat, lng })} />
-            <div className={`pin-readout ${pin.lat != null ? 'set' : ''}`}>{pin.lat != null ? `✓ Pin dropped — ${pin.lat}, ${pin.lng}` : 'No pin set'}</div>
+            <div style={{ marginTop: '0.75rem' }}><label className="field-label">Service Locations</label><ServicePinsEditor pins={pins} setPins={setPins} mapId="profilePinMap" /></div>
             <div style={{ marginTop: '0.75rem' }}><label className="field-label">Trades</label><div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div></div>
             <button className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</button>
         </div>
