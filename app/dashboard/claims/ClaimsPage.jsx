@@ -780,6 +780,26 @@ const ClaimsManagement = () => {
         } finally { setNotifyingId(null); }
     };
 
+    // Q2.7: "Send to Jobs Ready" from the quick-view — one action creates the
+    // linked, pre-filled job, then jumps to Jobs Ready.
+    const [sendingJobsId, setSendingJobsId] = useState(null);
+    const sendClaimToJobs = async (claimId) => {
+        setSendingJobsId(claimId);
+        try {
+            const res = await axiosInstance.post(`/jobs/from-claim/${claimId}`);
+            const jobNo = res.data?.data?.job_number;
+            toast.success(
+                res.data?.existed
+                    ? `Already in Jobs Ready${jobNo ? ` (Job ${jobNo})` : ''}. Opening…`
+                    : `Sent to Jobs Ready${jobNo ? ` as Job ${jobNo}` : ''}.`,
+            );
+            closeModal();
+            router.push('/dashboard/jobs-ready');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Could not send to Jobs Ready.');
+        } finally { setSendingJobsId(null); }
+    };
+
     // Bulk notify — with a count confirmation (Q4.4 + Q4.7 guard).
     const bulkNotify = async () => {
         const ids = [...selectedIds];
@@ -1723,7 +1743,7 @@ const ClaimsManagement = () => {
             {/* Claim Details Modal */}
             {showClaimModal && selectedClaim && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+                    <div className="bg-white rounded-xl w-full max-w-[760px] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
                         <div className="flex justify-between items-center px-6 py-6 border-b border-gray-200">
                             <h2 className="text-xl font-bold text-gray-800">Claim Details</h2>
                             <button className="w-8 h-8 border-0 bg-transparent cursor-pointer rounded-md flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-all" onClick={closeModal}>
@@ -1734,99 +1754,76 @@ const ClaimsManagement = () => {
                             </button>
                         </div>
                         <div className="p-6">
-                            <div className="claim-details-grid">
-                                <div className="detail-group">
-                                    <label>Claim ID</label>
-                                    <div className="detail-value">{selectedClaim.displayId}</div>
-                                </div>
-                                <div className="detail-group">
-                                    <label>Client Name</label>
-                                    <div className="detail-value">{selectedClaim.client}</div>
-                                </div>
-                                <div className="detail-group">
-                                    <label>Property Address</label>
-                                    <div className="detail-value">{selectedClaim.address}</div>
-                                </div>
-                                <div className="detail-group">
-                                    <label>Claim Amount (RCV)</label>
-                                    <div className="detail-value" style={{color: '#16a34a', fontWeight: 600}}>
-                                        ${selectedClaim.amount.toLocaleString()}
-                                    </div>
-                                </div>
-                                {selectedClaim.approvedAmount > 0 && (
-                                    <div className="detail-group">
-                                        <label>Approved</label>
-                                        <div className="detail-value" style={{ fontWeight: 600 }}>${selectedClaim.approvedAmount.toLocaleString()}</div>
-                                    </div>
-                                )}
-                                {selectedClaim.paidAmount > 0 && (
-                                    <div className="detail-group">
-                                        <label>Paid</label>
-                                        <div className="detail-value" style={{ fontWeight: 600 }}>${selectedClaim.paidAmount.toLocaleString()}</div>
-                                    </div>
-                                )}
-                                <div className="detail-group">
-                                    <label>Damage Type</label>
-                                    <div className="detail-value">{selectedClaim.damageType}</div>
-                                </div>
-                                <div className="detail-group">
-                                    <label>Insurance Carrier</label>
-                                    <div className="detail-value">{selectedClaim.insurer || '—'}</div>
-                                </div>
-                                {selectedClaim.policyNumber && (
-                                    <div className="detail-group">
-                                        <label>Policy #</label>
-                                        <div className="detail-value">{selectedClaim.policyNumber}</div>
-                                    </div>
-                                )}
-                                <div className="detail-group">
-                                    <label>Adjuster</label>
-                                    <div className="detail-value">
-                                        {selectedClaim.adjusterName || '—'}
-                                        {selectedClaim.adjusterPhone && <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{selectedClaim.adjusterPhone}</div>}
-                                    </div>
-                                </div>
-                                {selectedClaim.dateOfLoss && (
-                                    <div className="detail-group">
-                                        <label>Date of Loss</label>
-                                        <div className="detail-value">{new Date(selectedClaim.dateOfLoss).toLocaleDateString()}</div>
-                                    </div>
-                                )}
-                                <div className="detail-group">
-                                    <label>Priority</label>
-                                    <div className="detail-value">
-                                        <span className={`table-priority priority-${selectedClaim.priority}`}>
-                                            {selectedClaim.priority.charAt(0).toUpperCase() + selectedClaim.priority.slice(1)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="detail-group">
-                                    <label>Current Stage</label>
-                                    <div className="detail-value">
+                            {/* Identity + status at a glance */}
+                            <div style={{ marginBottom: '1.25rem' }}>
+                                <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1a1f3a' }}>{selectedClaim.client}</div>
+                                <div style={{ fontSize: '0.82rem', color: '#6b7280', marginTop: 2 }}>{selectedClaim.displayId} · {selectedClaim.address}</div>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+                                    <span className="cd-modal-chip" style={{ background: (selectedClaim.stage >= 11) ? '#fee2e2' : '#fef3c7', color: (selectedClaim.stage >= 11) ? '#b91c1c' : '#92400e' }}>
                                         Stage {selectedClaim.stage}: {selectedClaim.stageName}
-                                    </div>
+                                    </span>
+                                    <span className={`table-priority priority-${selectedClaim.priority}`}>
+                                        {selectedClaim.priority.charAt(0).toUpperCase() + selectedClaim.priority.slice(1)}
+                                    </span>
+                                    {selectedClaim.needAction ? (
+                                        <span className="cd-modal-chip" style={{ background: '#fee2e2', color: '#b91c1c' }} title={selectedClaim.actionReason || ''}>Action required</span>
+                                    ) : (
+                                        <span className="cd-modal-chip" style={{ background: '#dcfce7', color: '#166534' }}>In progress</span>
+                                    )}
                                 </div>
-                                <div className="detail-group">
-                                    <label>Status</label>
-                                    <div className="detail-value">
-                                        {selectedClaim.needAction ? (
-                                            <span style={{color: '#dc2626', fontWeight: 600}}>
-                                                Action Required{selectedClaim.actionReason ? ` — ${selectedClaim.actionReason}` : ''}
-                                            </span>
-                                        ) : (
-                                            <span style={{color: '#16a34a', fontWeight: 600}}>In Progress</span>
-                                        )}
-                                        {selectedClaim.daysInStage != null && selectedClaim.stage < 10 && (
-                                            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 2 }}>
-                                                {selectedClaim.daysInStage} day{selectedClaim.daysInStage === 1 ? '' : 's'} in this stage
-                                            </div>
-                                        )}
-                                    </div>
+                                {selectedClaim.needAction && selectedClaim.actionReason && (
+                                    <div style={{ fontSize: '0.78rem', color: '#b91c1c', marginTop: 6 }}>{selectedClaim.actionReason}</div>
+                                )}
+                                {selectedClaim.stage <= 10 && (
+                                    <>
+                                        <div className="cd-progress light" style={{ marginTop: 12 }} aria-hidden="true">
+                                            {Array.from({ length: 10 }, (_, i) => {
+                                                const n = i + 1;
+                                                const cls = n < selectedClaim.stage ? 'done' : n === selectedClaim.stage ? 'current' : '';
+                                                return <div key={n} className={`cd-progress-seg ${cls}`} />;
+                                            })}
+                                        </div>
+                                        <div className="cd-progress-label light" style={{ marginTop: 6 }}>
+                                            Stage {selectedClaim.stage} of 10
+                                            {selectedClaim.daysInStage != null && ` · ${selectedClaim.daysInStage} day${selectedClaim.daysInStage === 1 ? '' : 's'} in this stage`}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Money at a glance */}
+                            <div className="cd-stats" style={{ marginBottom: '1.25rem' }}>
+                                <div className="cd-stat">
+                                    <div className="cd-stat-label">Estimated (RCV)</div>
+                                    <div className="cd-stat-value money">${selectedClaim.amount.toLocaleString()}</div>
+                                </div>
+                                <div className="cd-stat">
+                                    <div className="cd-stat-label">Approved</div>
+                                    <div className={`cd-stat-value ${selectedClaim.approvedAmount > 0 ? 'money' : 'muted'}`}>${(selectedClaim.approvedAmount || 0).toLocaleString()}</div>
+                                </div>
+                                <div className="cd-stat">
+                                    <div className="cd-stat-label">Paid</div>
+                                    <div className={`cd-stat-value ${selectedClaim.paidAmount > 0 ? 'money' : 'muted'}`}>${(selectedClaim.paidAmount || 0).toLocaleString()}</div>
+                                </div>
+                            </div>
+
+                            {/* Details */}
+                            <div className="cd-info-grid">
+                                <div className="cd-field"><span className="cd-field-label">Damage Type</span><span className="cd-field-value">{selectedClaim.damageType || '—'}</span></div>
+                                <div className="cd-field"><span className="cd-field-label">Date of Loss</span><span className="cd-field-value">{selectedClaim.dateOfLoss ? new Date(selectedClaim.dateOfLoss).toLocaleDateString() : '—'}</span></div>
+                                <div className="cd-field"><span className="cd-field-label">Insurance Carrier</span><span className="cd-field-value">{selectedClaim.insurer || '—'}</span></div>
+                                <div className="cd-field"><span className="cd-field-label">Policy #</span><span className="cd-field-value">{selectedClaim.policyNumber || '—'}</span></div>
+                                <div className="cd-field">
+                                    <span className="cd-field-label">Adjuster</span>
+                                    <span className="cd-field-value">
+                                        {selectedClaim.adjusterName || '—'}
+                                        {selectedClaim.adjusterPhone && <> · <a href={`tel:${selectedClaim.adjusterPhone}`}>{selectedClaim.adjusterPhone}</a></>}
+                                    </span>
                                 </div>
                                 {has('assign_claims') && (
-                                    <div className="detail-group">
-                                        <label>Assigned To</label>
-                                        <div className="detail-value">
+                                    <div className="cd-field">
+                                        <span className="cd-field-label">Assigned To</span>
+                                        <span className="cd-field-value">
                                             <select
                                                 className="stage-selector"
                                                 value={selectedClaim.assignedTo || ''}
@@ -1838,40 +1835,47 @@ const ClaimsManagement = () => {
                                                     <option key={m.id} value={m.id}>{m.name}</option>
                                                 ))}
                                             </select>
-                                        </div>
+                                        </span>
                                     </div>
                                 )}
-                                <div className="detail-group">
-                                    <label>Latest Activity</label>
-                                    <div className="detail-value">
-                                        {selectedClaim.updatedAt ? `Updated ${timeAgo(selectedClaim.updatedAt)}` : '—'}
-                                        {selectedClaim.createdAt && <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Opened {new Date(selectedClaim.createdAt).toLocaleDateString()}</div>}
-                                    </div>
-                                </div>
+                            </div>
+
+                            <div className="cd-notes">
+                                {selectedClaim.updatedAt ? `Updated ${timeAgo(selectedClaim.updatedAt)}` : 'No recent activity'}
+                                {selectedClaim.createdAt && ` · Opened ${new Date(selectedClaim.createdAt).toLocaleDateString()}`}
                             </div>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2 flex-wrap">
-                            <button className="modal-btn secondary" onClick={closeModal}>
+                        <div className="px-6 py-4 border-t border-gray-200 flex items-center gap-2 flex-nowrap overflow-x-auto">
+                            <button className="modal-btn danger" style={{ marginRight: 'auto' }} onClick={closeModal}>
                                 Close
                             </button>
                             <button
-                                className="modal-btn primary"
+                                className="modal-btn"
                                 onClick={() => showMoveStageMenu(selectedClaim.id)}
                             >
-                                Move to Different Stage
+                                Move stage
                             </button>
                             <button
-                                className="modal-btn primary"
-                                style={{ background: '#16a34a' }}
+                                className="modal-btn notify"
                                 disabled={notifyingId === selectedClaim.id}
                                 onClick={() => notifyClient(selectedClaim.id)}
                                 title="Email + text this client their current claim status with a portal link"
                             >
                                 {notifyingId === selectedClaim.id ? 'Notifying…' : '🔔 Notify client'}
                             </button>
+                            {/* Q2.7: send an approved claim (stage 7–10) to Jobs Ready. */}
+                            {selectedClaim.stage >= 7 && selectedClaim.stage <= 10 && has('view_jobs') && (
+                                <button
+                                    className="modal-btn accent"
+                                    disabled={sendingJobsId === selectedClaim.id}
+                                    onClick={() => sendClaimToJobs(selectedClaim.id)}
+                                    title="Create the linked job in Jobs Ready, pre-filled from this claim"
+                                >
+                                    {sendingJobsId === selectedClaim.id ? 'Sending…' : '→ Send to Jobs Ready'}
+                                </button>
+                            )}
                             <button
                                 className="modal-btn primary"
-                                style={{ background: '#1a1f3a' }}
                                 onClick={() => { const id = selectedClaim.id; closeModal(); goToDetail(id); }}
                             >
                                 See Client Profile →

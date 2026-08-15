@@ -853,30 +853,46 @@
 }
 
 
+/* Modal footer buttons — one filled primary, the rest quiet outline, so a
+   footer full of actions reads as a clean hierarchy (not a wall of green). */
 .modal-btn {
-    padding: 0.625rem 1.25rem;
-    background: #f3f4f6;
-    color: #1f2937;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.55rem 1rem;
+    background: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
     border-radius: 8px;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
+    white-space: nowrap;
 }
 
-.modal-btn:hover {
-    background: #e5e7eb;
-}
+.modal-btn:hover { background: #f9fafb; border-color: #9ca3af; }
+.modal-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
-.modal-btn.primary {
-    background: #16a34a;
-    color: white;
-}
+/* Quiet text button — for Close. */
+.modal-btn.ghost { background: transparent; border-color: transparent; color: #6b7280; }
+.modal-btn.ghost:hover { background: #f3f4f6; color: #1f2937; }
 
-.modal-btn.primary:hover {
-    background: #15803d;
-}
+/* Red outline — dismiss/Close. */
+.modal-btn.danger { background: #fff; border-color: #fca5a5; color: #dc2626; }
+.modal-btn.danger:hover { background: #fef2f2; border-color: #dc2626; }
+
+/* The single filled primary. */
+.modal-btn.primary { background: #1a1f3a; color: #fff; border-color: #1a1f3a; }
+.modal-btn.primary:hover { background: #2a3151; border-color: #2a3151; }
+
+/* Accent outline — the notable forward action (Send to Jobs Ready). */
+.modal-btn.accent { color: #0f766e; border-color: #5eead4; background: #f0fdfa; }
+.modal-btn.accent:hover:not(:disabled) { background: #ccfbf1; border-color: #0f766e; }
+
+/* Notify keeps a subtle green tint so it's findable without shouting. */
+.modal-btn.notify { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+.modal-btn.notify:hover:not(:disabled) { background: #dcfce7; border-color: #15803d; }
 
 /* Stage Menu Styles */
 .stage-menu {
@@ -1904,3 +1920,56 @@
 .stage-pager-btn:hover { border-color: #FDB813; background: #fffdf5; }
 .stage-pager-btn.link { border: none; background: none; color: #6b7280; font-weight: 600; padding: 0.25rem; }
 .stage-pager-btn.link:hover { color: #1a1f3a; background: none; text-decoration: underline; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Claim Detail page redesign — meaningful hero + stage stepper + stat
+   tiles + grouped info cards. Prefixed .cd- so it can't collide with the
+   shared claims list styles above.
+   ───────────────────────────────────────────────────────────────────── */
+.cd-hero { background: linear-gradient(135deg, #1a1f3a 0%, #2a3151 100%); padding: 1.5rem 2rem 1.75rem; color: #fff; }
+.cd-back { color: rgba(255,255,255,0.75); font-size: 0.85rem; text-decoration: none; }
+.cd-back:hover { color: #fff; }
+.cd-hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.cd-hero-name { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+.cd-hero-sub { color: rgba(255,255,255,0.82); font-size: 0.9rem; margin-top: 0.4rem; display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.cd-hero-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.cd-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.65rem; border-radius: 999px; white-space: nowrap; }
+.cd-chip.stage { background: rgba(253,184,19,0.18); color: #FDB813; }
+.cd-chip.closed { background: rgba(220,38,38,0.22); color: #fca5a5; }
+.cd-chip.priority-high { background: rgba(220,38,38,0.22); color: #fca5a5; }
+.cd-chip.priority-medium { background: rgba(255,255,255,0.16); color: #e5e7eb; }
+.cd-chip.priority-low { background: rgba(255,255,255,0.12); color: #cbd5e1; }
+.cd-btn { border: none; border-radius: 8px; padding: 0.55rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.12s; }
+.cd-btn.gold { background: #FDB813; color: #1a1f3a; }
+.cd-btn.gold:hover:not(:disabled) { background: #e5a600; }
+.cd-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cd-progress { display: flex; gap: 4px; margin-top: 1.1rem; }
+.cd-progress-seg { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); transition: background 0.15s; }
+.cd-progress-seg.done { background: #16a34a; }
+.cd-progress-seg.current { background: #FDB813; }
+.cd-progress-label { font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem; }
+
+.cd-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.cd-stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem 1.15rem; }
+.cd-stat-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #6b7280; }
+.cd-stat-value { font-size: 1.45rem; font-weight: 700; color: #1a1f3a; margin-top: 0.35rem; }
+.cd-stat-value.money { color: #16a34a; }
+.cd-stat-value.muted { color: #9ca3af; }
+
+.cd-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem 1.5rem; }
+.cd-card-title { font-size: 1rem; font-weight: 700; color: #1a1f3a; margin: 0 0 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.cd-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem 1.5rem; }
+.cd-field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.cd-field-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #9ca3af; }
+.cd-field-value { font-size: 0.9rem; color: #1f2937; font-weight: 500; word-break: break-word; }
+.cd-field-value a { color: #2563eb; text-decoration: none; }
+.cd-field-value a:hover { text-decoration: underline; }
+.cd-notes { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px dashed #e5e7eb; font-size: 0.85rem; color: #374151; line-height: 1.5; }
+
+/* Light-background variant of the stepper for the claim quick-view modal. */
+.cd-progress.light .cd-progress-seg { background: #e5e7eb; }
+.cd-progress.light .cd-progress-seg.done { background: #16a34a; }
+.cd-progress.light .cd-progress-seg.current { background: #FDB813; }
+.cd-progress-label.light { color: #6b7280; }
+.cd-modal-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 999px; white-space: nowrap; }

@@ -79,7 +79,7 @@ function Modal({ children, onClose, wide }) {
    ========================================================================= */
 function CreateJobModal({ onClose, onSaved, toast }) {
     const [form, setForm] = useState({
-        claim_id: '', address: '', job_type: JOB_TYPES[0], scope: '', notes: '',
+        claim_id: '', estimate_id: '', address: '', job_type: JOB_TYPES[0], scope: '', notes: '',
         job_cost: '', lat: '', lng: '', permit_status: 'not_required', material_order_status: 'not_ordered',
     });
     const [trades, setTrades] = useState([]);
@@ -87,9 +87,76 @@ function CreateJobModal({ onClose, onSaved, toast }) {
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
 
+    // Q2.8 — "Add Job" starts from an existing client (search → pick → choose
+    // one of their estimates), or a blank standalone job for retail/cash work.
+    const [mode, setMode] = useState('client'); // 'client' | 'standalone'
+    const [clientQuery, setClientQuery] = useState('');
+    const [clientResults, setClientResults] = useState([]);
+    const [searchingClients, setSearchingClients] = useState(false);
+    const [selectedClient, setSelectedClient] = useState(null);
+    const [estimates, setEstimates] = useState([]);
+    const [loadingEstimates, setLoadingEstimates] = useState(false);
+    const [showAllEst, setShowAllEst] = useState(false);
+    const EST_LIMIT = 5;
+    const searchTimer = useRef(null);
+    const clientName = (c) => [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed client';
+    const clientAddr = (c) => c.address || [c.city, c.state, c.zip_code].filter(Boolean).join(', ') || '';
+
+    // Debounced client search (min 2 chars) against the existing list endpoint.
+    useEffect(() => {
+        if (mode !== 'client' || selectedClient) return;
+        const q = clientQuery.trim();
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        if (q.length < 2) { setClientResults([]); setSearchingClients(false); return; }
+        setSearchingClients(true);
+        searchTimer.current = setTimeout(async () => {
+            try {
+                const res = await axiosInstance.get('/client-portal', { params: { search: q }, suppressErrorToast: true });
+                setClientResults((res.data?.data ?? []).slice(0, 8));
+            } catch { setClientResults([]); }
+            finally { setSearchingClients(false); }
+        }, 300);
+        return () => searchTimer.current && clearTimeout(searchTimer.current);
+    }, [clientQuery, mode, selectedClient]);
+
+    const pickClient = async (c) => {
+        setSelectedClient(c);
+        setClientResults([]);
+        setShowAllEst(false);
+        set('claim_id', c.id);
+        set('estimate_id', '');
+        set('address', clientAddr(c));
+        setLoadingEstimates(true);
+        try {
+            const res = await axiosInstance.get('/estimates', { params: { client_id: c.id }, suppressErrorToast: true });
+            setEstimates(res.data?.data ?? []);
+        } catch { setEstimates([]); }
+        finally { setLoadingEstimates(false); }
+    };
+
+    const clearClient = () => {
+        setSelectedClient(null); setEstimates([]); setClientQuery('');
+        set('claim_id', ''); set('estimate_id', ''); set('address', '');
+    };
+
+    const pickEstimate = (est) => {
+        const id = est?.id || '';
+        set('estimate_id', id);
+        // Seed job type + scope from the chosen estimate (editable).
+        if (est) {
+            if (est.damage_type && JOB_TYPES.includes(est.damage_type)) set('job_type', est.damage_type);
+            const title = est.title || est.estimate_title;
+            if (title && !form.scope.trim()) set('scope', `Based on estimate: ${title}`);
+        }
+    };
+
     const save = async () => {
-        if (!form.address.trim() && !form.claim_id.trim()) {
-            toast('Enter an address, or link a claim to pull one.', 'error');
+        if (mode === 'client' && !selectedClient) {
+            toast('Search and pick a client, or switch to Standalone.', 'error');
+            return;
+        }
+        if (mode === 'standalone' && !form.address.trim()) {
+            toast('Enter an address for the standalone job.', 'error');
             return;
         }
         setSaving(true);
@@ -102,7 +169,10 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                 permit_status: form.permit_status,
                 material_order_status: form.material_order_status,
             };
-            if (form.claim_id.trim()) payload.claim_id = form.claim_id.trim();
+            if (mode === 'client' && selectedClient) {
+                payload.claim_id = selectedClient.id;
+                if (form.estimate_id) payload.estimate_id = form.estimate_id;
+            }
             if (form.address.trim()) payload.address = form.address.trim();
             if (form.lat !== '' && !isNaN(parseFloat(form.lat))) payload.lat = parseFloat(form.lat);
             if (form.lng !== '' && !isNaN(parseFloat(form.lng))) payload.lng = parseFloat(form.lng);
@@ -118,24 +188,96 @@ function CreateJobModal({ onClose, onSaved, toast }) {
         }
     };
 
+    const money = (n) => (n || n === 0)
+        ? `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : '';
+
     return (
         <Modal onClose={onClose}>
             <div className="modal-head">
-                <div><h2>Add Job</h2><div className="sub">Link a claim (claim→job) or create a standalone retail/cash job.</div></div>
+                <div><h2>Add Job</h2><div className="sub">Start from an existing client + estimate, or create a standalone retail/cash job.</div></div>
                 <button className="modal-close" onClick={onClose}>&times;</button>
             </div>
             <div className="modal-body">
+                {/* Q2.8 — client vs standalone */}
+                <div className="form-section">
+                    <div className="jobsrc-toggle">
+                        <button type="button" className={`jobsrc-btn ${mode === 'client' ? 'on' : ''}`} onClick={() => setMode('client')}>Existing client</button>
+                        <button type="button" className={`jobsrc-btn ${mode === 'standalone' ? 'on' : ''}`} onClick={() => { setMode('standalone'); clearClient(); }}>Standalone (retail)</button>
+                    </div>
+
+                    {mode === 'client' && !selectedClient && (
+                        <div className="field full" style={{ position: 'relative', marginTop: '0.75rem' }}>
+                            <label>Search client by name</label>
+                            <input type="text" value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Start typing a client's name…" autoFocus />
+                            {(searchingClients || clientResults.length > 0) && clientQuery.trim().length >= 2 && (
+                                <div className="client-results">
+                                    {searchingClients && <div className="client-result muted">Searching…</div>}
+                                    {!searchingClients && clientResults.length === 0 && <div className="client-result muted">No matching clients.</div>}
+                                    {clientResults.map((c) => (
+                                        <button type="button" key={c.id} className="client-result" onClick={() => pickClient(c)}>
+                                            <span className="cr-name">{clientName(c)}</span>
+                                            <span className="cr-addr">{clientAddr(c) || 'No address'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {mode === 'client' && selectedClient && (
+                        <div className="picked-client">
+                            <div className="pc-head">
+                                <div>
+                                    <div className="pc-name">{clientName(selectedClient)}</div>
+                                    <div className="pc-addr">{clientAddr(selectedClient) || 'No address on file'}</div>
+                                </div>
+                                <button type="button" className="btn btn-ghost btn-sm" onClick={clearClient}>Change</button>
+                            </div>
+                            <div className="pc-est-label">Base this job on an estimate</div>
+                            {loadingEstimates ? (
+                                <div className="hint">Loading estimates…</div>
+                            ) : (
+                                <div className="est-list">
+                                    {estimates.length === 0 && <div className="hint">No estimates for this client yet — you can still create the job.</div>}
+                                    {(showAllEst ? estimates : estimates.slice(0, EST_LIMIT)).map((est) => {
+                                        const on = form.estimate_id === est.id;
+                                        const meta = [est.damage_type, est.status].filter(Boolean).join(' · ') || 'estimate';
+                                        return (
+                                            <button type="button" key={est.id} className={`est-card ${on ? 'on' : ''}`} onClick={() => pickEstimate(est)}>
+                                                <div className="est-main">
+                                                    <span className="est-title">{est.title || est.estimate_title || 'Untitled estimate'}</span>
+                                                    <span className="est-meta">{meta}</span>
+                                                </div>
+                                                {est.total_rcv > 0 && <span className="est-total">{money(est.total_rcv)}</span>}
+                                                {on && <span className="est-check" aria-hidden="true">✓</span>}
+                                            </button>
+                                        );
+                                    })}
+                                    {estimates.length > EST_LIMIT && (
+                                        <button type="button" className="est-more" onClick={() => setShowAllEst((v) => !v)}>
+                                            {showAllEst ? 'Show fewer' : `Show all ${estimates.length} estimates`}
+                                        </button>
+                                    )}
+                                    {estimates.length > 0 && (
+                                        <button type="button" className={`est-card no-est ${!form.estimate_id ? 'on' : ''}`} onClick={() => pickEstimate(null)}>
+                                            <div className="est-main"><span className="est-title">No estimate</span><span className="est-meta">Create the job without linking one</span></div>
+                                            {!form.estimate_id && <span className="est-check" aria-hidden="true">✓</span>}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 <div className="form-section">
                     <h3>Job Details</h3>
                     <div className="form-grid">
                         <div className="field full">
-                            <label>Linked Claim ID <span className="hint" style={{ fontWeight: 400 }}>(optional — leave blank for a standalone job)</span></label>
-                            <input type="text" value={form.claim_id} onChange={(e) => set('claim_id', e.target.value)} placeholder="client_portals UUID (optional)" />
-                        </div>
-                        <div className="field full">
                             <label>Property Address</label>
                             <input type="text" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, City, State ZIP" />
-                            <span className="hint">Pulled from the claim automatically when a claim is linked and this is left blank.</span>
+                            <span className="hint">{mode === 'client' ? 'Pre-filled from the client — edit if the job site differs.' : 'Required for a standalone job.'}</span>
                         </div>
                         <div className="field">
                             <label>Job Type</label>

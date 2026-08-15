@@ -1,6 +1,7 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
@@ -85,6 +86,28 @@ const ClaimDetail = ({ id }) => {
     const { has } = usePermissions();
     const [teamMembers, setTeamMembers] = useState([]);
     const [assigning, setAssigning] = useState(false);
+
+    // "Send to Jobs Ready" (QA Q2.7) — one action spins up the linked job.
+    const router = useRouter();
+    const [sendingToJobs, setSendingToJobs] = useState(false);
+
+    const sendToJobsReady = async () => {
+        setSendingToJobs(true);
+        try {
+            const res = await axiosInstance.post(`/jobs/from-claim/${id}`);
+            const jobNo = res.data?.data?.job_number;
+            if (res.data?.existed) {
+                toast.success(`Already in Jobs Ready${jobNo ? ` (Job ${jobNo})` : ''}. Opening…`);
+            } else {
+                toast.success(`Sent to Jobs Ready${jobNo ? ` as Job ${jobNo}` : ''}.`);
+            }
+            router.push('/dashboard/jobs-ready');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Could not send to Jobs Ready.');
+        } finally {
+            setSendingToJobs(false);
+        }
+    };
 
     const load = async () => {
         try {
@@ -275,48 +298,114 @@ const ClaimDetail = ({ id }) => {
     );
 
     const stage = claim.claim_status || 1;
+    const closed = stage === 11 || stage === 12;
     const carrier = claim.insurance_carrier || claim.insurance_company || '—';
     const isPhoto = (u) => (u.content_type || '').startsWith('image/');
 
     return (
         <div className="main-container">
-            <div className="header-section">
-                <Link href="/dashboard/claims" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', textDecoration: 'none' }}>← Back to Claims</Link>
-                <h1 className="header-title" style={{ marginTop: '0.5rem' }}>{claim.full_name || `${claim.first_name} ${claim.last_name}`}</h1>
-                <p className="header-subtitle">{claim.claim_number || 'Pending claim #'} · {claim.address}{claim.city ? `, ${claim.city}` : ''}</p>
+            <div className="cd-hero">
+                <Link href="/dashboard/claims" className="cd-back">← Back to Claims</Link>
+                <div className="cd-hero-row">
+                    <div style={{ minWidth: 0 }}>
+                        <div className="cd-hero-name">{claim.full_name || `${claim.first_name} ${claim.last_name}`}</div>
+                        <div className="cd-hero-sub">
+                            <span>{claim.claim_number || 'Pending claim #'}</span>
+                            {(claim.address || claim.city) && <span>· {claim.address}{claim.city ? `, ${claim.city}` : ''}{claim.state ? `, ${claim.state}` : ''}</span>}
+                            <span className={`cd-chip ${closed ? 'closed' : 'stage'}`}>Stage {stage}: {STAGE_NAMES[stage - 1]}</span>
+                            <span className={`cd-chip priority-${claim.priority || 'medium'}`}>{(claim.priority || 'medium')} priority</span>
+                        </div>
+                    </div>
+                    <div className="cd-hero-actions">
+                        {/* Q2.7: send an approved claim (stage 7+) to Jobs Ready in one action. */}
+                        {stage >= 7 && stage <= 10 && has('view_jobs') && (
+                            <button
+                                className="cd-btn gold"
+                                onClick={sendToJobsReady}
+                                disabled={sendingToJobs}
+                                title="Create the linked job in Jobs Ready, pre-filled from this claim"
+                            >
+                                {sendingToJobs ? 'Sending…' : '→ Send to Jobs Ready'}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Pipeline progress — where this claim sits in the 10-stage flow.
+                    Terminal stages (11 Declined / 12 Lost) show a closed banner. */}
+                {closed ? (
+                    <div className="cd-progress-label" style={{ marginTop: '1rem' }}>
+                        This claim is closed — <strong style={{ color: '#fca5a5' }}>{STAGE_NAMES[stage - 1]}</strong>.
+                    </div>
+                ) : (
+                    <>
+                        <div className="cd-progress" aria-hidden="true">
+                            {Array.from({ length: 10 }, (_, i) => {
+                                const n = i + 1;
+                                const cls = n < stage ? 'done' : n === stage ? 'current' : '';
+                                return <div key={n} className={`cd-progress-seg ${cls}`} />;
+                            })}
+                        </div>
+                        <div className="cd-progress-label">Stage {stage} of 10 · {STAGE_NAMES[stage - 1]}</div>
+                    </>
+                )}
             </div>
 
             <div className="pipeline-content" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: '1.5rem', alignItems: 'start' }}>
                 {/* Left column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: 0 }}>
-                    {/* Overview */}
-                    <div className="current-stage-info" style={{ marginBottom: 0 }}>
-                        <h3 className="current-stage-title">Claim Overview</h3>
-                        <div className="claim-details-grid" style={{ marginTop: '1rem' }}>
-                            <div className="detail-group"><label>Stage</label>
-                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <select className="stage-selector" style={{ minWidth: 220 }} value={stage} onChange={(e) => changeStage(parseInt(e.target.value, 10))}>
-                                        {STAGE_NAMES.map((n, i) => <option key={i + 1} value={i + 1}>{i + 1}. {n}</option>)}
-                                    </select>
-                                    {(stage === 11 || stage === 12) && (
-                                        <button className="table-action-btn primary" onClick={reopenClaim}>Reopen</button>
-                                    )}
-                                </div>
+                    {/* Money at a glance */}
+                    <div className="cd-stats">
+                        <div className="cd-stat">
+                            <div className="cd-stat-label">Estimated (RCV)</div>
+                            <div className="cd-stat-value money">{fmtMoney(claim.claim_value)}</div>
+                        </div>
+                        <div className="cd-stat">
+                            <div className="cd-stat-label">Approved</div>
+                            <div className={`cd-stat-value ${claim.approved_amount > 0 ? 'money' : 'muted'}`}>{fmtMoney(claim.approved_amount)}</div>
+                        </div>
+                        <div className="cd-stat">
+                            <div className="cd-stat-label">Paid</div>
+                            <div className={`cd-stat-value ${claim.paid_amount > 0 ? 'money' : 'muted'}`}>{fmtMoney(claim.paid_amount)}</div>
+                        </div>
+                    </div>
+
+                    {/* Claim details — grouped, with the stage control up top */}
+                    <div className="cd-card">
+                        <div className="cd-card-title">
+                            Claim details
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <select className="stage-selector" style={{ minWidth: 200 }} value={stage} onChange={(e) => changeStage(parseInt(e.target.value, 10))}>
+                                    {STAGE_NAMES.map((n, i) => <option key={i + 1} value={i + 1}>{i + 1}. {n}</option>)}
+                                </select>
+                                {closed && (
+                                    <button className="cd-btn gold" onClick={reopenClaim}>Reopen</button>
+                                )}
                             </div>
-                            <div className="detail-group"><label>Priority</label><div className="detail-value"><span className={`table-priority priority-${claim.priority || 'medium'}`}>{(claim.priority || 'medium')}</span></div></div>
-                            <div className="detail-group"><label>Insurance Carrier</label><div className="detail-value">{carrier}</div></div>
-                            <div className="detail-group"><label>Policy #</label><div className="detail-value">{claim.policy_number || '—'}</div></div>
-                            <div className="detail-group"><label>Damage Type</label><div className="detail-value">{claim.damage_type || '—'}</div></div>
-                            <div className="detail-group"><label>Date of Loss</label><div className="detail-value">{claim.date_of_loss || '—'}</div></div>
-                            <div className="detail-group"><label>Estimated</label><div className="detail-value" style={{ color: '#16a34a', fontWeight: 600 }}>{fmtMoney(claim.claim_value)}</div></div>
-                            <div className="detail-group"><label>Approved</label><div className="detail-value">{fmtMoney(claim.approved_amount)}</div></div>
-                            <div className="detail-group"><label>Paid</label><div className="detail-value">{fmtMoney(claim.paid_amount)}</div></div>
-                            <div className="detail-group"><label>Email</label><div className="detail-value">{claim.email || '—'}</div></div>
-                            <div className="detail-group"><label>Phone</label><div className="detail-value">{claim.phone || '—'}</div></div>
-                            <div className="detail-group"><label>Adjuster</label><div className="detail-value">{claim.adjuster_name || '—'}{claim.adjuster_phone ? ` · ${claim.adjuster_phone}` : ''}</div></div>
-                            <div className="detail-group">
-                                <label>Assigned To</label>
-                                <div className="detail-value">
+                        </div>
+                        <div className="cd-info-grid">
+                            <div className="cd-field"><span className="cd-field-label">Damage Type</span><span className="cd-field-value">{claim.damage_type || '—'}</span></div>
+                            <div className="cd-field"><span className="cd-field-label">Date of Loss</span><span className="cd-field-value">{claim.date_of_loss || '—'}</span></div>
+                            <div className="cd-field"><span className="cd-field-label">Insurance Carrier</span><span className="cd-field-value">{carrier}</span></div>
+                            <div className="cd-field"><span className="cd-field-label">Policy #</span><span className="cd-field-value">{claim.policy_number || '—'}</span></div>
+                            <div className="cd-field">
+                                <span className="cd-field-label">Adjuster</span>
+                                <span className="cd-field-value">
+                                    {claim.adjuster_name || '—'}
+                                    {claim.adjuster_phone && <> · <a href={`tel:${claim.adjuster_phone}`}>{claim.adjuster_phone}</a></>}
+                                </span>
+                            </div>
+                            <div className="cd-field">
+                                <span className="cd-field-label">Email</span>
+                                <span className="cd-field-value">{claim.email ? <a href={`mailto:${claim.email}`}>{claim.email}</a> : '—'}</span>
+                            </div>
+                            <div className="cd-field">
+                                <span className="cd-field-label">Phone</span>
+                                <span className="cd-field-value">{claim.phone ? <a href={`tel:${claim.phone}`}>{claim.phone}</a> : '—'}</span>
+                            </div>
+                            <div className="cd-field">
+                                <span className="cd-field-label">Assigned To</span>
+                                <span className="cd-field-value">
                                     {has('assign_claims') ? (() => {
                                         const opts = [...teamMembers];
                                         if (claim.assigned_to_user_id && !opts.some(m => m.id === claim.assigned_to_user_id)) {
@@ -340,10 +429,10 @@ const ClaimDetail = ({ id }) => {
                                     ) : (
                                         <span style={{ color: '#9ca3af' }}>Unassigned</span>
                                     )}
-                                </div>
+                                </span>
                             </div>
                         </div>
-                        {claim.notes && <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#374151' }}><strong>Notes:</strong> {claim.notes}</p>}
+                        {claim.notes && <div className="cd-notes"><strong>Notes:</strong> {claim.notes}</div>}
                     </div>
 
                     {/* Documents */}
