@@ -471,6 +471,22 @@
 .subjobs .dt-row { border-top: 1px solid #f0f0f0; }
 .subjobs .dt-name { font-weight: 700; color: #1a1f3a; }
 
+/* Q2.9 — availability windows editor */
+.subjobs .avail-editor { display: flex; flex-direction: column; gap: 0.45rem; }
+.subjobs .avail-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.subjobs .avail-row input[type="date"] { padding: 0.4rem 0.5rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; }
+.subjobs .avail-row .avail-note { flex: 1; min-width: 160px; padding: 0.4rem 0.55rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; }
+.subjobs .avail-to { font-size: 0.78rem; color: #6b7280; }
+.subjobs .avail-add { align-self: flex-start; }
+.subjobs .avail-deadline { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.subjobs .avail-deadline input[type="date"] { max-width: 220px; padding: 0.4rem 0.5rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; }
+
+/* Q2.11 — pending sub-request approvals */
+.subjobs .jr-money.amber { color: #b45309; }
+.subjobs .dispatch-request-banner { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; padding: 0.6rem 0.8rem; margin-bottom: 0.75rem; font-size: 0.82rem; }
+.subjobs .dt-actions { display: flex; gap: 0.35rem; margin-top: 0.35rem; }
+.subjobs .btn-xs { padding: 0.2rem 0.55rem; font-size: 0.72rem; line-height: 1.3; border-radius: 6px; }
+
 /* Task 5.4 — mobile: keep wide grids from breaking the layout */
 .subjobs .dispatch-track { overflow-x: auto; }
 .subjobs .dt-head, .subjobs .dt-row { min-width: 460px; }

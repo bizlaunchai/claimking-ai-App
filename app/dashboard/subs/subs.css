@@ -107,6 +107,12 @@
 .subs-page .drawer-status-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .subs-page .drawer-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .subs-page .drawer-section { margin-bottom: 1.5rem; }
+/* Q2.11 — auto-accept toggle row */
+.subs-page .auto-accept-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 12px; padding: 0.8rem 1rem; }
+.subs-page .aa-title { font-weight: 700; color: #1a1f3a; font-size: 0.86rem; margin-bottom: 0.2rem; }
+.subs-page .aa-help { font-size: 0.76rem; color: #6b7280; max-width: 30ch; }
+.subs-page .aa-on { color: #16a34a; font-size: 0.72rem; margin-left: 0.3rem; }
+.subs-page .aa-off { color: #9ca3af; font-size: 0.72rem; margin-left: 0.3rem; }
 .subs-page .drawer-section h4 { font-size: 0.82rem; font-weight: 700; color: #1a1f3a; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0.6rem; }
 .subs-page .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .subs-page .kv-grid > div { display: flex; flex-direction: column; }

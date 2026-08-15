@@ -297,6 +297,17 @@ function SubDrawer({ subId, onClose, onChanged, toast }) {
     }, [subId]);
     useEffect(() => { load(); }, [load]);
 
+    const toggleAutoAccept = async () => {
+        setBusy('auto');
+        try {
+            const next = !data?.auto_accept;
+            await axiosInstance.patch(`/subs/${subId}/auto-accept`, { auto_accept: next });
+            toast(next ? 'Auto-accept ON — this sub wins jobs instantly.' : 'Auto-accept OFF — this sub’s accepts need approval.', 'success');
+            await load();
+            onChanged?.();
+        } catch { /* */ } finally { setBusy(''); }
+    };
+
     const setStatus = async (status) => {
         setBusy('status');
         try { await axiosInstance.patch(`/subs/${subId}/status`, { status }); toast('Status updated.', 'success'); await load(); onChanged?.(); }
@@ -352,6 +363,21 @@ function SubDrawer({ subId, onClose, onChanged, toast }) {
                                 {data.status === 'active' && <button className="btn btn-ghost" onClick={() => setStatus('suspended')} disabled={busy === 'status'}>Suspend</button>}
                                 {data.status === 'suspended' && <button className="btn btn-success" onClick={() => setStatus('active')} disabled={busy === 'status'}>Reactivate</button>}
                                 {['invited', 'onboarding'].includes(data.status) && <button className="btn btn-secondary" onClick={resend} disabled={busy === 'resend'}>{busy === 'resend' ? 'Sending…' : 'Resend Invite'}</button>}
+                            </div>
+
+                            {/* Q2.11 — auto-accept: trusted subs skip the request/approval queue */}
+                            <div className="drawer-section">
+                                <div className="auto-accept-row">
+                                    <div>
+                                        <div className="aa-title">Approved for auto-accept {data.auto_accept ? <span className="aa-on">ON</span> : <span className="aa-off">OFF</span>}</div>
+                                        <div className="aa-help">{data.auto_accept
+                                            ? 'This sub’s Accept wins the job instantly (first-accept-wins), no review.'
+                                            : 'This sub’s Accept becomes a request your team approves before the job is theirs.'}</div>
+                                    </div>
+                                    <button className={`btn btn-sm ${data.auto_accept ? 'btn-ghost' : 'btn-success'}`} onClick={toggleAutoAccept} disabled={busy === 'auto'}>
+                                        {busy === 'auto' ? '…' : data.auto_accept ? 'Turn off' : 'Turn on'}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="drawer-section">

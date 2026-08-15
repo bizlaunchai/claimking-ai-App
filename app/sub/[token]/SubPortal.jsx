@@ -347,7 +347,9 @@ function Wizard({ token, portal, reload }) {
    OFFER CARD  (accept-to-reveal)
    ========================================================================= */
 function OfferCard({ token, offer, onResponded }) {
-    const [detail, setDetail] = useState(null);
+    // Seed from the list row so a pending request (Q2.11) shows on reload without
+    // needing to open the card first.
+    const [detail, setDetail] = useState(offer.response === 'requested' ? { response: 'requested' } : null);
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState('');
 
@@ -364,13 +366,18 @@ function OfferCard({ token, offer, onResponded }) {
         setBusy(action);
         try {
             const res = await axiosInstance.post(`/sub-portal/${token}/dispatch/${offer.dispatch_id}/respond`, { action });
-            if (action === 'accept') { setDetail((d) => ({ ...(d || {}), ...(res.data?.data || {}), response: 'accepted' })); toast('Accepted! Job details revealed below.', 'success'); }
-            else toast('Declined.', 'info');
+            const resp = res.data?.data?.response;
+            if (action === 'accept') {
+                setDetail((d) => ({ ...(d || {}), ...(res.data?.data || {}), response: resp || 'accepted' }));
+                if (resp === 'requested') { setOpen(true); toast('Request sent — pending approval. We’ll notify you once it’s confirmed.', 'success'); }
+                else toast('Accepted! Job details revealed below.', 'success');
+            } else toast('Declined.', 'info');
             onResponded();
-        } catch { /* interceptor shows "already filled" etc. */ } finally { setBusy(''); }
+        } catch { /* interceptor shows "already filled" / rate-limit etc. */ } finally { setBusy(''); }
     };
 
     const accepted = detail?.response === 'accepted';
+    const requested = detail?.response === 'requested';
     return (
         <div className="offer-card">
             <div className="offer-top">
@@ -384,6 +391,12 @@ function OfferCard({ token, offer, onResponded }) {
                 <div className="offer-detail">
                     <div className="offer-scope">{detail.scope_summary}</div>
                     {(detail.photos || []).length > 0 && <div className="muted">📷 {detail.photos.length} photo(s) attached</div>}
+                    {requested && (
+                        <div className="reveal reveal-pending">
+                            <div className="reveal-title">⏳ Request submitted — pending approval</div>
+                            <div className="muted">The full address and client details unlock once our team approves your request. We’ll notify you.</div>
+                        </div>
+                    )}
                     {accepted && (
                         <div className="reveal">
                             <div className="reveal-title">✓ You accepted — full details:</div>
@@ -397,7 +410,8 @@ function OfferCard({ token, offer, onResponded }) {
             )}
             <div className="offer-actions">
                 <button className="btn btn-sm btn-ghost" onClick={view}>{open ? 'Hide' : 'View'}</button>
-                {!accepted && (
+                {requested && <span className="offer-pending-chip">⏳ Awaiting approval</span>}
+                {!accepted && !requested && (
                     <>
                         <button className="btn btn-sm btn-ghost" onClick={() => respond('decline')} disabled={!!busy}>{busy === 'decline' ? '…' : 'Decline'}</button>
                         <button className="btn btn-sm btn-success" onClick={() => respond('accept')} disabled={!!busy}>{busy === 'accept' ? '…' : 'Accept'}</button>
@@ -412,12 +426,27 @@ function OfferCard({ token, offer, onResponded }) {
 function JobCard({ token, job, reload }) {
     const inputRef = useRef(null);
     const [busy, setBusy] = useState('');
+    const [dateVal, setDateVal] = useState(job.scheduled_start ? String(job.scheduled_start).slice(0, 10) : '');
     const photos = Array.isArray(job.completion_photos) ? job.completion_photos : [];
+    const windows = Array.isArray(job.availability_windows) ? job.availability_windows : [];
+    const fmtDay = (d) => d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
     const setStatus = async (status) => {
         setBusy('status');
         try { await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/status`, { status }); toast('Status updated.', 'success'); reload(); }
         catch { /* */ } finally { setBusy(''); }
+    };
+
+    // Q2.9 — the sub sets the actual install date (server validates it's inside
+    // the availability windows / before the deadline, and notifies the client).
+    const saveDate = async () => {
+        if (!dateVal) { toast('Pick a date first.', 'error'); return; }
+        setBusy('date');
+        try {
+            await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/schedule`, { scheduled_start: dateVal });
+            toast('Date set — the client has been notified.', 'success');
+            reload();
+        } catch { /* interceptor shows the out-of-window / past-deadline message */ } finally { setBusy(''); }
     };
     const uploadPhoto = async (file) => {
         if (!file) return;
@@ -466,7 +495,27 @@ function JobCard({ token, job, reload }) {
             </div>
             <div className="jc-addr">{job.address || '—'}</div>
             {job.scope && <div className="jc-scope">{job.scope}</div>}
-            {job.scheduled_start && <div className="muted">📅 {fmtDateTime(job.scheduled_start)}</div>}
+
+            {/* Q2.9 — availability windows + deadline + the sub sets the actual date */}
+            <div className="jc-schedule">
+                {windows.length > 0 && (
+                    <div className="jc-windows">
+                        <div className="jc-sched-label">You must work within:</div>
+                        {windows.map((w, i) => (
+                            <div className="jc-window" key={i}>📆 {fmtDay(w.start)}{w.end && w.end !== w.start ? ` – ${fmtDay(w.end)}` : ''}{w.note ? <span className="jc-window-note"> — {w.note}</span> : null}</div>
+                        ))}
+                    </div>
+                )}
+                {job.complete_by && <div className="jc-deadline">⏳ Complete by <strong>{fmtDay(job.complete_by)}</strong></div>}
+                <div className="jc-setdate">
+                    <label className="jc-sched-label">{job.scheduled_start ? 'Your scheduled date' : 'Set your date'}</label>
+                    <div className="jc-setdate-row">
+                        <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} disabled={busy === 'date'} />
+                        <button className="btn btn-sm btn-success" disabled={busy === 'date' || !dateVal} onClick={saveDate}>{busy === 'date' ? 'Saving…' : (job.scheduled_start ? 'Update date' : 'Set date')}</button>
+                    </div>
+                    {job.scheduled_start && <div className="muted">📅 Currently: {fmtDay(job.scheduled_start)}</div>}
+                </div>
+            </div>
 
             <div className="jc-steps">
                 {steps.map(([s, label]) => (

@@ -143,6 +143,51 @@ const Icon = {
     ),
 };
 
+// QA Q2.9 — homeowner-facing project schedule: the actual date once the crew
+// sets it, plus the availability windows they'll work within and the deadline.
+function PortalJobSchedule({ schedule }) {
+    const fmtDay = (d) => d
+        ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+        : null;
+    const windows = Array.isArray(schedule.availability_windows) ? schedule.availability_windows : [];
+    const scheduled = fmtDay(schedule.scheduled_start);
+    return (
+        <div className="pv-schedule">
+            {scheduled ? (
+                <div className="pv-sched-set">
+                    <div className="pv-sched-label">Scheduled date</div>
+                    <div className="pv-sched-date">📅 {scheduled}</div>
+                </div>
+            ) : (
+                <div className="pv-sched-pending">Your crew will confirm the exact date soon.</div>
+            )}
+            {windows.length > 0 && (
+                <div className="pv-sched-windows">
+                    <div className="pv-sched-label">Planned work windows</div>
+                    {windows.map((w, i) => (
+                        <div className="pv-sched-window" key={i}>
+                            {fmtDay(w.start)}{w.end && w.end !== w.start ? ` – ${fmtDay(w.end)}` : ''}
+                            {w.note ? <span className="pv-sched-note"> · {w.note}</span> : null}
+                        </div>
+                    ))}
+                </div>
+            )}
+            {schedule.complete_by && (
+                <div className="pv-sched-deadline">Target completion by <strong>{fmtDay(schedule.complete_by)}</strong></div>
+            )}
+            <style jsx>{`
+                .pv-schedule { display: flex; flex-direction: column; gap: 0.85rem; }
+                .pv-sched-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #6b7280; margin-bottom: 0.25rem; }
+                .pv-sched-date { font-size: 1.15rem; font-weight: 700; color: #047857; }
+                .pv-sched-pending { font-size: 0.9rem; color: #6b7280; }
+                .pv-sched-window { font-size: 0.9rem; color: #1a1f3a; padding: 0.15rem 0; }
+                .pv-sched-note { color: #b45309; }
+                .pv-sched-deadline { font-size: 0.88rem; color: #b45309; }
+            `}</style>
+        </div>
+    );
+}
+
 export default function PortalView() {
     const params = useParams();
     const search = useSearchParams();
@@ -452,6 +497,17 @@ export default function PortalView() {
 
             {/* ── Tab panels. `key={activeTab}` replays the fade-in on switch. */}
             <div className="pv-tabpanel" key={activeTab}>
+                {activeTab === 'overview' && c.job_schedule && (
+                    <SectionCard
+                        icon={<Icon.Home width="18" height="18" />}
+                        accent="green"
+                        title="Project Schedule"
+                        subtitle="When your crew is set to work"
+                    >
+                        <PortalJobSchedule schedule={c.job_schedule} />
+                    </SectionCard>
+                )}
+
                 {activeTab === 'overview' && (
                     <SectionCard
                         icon={<Icon.Timeline width="18" height="18" />}
