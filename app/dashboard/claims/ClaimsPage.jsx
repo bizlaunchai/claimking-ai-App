@@ -72,16 +72,11 @@ const ClaimsManagement = () => {
     const ncInputBase = "w-full px-3.5 py-2.5 border-2 rounded-[10px] text-sm text-gray-800 bg-gray-50 transition-all placeholder:text-gray-400 focus:outline-none focus:border-[#FDB813] focus:bg-white focus:shadow-[0_0_0_4px_rgba(253,184,19,0.1)]";
     const ncInput = (err) => `${ncInputBase} ${err ? 'border-red-600 bg-red-50' : 'border-gray-200'}`;
 
-    const salesReps = ['Mike Reynolds', 'Jessica Tran', 'Carlos Ramirez', 'Emily Brooks'];
-
-    // Demo set of existing clients for autofill. In production this is pulled
-    // from the clients table (Supabase) keyed by company_id.
-    const existingClients = [
-        { name: 'Sarah Mitchell', email: 'sarah.mitchell@email.com', phone: '(330) 555-0142', address: '482 Oakwood Dr, Doylestown, OH 44230', insurer: 'State Farm', policy: 'SF-7741920' },
-        { name: 'James Carter', email: 'jcarter@email.com', phone: '(330) 555-0198', address: '17 Birchwood Ln, Wadsworth, OH 44281', insurer: 'Allstate', policy: 'AL-2298104' },
-        { name: 'Linda Nguyen', email: 'l.nguyen@email.com', phone: '(330) 555-0173', address: '903 Maple Ridge Rd, Medina, OH 44256', insurer: 'Liberty Mutual', policy: 'LM-5530217' },
-        { name: 'Robert Davis', email: 'rdavis@email.com', phone: '(234) 555-0110', address: '226 Sunset Blvd, Akron, OH 44302', insurer: 'Nationwide', policy: 'NW-8841003' }
-    ];
+    // Existing-client directory for the New Claim autofill — built from the
+    // real claims fetched from Supabase (see fetchClaims), unique by
+    // name+address so a client with several claims appears once. Held in a ref
+    // so typing in the search box doesn't trigger re-renders.
+    const clientsDirectoryRef = useRef([]);
 
     const [statsData, setStatsData] = useState({
         totalClaims: { value: "0", change: "0% vs last month", isPositive: true },
@@ -286,7 +281,30 @@ const ClaimsManagement = () => {
         try {
             if (!silent) setLoading(true);
             const res = await axiosInstance.get('/client-portal');
-            const rows = (res.data?.data || []).map(mapClaim);
+            const raw = res.data?.data || [];
+            const rows = raw.map(mapClaim);
+            // Build the New Claim autofill directory from the real rows (unique
+            // by name+address) so the modal reuses live contact + insurance
+            // details instead of hardcoded demo clients.
+            const seen = new Set();
+            const dir = [];
+            for (const c of raw) {
+                const name = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim();
+                if (!name) continue;
+                const address = [c.address, c.city, c.state, c.zip_code].filter(Boolean).join(', ');
+                const key = `${name.toLowerCase()}|${address.toLowerCase()}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                dir.push({
+                    name,
+                    email: c.email || '',
+                    phone: c.phone || '',
+                    address,
+                    insurer: c.insurance_carrier || c.insurance_company || '',
+                    policy: c.policy_number || '',
+                });
+            }
+            clientsDirectoryRef.current = dir;
             const { stage, tab, search } = filterRef.current;
             setAllClaims(rows);
             setFilteredClaims(computeFiltered(rows, stage, tab, search));
@@ -344,7 +362,7 @@ const ClaimsManagement = () => {
     // Fetch is best-effort (needs view_team); on failure the dropdown just shows
     // All / Unassigned. Names are normalised across the /team/members shape.
     useEffect(() => {
-        if (!has('view_all_claims')) return;
+        if (!has('view_all_claims') && !has('assign_claims')) return;
         (async () => {
             try {
                 const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
@@ -1055,9 +1073,9 @@ const ClaimsManagement = () => {
             setNcSuggestions([]);
             return;
         }
-        setNcSuggestions(existingClients.filter(c =>
+        setNcSuggestions(clientsDirectoryRef.current.filter(c =>
             c.name.toLowerCase().includes(q) || c.address.toLowerCase().includes(q)
-        ));
+        ).slice(0, 8));
     };
 
     const ncPickClient = (c) => {
@@ -1081,6 +1099,18 @@ const ClaimsManagement = () => {
 
     const ncRemoveFile = (key, idx) => {
         setNcFiles(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }));
+    };
+
+    // Normalise a US phone to the exact shape the backend DTO accepts
+    // ("(xxx) xxx-xxxx"). Without this, dashes/dots/spaces the user types
+    // silently 400 the create call. Falls back to the trimmed original when it
+    // can't be reduced to 10 digits, so unusual input is never mangled.
+    const normalizePhone = (raw) => {
+        const trimmed = (raw || '').trim();
+        let digits = trimmed.replace(/\D/g, '');
+        if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+        if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+        return trimmed;
     };
 
     // Modal damage-type label -> backend enum value
@@ -1124,14 +1154,14 @@ const ClaimsManagement = () => {
         };
         // Only send optional fields when filled (backend validates format).
         if (ncForm.clientEmail.trim()) payload.email = ncForm.clientEmail.trim();
-        if (ncForm.clientPhone.trim()) payload.phone = ncForm.clientPhone.trim();
+        if (ncForm.clientPhone.trim()) payload.phone = normalizePhone(ncForm.clientPhone);
         if (ncForm.insurer.trim()) payload.insurance_carrier = ncForm.insurer.trim();
         if (ncForm.policy.trim()) payload.policy_number = ncForm.policy.trim();
         if (claimNum) payload.claim_number = claimNum;
         if (ncForm.dateOfLoss) payload.date_of_loss = ncForm.dateOfLoss;
         if (DAMAGE_TYPE_MAP[ncForm.damageType]) payload.damage_type = DAMAGE_TYPE_MAP[ncForm.damageType];
         if (ncForm.adjusterName.trim()) payload.adjuster_name = ncForm.adjusterName.trim();
-        if (ncForm.adjusterPhone.trim()) payload.adjuster_phone = ncForm.adjusterPhone.trim();
+        if (ncForm.adjusterPhone.trim()) payload.adjuster_phone = normalizePhone(ncForm.adjusterPhone);
         if (ncForm.insuranceEmail.trim()) payload.adjuster_email = ncForm.insuranceEmail.trim();
         if (ncForm.notes.trim()) payload.notes = ncForm.notes.trim();
 
@@ -1140,6 +1170,17 @@ const ClaimsManagement = () => {
             const res = await axiosInstance.post('/client-portal', payload);
             const newId = res?.data?.data?.id;
             toast.success(`Claim created for ${ncForm.clientName.trim()} — "${stageNames[claimStatus - 1]}".`);
+
+            // Assign to the selected team member — reuses the permission-checked
+            // assign endpoint (same as the board's reassign). Non-fatal: the
+            // claim exists even if the assign call fails.
+            if (newId && ncForm.salesRep && has('assign_claims')) {
+                try {
+                    await axiosInstance.patch(`/client-portal/${newId}/assign`, { user_id: ncForm.salesRep });
+                } catch {
+                    // Assignment can be set later from the board.
+                }
+            }
 
             // Upload any staged documents to the new claim (sequential).
             const groups = [
@@ -1848,14 +1889,19 @@ const ClaimsManagement = () => {
                                         <input type="number" id="ncAmount" className={ncInput(false)} placeholder="0" min="0" step="100"
                                             value={ncForm.amount} onChange={(e) => ncUpdate('amount', e.target.value)} />
                                     </div>
+                                    {has('assign_claims') && (
                                     <div className={ncFieldCls}>
-                                        <label className={ncLabelCls} htmlFor="ncSalesRep">Sales Rep</label>
+                                        <label className={ncLabelCls} htmlFor="ncSalesRep">Assign To</label>
                                         <select id="ncSalesRep" className={ncInput(false)}
                                             value={ncForm.salesRep} onChange={(e) => ncUpdate('salesRep', e.target.value)}>
                                             <option value="">Unassigned</option>
-                                            {salesReps.map(r => <option key={r} value={r}>{r}</option>)}
+                                            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                         </select>
+                                        {teamMembers.length === 0 && (
+                                            <span className={ncHintCls}>No team members loaded — assign later from the board.</span>
+                                        )}
                                     </div>
+                                    )}
                                 </div>
                             </div>
 
