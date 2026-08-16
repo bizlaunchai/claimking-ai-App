@@ -415,6 +415,19 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>)}
 
+                        {has('view_schedule') && (<div className="nav-item">
+                            <Link href="/dashboard/packages" className={`nav-link ${pathname.startsWith('/dashboard/packages') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Packages & Memberships">
+                                <span className="nav-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                    </svg>
+                                </span>
+                                <span className="nav-text">Packages</span>
+                            </Link>
+                        </div>)}
+
                         {has('view_jobs') && (<div className="nav-item">
                             <Link href="/dashboard/jobs-ready" className={`nav-link ${pathname === '/dashboard/jobs-ready' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
                                 <span className="nav-icon">
