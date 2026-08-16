@@ -6,6 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import axiosInstance from '@/lib/axiosInstance';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import { Can } from '@/lib/permissions/Can';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
+import { useCompanyTrades } from '@/lib/useCompanyTrades';
 import './jobs-ready.css';
 
 /* =========================================================================
@@ -78,6 +80,7 @@ function Modal({ children, onClose, wide }) {
    CREATE JOB MODAL  → POST /jobs
    ========================================================================= */
 function CreateJobModal({ onClose, onSaved, toast }) {
+    const { trades: companyTrades } = useCompanyTrades();
     const [form, setForm] = useState({
         claim_id: '', estimate_id: '', address: '', job_type: JOB_TYPES[0], scope: '', notes: '',
         job_cost: '', lat: '', lng: '', permit_status: 'not_required', material_order_status: 'not_ordered',
@@ -282,7 +285,11 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                     <div className="form-grid">
                         <div className="field full">
                             <label>Property Address</label>
-                            <input type="text" value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, City, State ZIP" />
+                            <AddressAutocomplete
+                                placeholder="Street, City, State ZIP"
+                                value={form.address}
+                                onChange={(v) => set('address', v)}
+                                onSelect={(p) => set('address', p.formatted || p.address)} />
                             <span className="hint">{mode === 'client' ? 'Pre-filled from the client — edit if the job site differs.' : 'Required for a standalone job.'}</span>
                         </div>
                         <div className="field">
@@ -304,8 +311,8 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                         <div className="field full">
                             <label>Trades <span className="hint" style={{ fontWeight: 400 }}>(used to match subs)</span></label>
                             <div className="trade-chips">
-                                {TRADES.map((t) => (
-                                    <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>
+                                {companyTrades.map((t) => (
+                                    <button key={t.key} type="button" className={`trade-chip ${trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>
                                 ))}
                             </div>
                         </div>
@@ -366,6 +373,7 @@ function AvailabilityWindowsEditor({ windows, setWindows, completeBy, setComplet
    FIND SUBS (dispatch) MODAL  → GET /subs/match + POST /jobs/:id/dispatch
    ========================================================================= */
 function DispatchModal({ job, onClose, onDispatched, toast }) {
+    const { trades: companyTrades } = useCompanyTrades();
     const mapRef = useRef(null);
     const layerRef = useRef(null);
     const [trade, setTrade] = useState((job.trades && job.trades[0]) || 'roofing');
@@ -467,7 +475,7 @@ function DispatchModal({ job, onClose, onDispatched, toast }) {
                 <div className="form-section">
                     <h3>Match Criteria</h3>
                     <div className="form-grid">
-                        <div className="field"><label>Trade</label><select value={trade} onChange={(e) => setTrade(e.target.value)}>{TRADES.map((t) => <option key={t} value={t}>{tradeLabel(t)}</option>)}</select></div>
+                        <div className="field"><label>Trade</label><select value={trade} onChange={(e) => setTrade(e.target.value)}>{companyTrades.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
                         <div className="field"><label>Max distance (mi) <span className="hint" style={{ fontWeight: 400 }}>(optional)</span></label><input type="number" min="1" value={maxMiles} onChange={(e) => setMaxMiles(e.target.value)} placeholder="Sub's own radius" /></div>
                         <div className="field" style={{ alignSelf: 'end' }}>
                             <button className="btn btn-secondary btn-block" onClick={runMatch} disabled={searching || !hasCoords}>{searching ? 'Searching…' : '🔍 Find Matching Subs'}</button>
@@ -617,6 +625,7 @@ function DispatchTracker({ job, canDispatch, canApprove, toast, onChanged }) {
    ========================================================================= */
 function JobModal({ jobId, team, onClose, onChanged, toast }) {
     const { has } = usePermissions();
+    const { trades: companyTrades } = useCompanyTrades();
     const canDispatch = has('dispatch_subs');
     const canApprove = has('approve_sub_requests');
     const canFin = has('view_job_financials');
@@ -803,7 +812,7 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
                             <div className="field"><label>Materials</label><select value={edit.material_order_status} onChange={(e) => setE('material_order_status', e.target.value)}>{MATERIAL_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
                             <div className="field full">
                                 <label>Trades</label>
-                                <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${edit.trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+                                <div className="trade-chips">{companyTrades.map((t) => <button key={t.key} type="button" className={`trade-chip ${edit.trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>)}</div>
                             </div>
                             <div className="field full"><label>Scope</label><textarea value={edit.scope} onChange={(e) => setE('scope', e.target.value)} /></div>
                             <div className="field full"><label>Site Notes</label><textarea value={edit.notes} onChange={(e) => setE('notes', e.target.value)} /></div>

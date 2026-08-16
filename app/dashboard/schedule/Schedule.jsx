@@ -13,15 +13,56 @@ import { Link2, Copy } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import './schedule.css';
 
-// ─── Appointment types (color-coded per packet §5.4.3) ────────────────────
-const TYPE_META = {
-    estimate: { label: 'Estimate', cls: 'estimate' },
-    inspection: { label: 'Inspection', cls: 'inspection' },
-    adjuster_meeting: { label: 'Adjuster', cls: 'adjuster' },
-    install: { label: 'Install', cls: 'install' },
-    follow_up: { label: 'Follow-up', cls: 'follow-up' },
+// ─── Appointment types (Q3.6 — now DB-driven per company) ──────────────────
+// Built-in defaults are the fallback; `applyAppointmentTypes()` overwrites these
+// from GET /appointment-types once loaded, so custom types + edited colours flow
+// through every `TYPE_META[...]` lookup below without threading state everywhere.
+// Each entry carries the CSS class (the type key) + colour so we can both use the
+// static built-in CSS AND inject colours for custom/edited types.
+let TYPE_META = {
+    estimate: { label: 'Estimate', cls: 'estimate', color: '#FDB813', text: '#1a1f3a', duration: 60, reminder: true },
+    inspection: { label: 'Inspection', cls: 'inspection', color: '#3b82f6', text: '#ffffff', duration: 60, reminder: true },
+    adjuster_meeting: { label: 'Adjuster', cls: 'adjuster_meeting', color: '#8b5cf6', text: '#ffffff', duration: 60, reminder: true },
+    install: { label: 'Install', cls: 'install', color: '#1a1f3a', text: '#FDB813', duration: 120, reminder: true },
+    follow_up: { label: 'Follow-up', cls: 'follow_up', color: '#9ca3af', text: '#ffffff', duration: 30, reminder: true },
 };
-const TYPES = Object.keys(TYPE_META);
+let TYPES = Object.keys(TYPE_META);
+
+// Rebuild TYPE_META/TYPES from the server list + inject per-type colour CSS.
+// `.chip.<key>` colours the legend/dots; `.schedule-page .<key>` sets the
+// --c/--t custom props the calendar blocks + type-pick buttons already read.
+function applyAppointmentTypes(list) {
+    if (!Array.isArray(list) || !list.length) return;
+    const active = list.filter((t) => t.is_active !== false);
+    const next = {};
+    active.forEach((t) => {
+        next[t.key] = {
+            label: t.label,
+            cls: t.key,
+            color: t.color,
+            text: t.text_color,
+            duration: t.default_duration_minutes ?? 60,
+            reminder: !!(t.default_reminders?.sms_24h || t.default_reminders?.sms_2h),
+            applicable_fields: Array.isArray(t.applicable_fields) ? t.applicable_fields : ['address', 'reminders'],
+        };
+    });
+    TYPE_META = next;
+    TYPES = active.map((t) => t.key);
+
+    if (typeof document !== 'undefined') {
+        let el = document.getElementById('ck-appt-type-colors');
+        if (!el) { el = document.createElement('style'); el.id = 'ck-appt-type-colors'; document.head.appendChild(el); }
+        el.textContent = active.map((t) => {
+            const c = t.color || '#3b82f6';
+            const txt = t.text_color || '#ffffff';
+            const k = cssEscapeKey(t.key);
+            return `.schedule-page .chip.${k}{background:${c};}` +
+                   `.schedule-page .${k}{--c:${c};--t:${txt};}`;
+        }).join('\n');
+    }
+}
+// Type keys are our own slugs ([a-z0-9_]) but guard anyway.
+function cssEscapeKey(k) { return String(k).replace(/[^a-zA-Z0-9_-]/g, ''); }
 // Q3.2 — a synced Jobs Ready entry shows as a job, not a generic "Install".
 const entryLabel = (a) => a?.is_job ? `🔧 ${a.job_number || 'Job'}` : (TYPE_META[a?.type]?.label || 'Appointment');
 const entryCls = (a) => `${TYPE_META[a?.type]?.cls || ''}${a?.is_job ? ' is-job' : ''}`;
@@ -85,6 +126,22 @@ export default function Schedule() {
     const [notifyChoice, setNotifyChoice] = useState(null); // Q3.4 forced notify choice
     const [personFilter, setPersonFilter] = useState('');   // Q3.3 '' = everyone; uuid | sub:uuid
     const [showDayMap, setShowDayMap] = useState(false);    // Q3.5 day-route map
+    const [showTypes, setShowTypes] = useState(false);      // Q3.6 appointment type center
+    const [apptTypes, setApptTypes] = useState([]);         // Q3.6 DB-driven types
+    const [typesVersion, setTypesVersion] = useState(0);    // bump to re-render on type change
+
+    // Q3.6 — load the company's appointment types once, feed the module-level
+    // TYPE_META/TYPES + inject their colours, then bump to re-render.
+    const loadTypes = useCallback(async () => {
+        try {
+            const res = await axiosInstance.get('/appointment-types', { suppressErrorToast: true });
+            const list = res.data?.data || [];
+            setApptTypes(list);
+            applyAppointmentTypes(list);
+            setTypesVersion((v) => v + 1);
+        } catch { /* keep built-in fallback */ }
+    }, []);
+    useEffect(() => { loadTypes(); }, [loadTypes]);
 
     // Visible range for the fetch (widen to full weeks for month).
     const range = useMemo(() => {
@@ -284,6 +341,9 @@ export default function Schedule() {
                 </div>
                 <div className="header-right">
                     <button className="btn-secondary" onClick={() => setShowAvail((s) => !s)} title="Working hours & blocked days"><Clock size={15} style={{ verticalAlign: '-3px' }} /> Availability</button>
+                    {has('manage_appointment_types') && (
+                        <button className="btn-secondary" onClick={() => setShowTypes(true)} title="Create & edit appointment types"><span style={{ verticalAlign: '-1px', marginRight: 4 }}>🎨</span> Types</button>
+                    )}
                     <button className="btn-secondary" onClick={() => setShowLinks((s) => !s)} title="Booking links"><Link2 size={15} style={{ verticalAlign: '-3px' }} /> Booking Links</button>
                     <button className="btn-secondary" onClick={load} title="Refresh"><RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh</button>
                     <button className="btn-primary" onClick={() => setModal({ mode: 'create' })}><Plus size={16} style={{ verticalAlign: '-3px' }} /> New Appointment</button>
@@ -334,6 +394,7 @@ export default function Schedule() {
                     </div>
                 </div>
 
+                {showTypes && <TypeCenterModal types={apptTypes} onClose={() => setShowTypes(false)} onChanged={loadTypes} />}
                 {showAvail && <AvailabilityPanel manageAll={manageAll} workers={workers} onClose={() => setShowAvail(false)} onChanged={load} />}
                 {showLinks && <BookingLinks manageAll={manageAll} nameOf={nameOf} onClose={() => setShowLinks(false)} />}
 
@@ -900,7 +961,7 @@ function PersonSearch({ onPick }) {
 // New Appointment modal
 // ==========================================================================
 function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSaved }) {
-    const [type, setType] = useState('estimate');
+    const [type, setType] = useState(TYPES[0] || 'estimate');
     const [date, setDate] = useState(ymd(defaultDate || new Date()));
     const [time, setTime] = useState('09:00');
     const [duration, setDuration] = useState(60);
@@ -1007,7 +1068,14 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                     <label>Type</label>
                     <div className="type-row">
                         {TYPES.map((t) => (
-                            <button key={t} className={`type-pick ${TYPE_META[t].cls} ${type === t ? 'active' : ''}`} onClick={() => setType(t)}>
+                            <button key={t} className={`type-pick ${TYPE_META[t].cls} ${type === t ? 'active' : ''}`}
+                                onClick={() => {
+                                    setType(t);
+                                    // Q3.6 — apply the type's default duration + reminder default.
+                                    const meta = TYPE_META[t];
+                                    if (meta?.duration) setDuration(meta.duration);
+                                    if (meta && typeof meta.reminder === 'boolean') setReminder(meta.reminder);
+                                }}>
                                 {TYPE_META[t].label}
                             </button>
                         ))}
@@ -1028,7 +1096,8 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                         <div>
                             <label>Duration</label>
                             <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-                                {DURATIONS.map((d) => <option key={d} value={d}>{d} min</option>)}
+                                {/* Include a custom type's default duration even if it's not a preset. */}
+                                {[...new Set([...DURATIONS, duration])].sort((a, b) => a - b).map((d) => <option key={d} value={d}>{d} min</option>)}
                             </select>
                         </div>
                         {manageAll && (
@@ -1088,6 +1157,165 @@ const daysSummary = (days) => {
     }
     return parts.join(', ');
 };
+
+// ==========================================================================
+// Q3.6 — Appointment Type creation center. Admin creates/edits types: name,
+// color, default duration, default reminders, applicable fields. The colour
+// drives calendar colour coding (applyAppointmentTypes injects it).
+// ==========================================================================
+const APPLICABLE = [['address', 'Address'], ['reminders', 'Reminders']];
+function TypeCenterModal({ types, onClose, onChanged }) {
+    const [rows, setRows] = useState(() => (types || []).map((t) => ({ ...t })));
+    const [busyId, setBusyId] = useState(null);
+    const [adding, setAdding] = useState(false);
+    const blankNew = { label: '', color: '#3b82f6', default_duration_minutes: 60, default_reminders: { sms_24h: true, sms_2h: true }, applicable_fields: ['address', 'reminders'] };
+    const [draft, setDraft] = useState(blankNew);
+
+    useEffect(() => { setRows((types || []).map((t) => ({ ...t }))); }, [types]);
+
+    const patchRow = (id, k, v) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
+    const toggleReminder = (r, key) => {
+        const dr = { ...(r.default_reminders || {}), [key]: !(r.default_reminders?.[key]) };
+        patchRow(r.id, 'default_reminders', dr);
+    };
+    const toggleField = (r, f) => {
+        const has = (r.applicable_fields || []).includes(f);
+        const next = has ? r.applicable_fields.filter((x) => x !== f) : [...(r.applicable_fields || []), f];
+        patchRow(r.id, 'applicable_fields', next);
+    };
+
+    const saveRow = async (r) => {
+        setBusyId(r.id);
+        try {
+            await axiosInstance.patch(`/appointment-types/${r.id}`, {
+                label: r.label, color: r.color, default_duration_minutes: Number(r.default_duration_minutes),
+                default_reminders: r.default_reminders, applicable_fields: r.applicable_fields,
+            });
+            toast.success('Saved');
+            onChanged?.();
+        } catch (e) { toast.error(e?.response?.data?.message || 'Save failed'); }
+        finally { setBusyId(null); }
+    };
+    const removeRow = async (r) => {
+        if (!window.confirm(r.is_builtin ? `Hide "${r.label}" from new bookings?` : `Delete "${r.label}"?`)) return;
+        setBusyId(r.id);
+        try { await axiosInstance.delete(`/appointment-types/${r.id}`); toast.success(r.is_builtin ? 'Hidden' : 'Deleted'); onChanged?.(); }
+        catch (e) { toast.error(e?.response?.data?.message || 'Failed'); }
+        finally { setBusyId(null); }
+    };
+    const reactivate = async (r) => {
+        setBusyId(r.id);
+        try { await axiosInstance.patch(`/appointment-types/${r.id}`, { is_active: true }); onChanged?.(); }
+        catch { /* */ } finally { setBusyId(null); }
+    };
+    const createType = async () => {
+        if (!draft.label.trim()) { toast.error('Name the type first.'); return; }
+        setAdding('busy');
+        try {
+            await axiosInstance.post('/appointment-types', {
+                label: draft.label.trim(), color: draft.color,
+                default_duration_minutes: Number(draft.default_duration_minutes),
+                default_reminders: draft.default_reminders, applicable_fields: draft.applicable_fields,
+            });
+            toast.success('Type created');
+            setDraft(blankNew); setAdding(false); onChanged?.();
+        } catch (e) { toast.error(e?.response?.data?.message || 'Create failed'); setAdding(true); }
+    };
+
+    return (
+        <div className="tc-overlay" onClick={onClose}>
+            <div className="tc-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="tc-head">
+                    <div>
+                        <div className="tc-title">Appointment Types</div>
+                        <div className="tc-sub">Name, colour, default duration & reminders. The colour codes the calendar.</div>
+                    </div>
+                    <button className="tc-x" onClick={onClose}>&times;</button>
+                </div>
+
+                <div className="tc-list">
+                    {rows.map((r) => (
+                        <div key={r.id} className="tc-row" style={{ opacity: r.is_active === false ? 0.55 : 1 }}>
+                            <input type="color" className="tc-color" value={r.color || '#3b82f6'} onChange={(e) => patchRow(r.id, 'color', e.target.value)} title="Colour" />
+                            <div className="tc-main">
+                                <div className="tc-row-top">
+                                    <input className="tc-label" value={r.label} onChange={(e) => patchRow(r.id, 'label', e.target.value)} />
+                                    {r.is_builtin && <span className="tc-tag">built-in</span>}
+                                    {r.is_active === false && <span className="tc-tag tc-tag-off">hidden</span>}
+                                </div>
+                                <div className="tc-row-controls">
+                                    <label className="tc-mini">Duration
+                                        <input type="number" min="5" max="1440" step="5" value={r.default_duration_minutes} onChange={(e) => patchRow(r.id, 'default_duration_minutes', e.target.value)} /> min
+                                    </label>
+                                    <label className="tc-chk"><input type="checkbox" checked={!!r.default_reminders?.sms_24h} onChange={() => toggleReminder(r, 'sms_24h')} /> 24h</label>
+                                    <label className="tc-chk"><input type="checkbox" checked={!!r.default_reminders?.sms_2h} onChange={() => toggleReminder(r, 'sms_2h')} /> 2h</label>
+                                    {APPLICABLE.map(([f, lbl]) => (
+                                        <label key={f} className="tc-chk"><input type="checkbox" checked={(r.applicable_fields || []).includes(f)} onChange={() => toggleField(r, f)} /> {lbl}</label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="tc-actions">
+                                <button className="tc-save" disabled={busyId === r.id} onClick={() => saveRow(r)}>Save</button>
+                                {r.is_active === false
+                                    ? <button className="tc-del" disabled={busyId === r.id} onClick={() => reactivate(r)}>Restore</button>
+                                    : <button className="tc-del" disabled={busyId === r.id} onClick={() => removeRow(r)}>{r.is_builtin ? 'Hide' : 'Delete'}</button>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {adding ? (
+                    <div className="tc-row tc-new">
+                        <input type="color" className="tc-color" value={draft.color} onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))} />
+                        <div className="tc-main">
+                            <input className="tc-label" placeholder="New type name (e.g. Roof Tune-up)" value={draft.label} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} />
+                            <div className="tc-row-controls">
+                                <label className="tc-mini">Duration
+                                    <input type="number" min="5" max="1440" step="5" value={draft.default_duration_minutes} onChange={(e) => setDraft((d) => ({ ...d, default_duration_minutes: e.target.value }))} /> min
+                                </label>
+                                <label className="tc-chk"><input type="checkbox" checked={draft.default_reminders.sms_24h} onChange={() => setDraft((d) => ({ ...d, default_reminders: { ...d.default_reminders, sms_24h: !d.default_reminders.sms_24h } }))} /> 24h</label>
+                                <label className="tc-chk"><input type="checkbox" checked={draft.default_reminders.sms_2h} onChange={() => setDraft((d) => ({ ...d, default_reminders: { ...d.default_reminders, sms_2h: !d.default_reminders.sms_2h } }))} /> 2h</label>
+                            </div>
+                        </div>
+                        <div className="tc-actions">
+                            <button className="tc-save" disabled={adding === 'busy'} onClick={createType}>{adding === 'busy' ? 'Adding…' : 'Add'}</button>
+                            <button className="tc-del" onClick={() => { setAdding(false); setDraft(blankNew); }}>Cancel</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button className="tc-add" onClick={() => setAdding(true)}>+ Add appointment type</button>
+                )}
+
+                <style jsx>{`
+                    .tc-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+                    .tc-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 640px; max-height: 90vh; overflow: auto; padding: 1.25rem 1.4rem; }
+                    .tc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+                    .tc-title { font-size: 1.2rem; font-weight: 800; color: #1a1f3a; }
+                    .tc-sub { font-size: .82rem; color: #6b7280; margin-top: 2px; }
+                    .tc-x { background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; line-height: 1; }
+                    .tc-list { display: flex; flex-direction: column; gap: .6rem; }
+                    .tc-row { display: flex; gap: .7rem; align-items: flex-start; border: 1px solid #eef0f4; border-radius: 12px; padding: .7rem .8rem; }
+                    .tc-new { border-style: dashed; border-color: #cbd5e1; }
+                    .tc-color { width: 34px; height: 34px; border: none; background: none; padding: 0; cursor: pointer; flex: 0 0 auto; }
+                    .tc-main { flex: 1; min-width: 0; }
+                    .tc-row-top { display: flex; align-items: center; gap: .5rem; }
+                    .tc-label { font-weight: 700; color: #1a1f3a; border: 1px solid #e5e7eb; border-radius: 6px; padding: .3rem .5rem; font-size: .9rem; flex: 1; min-width: 0; }
+                    .tc-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; background: #f3f4f6; border-radius: 999px; padding: 2px 7px; }
+                    .tc-tag-off { color: #92400e; background: #fef3c7; }
+                    .tc-row-controls { display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; margin-top: .5rem; }
+                    .tc-mini { font-size: .78rem; color: #6b7280; display: inline-flex; align-items: center; gap: .3rem; }
+                    .tc-mini input { width: 60px; border: 1px solid #e5e7eb; border-radius: 6px; padding: .2rem .4rem; font-size: .8rem; }
+                    .tc-chk { font-size: .78rem; color: #6b7280; display: inline-flex; align-items: center; gap: .25rem; }
+                    .tc-actions { display: flex; flex-direction: column; gap: .35rem; flex: 0 0 auto; }
+                    .tc-save { background: #1a1f3a; color: #fff; border: none; border-radius: 7px; padding: .35rem .8rem; font-size: 12px; font-weight: 700; cursor: pointer; }
+                    .tc-del { background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 7px; padding: .35rem .8rem; font-size: 12px; font-weight: 700; cursor: pointer; }
+                    .tc-save:disabled, .tc-del:disabled { opacity: .5; }
+                    .tc-add { margin-top: .8rem; width: 100%; padding: .6rem; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fafbfc; color: #1a1f3a; font-weight: 700; font-size: .85rem; cursor: pointer; }
+                `}</style>
+            </div>
+        </div>
+    );
+}
 
 function AvailabilityPanel({ manageAll, workers, onClose, onChanged }) {
     const [target, setTarget] = useState('');           // '' = me

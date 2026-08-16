@@ -86,6 +86,7 @@ const PERMISSION_CATALOG = [
     { group: 'Scheduling', items: [
         { key: 'view_schedule', label: 'View Schedule' },
         { key: 'manage_all_schedule', label: 'Manage All Appointments (off = own only)' },
+        { key: 'manage_appointment_types', label: 'Create / Edit Appointment Types' },
         { key: 'approve_images', label: 'Approve AI Photo Notes / Post Photos to Portal' },
     ]},
     { group: 'Active Claims', items: [
