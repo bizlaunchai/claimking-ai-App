@@ -523,6 +523,26 @@ function JobCard({ token, job, reload }) {
         catch { /* */ } finally { setBusy(''); }
     };
 
+    // Q3.8 — "On the Way": notify the client with an arrival window.
+    const [otwOpen, setOtwOpen] = useState(false);
+    const [otwTime, setOtwTime] = useState('09:00');
+    const [otwBuf, setOtwBuf] = useState(30);
+    const otwPreview = (() => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(otwTime);
+        if (!m) return '';
+        const mins = +m[1] * 60 + +m[2], half = Math.round(otwBuf / 2);
+        const fmt = (t) => { t = ((t % 1440) + 1440) % 1440; const h = Math.floor(t / 60), mm = t % 60; const ap = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:${String(mm).padStart(2, '0')} ${ap}`; };
+        return `${fmt(mins - half)} – ${fmt(mins + half)}`;
+    })();
+    const sendOtw = async () => {
+        setBusy('otw');
+        try {
+            await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/on-the-way`, { arrival: otwTime, buffer_minutes: otwBuf });
+            toast(`Client notified — arriving ${otwPreview}`, 'success');
+            setOtwOpen(false);
+        } catch { /* interceptor */ } finally { setBusy(''); }
+    };
+
     // Q2.9 — the sub sets the actual install date (server validates it's inside
     // the availability windows / before the deadline, and notifies the client).
     const saveDate = async () => {
@@ -601,6 +621,25 @@ function JobCard({ token, job, reload }) {
                     </div>
                     {job.scheduled_start && <div className="muted">📅 Currently: {fmtDay(job.scheduled_start)}</div>}
                 </div>
+            </div>
+
+            {/* Q3.8 — On the Way: notify the client with an arrival window */}
+            <div className="jc-otw">
+                {!otwOpen ? (
+                    <button className="btn btn-sm btn-secondary" onClick={() => setOtwOpen(true)}>🚗 On the Way</button>
+                ) : (
+                    <div className="jc-otw-box">
+                        <div className="jc-sched-label">Client will be told you arrive: <strong>{otwPreview}</strong></div>
+                        <div className="jc-otw-row">
+                            <input type="time" value={otwTime} onChange={(e) => setOtwTime(e.target.value)} />
+                            <select value={otwBuf} onChange={(e) => setOtwBuf(Number(e.target.value))}>
+                                {[10, 15, 20, 30, 45, 60].map((b) => <option key={b} value={b}>± {b}m</option>)}
+                            </select>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setOtwOpen(false)}>Cancel</button>
+                            <button className="btn btn-sm btn-success" disabled={busy === 'otw'} onClick={sendOtw}>{busy === 'otw' ? 'Sending…' : 'Notify'}</button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="jc-steps">
