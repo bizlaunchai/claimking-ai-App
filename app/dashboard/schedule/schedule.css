@@ -373,3 +373,12 @@
 .appt-photo-thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eef0f4; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 11px; }
 .appt-photo-loading { }
 .appt-photo-badge { position: absolute; bottom: 2px; left: 2px; background: rgba(6,95,70,0.85); color: #fff; font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 999px; }
+
+/* Q3.15 all-jobs map legend */
+.schedule-page .jobs-map-legend { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; padding: 0.75rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; }
+.schedule-page .jml-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.schedule-page .jml-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+.schedule-page .jml-item { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: #374151; }
+.schedule-page .jml-shape { display: inline-flex; width: 18px; height: 18px; }
+.schedule-page .jml-shape svg { width: 18px; height: 18px; }
+.schedule-page .jml-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
