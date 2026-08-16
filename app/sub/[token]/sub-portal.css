@@ -168,7 +168,12 @@
 .sign-modal-head h3 { font-size: 1.05rem; font-weight: 800; color: #1a1f3a; margin: 0; }
 .sign-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #9ca3af; cursor: pointer; }
 .sign-modal-body { padding: 1.1rem 1.25rem; overflow-y: auto; }
-.sign-modal-foot { display: flex; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.25rem; border-top: 1px solid #eef0f4; }
+.sign-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; padding: 0.9rem 1.25rem; border-top: 1px solid #eef0f4; }
+/* Q2.5b — SignWell embedded signing */
+.sign-modal-wide { width: min(880px, 100%); }
+.esign-frame-wrap { flex: 1; min-height: 0; padding: 0.75rem; }
+.esign-frame { width: 100%; height: 68vh; border: 1px solid #eef0f4; border-radius: 10px; background: #fff; }
+.esign-secure { margin-right: auto; font-size: 0.74rem; color: #64748b; }
 .agreement-text { background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.85rem 1rem; max-height: 180px; overflow-y: auto; font-size: 0.82rem; line-height: 1.5; margin-bottom: 1rem; }
 .agreement-text p { margin: 0 0 0.5rem; }
 .sig-pad-box { border: 2px dashed #cbd5e1; border-radius: 10px; background: #fff; overflow: hidden; }

@@ -506,13 +506,15 @@ function TradeManagerModal({ onClose, onChanged, toast }) {
     const reject = async (t) => { try { await axiosInstance.post(`/company-trades/${t.id}/reject`); after(); } catch { /* */ } };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div className="modal open">
+            <div className="modal-overlay" onClick={onClose} />
+            <div className="modal-content" style={{ width: 'min(520px, 94vw)' }}>
                 <div className="modal-head">
                     <div><h2>Trade Types</h2><div className="sub">Used for sub matching &amp; job dispatch. Add your own — they apply to every future sub &amp; job.</div></div>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
+                <div className="modal-body">
                 {pending.length > 0 && (
                     <div className="tm-review">
                         <div className="tm-review-head">◷ {pending.length} suggested by subs — review</div>
@@ -535,13 +537,14 @@ function TradeManagerModal({ onClose, onChanged, toast }) {
                 </div>
 
                 <div className="tm-list">
-                    {loading ? <div className="empty">Loading…</div> : active.map((t) => (
+                    {loading ? <div className="spinner-wrap"><span className="spinner" />Loading trades…</div> : active.map((t) => (
                         <div key={t.id} className="tm-row">
                             <input className="tm-label-input" defaultValue={t.label} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== t.label) rename(t, v); }} />
                             {t.is_builtin && <span className="tm-tag">built-in</span>}
                             <button className="tm-del" onClick={() => removeTrade(t)}>{t.is_builtin ? 'Hide' : 'Delete'}</button>
                         </div>
                     ))}
+                </div>
                 </div>
 
                 <style jsx>{`
@@ -563,6 +566,144 @@ function TradeManagerModal({ onClose, onChanged, toast }) {
     );
 }
 
+/* ── Q2.5b — subcontractor agreement builder (admin edits the template subs sign) ── */
+const MERGE_FIELDS = [
+    { key: 'company_name', label: 'Company name' },
+    { key: 'business_name', label: 'Sub business name' },
+    { key: 'contact_name', label: 'Sub contact name' },
+    { key: 'date', label: 'Sign date' },
+];
+function previewAgreement(text) {
+    return (text || '')
+        .replace(/\{\{\s*company_name\s*\}\}/gi, 'Your Company, LLC')
+        .replace(/\{\{\s*(business_name)\s*\}\}/gi, 'ABC Roofing Co.')
+        .replace(/\{\{\s*(contact_name|sub_name)\s*\}\}/gi, 'Jordan Smith')
+        .replace(/\{\{\s*date\s*\}\}/gi, new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
+}
+function AgreementBuilderModal({ onClose, toast }) {
+    const taRef = useRef(null);
+    const [text, setText] = useState('');
+    const [isDefault, setIsDefault] = useState(true);
+    const [defaultText, setDefaultText] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+
+    useEffect(() => {
+        let alive = true;
+        axiosInstance.get('/subs/agreement-template')
+            .then((res) => {
+                if (!alive) return;
+                const d = res.data?.data || {};
+                setText(d.template || '');
+                setIsDefault(!!d.is_default);
+                setDefaultText(d.default_template || '');
+            })
+            .catch(() => { /* interceptor toasts */ })
+            .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+    }, []);
+
+    const insertField = (key) => {
+        const ta = taRef.current;
+        const token = `{{${key}}}`;
+        if (!ta) { setText((t) => t + token); return; }
+        const s = ta.selectionStart ?? text.length;
+        const e = ta.selectionEnd ?? text.length;
+        const next = text.slice(0, s) + token + text.slice(e);
+        setText(next);
+        requestAnimationFrame(() => { ta.focus(); const p = s + token.length; ta.setSelectionRange(p, p); });
+    };
+
+    const save = async () => {
+        if (!text.trim()) { toast('The agreement can’t be empty. Use “Reset to default” to restore the built-in text.', 'error'); return; }
+        setBusy(true);
+        try {
+            const res = await axiosInstance.put('/subs/agreement-template', { template: text });
+            setIsDefault(!!res.data?.data?.is_default);
+            toast('Agreement saved. New subs will sign this version.', 'success');
+        } catch (e) { toast(e?.response?.data?.message || 'Save failed', 'error'); }
+        finally { setBusy(false); }
+    };
+
+    const resetDefault = async () => {
+        if (!window.confirm('Reset to the built-in default agreement? Your custom text will be discarded.')) return;
+        setBusy(true);
+        try {
+            await axiosInstance.put('/subs/agreement-template', { template: '' });
+            setText(defaultText);
+            setIsDefault(true);
+            toast('Reset to the default agreement.', 'success');
+        } catch (e) { toast(e?.response?.data?.message || 'Reset failed', 'error'); }
+        finally { setBusy(false); }
+    };
+
+    return (
+        <div className="modal open">
+            <div className="modal-overlay" onClick={busy ? undefined : onClose} />
+            <div className="modal-content" style={{ width: 'min(760px, 94vw)' }}>
+                <div className="modal-head">
+                    <div>
+                        <h2>Subcontractor Agreement</h2>
+                        <div className="sub">The text every sub e-signs during onboarding. {isDefault ? 'Currently using the built-in default.' : 'Using your custom version.'}</div>
+                    </div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+
+                {loading ? <div className="modal-body"><div className="spinner-wrap"><span className="spinner" />Loading agreement…</div></div> : (
+                    <>
+                        <div className="modal-body">
+                            <div className="ab-fields">
+                                <span className="ab-fields-label">Insert merge field:</span>
+                                {MERGE_FIELDS.map((f) => (
+                                    <button key={f.key} type="button" className="ab-chip" onClick={() => insertField(f.key)} title={`Inserts {{${f.key}}}`}>{f.label}</button>
+                                ))}
+                            </div>
+
+                            {showPreview ? (
+                                <div className="ab-preview">
+                                    {previewAgreement(text).split(/\n\s*\n/).map((c, i) => c.trim() && <p key={i}>{c.trim()}</p>)}
+                                </div>
+                            ) : (
+                                <textarea
+                                    ref={taRef}
+                                    className="ab-textarea"
+                                    value={text}
+                                    onChange={(e) => setText(e.target.value)}
+                                    placeholder="Write your subcontractor agreement. Separate clauses with a blank line. Use merge fields like {{company_name}}."
+                                    spellCheck={true}
+                                />
+                            )}
+
+                            <div className="ab-hint">Separate each clause with a blank line. Merge fields are filled in per sub when they sign.</div>
+                        </div>
+
+                        <div className="modal-foot ab-foot">
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowPreview((v) => !v)}>{showPreview ? '✎ Edit' : '👁 Preview'}</button>
+                            <div style={{ flex: 1 }} />
+                            <button className="btn btn-ghost btn-sm" disabled={busy || isDefault} onClick={resetDefault}>Reset to default</button>
+                            <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save agreement'}</button>
+                        </div>
+                    </>
+                )}
+
+                <style jsx>{`
+                    .ab-fields { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin-bottom: .7rem; }
+                    .ab-fields-label { font-size: .78rem; font-weight: 700; color: #6b7280; margin-right: .2rem; }
+                    .ab-chip { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; border-radius: 999px; padding: .28rem .7rem; font-size: 12px; font-weight: 700; cursor: pointer; }
+                    .ab-chip:hover { background: #e0e7ff; }
+                    .ab-textarea { width: 100%; min-height: 300px; border: 1px solid #e5e7eb; border-radius: 10px; padding: .8rem .9rem; font-size: .88rem; line-height: 1.6; font-family: Georgia, 'Times New Roman', serif; color: #1f2937; resize: vertical; box-sizing: border-box; }
+                    .ab-textarea:focus { outline: none; border-color: #a5b4fc; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+                    .ab-preview { min-height: 300px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.2rem; background: #fbfbfd; font-family: Georgia, 'Times New Roman', serif; color: #1f2937; line-height: 1.7; }
+                    .ab-preview p { margin: 0 0 .8rem; }
+                    .ab-hint { font-size: .75rem; color: #9ca3af; margin: .6rem 0 0; }
+                    .ab-foot { align-items: center; gap: .5rem; }
+                `}</style>
+            </div>
+        </div>
+    );
+}
+
 export default function SubsPage() {
     const [subs, setSubs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -573,6 +714,7 @@ export default function SubsPage() {
     const [drawerId, setDrawerId] = useState(null);
     const [showAdd, setShowAdd] = useState(false);
     const [showTrades, setShowTrades] = useState(false);          // Q2.12 trade manager
+    const [showAgreement, setShowAgreement] = useState(false);    // Q2.5b agreement builder
     const { trades: companyTrades, reload: reloadTrades } = useCompanyTrades();
 
     const toast = (msg, type = '') => {
@@ -633,8 +775,11 @@ export default function SubsPage() {
                         <div className="page-title">Subcontractors</div>
                         <div className="page-subtitle">Network roster, compliance review, and payouts</div>
                     </div>
-                    <button className="btn btn-secondary" onClick={() => setShowTrades(true)}>🧰 Trades</button>
-                    <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Invite Sub</button>
+                    <div className="header-actions">
+                        <button className="btn btn-secondary" onClick={() => setShowAgreement(true)}>📄 Agreement</button>
+                        <button className="btn btn-secondary" onClick={() => setShowTrades(true)}>🧰 Trades</button>
+                        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Invite Sub</button>
+                    </div>
                 </div>
             </div>
 
@@ -675,6 +820,7 @@ export default function SubsPage() {
 
             {showAdd && <AddSubModal toast={toast} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
             {showTrades && <TradeManagerModal toast={toast} onClose={() => setShowTrades(false)} onChanged={reloadTrades} />}
+            {showAgreement && <AgreementBuilderModal toast={toast} onClose={() => setShowAgreement(false)} />}
             {drawerId && <SubDrawer subId={drawerId} toast={toast} onClose={() => setDrawerId(null)} onChanged={load} />}
         </div>
     );
