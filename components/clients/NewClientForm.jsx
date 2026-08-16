@@ -6,6 +6,7 @@ import {
     CLIENT_CLAIM_STATUSES,
     CLIENT_PROPERTY_TYPES,
 } from '@/lib/clients/newClientForm';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 
 /**
  * Single canonical "Add New Client" form used across:
@@ -99,8 +100,22 @@ const NewClientForm = ({
             <h4 style={{ ...sectionTitle, marginTop: 20 }}>Property Information</h4>
             <div style={grid}>
                 <Field label="Property Address" required error={fieldErrors.address} fullWidth>
-                    <input type="text" placeholder="123 Main Street" style={styleFor('address')}
-                        value={value.address} onChange={set('address')} />
+                    {/* Q0.1 — Google Places autocomplete; picking a suggestion
+                        fills city / state / ZIP (+ coordinates) below. Falls back
+                        to a plain input when no Google key is configured. */}
+                    <AddressAutocomplete
+                        placeholder="123 Main Street"
+                        style={styleFor('address')}
+                        value={value.address}
+                        onChange={(v) => onChange('address', v)}
+                        onSelect={(p) => {
+                            onChange('address', p.address);
+                            if (p.city) onChange('city', p.city);
+                            if (p.state) onChange('state', p.state);
+                            if (p.zip) onChange('zip_code', p.zip);
+                            if (p.lat != null) onChange('lat', p.lat);
+                            if (p.lng != null) onChange('lng', p.lng);
+                        }} />
                 </Field>
                 <Field label="City" required error={fieldErrors.city}>
                     <input type="text" placeholder="Dallas" style={styleFor('city')}
