@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-    ChevronLeft, ChevronRight, Plus, MapPin, Phone, Check, XCircle, X, Clock, RefreshCw,
+    ChevronLeft, ChevronRight, Plus, MapPin, Phone, Check, XCircle, X, Clock, RefreshCw, Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
@@ -63,6 +63,99 @@ function applyAppointmentTypes(list) {
 }
 // Type keys are our own slugs ([a-z0-9_]) but guard anyway.
 function cssEscapeKey(k) { return String(k).replace(/[^a-zA-Z0-9_-]/g, ''); }
+
+// Q3.14 — build + open a clean, branded printable crew sheet, grouped by day.
+function openPrintSheet({ companyName, rangeLabel, rows, logoUrl }) {
+    const esc = (v) => String(v ?? '—').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const initials = (companyName || 'C').split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('');
+    const fmtTime = (iso) => {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    };
+    const dayKey = (iso) => String(iso).slice(0, 10);
+    const dayLabel = (key) => new Date(`${key}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    const all = rows || [];
+    const byDay = {};
+    all.forEach((r) => { (byDay[dayKey(r.starts_at)] ||= []).push(r); });
+    const days = Object.keys(byDay).sort();
+
+    const sections = days.length ? days.map((k) => {
+        const items = byDay[k].map((r) => {
+            const meta = TYPE_META[r.type];
+            const color = meta?.color || '#9ca3af';
+            const label = r.is_job ? `Job #${r.job_number || ''}` : (meta?.label || r.type || 'Appointment');
+            const who = r.client_name || (r.claim_number ? `Claim ${r.claim_number}` : '—');
+            const sub = r.claim_number && r.client_name ? `<div class="sub">${esc(r.claim_number)}</div>` : '';
+            return `<tr>
+                <td class="t">${esc(fmtTime(r.starts_at))}</td>
+                <td><span class="pill" style="background:${color}20;color:${color}"><span class="dot" style="background:${color}"></span>${esc(label)}</span></td>
+                <td class="cl">${esc(who)}${sub}</td>
+                <td>${esc(r.address)}</td>
+                <td>${esc(r.assignee)}</td>
+            </tr>`;
+        }).join('');
+        return `<section class="day"><h2>${esc(dayLabel(k))} <span class="cnt">${byDay[k].length} ${byDay[k].length === 1 ? 'stop' : 'stops'}</span></h2>
+            <table><thead><tr><th style="width:64px">Time</th><th style="width:120px">Type</th><th>Client</th><th>Address</th><th style="width:130px">Assignee</th></tr></thead>
+            <tbody>${items}</tbody></table></section>`;
+    }).join('') : '<div class="empty"><div class="empty-ic">📅</div>No appointments or jobs scheduled in this range.</div>';
+
+    const summary = all.length
+        ? `<div class="summary"><b>${all.length}</b> ${all.length === 1 ? 'entry' : 'entries'} across <b>${days.length}</b> ${days.length === 1 ? 'day' : 'days'}</div>`
+        : '';
+
+    const logoImg = logoUrl
+        ? `<img class="logo" src="${logoUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo logo-fb',textContent:'${esc(initials)}'}))"/>`
+        : `<div class="logo logo-fb">${esc(initials)}</div>`;
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(companyName)} — Schedule</title>
+        <style>
+            *{box-sizing:border-box} html,body{margin:0} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1a1f3a;font-size:12.5px;line-height:1.5}
+            .page{max-width:940px;margin:0 auto;padding:32px 34px}
+            .head{display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:3px solid #1a1f3a;margin-bottom:6px}
+            .logo{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:0 0 auto;border:1px solid #eef0f4;background:#fff}
+            .logo-fb{display:flex;align-items:center;justify-content:center;background:#1a1f3a;color:#FDB813;font-weight:800;font-size:18px;border:none}
+            .head-meta{flex:1}
+            .co{font-size:20px;font-weight:800;letter-spacing:-.01em}
+            .subttl{color:#6b7280;font-size:12.5px;margin-top:1px}
+            .summary{margin-left:auto;text-align:right;color:#6b7280;font-size:12px;white-space:nowrap}
+            .summary b{color:#1a1f3a;font-size:15px}
+            .day{margin-top:22px;page-break-inside:auto}
+            h2{font-size:13px;margin:0 0 8px;color:#1a1f3a;display:flex;align-items:baseline;gap:8px}
+            .cnt{color:#9ca3af;font-weight:500;font-size:11px}
+            table{border-collapse:collapse;width:100%}
+            th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;font-weight:700;padding:5px 10px;border-bottom:1.5px solid #e5e7eb}
+            td{padding:8px 10px;border-bottom:1px solid #f2f3f5;vertical-align:top}
+            tbody tr:nth-child(even){background:#fafbfc}
+            td.t{white-space:nowrap;font-weight:700}
+            td.cl{font-weight:600}
+            .sub{font-size:10.5px;color:#9ca3af;font-weight:400}
+            .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+            .dot{display:inline-block;width:7px;height:7px;border-radius:50%}
+            .empty{text-align:center;color:#9ca3af;padding:64px 0;font-size:14px}
+            .empty-ic{font-size:34px;margin-bottom:8px;opacity:.5}
+            .foot{margin-top:30px;padding-top:12px;border-top:1px solid #eef0f4;color:#9ca3af;font-size:10.5px;display:flex;justify-content:space-between}
+            @media print{.page{max-width:none;padding:0} body{margin:12mm} h2{page-break-after:avoid} tr,section{page-break-inside:avoid} tbody tr:nth-child(even){background:#fafbfc !important;-webkit-print-color-adjust:exact;print-color-adjust:exact} .head,.pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+        </style></head><body>
+        <div class="page">
+            <div class="head">
+                ${logoImg}
+                <div class="head-meta"><div class="co">${esc(companyName)}</div><div class="subttl">Schedule · ${esc(rangeLabel)}</div></div>
+                ${summary}
+            </div>
+            ${sections}
+            <div class="foot"><span>Printed ${new Date().toLocaleString()}</span><span>Powered by ClaimKing.AI</span></div>
+        </div>
+        </body></html>`;
+
+    const w = window.open('', '_blank', 'width=920,height=1000');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 350);
+}
 // Q3.2 — a synced Jobs Ready entry shows as a job, not a generic "Install".
 const entryLabel = (a) => a?.is_job ? `🔧 ${a.job_number || 'Job'}` : (TYPE_META[a?.type]?.label || 'Appointment');
 const entryCls = (a) => `${TYPE_META[a?.type]?.cls || ''}${a?.is_job ? ' is-job' : ''}`;
@@ -114,7 +207,7 @@ export default function Schedule() {
     const search = useSearchParams();
     const manageAll = has('manage_all_schedule');
 
-    const [view, setView] = useState('week');           // day | week | month | team
+    const [view, setView] = useState('month');          // day | week | month | team
     const [anchor, setAnchor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
     const [appts, setAppts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -126,6 +219,7 @@ export default function Schedule() {
     const [notifyChoice, setNotifyChoice] = useState(null); // Q3.4 forced notify choice
     const [personFilter, setPersonFilter] = useState('');   // Q3.3 '' = everyone; uuid | sub:uuid
     const [showDayMap, setShowDayMap] = useState(false);    // Q3.5 day-route map
+    const [showJobsMap, setShowJobsMap] = useState(false);  // Q3.15 all-jobs map
     const [showTypes, setShowTypes] = useState(false);      // Q3.6 appointment type center
     const [apptTypes, setApptTypes] = useState([]);         // Q3.6 DB-driven types
     const [typesVersion, setTypesVersion] = useState(0);    // bump to re-render on type change
@@ -142,6 +236,24 @@ export default function Schedule() {
         } catch { /* keep built-in fallback */ }
     }, []);
     useEffect(() => { loadTypes(); }, [loadTypes]);
+
+    // Q3.14 — print-friendly crew sheet for the current range (day/week/month).
+    // Server resolves client + assignee names; we group by day and print.
+    const [printing, setPrinting] = useState(false);
+    const printSchedule = async () => {
+        setPrinting(true);
+        try {
+            const params = { start: range.start.toISOString(), end: range.end.toISOString() };
+            if (personFilter) params.assigned_to = personFilter;
+            const res = await axiosInstance.get('/appointments/print', { params });
+            const { company_id, company_name, rows } = res.data?.data || { company_name: 'Schedule', rows: [] };
+            const origin = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+            const logoUrl = company_id ? `${origin}/portal-public/company/${company_id}/logo` : null;
+            openPrintSheet({ companyName: company_name, rangeLabel, rows, logoUrl });
+        } catch {
+            toast.error('Could not build the print sheet.');
+        } finally { setPrinting(false); }
+    };
 
     // Visible range for the fetch (widen to full weeks for month).
     const range = useMemo(() => {
@@ -362,6 +474,10 @@ export default function Schedule() {
                     <div className="sched-toolbar-right">
                         {/* Q3.5 — the day's stops as a map / route */}
                         <button className="cal-nav-btn" onClick={() => setShowDayMap(true)} title="Map the day's stops"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Day Map</button>
+                        {/* Q3.14 — print a clean crew sheet of the current range */}
+                        <button className="cal-nav-btn" onClick={printSchedule} disabled={printing} title="Print this range as a crew sheet"><Printer size={14} style={{ verticalAlign: '-2px' }} /> {printing ? 'Preparing…' : 'Print'}</button>
+                        {/* Q3.15 — all upcoming jobs on one map */}
+                        <button className="cal-nav-btn" onClick={() => setShowJobsMap(true)} title="All upcoming jobs on a map"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Jobs Map</button>
                         {/* Q3.3 — one picker for workers AND subs */}
                         {manageAll && (
                             <select className="sched-person" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} title="Filter by person">
@@ -463,6 +579,12 @@ export default function Schedule() {
                         const found = appts.find((a) => a.id === (kind === 'job' ? `job:${refId}` : refId));
                         if (found) openDetail(found);
                     }}
+                />
+            )}
+            {showJobsMap && (
+                <JobsMapModal
+                    onClose={() => setShowJobsMap(false)}
+                    onOpenJobs={() => { window.location.href = '/dashboard/jobs-ready'; }}
                 />
             )}
             {notifyChoice && (
@@ -635,6 +757,128 @@ function DayMapModal({ date, onClose, onOpenRef }) {
 
 function escapeHtmlJs(s) {
     return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// ==========================================================================
+// Q3.15 — all upcoming jobs on one map. Pin COLOUR = assignee/team, pin SHAPE =
+// weekday (Mon = star, etc.), so a glance shows whose job + which day.
+// ==========================================================================
+const JOBS_MAP_PALETTE = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#c026d3', '#475569'];
+const DOW_SHAPE = [
+    { name: 'Sun', svg: (c) => `<circle cx="12" cy="12" r="9.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+    { name: 'Mon', svg: (c) => `<polygon points="12,2 14.6,9 22,9 16,13.5 18.2,21 12,16.5 5.8,21 8,13.5 2,9 9.4,9" fill="${c}" stroke="#fff" stroke-width="1.2"/>` },
+    { name: 'Tue', svg: (c) => `<rect x="3" y="3" width="18" height="18" rx="3.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+    { name: 'Wed', svg: (c) => `<polygon points="12,2.5 21.5,20 2.5,20" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+    { name: 'Thu', svg: (c) => `<polygon points="12,2 21.5,12 12,22 2.5,12" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+    { name: 'Fri', svg: (c) => `<polygon points="12,2 22,9.3 18.2,21 5.8,21 2,9.3" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+    { name: 'Sat', svg: (c) => `<polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="${c}" stroke="#fff" stroke-width="1.5"/>` },
+];
+const jobMarkerSvg = (color, dow) => `<svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">${DOW_SHAPE[dow].svg(color)}</svg>`;
+
+function JobsMapModal({ onClose, onOpenJobs }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const mapRef = useRef(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/appointments/jobs-map', { suppressErrorToast: true });
+                if (!cancelled) setData(res.data?.data || { points: [], unlocated: 0 });
+            } catch { if (!cancelled) setData({ points: [], unlocated: 0 }); }
+            finally { if (!cancelled) setLoading(false); }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    const points = data?.points || [];
+
+    // Stable colour per assignee + which assignees/weekdays are present (legend).
+    const assignees = useMemo(() => {
+        const map = new Map();
+        points.forEach((p) => { if (!map.has(p.assignee_id)) map.set(p.assignee_id, { name: p.assignee_name, color: JOBS_MAP_PALETTE[map.size % JOBS_MAP_PALETTE.length] }); });
+        return map;
+    }, [points]);
+    const daysPresent = useMemo(() => {
+        const s = new Set(points.map((p) => new Date(`${p.date}T00:00:00`).getDay()));
+        return [...s].sort();
+    }, [points]);
+
+    useEffect(() => {
+        if (!points.length) return;
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById('jobsMap');
+            if (!el || el._leaflet_id) return;
+            const map = L.map('jobsMap', { scrollWheelZoom: true });
+            mapRef.current = map;
+            map.setView([points[0].lat, points[0].lng], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map);
+            const group = [];
+            points.forEach((p) => {
+                const dow = new Date(`${p.date}T00:00:00`).getDay();
+                const color = assignees.get(p.assignee_id)?.color || '#475569';
+                const icon = L.divIcon({ className: 'ck-jobs-pin', html: jobMarkerSvg(color, dow), iconSize: [24, 24], iconAnchor: [12, 12] });
+                const dLabel = new Date(`${p.date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                const nav = navHref(p.address, p.lat, p.lng);
+                const html = `<div style="min-width:160px"><strong>Job #${escapeHtmlJs(p.job_number || '')}</strong><br>` +
+                    `<span style="color:#6b7280">${dLabel} · ${escapeHtmlJs(p.assignee_name)}</span>` +
+                    (p.address ? `<br><span style="color:#6b7280">${escapeHtmlJs(p.address)}</span>` : '') +
+                    (nav ? `<br><a href="${nav}" target="_blank" rel="noreferrer" style="color:#2563eb;font-weight:600">Navigate ↗</a>` : '') + `</div>`;
+                group.push(L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(html));
+            });
+            setTimeout(() => {
+                if (cancelled || !mapRef.current) return;
+                mapRef.current.invalidateSize();
+                try { mapRef.current.fitBounds(L.featureGroup(group).getBounds(), { padding: [30, 30], maxZoom: 13 }); } catch { /* single */ }
+            }, 150);
+        })();
+        return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    }, [points, assignees]);
+
+    return (
+        <div className="modal-backdrop active" onClick={onClose}>
+            <div className="modal-box day-map-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title"><MapPin size={16} style={{ verticalAlign: '-3px' }} /> All Jobs Map</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    {loading ? <div className="today-empty">Loading map…</div> : points.length === 0 ? (
+                        <div className="today-empty">No upcoming scheduled jobs to map{data?.unlocated ? ` (${data.unlocated} couldn’t be located)` : ''}.</div>
+                    ) : (
+                        <>
+                            <div id="jobsMap" className="day-map" />
+                            <div className="jobs-map-legend">
+                                <div className="jml-group">
+                                    <span className="jml-title">Day</span>
+                                    {daysPresent.map((d) => (
+                                        <span className="jml-item" key={d}>
+                                            <span className="jml-shape" dangerouslySetInnerHTML={{ __html: jobMarkerSvg('#475569', d) }} /> {DOW_SHAPE[d].name}
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="jml-group">
+                                    <span className="jml-title">Assignee</span>
+                                    {[...assignees.values()].map((a, i) => (
+                                        <span className="jml-item" key={i}><span className="jml-swatch" style={{ background: a.color }} /> {a.name}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            {data?.unlocated > 0 && <div className="day-map-note">{data.unlocated} job{data.unlocated > 1 ? 's' : ''} had an address we couldn’t map.</div>}
+                        </>
+                    )}
+                </div>
+                <div className="modal-footer between">
+                    <button className="btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn-secondary" onClick={onOpenJobs}>Open Jobs Ready →</button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ==========================================================================
@@ -975,6 +1219,8 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
         return null;
     });
     const [reminder, setReminder] = useState(true);
+    const [repeat, setRepeat] = useState('none');        // Q3.16 none|weekly|biweekly|monthly
+    const [repeatCount, setRepeatCount] = useState(4);   // total occurrences
     const [slots, setSlots] = useState(null);
     const [busy, setBusy] = useState(false);
 
@@ -1021,8 +1267,10 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
             if (address.trim()) body.address = address.trim();
             if (leadId) body.lead_id = leadId;
             if (claimId) body.claim_id = claimId;
+            if (repeat !== 'none') body.recurrence = { freq: repeat, count: Math.max(2, Math.min(60, Number(repeatCount) || 2)) };
             const res = await axiosInstance.post('/appointments', body);
-            toast.success('Appointment created');
+            const made = res.data?.series?.created;
+            toast.success(made && made > 1 ? `${made} appointments created (repeating)` : 'Appointment created');
             // Q3.11 — non-blocking heads-up if it's outside the rep's availability.
             if (res.data?.outside_availability) {
                 toast('Heads up — that slot is outside this person’s availability', { description: 'It was still booked. Check their working hours / blocked days if this was unintended.' });
@@ -1124,6 +1372,23 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
 
                     <label>Address</label>
                     <input type="text" value={address} placeholder="Job site address" onChange={(e) => setAddress(e.target.value)} />
+
+                    {/* Q3.16 — repeat rule */}
+                    <label>Repeat</label>
+                    <div className="grid2">
+                        <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+                            <option value="none">Does not repeat</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Every 2 weeks</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                        {repeat !== 'none' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <input type="number" min="2" max="60" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} style={{ width: 70 }} />
+                                <span className="muted">occurrences</span>
+                            </div>
+                        )}
+                    </div>
 
                     <label className="check-row">
                         <input type="checkbox" checked={reminder} onChange={(e) => setReminder(e.target.checked)} />
@@ -1693,6 +1958,8 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
     const [duration, setDuration] = useState(Math.round((appt._e - appt._s) / 60000));
     const [assignee, setAssignee] = useState(appt.assigned_to || '');
     const [busy, setBusy] = useState(false);
+    const [seriesScope, setSeriesScope] = useState('one'); // Q3.16 one | future
+    const isSeries = !!appt.series_id;
     const done = ['completed', 'no_show', 'cancelled'].includes(appt.status);
 
     // Q3.7 — enriched detail: client + history + change log + gated job cost.
@@ -1717,7 +1984,12 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
     const client = detail?.client || null;
     const saveNotes = async () => {
         setSavingNotes(true);
-        try { await axiosInstance.patch(`/appointments/${appt.id}`, { notes }); toast.success('Notes saved'); }
+        try {
+            const body = { notes };
+            if (isSeries && seriesScope === 'future') body.scope = 'future';
+            await axiosInstance.patch(`/appointments/${appt.id}`, body);
+            toast.success('Notes saved');
+        }
         catch (e) { toast.error(e?.userMessage || 'Could not save notes'); }
         finally { setSavingNotes(false); }
     };
@@ -1746,8 +2018,11 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
     const cancelAppt = async () => {
         setBusy(true);
         try {
-            await axiosInstance.patch(`/appointments/${appt.id}`, { status: 'cancelled' });
-            toast.success('Appointment cancelled');
+            const body = { status: 'cancelled' };
+            if (isSeries && seriesScope === 'future') body.scope = 'future';
+            const res = await axiosInstance.patch(`/appointments/${appt.id}`, body);
+            const n = res.data?.series_applied || 0;
+            toast.success(n > 0 ? `Cancelled this + ${n} following` : 'Appointment cancelled');
             onAfter();
         } catch (e) { toast.error(e?.userMessage || 'Could not cancel'); }
         finally { setBusy(false); }
@@ -1904,6 +2179,16 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
 
                     {appt.outcome_note && (
                         <div className="sched-note"><b>Outcome:</b> {appt.outcome_note}</div>
+                    )}
+
+                    {/* Q3.16 — recurring appointment: apply cancel/reassign to one or the series */}
+                    {isSeries && !done && (
+                        <div className="series-scope">
+                            <span className="sched-sec-title" style={{ marginBottom: 4 }}>🔁 Part of a repeating series</span>
+                            <label className="check-row"><input type="radio" name="scope" checked={seriesScope === 'one'} onChange={() => setSeriesScope('one')} /> This appointment only</label>
+                            <label className="check-row"><input type="radio" name="scope" checked={seriesScope === 'future'} onChange={() => setSeriesScope('future')} /> This and all following</label>
+                            <div className="muted" style={{ fontSize: 11 }}>Applies to Cancel and Notes. A time change only ever moves this one.</div>
+                        </div>
                     )}
                 </div>
                 <div className="modal-footer between">
