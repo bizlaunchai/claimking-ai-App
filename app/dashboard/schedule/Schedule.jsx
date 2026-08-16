@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
     ChevronLeft, ChevronRight, Plus, MapPin, Phone, Check, XCircle, X, Clock, RefreshCw,
 } from 'lucide-react';
@@ -21,6 +21,9 @@ const TYPE_META = {
     follow_up: { label: 'Follow-up', cls: 'follow-up' },
 };
 const TYPES = Object.keys(TYPE_META);
+// Q3.2 — a synced Jobs Ready entry shows as a job, not a generic "Install".
+const entryLabel = (a) => a?.is_job ? `🔧 ${a.job_number || 'Job'}` : (TYPE_META[a?.type]?.label || 'Appointment');
+const entryCls = (a) => `${TYPE_META[a?.type]?.cls || ''}${a?.is_job ? ' is-job' : ''}`;
 const STATUS_LABEL = {
     scheduled: 'Scheduled', confirmed: 'Confirmed', completed: 'Completed',
     no_show: 'No-show', cancelled: 'Cancelled', rescheduled: 'Rescheduled',
@@ -187,11 +190,32 @@ export default function Schedule() {
         return doReschedule(appt, newStart, newEnd, assignee, false);
     };
 
-    // Drop an appointment onto a target day (keep time-of-day) + optional rep.
+    // Q3.2 — a Jobs Ready entry reschedules the JOB's date (single source of
+    // truth); day-level, window-validated via the jobs endpoint. No reassign,
+    // no notify prompt (that's the sub-sets-date flow in Jobs Ready).
+    const rescheduleJobEntry = async (jobEntry, targetDate) => {
+        if (sameDay(new Date(jobEntry._s), targetDate)) return;
+        try {
+            await axiosInstance.post(`/jobs/${jobEntry.job_id}/schedule`, { scheduled_start: ymd(targetDate) });
+            toast.success(`Job ${jobEntry.job_number || ''} moved to ${targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
+            await load();
+        } catch (e) {
+            // Q2.9 window/deadline rejection or a readiness block — surface it.
+            toast.error(e?.userMessage || e?.response?.data?.message || 'Could not move the job');
+        }
+    };
+
+    // Drop an appointment (or job) onto a target day (keep time-of-day) + optional rep.
     const onDropDay = (targetDate, assignee) => {
         const appt = appts.find((a) => a.id === dragId);
         setDragId(null);
         if (!appt) return;
+        if (appt.is_job) {
+            // Jobs are day-scheduled; a calendar drop changes the DATE only (the
+            // lane/assignee is ignored — crew is managed in Jobs Ready).
+            rescheduleJobEntry(appt, targetDate);
+            return;
+        }
         const dur = appt._e - appt._s;
         const ns = new Date(targetDate);
         ns.setHours(appt._s.getHours(), appt._s.getMinutes(), 0, 0);
@@ -200,7 +224,7 @@ export default function Schedule() {
         requestReschedule(appt, ns, ne, assignee);
     };
 
-    const openDetail = (appt) => setModal({ mode: 'detail', appt });
+    const openDetail = (appt) => setModal({ mode: appt.is_job ? 'job' : 'detail', appt });
 
     const days = useMemo(() => {
         if (view === 'day') return [new Date(anchor)];
@@ -301,6 +325,9 @@ export default function Schedule() {
                     onAfter={() => { setModal(null); load(); }}
                 />
             )}
+            {modal?.mode === 'job' && (
+                <JobDetailModal appt={modal.appt} onClose={() => setModal(null)} />
+            )}
             {notifyChoice && (
                 <NotifyChoiceModal
                     info={notifyChoice}
@@ -312,6 +339,38 @@ export default function Schedule() {
                     }}
                 />
             )}
+        </div>
+    );
+}
+
+// ==========================================================================
+// Q3.2 — read-only detail for a synced Jobs Ready entry (manage the job itself
+// over in Jobs Ready — this calendar just mirrors + reschedules its date).
+// ==========================================================================
+function JobDetailModal({ appt, onClose }) {
+    const router = useRouter();
+    const when = new Date(appt._s).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    return (
+        <div className="modal-backdrop active" onClick={onClose}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title">🔧 Job {appt.job_number || ''}</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <div className="modal-lead-summary">
+                        <div className="name">Install{appt.job_type ? ` · ${appt.job_type}` : ''} · <span className={`st-badge st-${appt.status}`}>{STATUS_LABEL[appt.status] || appt.status}</span></div>
+                        <div className="meta">Scheduled {when}</div>
+                        {appt.address && <div className="meta">{appt.address}</div>}
+                        {appt.assigned_sub_id && <div className="meta">Assigned to a subcontractor</div>}
+                    </div>
+                    <p className="nc-help">This entry mirrors a job from <strong>Jobs Ready</strong>. Drag it on the calendar to change its date; manage the crew, checklist and completion from Jobs Ready.</p>
+                </div>
+                <div className="modal-footer between">
+                    <button className="btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn-primary" onClick={() => router.push('/dashboard/jobs-ready')}>Open in Jobs Ready →</button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -396,15 +455,15 @@ function TimeGrid({ days, appts, onOpen, onDropDay, setDragId }) {
                                         return (
                                             <div
                                                 key={a.id}
-                                                className={`tg-appt ${TYPE_META[a.type]?.cls || ''} st-${a.status}`}
+                                                className={`tg-appt ${entryCls(a)} st-${a.status}`}
                                                 style={{ top, height }}
                                                 draggable
                                                 onDragStart={() => setDragId(a.id)}
                                                 onDragEnd={() => setDragId(null)}
                                                 onClick={() => onOpen(a)}
                                             >
-                                                <div className="tg-appt-t">{fmtTime(a._s)}</div>
-                                                <div className="tg-appt-n">{TYPE_META[a.type]?.label}{a.address ? ` · ${a.address}` : ''}</div>
+                                                <div className="tg-appt-t">{a.is_job ? 'Job' : fmtTime(a._s)}</div>
+                                                <div className="tg-appt-n">{entryLabel(a)}{a.address ? ` · ${a.address}` : ''}</div>
                                             </div>
                                         );
                                     })}
@@ -448,13 +507,13 @@ function MonthGrid({ anchor, appts, onOpen, onDropDay, setDragId }) {
                                 {dayAppts.slice(0, 4).map((a) => (
                                     <div
                                         key={a.id}
-                                        className={`mg-pill ${TYPE_META[a.type]?.cls || ''} st-${a.status}`}
+                                        className={`mg-pill ${entryCls(a)} st-${a.status}`}
                                         draggable
                                         onDragStart={() => setDragId(a.id)}
                                         onDragEnd={() => setDragId(null)}
                                         onClick={() => onOpen(a)}
                                     >
-                                        {fmtTime(a._s)} {TYPE_META[a.type]?.label}
+                                        {a.is_job ? entryLabel(a) : `${fmtTime(a._s)} ${entryLabel(a)}`}
                                     </div>
                                 ))}
                                 {dayAppts.length > 4 && <div className="mg-more">+{dayAppts.length - 4} more</div>}
@@ -497,13 +556,13 @@ function TeamGrid({ days, team, appts, nameOf, onOpen, onDropDay, setDragId }) {
                                     {cellAppts.map((a) => (
                                         <div
                                             key={a.id}
-                                            className={`team-appt ${TYPE_META[a.type]?.cls || ''} st-${a.status}`}
+                                            className={`team-appt ${entryCls(a)} st-${a.status}`}
                                             draggable
                                             onDragStart={() => setDragId(a.id)}
                                             onDragEnd={() => setDragId(null)}
                                             onClick={() => onOpen(a)}
                                         >
-                                            {fmtTime(a._s)} {TYPE_META[a.type]?.label}
+                                            {a.is_job ? entryLabel(a) : `${fmtTime(a._s)} ${entryLabel(a)}`}
                                         </div>
                                     ))}
                                 </div>
@@ -529,9 +588,9 @@ function TodayPanel({ todays, nameOf, onOpen, onOutcome }) {
                 const mapHref = a.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address)}` : null;
                 const done = ['completed', 'no_show', 'cancelled'].includes(a.status);
                 return (
-                    <div key={a.id} className={`today-card ${TYPE_META[a.type]?.cls || ''}`}>
-                        <div className="today-time"><Clock size={12} style={{ verticalAlign: '-2px' }} /> {fmtTime(a._s)}</div>
-                        <button className="today-title" onClick={() => onOpen(a)}>{TYPE_META[a.type]?.label} · {nameOf(a.assigned_to)}</button>
+                    <div key={a.id} className={`today-card ${entryCls(a)}`}>
+                        <div className="today-time"><Clock size={12} style={{ verticalAlign: '-2px' }} /> {a.is_job ? 'Job' : fmtTime(a._s)}</div>
+                        <button className="today-title" onClick={() => onOpen(a)}>{entryLabel(a)}{a.is_job ? '' : ` · ${nameOf(a.assigned_to)}`}</button>
                         {a.address && <div className="today-addr">{a.address}</div>}
                         <div className="today-actions">
                             {mapHref && <a className="today-btn" href={mapHref} target="_blank" rel="noreferrer"><MapPin size={13} /> Map</a>}
