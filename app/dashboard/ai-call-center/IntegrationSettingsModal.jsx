@@ -93,6 +93,8 @@ export default function IntegrationSettingsModal({ open, onClose }) {
     const [rcSt, setRcSt] = useState(null);
     const [rcErr, setRcErr] = useState('');
     const [rcSubWarn, setRcSubWarn] = useState(null);
+    const [rcTestSt, setRcTestSt] = useState(null); // null | 'loading' | 'ok' | 'fail'
+    const [rcTest, setRcTest] = useState(null);      // result payload
 
     // CTM
     const [ctmKey, setCtmKey] = useState('');
@@ -141,6 +143,17 @@ export default function IntegrationSettingsModal({ open, onClose }) {
         } catch (e) {
             const msg = extractError(e);
             setRcSt('error'); setRcErr(msg); toast.error(msg);
+        }
+    };
+
+    const testRc = async () => {
+        setRcTestSt('loading'); setRcTest(null);
+        try {
+            const { data } = await axiosInstance.post('/ringcentral-test', {});
+            if (data?.ok) { setRcTestSt('ok'); setRcTest(data); }
+            else { setRcTestSt('fail'); setRcTest(data); }
+        } catch (e) {
+            setRcTestSt('fail'); setRcTest({ error: extractError(e) });
         }
     };
 
@@ -237,15 +250,44 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                                     value={rcJwt} onChange={(e) => setRcJwt(e.target.value)}
                                     style={{ minHeight: 80, resize: 'none' }} />
                             </F>
-                            <button className="ics-btn" onClick={saveRc} disabled={rcSt === 'loading'}>
-                                {summary.ringcentral.configured ? 'Reconnect Phone' : 'Connect Phone'} <SI status={rcSt} />
-                            </button>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <button className="ics-btn" onClick={saveRc} disabled={rcSt === 'loading'}>
+                                    {summary.ringcentral.configured ? 'Reconnect Phone' : 'Connect Phone'} <SI status={rcSt} />
+                                </button>
+                                {summary.ringcentral.configured && (
+                                    <button className="ics-btn" onClick={testRc} disabled={rcTestSt === 'loading'}
+                                        style={{ background: '#fff', color: '#ea580c', border: '1.5px solid #fed7aa' }}>
+                                        {rcTestSt === 'loading' ? <Loader2 size={14} className="ics-spin" /> : <CheckCircle2 size={14} />} Test Connection
+                                    </button>
+                                )}
+                            </div>
                             <Banner status={rcSt} error={rcErr} />
+                            {rcTestSt === 'ok' && rcTest && (
+                                <div className="ics-ok" style={{ display: 'block' }}>
+                                    ✓ Connected to <strong>{rcTest.account_name}</strong>
+                                    {rcTest.main_number ? ` (${rcTest.main_number})` : ''}
+                                    {typeof rcTest.extension_count === 'number' ? ` · ${rcTest.extension_count} extensions` : ''}
+                                    <div style={{ fontSize: 11, marginTop: 4, opacity: 0.85 }}>
+                                        {rcTest.subscription_active
+                                            ? 'Real-time call events are active — new calls will appear with who answered.'
+                                            : '⚠️ Webhook subscription is not active yet — Reconnect to enable live call events.'}
+                                    </div>
+                                </div>
+                            )}
+                            {rcTestSt === 'fail' && (
+                                <div className="ics-err">
+                                    <AlertCircle size={14} /> {rcTest?.error || 'Connection test failed.'}
+                                </div>
+                            )}
                             {rcSubWarn && (
                                 <div className="ics-err" style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>
                                     ⚠️ {rcSubWarn}
                                 </div>
                             )}
+                            <a href="/RINGCENTRAL-SETUP-GUIDE.md" target="_blank" rel="noreferrer"
+                                style={{ fontSize: 12, color: '#ea580c', fontWeight: 600, textDecoration: 'none' }}>
+                                📄 RingCentral setup guide — step by step
+                            </a>
                         </div>
 
                         <div className="ics-divider" />
