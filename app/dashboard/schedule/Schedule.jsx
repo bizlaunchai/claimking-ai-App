@@ -56,6 +56,7 @@ export default function Schedule() {
     const [modal, setModal] = useState(null);           // { mode:'create'|'detail', appt? , prefill? }
     const [dragId, setDragId] = useState(null);
     const [showLinks, setShowLinks] = useState(false);
+    const [notifyChoice, setNotifyChoice] = useState(null); // Q3.4 forced notify choice
 
     // Visible range for the fetch (widen to full weeks for month).
     const range = useMemo(() => {
@@ -146,13 +147,18 @@ export default function Schedule() {
         } catch (e) { toast.error(e?.userMessage || 'Could not save outcome'); }
     };
 
-    // Reschedule (and optionally reassign) — used by drag + the detail modal.
-    const reschedule = async (appt, newStart, newEnd, assignee) => {
+    // The actual PATCH. `notify` is only meaningful when the time changed (Q3.4);
+    // a pure reassign passes notify=false and the server never messages the client.
+    const doReschedule = async (appt, newStart, newEnd, assignee, notify) => {
         const body = { starts_at: newStart.toISOString(), ends_at: newEnd.toISOString() };
         if (assignee !== undefined && assignee !== appt.assigned_to) body.assigned_to = assignee;
+        if (notify !== undefined) body.notify = notify;
         try {
-            await axiosInstance.patch(`/appointments/${appt.id}`, body);
-            toast.success('Appointment updated');
+            const res = await axiosInstance.patch(`/appointments/${appt.id}`, body);
+            const n = res.data?.notified;
+            if (n && (n.email || n.sms)) toast.success('Rescheduled — client notified');
+            else if (notify === true) toast.success('Rescheduled (client had no reachable contact)');
+            else toast.success('Appointment updated');
             await load();
             return true;
         } catch (e) {
@@ -166,6 +172,21 @@ export default function Schedule() {
         }
     };
 
+    // Q3.4 — route reschedules through the mandatory notify choice. A date/time
+    // change on a client-linked appointment ALWAYS asks "Notify client?" (no
+    // default). A pure reassign (or an unlinked appointment) skips the prompt and
+    // never notifies. Returns 'deferred' when the choice modal took over.
+    const requestReschedule = async (appt, newStart, newEnd, assignee) => {
+        const timeChanged = newStart.getTime() !== appt._s.getTime() || newEnd.getTime() !== appt._e.getTime();
+        const hasClient = !!(appt.claim_id || appt.lead_id);
+        if (timeChanged && hasClient) {
+            setModal(null);
+            setNotifyChoice({ appt, ns: newStart, ne: newEnd, assignee });
+            return 'deferred';
+        }
+        return doReschedule(appt, newStart, newEnd, assignee, false);
+    };
+
     // Drop an appointment onto a target day (keep time-of-day) + optional rep.
     const onDropDay = (targetDate, assignee) => {
         const appt = appts.find((a) => a.id === dragId);
@@ -176,7 +197,7 @@ export default function Schedule() {
         ns.setHours(appt._s.getHours(), appt._s.getMinutes(), 0, 0);
         const ne = new Date(ns.getTime() + dur);
         if (sameDay(ns, appt._s) && assignee === undefined) return;
-        reschedule(appt, ns, ne, assignee);
+        requestReschedule(appt, ns, ne, assignee);
     };
 
     const openDetail = (appt) => setModal({ mode: 'detail', appt });
@@ -276,10 +297,52 @@ export default function Schedule() {
                     nameOf={nameOf}
                     onClose={() => setModal(null)}
                     onOutcome={saveOutcome}
-                    onReschedule={reschedule}
+                    onReschedule={requestReschedule}
                     onAfter={() => { setModal(null); load(); }}
                 />
             )}
+            {notifyChoice && (
+                <NotifyChoiceModal
+                    info={notifyChoice}
+                    onCancel={() => setNotifyChoice(null)}
+                    onChoose={async (notify) => {
+                        const { appt, ns, ne, assignee } = notifyChoice;
+                        setNotifyChoice(null);
+                        await doReschedule(appt, ns, ne, assignee, notify);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+// ==========================================================================
+// Q3.4 — mandatory "Notify client?" choice on a date/time change (no default)
+// ==========================================================================
+function NotifyChoiceModal({ info, onCancel, onChoose }) {
+    const { appt, ns } = info;
+    const when = ns.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const linked = appt.claim_id ? 'the client' : 'the lead';
+    return (
+        <div className="modal-backdrop active" onClick={onCancel}>
+            <div className="modal-box notify-choice" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title">Moving to a new time</div>
+                    <button className="modal-close" onClick={onCancel}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <div className="nc-when">📅 {when}</div>
+                    <p className="nc-q">Let {linked} know about the new time?</p>
+                    <p className="nc-help">Notifying sends {appt.claim_id ? 'an email + text with a link to their portal' : 'a text'}. Choose one to continue.</p>
+                </div>
+                <div className="modal-footer between">
+                    <button className="btn-secondary" onClick={onCancel}>Cancel</button>
+                    <div className="footer-left" style={{ marginLeft: 'auto' }}>
+                        <button className="btn-secondary" onClick={() => onChoose(false)}>Don’t notify</button>
+                        <button className="btn-primary" onClick={() => onChoose(true)}>🔔 Notify {linked}</button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -842,9 +905,11 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
         setBusy(true);
         const ns = new Date(`${date}T${time}:00`);
         const ne = new Date(ns.getTime() + duration * 60000);
-        const ok = await onReschedule(appt, ns, ne, manageAll ? (assignee || null) : undefined);
+        const r = await onReschedule(appt, ns, ne, manageAll ? (assignee || null) : undefined);
         setBusy(false);
-        if (ok) onAfter();
+        // 'deferred' → the notify-choice modal took over (a time change on a
+        // linked appointment); this detail modal was already closed by the parent.
+        if (r === true) onAfter();
     };
     const cancelAppt = async () => {
         setBusy(true);
