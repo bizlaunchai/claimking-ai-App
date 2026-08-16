@@ -332,7 +332,24 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
 }
 
 /* ── document uploader row ── */
-function DocRow({ token, doc, onUploaded }) {
+/* Load the Plaid Link script once (CDN, same dynamic-script pattern as the
+   Google Maps loader) — no npm dependency. */
+let plaidScriptPromise = null;
+function loadPlaid() {
+    if (typeof window !== 'undefined' && window.Plaid) return Promise.resolve(window.Plaid);
+    if (plaidScriptPromise) return plaidScriptPromise;
+    plaidScriptPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+        s.async = true;
+        s.onload = () => resolve(window.Plaid);
+        s.onerror = () => reject(new Error('Failed to load Plaid'));
+        document.head.appendChild(s);
+    });
+    return plaidScriptPromise;
+}
+
+function DocRow({ token, doc, onUploaded, profile }) {
     const inputRef = useRef(null);
     const [busy, setBusy] = useState(false);
     const [showSign, setShowSign] = useState(false);
@@ -350,17 +367,61 @@ function DocRow({ token, doc, onUploaded }) {
         } catch { /* */ } finally { setBusy(false); }
     };
 
+    // Q2.6 — Plaid bank-connect for the payout account.
+    const connectBank = async () => {
+        setBusy(true);
+        try {
+            const res = await axiosInstance.post(`/sub-portal/${token}/plaid/link-token`);
+            const d = res.data?.data || {};
+            if (!d.available || !d.link_token) {
+                toast('Bank connect isn’t set up — please upload a voided check instead.', 'warn');
+                setBusy(false);
+                inputRef.current?.click();
+                return;
+            }
+            const Plaid = await loadPlaid();
+            const handler = Plaid.create({
+                token: d.link_token,
+                onSuccess: async (public_token) => {
+                    setBusy(true);
+                    try {
+                        const c = await axiosInstance.post(`/sub-portal/${token}/plaid/connect`, { public_token });
+                        const info = c.data?.data || {};
+                        toast(`Bank connected${info.mask ? ` (••${info.mask})` : ''}.`, 'success');
+                        onUploaded();
+                    } catch { /* interceptor shows the error */ } finally { setBusy(false); }
+                },
+                onExit: () => setBusy(false),
+            });
+            setBusy(false);
+            handler.open();
+        } catch {
+            toast('Could not start bank connect. Please upload a voided check instead.', 'error');
+            setBusy(false);
+        }
+    };
+
     const isAgreement = doc.doc_type === 'subcontractor_agreement';
+    const isBank = doc.doc_type === 'bank_ach';
+    const bankConnected = isBank && profile?.payout_provider === 'plaid' && profile?.payout_account_mask;
+
     return (
         <div className="doc-row">
             <div style={{ flex: 1 }}>
                 <div className="doc-name">{DOC_LABELS[doc.doc_type] || doc.doc_type}</div>
+                {bankConnected && <div className="doc-note ok">✓ {profile.payout_bank_name || profile.payout_account_name} ••{profile.payout_account_mask}</div>}
                 {doc.rejection_reason && <div className="doc-note err">Rejected: {doc.rejection_reason}</div>}
                 {doc.expires_at && <div className="doc-note">Expires {fmtDate(doc.expires_at)}</div>}
             </div>
             <span className={`doc-status ${cls}`}>{label}</span>
             {isAgreement ? (
                 <button className="btn btn-sm btn-secondary" onClick={() => setShowSign(true)}>{['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign'}</button>
+            ) : isBank ? (
+                <>
+                    <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
+                    <button className="btn btn-sm btn-primary btn-busy" disabled={busy} onClick={connectBank}>{busy ? <><span className="doc-spin dark" />Connecting…</> : (bankConnected ? '🏦 Reconnect' : '🏦 Connect bank')}</button>
+                    <button className="link-btn" disabled={busy} onClick={() => inputRef.current?.click()}>or upload a voided check</button>
+                </>
             ) : (
                 <>
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
@@ -478,7 +539,7 @@ function Wizard({ token, portal, reload }) {
                 <div className="review-banner">⏳ Your application is under review. We’ll notify you once you’re approved to receive job offers.</div>
                 <div className="card">
                     <h3>Your Documents</h3>
-                    <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
+                    <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} profile={portal.profile} />)}</div>
                 </div>
             </div>
         );
@@ -541,7 +602,7 @@ function Wizard({ token, portal, reload }) {
 
                     <div className="card">
                         <p className="muted" style={{ marginTop: 0 }}>Upload each required document. Insurance certificates (COIs) are checked for expiry.</p>
-                        <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div>
+                        <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} profile={portal.profile} />)}</div>
                     </div>
 
                     <button className="btn btn-success btn-block" onClick={submit} disabled={submitting || !portal.ready_to_submit}>
@@ -854,7 +915,7 @@ function ActivePortal({ token, portal, reload }) {
                         )) : <div className="empty">No payments yet.</div>}
                     </>
                 ) : tab === 'docs' ? (
-                    <div className="card"><h3>My Documents</h3><div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} />)}</div></div>
+                    <div className="card"><h3>My Documents</h3><div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} profile={portal.profile} />)}</div></div>
                 ) : (
                     <ProfileTab token={token} portal={portal} reload={reload} />
                 )}
