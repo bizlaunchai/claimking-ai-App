@@ -140,6 +140,11 @@
 .sub-portal .jc-deadline { font-size: 0.82rem; color: #b45309; }
 .sub-portal .jc-setdate-row { display: flex; gap: 0.5rem; align-items: center; }
 .sub-portal .jc-setdate-row input[type="date"] { flex: 1; padding: 0.4rem 0.5rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; }
+/* Q3.8 — On the Way (sub side) */
+.sub-portal .jc-otw { margin: 0.5rem 0; }
+.sub-portal .jc-otw-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 0.6rem 0.7rem; }
+.sub-portal .jc-otw-row { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-top: 0.4rem; }
+.sub-portal .jc-otw-row input[type="time"], .sub-portal .jc-otw-row select { padding: 0.35rem 0.4rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.82rem; }
 .sub-portal .jc-steps { display: flex; gap: 0.4rem; margin: 0.75rem 0; }
 .sub-portal .step-btn { flex: 1; border: 2px solid #e5e7eb; background: #fff; border-radius: 10px; padding: 0.5rem 0.3rem; font-size: 0.75rem; font-weight: 700; color: #6b7280; cursor: pointer; }
 .sub-portal .step-btn.on { background: #16a34a; border-color: #16a34a; color: #fff; }

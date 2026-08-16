@@ -10,6 +10,7 @@ import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import { Link2, Copy } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
 import './schedule.css';
 
 // ─── Appointment types (color-coded per packet §5.4.3) ────────────────────
@@ -24,6 +25,27 @@ const TYPES = Object.keys(TYPE_META);
 // Q3.2 — a synced Jobs Ready entry shows as a job, not a generic "Install".
 const entryLabel = (a) => a?.is_job ? `🔧 ${a.job_number || 'Job'}` : (TYPE_META[a?.type]?.label || 'Appointment');
 const entryCls = (a) => `${TYPE_META[a?.type]?.cls || ''}${a?.is_job ? ' is-job' : ''}`;
+// Q3.12 — the property-local time (calendar itself renders in the viewer's zone).
+const TZ_FRIENDLY = { 'America/New_York': 'Eastern', 'America/Chicago': 'Central', 'America/Denver': 'Mountain', 'America/Los_Angeles': 'Pacific', 'America/Phoenix': 'Mountain', 'America/Anchorage': 'Alaska', 'Pacific/Honolulu': 'Hawaii' };
+const fmtInTz = (d, tz) => {
+    if (!tz) return null;
+    try {
+        const t = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
+        return `${t} ${TZ_FRIENDLY[tz] || ''}`.trim();
+    } catch { return null; }
+};
+// Q3.5 — turn-by-turn navigation link. Prefers coordinates, falls back to the
+// typed address (Google geocodes it). Null when there's nothing to route to.
+const navHref = (address, lat, lng) => {
+    const dest = (lat != null && lng != null) ? `${lat},${lng}` : (address ? encodeURIComponent(address) : null);
+    return dest ? `https://www.google.com/maps/dir/?api=1&destination=${dest}` : null;
+};
+// Self-contained SVG pin (no Leaflet default-icon asset — same pattern as the
+// sub/claims maps) for the day-map divIcon.
+const MAP_PIN_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 30 42">' +
+    '<path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.7 23.3 0 15 0z" fill="#1a1f3a"/>' +
+    '<circle cx="15" cy="15" r="5.5" fill="#FDB813"/></svg>';
 const STATUS_LABEL = {
     scheduled: 'Scheduled', confirmed: 'Confirmed', completed: 'Completed',
     no_show: 'No-show', cancelled: 'Cancelled', rescheduled: 'Rescheduled',
@@ -59,7 +81,10 @@ export default function Schedule() {
     const [modal, setModal] = useState(null);           // { mode:'create'|'detail', appt? , prefill? }
     const [dragId, setDragId] = useState(null);
     const [showLinks, setShowLinks] = useState(false);
+    const [showAvail, setShowAvail] = useState(false);      // Q3.11 availability editor
     const [notifyChoice, setNotifyChoice] = useState(null); // Q3.4 forced notify choice
+    const [personFilter, setPersonFilter] = useState('');   // Q3.3 '' = everyone; uuid | sub:uuid
+    const [showDayMap, setShowDayMap] = useState(false);    // Q3.5 day-route map
 
     // Visible range for the fetch (widen to full weeks for month).
     const range = useMemo(() => {
@@ -76,36 +101,37 @@ export default function Schedule() {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await axiosInstance.get('/appointments', {
-                params: { start: range.start.toISOString(), end: range.end.toISOString() },
-            });
+            const params = { start: range.start.toISOString(), end: range.end.toISOString() };
+            if (personFilter) params.assigned_to = personFilter; // Q3.3 worker uuid or sub:uuid
+            const res = await axiosInstance.get('/appointments', { params });
             setAppts((res.data?.data || []).map((a) => ({ ...a, _s: new Date(a.starts_at), _e: new Date(a.ends_at) })));
         } catch {
             setAppts([]);
         } finally {
             setLoading(false);
         }
-    }, [range]);
+    }, [range, personFilter]);
 
     useEffect(() => { load(); }, [load]);
 
-    // Team roster (best-effort; needs view_team). Used for swimlanes + assignee.
+    // Q3.3 — calendar people: in-house workers AND subcontractors (with jobs) in
+    // ONE roster. Drives the person filter, the assignee picker, and swimlanes.
+    // Each row: { id, name, kind:'worker'|'sub', value } where value is what the
+    // list filter sends (`sub:<id>` for subs so it matches assigned_sub_id).
     useEffect(() => {
-        if (!manageAll) return;
         (async () => {
             try {
-                const res = await axiosInstance.get('/team/members', { suppressErrorToast: true });
-                const list = res.data?.data || res.data || [];
-                setTeam(list.map((m) => ({
-                    id: m.id || m.user_id,
-                    name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email || 'Member',
-                })).filter((m) => m.id));
+                const res = await axiosInstance.get('/appointments/calendar-people', { suppressErrorToast: true });
+                const d = res.data?.data || {};
+                const workers = (d.workers || []).map((w) => ({ id: w.id, name: w.name, kind: 'worker', value: w.id }));
+                const subs = (d.subs || []).map((s) => ({ id: s.id, name: s.name, kind: 'sub', value: `sub:${s.id}` }));
+                setTeam([...workers, ...subs]);
             } catch { /* swimlanes degrade to a single lane */ }
         })();
-    }, [manageAll]);
+    }, []);
 
     const nameOf = useCallback(
-        (id) => team.find((m) => m.id === id)?.name || (id ? 'Assigned' : 'Unassigned'),
+        (id) => team.find((m) => m.id === id && m.kind !== 'sub')?.name || (id ? 'Assigned' : 'Unassigned'),
         [team],
     );
 
@@ -205,17 +231,24 @@ export default function Schedule() {
         }
     };
 
-    // Drop an appointment (or job) onto a target day (keep time-of-day) + optional rep.
-    const onDropDay = (targetDate, assignee) => {
+    // Drop an appointment (or job) onto a target day. `lane` is the team-view rep
+    // object when dropped into a swimlane (undefined in day/week/month).
+    const onDropDay = (targetDate, lane) => {
         const appt = appts.find((a) => a.id === dragId);
         setDragId(null);
         if (!appt) return;
         if (appt.is_job) {
-            // Jobs are day-scheduled; a calendar drop changes the DATE only (the
-            // lane/assignee is ignored — crew is managed in Jobs Ready).
+            // Jobs are day-scheduled; a calendar drop changes the DATE only (crew
+            // is managed in Jobs Ready), so the lane is ignored.
             rescheduleJobEntry(appt, targetDate);
             return;
         }
+        // Q3.3 — an appointment can't be reassigned to a subcontractor.
+        if (lane?.kind === 'sub') {
+            toast.error('Appointments go to workers, not subs. Subs are assigned jobs in Jobs Ready.');
+            return;
+        }
+        const assignee = lane ? lane.id : undefined;
         const dur = appt._e - appt._s;
         const ns = new Date(targetDate);
         ns.setHours(appt._s.getHours(), appt._s.getMinutes(), 0, 0);
@@ -237,6 +270,11 @@ export default function Schedule() {
         return appts.filter((a) => sameDay(a._s, now)).sort((a, b) => a._s - b._s);
     }, [appts]);
 
+    // Only in-house workers can be an APPOINTMENT assignee (subs get jobs, not
+    // appointments). The full `team` (workers + subs) drives the filter + lanes.
+    const workers = useMemo(() => team.filter((m) => m.kind === 'worker'), [team]);
+    const subsList = useMemo(() => team.filter((m) => m.kind === 'sub'), [team]);
+
     return (
         <div className="schedule-page">
             <div className="page-header">
@@ -245,6 +283,7 @@ export default function Schedule() {
                     <div className="page-subtitle">Estimates, inspections, adjuster meetings, installs & follow-ups — one calendar</div>
                 </div>
                 <div className="header-right">
+                    <button className="btn-secondary" onClick={() => setShowAvail((s) => !s)} title="Working hours & blocked days"><Clock size={15} style={{ verticalAlign: '-3px' }} /> Availability</button>
                     <button className="btn-secondary" onClick={() => setShowLinks((s) => !s)} title="Booking links"><Link2 size={15} style={{ verticalAlign: '-3px' }} /> Booking Links</button>
                     <button className="btn-secondary" onClick={load} title="Refresh"><RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh</button>
                     <button className="btn-primary" onClick={() => setModal({ mode: 'create' })}><Plus size={16} style={{ verticalAlign: '-3px' }} /> New Appointment</button>
@@ -260,21 +299,42 @@ export default function Schedule() {
                         <button className="cal-nav-btn" onClick={() => step(1)}><ChevronRight size={16} /></button>
                         <span className="sched-range">{rangeLabel}</span>
                     </div>
-                    <div className="sched-views">
-                        {['day', 'week', 'month', 'team'].map((v) => (
-                            <button
-                                key={v}
-                                className={`sched-view-btn ${view === v ? 'active' : ''}`}
-                                onClick={() => setView(v)}
-                                disabled={v === 'team' && !manageAll}
-                                title={v === 'team' && !manageAll ? 'Needs Manage All Schedule' : ''}
-                            >
-                                {v[0].toUpperCase() + v.slice(1)}
-                            </button>
-                        ))}
+                    <div className="sched-toolbar-right">
+                        {/* Q3.5 — the day's stops as a map / route */}
+                        <button className="cal-nav-btn" onClick={() => setShowDayMap(true)} title="Map the day's stops"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Day Map</button>
+                        {/* Q3.3 — one picker for workers AND subs */}
+                        {manageAll && (
+                            <select className="sched-person" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} title="Filter by person">
+                                <option value="">👥 All people</option>
+                                {workers.length > 0 && (
+                                    <optgroup label="Workers">
+                                        {workers.map((w) => <option key={w.value} value={w.value}>{w.name}</option>)}
+                                    </optgroup>
+                                )}
+                                {subsList.length > 0 && (
+                                    <optgroup label="Subcontractors">
+                                        {subsList.map((s) => <option key={s.value} value={s.value}>{s.name}</option>)}
+                                    </optgroup>
+                                )}
+                            </select>
+                        )}
+                        <div className="sched-views">
+                            {['day', 'week', 'month', 'team'].map((v) => (
+                                <button
+                                    key={v}
+                                    className={`sched-view-btn ${view === v ? 'active' : ''}`}
+                                    onClick={() => setView(v)}
+                                    disabled={v === 'team' && !manageAll}
+                                    title={v === 'team' && !manageAll ? 'Needs Manage All Schedule' : ''}
+                                >
+                                    {v[0].toUpperCase() + v.slice(1)}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
+                {showAvail && <AvailabilityPanel manageAll={manageAll} workers={workers} onClose={() => setShowAvail(false)} onChanged={load} />}
                 {showLinks && <BookingLinks manageAll={manageAll} nameOf={nameOf} onClose={() => setShowLinks(false)} />}
 
                 {/* Legend */}
@@ -286,7 +346,12 @@ export default function Schedule() {
 
                 <div className="sched-main">
                     <div className="sched-cal">
-                        {loading && <div className="sched-loading">Loading calendar…</div>}
+                        {loading && (
+                            <div className="sched-loading">
+                                <span className="detail-spinner lg" />
+                                <span>Loading calendar…</span>
+                            </div>
+                        )}
                         {!loading && (view === 'day' || view === 'week') && (
                             <TimeGrid days={days} appts={appts} onOpen={openDetail} onDropDay={onDropDay} setDragId={setDragId} />
                         )}
@@ -306,7 +371,7 @@ export default function Schedule() {
             {modal?.mode === 'create' && (
                 <AppointmentModal
                     prefill={modal.prefill}
-                    team={team}
+                    team={workers}
                     manageAll={manageAll}
                     defaultDate={view === 'day' ? anchor : new Date()}
                     onClose={() => setModal(null)}
@@ -316,7 +381,7 @@ export default function Schedule() {
             {modal?.mode === 'detail' && (
                 <DetailModal
                     appt={modal.appt}
-                    team={team}
+                    team={workers}
                     manageAll={manageAll}
                     nameOf={nameOf}
                     onClose={() => setModal(null)}
@@ -327,6 +392,17 @@ export default function Schedule() {
             )}
             {modal?.mode === 'job' && (
                 <JobDetailModal appt={modal.appt} onClose={() => setModal(null)} />
+            )}
+            {showDayMap && (
+                <DayMapModal
+                    date={view === 'day' ? anchor : new Date()}
+                    onClose={() => setShowDayMap(false)}
+                    onOpenRef={(kind, refId) => {
+                        setShowDayMap(false);
+                        const found = appts.find((a) => a.id === (kind === 'job' ? `job:${refId}` : refId));
+                        if (found) openDetail(found);
+                    }}
+                />
             )}
             {notifyChoice && (
                 <NotifyChoiceModal
@@ -361,7 +437,14 @@ function JobDetailModal({ appt, onClose }) {
                     <div className="modal-lead-summary">
                         <div className="name">Install{appt.job_type ? ` · ${appt.job_type}` : ''} · <span className={`st-badge st-${appt.status}`}>{STATUS_LABEL[appt.status] || appt.status}</span></div>
                         <div className="meta">Scheduled {when}</div>
-                        {appt.address && <div className="meta">{appt.address}</div>}
+                        {appt.address && (
+                            <div className="meta meta-addr">
+                                <span>{appt.address}</span>
+                                {navHref(appt.address, appt.lat, appt.lng) && (
+                                    <a className="maps-btn" href={navHref(appt.address, appt.lat, appt.lng)} target="_blank" rel="noreferrer"><MapPin size={12} /> Open in Maps</a>
+                                )}
+                            </div>
+                        )}
                         {appt.assigned_sub_id && <div className="meta">Assigned to a subcontractor</div>}
                     </div>
                     <p className="nc-help">This entry mirrors a job from <strong>Jobs Ready</strong>. Drag it on the calendar to change its date; manage the crew, checklist and completion from Jobs Ready.</p>
@@ -373,6 +456,124 @@ function JobDetailModal({ appt, onClose }) {
             </div>
         </div>
     );
+}
+
+// ==========================================================================
+// Q3.5 — Day Map: the day's appointments + jobs as pins (tap → time & details),
+// plus a one-tap "Open route in Google Maps" for the whole day.
+// ==========================================================================
+function DayMapModal({ date, onClose, onOpenRef }) {
+    const [data, setData] = useState(null); // { points, unlocated }
+    const [loading, setLoading] = useState(true);
+    const mapRef = useRef(null);
+    const dayLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await axiosInstance.get('/appointments/day-map', { params: { date: ymd(date) }, suppressErrorToast: true });
+                if (!cancelled) setData(res.data?.data || { points: [], unlocated: 0 });
+            } catch { if (!cancelled) setData({ points: [], unlocated: 0 }); }
+            finally { if (!cancelled) setLoading(false); }
+        })();
+        return () => { cancelled = true; };
+    }, [date]);
+
+    const points = data?.points || [];
+
+    // Draw the Leaflet map once points arrive.
+    useEffect(() => {
+        if (!points.length) return;
+        let cancelled = false;
+        (async () => {
+            const L = (await import('leaflet')).default || (await import('leaflet'));
+            if (cancelled) return;
+            const el = document.getElementById('dayMap');
+            if (!el || el._leaflet_id) return;
+            const map = L.map('dayMap', { scrollWheelZoom: true });
+            mapRef.current = map;
+            map.setView([points[0].lat, points[0].lng], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map);
+            const icon = L.divIcon({ className: 'ck-map-pin', html: MAP_PIN_SVG, iconSize: [28, 40], iconAnchor: [14, 40] });
+            const group = [];
+            points.forEach((p, i) => {
+                const t = p.time ? new Date(p.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Job';
+                const nav = navHref(p.address, p.lat, p.lng);
+                const html =
+                    `<div style="min-width:150px"><strong>${i + 1}. ${escapeHtmlJs(p.title)}</strong><br>` +
+                    `<span style="color:#6b7280">${t}${p.address ? ` · ${escapeHtmlJs(p.address)}` : ''}</span>` +
+                    (nav ? `<br><a href="${nav}" target="_blank" rel="noreferrer" style="color:#2563eb;font-weight:600">Navigate ↗</a>` : '') + `</div>`;
+                const m = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(html);
+                group.push(m);
+            });
+            setTimeout(() => {
+                if (cancelled || !mapRef.current) return;
+                mapRef.current.invalidateSize();
+                try { mapRef.current.fitBounds(L.featureGroup(group).getBounds(), { padding: [30, 30], maxZoom: 14 }); } catch { /* single point */ }
+            }, 150);
+        })();
+        return () => { cancelled = true; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    }, [points]);
+
+    // Whole-day route in Google Maps: last stop is the destination, the rest are waypoints.
+    const routeHref = (() => {
+        if (points.length < 1) return null;
+        const coord = (p) => `${p.lat},${p.lng}`;
+        const dest = coord(points[points.length - 1]);
+        const wpts = points.slice(0, -1).map(coord).join('|');
+        return `https://www.google.com/maps/dir/?api=1&destination=${dest}${wpts ? `&waypoints=${encodeURIComponent(wpts)}` : ''}`;
+    })();
+
+    return (
+        <div className="modal-backdrop active" onClick={onClose}>
+            <div className="modal-box day-map-box" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <div className="modal-title"><MapPin size={16} style={{ verticalAlign: '-3px' }} /> Day Map · {dayLabel}</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    {loading ? <div className="today-empty">Loading map…</div> : points.length === 0 ? (
+                        <div className="today-empty">No mappable stops for this day{data?.unlocated ? ` (${data.unlocated} had an address we couldn’t locate)` : ''}.</div>
+                    ) : (
+                        <>
+                            {routeHref && (
+                                <a className="btn-primary route-btn" href={routeHref} target="_blank" rel="noreferrer"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Open route in Google Maps ({points.length} {points.length === 1 ? 'stop' : 'stops'})</a>
+                            )}
+                            <div id="dayMap" className="day-map" />
+                            <div className="day-stops">
+                                {points.map((p, i) => {
+                                    const t = p.time ? new Date(p.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Job';
+                                    const nav = navHref(p.address, p.lat, p.lng);
+                                    return (
+                                        <div className="day-stop" key={p.id}>
+                                            <span className="day-stop-idx">{i + 1}</span>
+                                            <div className="day-stop-info">
+                                                <div className="day-stop-title">{p.title}</div>
+                                                <div className="day-stop-meta">{t}{p.address ? ` · ${p.address}` : ''}</div>
+                                            </div>
+                                            <div className="day-stop-actions">
+                                                <button className="today-btn" onClick={() => onOpenRef(p.kind, p.ref_id)}>Details</button>
+                                                {nav && <a className="today-btn" href={nav} target="_blank" rel="noreferrer"><MapPin size={12} /> Go</a>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {data?.unlocated > 0 && <div className="day-map-note">{data.unlocated} stop{data.unlocated > 1 ? 's' : ''} had an address we couldn’t map.</div>}
+                        </>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button className="btn-secondary" onClick={onClose}>Close</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function escapeHtmlJs(s) {
+    return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // ==========================================================================
@@ -542,16 +743,20 @@ function TeamGrid({ days, team, appts, nameOf, onOpen, onDropDay, setDragId }) {
                     </div>
                 ))}
                 {lanes.map((rep) => (
-                    <React.Fragment key={rep.id || 'unassigned'}>
-                        <div className="team-lane-name">{rep.name}</div>
+                    <React.Fragment key={`${rep.kind || 'w'}:${rep.id || 'unassigned'}`}>
+                        <div className="team-lane-name">{rep.name}{rep.kind === 'sub' ? <span className="lane-sub-tag">sub</span> : null}</div>
                         {days.map((day) => {
-                            const cellAppts = appts.filter((a) => a.assigned_to === rep.id && sameDay(a._s, day)).sort((a, b) => a._s - b._s);
+                            // Q3.3 — a sub lane matches jobs assigned to that sub; a worker
+                            // lane matches appointments/jobs assigned to that worker.
+                            const cellAppts = appts.filter((a) =>
+                                (rep.kind === 'sub' ? a.assigned_sub_id === rep.id : a.assigned_to === rep.id) && sameDay(a._s, day),
+                            ).sort((a, b) => a._s - b._s);
                             return (
                                 <div
                                     key={day.toISOString()}
                                     className="team-cell"
                                     onDragOver={(e) => e.preventDefault()}
-                                    onDrop={() => onDropDay(day, rep.id)}
+                                    onDrop={() => onDropDay(day, rep)}
                                 >
                                     {cellAppts.map((a) => (
                                         <div
@@ -738,18 +943,29 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
     const save = async () => {
         setBusy(true);
         try {
-            const starts = new Date(`${date}T${time}:00`);
-            const ends = new Date(starts.getTime() + duration * 60000);
+            // Q3.12 — send the typed time as a naive WALL-CLOCK + local:true. The
+            // backend interprets it in the PROPERTY's timezone (from the client's
+            // state), so "2 PM for a Texas property" is stored as 2 PM Central.
+            const [th, tm] = time.split(':').map(Number);
+            const endTotal = th * 60 + tm + duration;
+            const endDay = endTotal >= 1440 ? ymd(addDays(new Date(`${date}T12:00:00`), Math.floor(endTotal / 1440))) : date;
+            const eh = Math.floor((endTotal % 1440) / 60), em = endTotal % 60;
+            const startWall = `${date}T${pad(th)}:${pad(tm)}:00`;
+            const endWall = `${endDay}T${pad(eh)}:${pad(em)}:00`;
             const body = {
-                type, starts_at: starts.toISOString(), ends_at: ends.toISOString(),
+                type, starts_at: startWall, ends_at: endWall, local: true,
                 reminder_sms: reminder,
             };
             if (assignee) body.assigned_to = assignee;
             if (address.trim()) body.address = address.trim();
             if (leadId) body.lead_id = leadId;
             if (claimId) body.claim_id = claimId;
-            await axiosInstance.post('/appointments', body);
+            const res = await axiosInstance.post('/appointments', body);
             toast.success('Appointment created');
+            // Q3.11 — non-blocking heads-up if it's outside the rep's availability.
+            if (res.data?.outside_availability) {
+                toast('Heads up — that slot is outside this person’s availability', { description: 'It was still booked. Check their working hours / blocked days if this was unintended.' });
+            }
             onSaved();
         } catch (e) {
             const c = e?.response?.data?.conflict;
@@ -855,6 +1071,161 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
 }
 
 // ==========================================================================
+// Q3.11 — per-person availability editor (weekly hours + date overrides).
+// Booking + public links compute slots from this, so blocking a day removes it.
+// ==========================================================================
+const DOW = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']];
+const DOW_SHORT = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
+const to12h = (hhmm) => { if (!hhmm) return ''; const [h, m] = String(hhmm).split(':').map(Number); const ap = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:${String(m).padStart(2, '0')} ${ap}`; };
+const daysSummary = (days) => {
+    if (!days || !days.length) return 'No working days';
+    const s = [...days].sort((a, b) => a - b);
+    const parts = []; let i = 0;
+    while (i < s.length) {
+        let j = i; while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+        parts.push(j > i ? `${DOW_SHORT[s[i]]}–${DOW_SHORT[s[j]]}` : DOW_SHORT[s[i]]);
+        i = j + 1;
+    }
+    return parts.join(', ');
+};
+
+function AvailabilityPanel({ manageAll, workers, onClose, onChanged }) {
+    const [target, setTarget] = useState('');           // '' = me
+    const [rules, setRules] = useState(null);            // { weekly, company_default, overrides }
+    const [weekly, setWeekly] = useState(null);          // editable working copy
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [ov, setOv] = useState({ day: '', kind: 'blocked', start_time: '09:00', end_time: '13:00', note: '' });
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await axiosInstance.get('/appointments/availability-rules', { params: target ? { user_id: target } : {}, suppressErrorToast: true });
+            const d = res.data?.data;
+            setRules(d);
+            setWeekly({ ...(d?.company_default || {}), ...(d?.weekly || {}) });
+        } catch { setRules(null); } finally { setLoading(false); }
+    }, [target]);
+    useEffect(() => { load(); }, [load]);
+
+    const toggleDay = (n) => setWeekly((w) => {
+        const days = new Set(w.days || []);
+        days.has(n) ? days.delete(n) : days.add(n);
+        return { ...w, days: [...days].sort() };
+    });
+    const saveWeekly = async () => {
+        setSaving(true);
+        try {
+            await axiosInstance.put('/appointments/availability-rules', { user_id: target || undefined, weekly });
+            toast.success('Working hours saved');
+            await load(); onChanged?.();
+        } catch (e) { toast.error(e?.userMessage || 'Could not save'); } finally { setSaving(false); }
+    };
+    const addOverride = async () => {
+        if (!ov.day) { toast.error('Pick a date'); return; }
+        try {
+            await axiosInstance.post('/appointments/availability-overrides', { user_id: target || undefined, ...ov });
+            toast.success(ov.kind === 'blocked' ? 'Day blocked' : 'Custom hours set');
+            setOv({ ...ov, day: '', note: '' });
+            await load(); onChanged?.();
+        } catch (e) { toast.error(e?.userMessage || 'Could not save'); }
+    };
+    const removeOverride = async (id) => {
+        try { await axiosInstance.delete(`/appointments/availability-overrides/${id}`); await load(); onChanged?.(); }
+        catch { /* */ }
+    };
+
+    return (
+        <div className="bl-panel avail-panel">
+            <div className="bl-head">
+                <span><Clock size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Availability</span>
+                <button className="modal-close" onClick={onClose}>&times;</button>
+            </div>
+
+            {manageAll && workers.length > 0 && (
+                <div className="avail-target">
+                    <label>Editing availability for</label>
+                    <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                        <option value="">Me</option>
+                        {workers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                </div>
+            )}
+
+            {loading || !weekly ? (
+                <div className="avail-loading"><span className="detail-spinner" /> Loading availability…</div>
+            ) : (
+                <>
+                    {/* Weekly hours */}
+                    <div className="avail-card">
+                        <div className="avail-card-head">
+                            <div>
+                                <div className="avail-card-title">Weekly working hours</div>
+                                <div className="avail-card-sub">{rules?.weekly ? 'Bookings & your public link use these hours.' : 'Using the company default — customise below.'}</div>
+                            </div>
+                            {!rules?.weekly && <span className="avail-pill">Company default</span>}
+                        </div>
+                        <div className="avail-days">
+                            {DOW.map(([n, lbl]) => (
+                                <button key={n} type="button" className={`avail-day ${(weekly.days || []).includes(n) ? 'on' : ''}`} onClick={() => toggleDay(n)}>{lbl}</button>
+                            ))}
+                        </div>
+                        <div className="avail-summary">
+                            🗓 <strong>{daysSummary(weekly.days)}</strong> · {to12h(weekly.start || '08:00')} – {to12h(weekly.end || '18:00')} · {weekly.slot_minutes || 60}-min slots
+                        </div>
+                        <div className="avail-hours">
+                            <label>Start <input type="time" value={weekly.start || '08:00'} onChange={(e) => setWeekly((w) => ({ ...w, start: e.target.value }))} /></label>
+                            <label>End <input type="time" value={weekly.end || '18:00'} onChange={(e) => setWeekly((w) => ({ ...w, end: e.target.value }))} /></label>
+                            <label>Slot <select value={weekly.slot_minutes || 60} onChange={(e) => setWeekly((w) => ({ ...w, slot_minutes: Number(e.target.value) }))}>{[30, 45, 60, 90, 120].map((s) => <option key={s} value={s}>{s} min</option>)}</select></label>
+                        </div>
+                        <div className="avail-card-foot">
+                            <button className="btn-primary sm" disabled={saving} onClick={saveWeekly}>{saving ? 'Saving…' : 'Save working hours'}</button>
+                        </div>
+                    </div>
+
+                    {/* Time off / custom hours */}
+                    <div className="avail-card">
+                        <div className="avail-card-head">
+                            <div>
+                                <div className="avail-card-title">Time off &amp; custom hours</div>
+                                <div className="avail-card-sub">Block a vacation day or set special hours for one date.</div>
+                            </div>
+                        </div>
+                        <div className="avail-ov-list">
+                            {(rules?.overrides || []).length === 0 && <div className="avail-empty">No upcoming time off or custom hours.</div>}
+                            {(rules?.overrides || []).map((o) => (
+                                <div className="avail-ov" key={o.id}>
+                                    <span className="avail-ov-day">{new Date(`${o.day}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                                    <span className={`avail-ov-kind ${o.kind}`}>{o.kind === 'blocked' ? '⛔ Day off' : `🕒 ${to12h(o.start_time)}–${to12h(o.end_time)}`}</span>
+                                    {o.note && <span className="avail-ov-note">{o.note}</span>}
+                                    <button className="avail-ov-rm" onClick={() => removeOverride(o.id)} title="Remove">✕</button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="avail-ov-add">
+                            <input type="date" value={ov.day} onChange={(e) => setOv({ ...ov, day: e.target.value })} />
+                            <select value={ov.kind} onChange={(e) => setOv({ ...ov, kind: e.target.value })}>
+                                <option value="blocked">Block (day off)</option>
+                                <option value="custom">Custom hours</option>
+                            </select>
+                            {ov.kind === 'custom' && (
+                                <>
+                                    <input type="time" value={ov.start_time} onChange={(e) => setOv({ ...ov, start_time: e.target.value })} />
+                                    <span className="avail-to">–</span>
+                                    <input type="time" value={ov.end_time} onChange={(e) => setOv({ ...ov, end_time: e.target.value })} />
+                                </>
+                            )}
+                            <input type="text" className="avail-ov-note-in" placeholder="Note (optional)" value={ov.note} onChange={(e) => setOv({ ...ov, note: e.target.value })} />
+                            <button className="btn-secondary sm" onClick={addOverride}>Add</button>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
+// ==========================================================================
 // Booking Links panel — per-rep public /book/:slug URLs (task 2.12)
 // ==========================================================================
 function BookingLinks({ manageAll, nameOf, onClose }) {
@@ -949,16 +1320,120 @@ function BookingLinks({ manageAll, nameOf, onClose }) {
     );
 }
 
+// Q3.8 — "On the Way" control: pick arrival + buffer → the client gets the
+// window (arrival ± buffer/2) with the tech's name/photo/phone + a deep link.
+function OnTheWayControl({ defaultTime, onSend }) {
+    const [open, setOpen] = useState(false);
+    const [arrival, setArrival] = useState(defaultTime || '09:00');
+    const [buffer, setBuffer] = useState(30);
+    const [sending, setSending] = useState(false);
+    // Live preview of the window the client will see.
+    const preview = (() => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(arrival);
+        if (!m) return '';
+        const mins = +m[1] * 60 + +m[2], half = Math.round(buffer / 2);
+        const fmt = (t) => { t = ((t % 1440) + 1440) % 1440; const h = Math.floor(t / 60), mm = t % 60; const ap = h < 12 ? 'AM' : 'PM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:${String(mm).padStart(2, '0')} ${ap}`; };
+        return `${fmt(mins - half)} – ${fmt(mins + half)}`;
+    })();
+    const send = async () => {
+        setSending(true);
+        try { await onSend(arrival, buffer); setOpen(false); }
+        finally { setSending(false); }
+    };
+    if (!open) {
+        return <button className="btn-otw" onClick={() => setOpen(true)}><MapPin size={14} style={{ verticalAlign: '-2px' }} /> On the Way</button>;
+    }
+    return (
+        <div className="otw-box">
+            <div className="otw-head">🚗 On the Way — the client will be told you arrive:</div>
+            <div className="otw-window">{preview}</div>
+            <div className="grid2">
+                <div><label>Arrival time</label><input type="time" value={arrival} onChange={(e) => setArrival(e.target.value)} /></div>
+                <div><label>Window (± minutes)</label>
+                    <select value={buffer} onChange={(e) => setBuffer(Number(e.target.value))}>
+                        {[10, 15, 20, 30, 45, 60].map((b) => <option key={b} value={b}>{b} min</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="otw-actions">
+                <button className="btn-secondary sm" onClick={() => setOpen(false)}>Cancel</button>
+                <button className="btn-primary sm" disabled={sending} onClick={send}>{sending ? 'Sending…' : 'Notify client'}</button>
+            </div>
+        </div>
+    );
+}
+
+// Q3.7 — inline SMS composer (company Twilio number; A2P-gated server-side).
+function SmsComposer({ to, onSent }) {
+    const [body, setBody] = useState('');
+    const [sending, setSending] = useState(false);
+    const send = async () => {
+        if (!body.trim()) return;
+        setSending(true);
+        try {
+            await axiosInstance.post('/sms/send', { to, body: body.trim() });
+            toast.success('Message sent');
+            setBody(''); onSent?.();
+        } catch (e) { toast.error(e?.userMessage || 'Could not send (needs Send SMS + A2P)'); }
+        finally { setSending(false); }
+    };
+    return (
+        <div className="sms-composer">
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Text ${to}…`} rows={2} />
+            <button className="btn-primary sm" disabled={sending || !body.trim()} onClick={send}>{sending ? 'Sending…' : 'Send text'}</button>
+        </div>
+    );
+}
+
 // ==========================================================================
 // Detail modal (reschedule / reassign / outcome / status)
 // ==========================================================================
 function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onReschedule, onAfter }) {
+    const router = useRouter();
     const [date, setDate] = useState(ymd(appt._s));
     const [time, setTime] = useState(`${pad(appt._s.getHours())}:${pad(appt._s.getMinutes())}`);
     const [duration, setDuration] = useState(Math.round((appt._e - appt._s) / 60000));
     const [assignee, setAssignee] = useState(appt.assigned_to || '');
     const [busy, setBusy] = useState(false);
     const done = ['completed', 'no_show', 'cancelled'].includes(appt.status);
+
+    // Q3.7 — enriched detail: client + history + change log + gated job cost.
+    const [detail, setDetail] = useState(null);
+    const [loadingDetail, setLoadingDetail] = useState(true);
+    const [notes, setNotes] = useState(appt.notes || '');
+    const [savingNotes, setSavingNotes] = useState(false);
+    const [showMsg, setShowMsg] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        setLoadingDetail(true);
+        (async () => {
+            try {
+                const res = await axiosInstance.get(`/appointments/${appt.id}/detail`, { suppressErrorToast: true });
+                if (!cancelled) { setDetail(res.data?.data); setNotes(res.data?.data?.appointment?.notes || ''); }
+            } catch { /* degrade to the basic view */ }
+            finally { if (!cancelled) setLoadingDetail(false); }
+        })();
+        return () => { cancelled = true; };
+    }, [appt.id]);
+
+    const client = detail?.client || null;
+    const saveNotes = async () => {
+        setSavingNotes(true);
+        try { await axiosInstance.patch(`/appointments/${appt.id}`, { notes }); toast.success('Notes saved'); }
+        catch (e) { toast.error(e?.userMessage || 'Could not save notes'); }
+        finally { setSavingNotes(false); }
+    };
+    const copyPhone = () => { if (client?.phone) { navigator.clipboard?.writeText(client.phone); toast.success('Phone copied'); } };
+    const goToPortal = () => { if (client?.claim_id) { onClose(); router.push(`/dashboard/claims/${client.claim_id}`); } };
+    const isToday = sameDay(appt._s, new Date());
+    const sendOnTheWay = async (arrival, buffer) => {
+        try {
+            const res = await axiosInstance.post(`/appointments/${appt.id}/on-the-way`, { arrival, buffer_minutes: buffer });
+            const n = res.data?.data?.notified;
+            if (n && (n.email || n.sms)) toast.success(`Client notified · arriving ${res.data.data.window}`);
+            else toast.success(`On-the-way set (${res.data?.data?.window}) — client had no reachable contact`);
+        } catch (e) { toast.error(e?.userMessage || 'Could not notify'); }
+    };
 
     const applyReschedule = async () => {
         setBusy(true);
@@ -993,11 +1468,108 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                 <div className="modal-body">
                     <div className="modal-lead-summary">
                         <div className="name">{nameOf(appt.assigned_to)} · <span className={`st-badge st-${appt.status}`}>{STATUS_LABEL[appt.status]}</span></div>
-                        <div className="meta">{appt._s.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} – {fmtTime(appt._e)}</div>
-                        {appt.address && <div className="meta">{appt.address}</div>}
+                        <div className="meta">{appt._s.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} – {fmtTime(appt._e)} <span className="tz-you">your time</span></div>
+                        {(() => {
+                            // Q3.12 — note the property's local time when it differs from the viewer's.
+                            const pt = fmtInTz(appt._s, appt.timezone);
+                            const yt = fmtInTz(appt._s, Intl.DateTimeFormat().resolvedOptions().timeZone);
+                            return pt && pt !== yt ? <div className="meta tz-prop">🌎 Property time: <strong>{pt}</strong></div> : null;
+                        })()}
+                        {appt.address && (
+                            <div className="meta meta-addr">
+                                <span>{appt.address}</span>
+                                {navHref(appt.address, appt.lat, appt.lng) && (
+                                    <a className="maps-btn" href={navHref(appt.address, appt.lat, appt.lng)} target="_blank" rel="noreferrer"><MapPin size={12} /> Open in Maps</a>
+                                )}
+                            </div>
+                        )}
                         {appt.claim_id && <div className="meta">Linked to a claim</div>}
                         {appt.lead_id && <div className="meta">Linked to a lead</div>}
                     </div>
+
+                    {/* Q3.7 — loading state while the enriched detail arrives */}
+                    {loadingDetail && (
+                        <div className="detail-loading"><span className="detail-spinner" /> Loading client & history…</div>
+                    )}
+
+                    {/* Q3.7 — client + quick actions */}
+                    {client && (
+                        <div className="appt-client">
+                            <div className="appt-client-head">
+                                <div className="appt-client-name">{client.name}<span className={`person-badge ${client.kind}`}>{client.kind === 'claim' ? 'Client' : 'Lead'}</span></div>
+                            </div>
+                            <div className="appt-quick">
+                                {client.phone && <a className="today-btn" href={`tel:${client.phone}`}><Phone size={12} /> Call</a>}
+                                {client.phone && <button className="today-btn" onClick={copyPhone}>Copy #</button>}
+                                {client.phone && <button className="today-btn" onClick={() => setShowMsg((s) => !s)}>Message</button>}
+                                {client.claim_id && <button className="today-btn" onClick={goToPortal}>Client portal →</button>}
+                            </div>
+                            {showMsg && client.phone && <SmsComposer to={client.phone} onSent={() => setShowMsg(false)} />}
+                            {/* Q3.8 — On the Way (today's appointments only) */}
+                            {isToday && !done && client.kind === 'claim' && (
+                                <OnTheWayControl defaultTime={`${pad(appt._s.getHours())}:${pad(appt._s.getMinutes())}`} onSend={sendOnTheWay} />
+                            )}
+                        </div>
+                    )}
+
+                    {/* Q3.7 — job cost (financial firewall: only when granted) */}
+                    {detail?.can_view_financials && detail?.linked_job_cost != null && (
+                        <div className="appt-cost">💰 Job cost: <strong>${Number(detail.linked_job_cost).toLocaleString('en-US')}</strong> <span className="muted">(internal)</span></div>
+                    )}
+
+                    {/* Q3.7 — Notes */}
+                    <div className="sched-sec-title">Notes</div>
+                    <textarea className="appt-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Access, gate codes, what to bring, context…" rows={2} />
+                    <button className="btn-secondary sm" disabled={savingNotes} onClick={saveNotes}>{savingNotes ? 'Saving…' : 'Save notes'}</button>
+
+                    {/* Q3.7 — client history */}
+                    {detail && (detail.history?.appointments?.length > 0 || detail.history?.jobs?.length > 0) && (
+                        <>
+                            <div className="sched-sec-title">Client history</div>
+                            <div className="appt-history">
+                                {detail.history.appointments.map((h) => (
+                                    <div className="appt-hist-row" key={`a:${h.id}`}>
+                                        <span className={`chip ${TYPE_META[h.type]?.cls || ''}`} />
+                                        <span className="appt-hist-t">{TYPE_META[h.type]?.label || h.type}</span>
+                                        <span className="appt-hist-d">{new Date(h.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                        <span className={`st-badge st-${h.status}`}>{STATUS_LABEL[h.status] || h.status}</span>
+                                    </div>
+                                ))}
+                                {detail.history.jobs.map((j) => (
+                                    <div className="appt-hist-row" key={`j:${j.id}`}>
+                                        <span className="chip install" />
+                                        <span className="appt-hist-t">🔧 Job {j.job_number || ''}</span>
+                                        <span className="appt-hist-d">{j.scheduled_start ? new Date(`${String(j.scheduled_start).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (j.readiness_state || '').replace(/_/g, ' ')}</span>
+                                        {j.job_cost != null && <span className="muted">${Number(j.job_cost).toLocaleString('en-US')}</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Q3.7 — change history */}
+                    {detail?.change_history?.length > 0 && (
+                        <>
+                            <div className="sched-sec-title">Change history {detail.move_count > 0 ? `· moved ${detail.move_count}×` : ''}</div>
+                            <div className="appt-changes">
+                                {detail.change_history.slice(0, 6).map((c, i) => (
+                                    <div className="appt-change" key={i}>
+                                        <span className="appt-change-a">{(c.action || '').replace(/^appointment_/, '').replace(/_/g, ' ')}</span>
+                                        <span className="appt-change-by">{c.by}</span>
+                                        <span className="appt-change-at">{new Date(c.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Q3.7 — job-linked actions (route to the claim where these live) */}
+                    {client?.claim_id && (
+                        <div className="appt-joblinks">
+                            <button className="btn-secondary sm" onClick={goToPortal} title="Send the final invoice from the client's claim">Send Final Invoice →</button>
+                            <button className="btn-secondary sm" onClick={goToPortal} title="Request a review from the client's claim">Request Review →</button>
+                        </div>
+                    )}
 
                     {!done && (
                         <>

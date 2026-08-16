@@ -21,7 +21,9 @@
 .schedule-page .btn-secondary {
     padding: 0.5rem 0.875rem; background: white; color: #1a1f3a; border: 1px solid #e5e7eb;
     border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 0.875rem;
+    display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; line-height: 1;
 }
+.schedule-page .btn-secondary svg { flex: 0 0 auto; }
 .schedule-page .btn-secondary:hover { border-color: #FDB813; background: #fef9e6; }
 .schedule-page .btn-success {
     padding: 0.5rem 0.875rem; background: #16a34a; color: white; border: none; border-radius: 6px;
@@ -49,6 +51,11 @@
 .schedule-page .cal-nav-btn:hover { border-color: #FDB813; background: #fef9e6; }
 .schedule-page .sched-range { font-size: 0.95rem; font-weight: 700; color: #1a1f3a; margin-left: 0.5rem; }
 .schedule-page .sched-views { display: flex; gap: 2px; background: #f3f4f6; border-radius: 8px; padding: 3px; }
+/* Q3.3 — people filter (workers + subs) */
+.schedule-page .sched-toolbar-right { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.schedule-page .sched-person { padding: 0.45rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.82rem; font-weight: 600; color: #1a1f3a; background: white; cursor: pointer; max-width: 220px; }
+.schedule-page .sched-person:focus { outline: none; border-color: #FDB813; }
+.schedule-page .lane-sub-tag { margin-left: 0.4rem; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #92400e; background: #fef3c7; border-radius: 4px; padding: 0.05rem 0.3rem; vertical-align: middle; }
 .schedule-page .sched-view-btn {
     padding: 0.4rem 0.85rem; border: none; background: transparent; border-radius: 6px;
     font-size: 0.8rem; font-weight: 600; color: #6b7280; cursor: pointer;
@@ -70,7 +77,8 @@
 .schedule-page .sched-main { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 1rem; align-items: start; }
 @media (max-width: 1100px) { .schedule-page .sched-main { grid-template-columns: 1fr; } }
 .schedule-page .sched-cal { background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
-.schedule-page .sched-loading { padding: 3rem; text-align: center; color: #6b7280; }
+.schedule-page .sched-loading { padding: 3.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.85rem; color: #6b7280; font-size: 0.9rem; font-weight: 600; }
+.schedule-page .detail-spinner.lg { width: 34px; height: 34px; border-width: 3px; border-top-color: #FDB813; }
 
 /* Type colour helpers (block backgrounds) */
 .schedule-page .estimate { --c: #FDB813; --t: #1a1f3a; }
@@ -224,6 +232,98 @@
 .schedule-page .tg-appt.is-job, .schedule-page .team-appt.is-job { outline: 1.5px dashed rgba(255,255,255,0.55); outline-offset: -3px; }
 .schedule-page .mg-pill.is-job { border: 1px dashed rgba(255,255,255,0.6); }
 .schedule-page .today-card.is-job { border-left-style: dashed; }
+
+/* Q3.12 — timezone note */
+.schedule-page .tz-you { font-size: 0.68rem; color: #9ca3af; font-weight: 600; }
+.schedule-page .tz-prop { color: #b45309 !important; }
+
+/* Q3.11 — availability editor (redesigned) */
+.schedule-page .avail-loading { display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 2.5rem; color: #6b7280; font-size: 0.88rem; font-weight: 600; }
+.schedule-page .avail-target { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; }
+.schedule-page .avail-target label { font-size: 0.72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
+.schedule-page .avail-target select { padding: 0.45rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: #1a1f3a; }
+.schedule-page .avail-card { border: 1px solid #eef0f4; border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: 0.9rem; background: #fff; }
+.schedule-page .avail-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.7rem; }
+.schedule-page .avail-card-title { font-size: 0.95rem; font-weight: 700; color: #1a1f3a; }
+.schedule-page .avail-card-sub { font-size: 0.78rem; color: #6b7280; margin-top: 0.15rem; }
+.schedule-page .avail-pill { flex: 0 0 auto; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #92400e; background: #fef3c7; border-radius: 999px; padding: 0.2rem 0.55rem; white-space: nowrap; }
+.schedule-page .avail-days { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.schedule-page .avail-day { width: 46px; padding: 0.45rem 0; text-align: center; border: 1.5px solid #e5e7eb; border-radius: 9px; background: white; font-size: 0.78rem; font-weight: 700; color: #9ca3af; cursor: pointer; transition: all 0.12s; }
+.schedule-page .avail-day:hover { border-color: #1a1f3a; }
+.schedule-page .avail-day.on { border-color: #1a1f3a; background: #1a1f3a; color: #FDB813; }
+.schedule-page .avail-summary { margin: 0.7rem 0; padding: 0.55rem 0.7rem; background: #f9fafb; border-radius: 9px; font-size: 0.82rem; color: #374151; }
+.schedule-page .avail-summary strong { color: #1a1f3a; }
+.schedule-page .avail-hours { display: flex; gap: 0.9rem; flex-wrap: wrap; }
+.schedule-page .avail-hours label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
+.schedule-page .avail-hours input, .schedule-page .avail-hours select { padding: 0.4rem 0.5rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: #1a1f3a; text-transform: none; letter-spacing: normal; }
+.schedule-page .avail-card-foot { margin-top: 0.85rem; display: flex; justify-content: flex-end; }
+.schedule-page .avail-empty { font-size: 0.82rem; color: #9ca3af; padding: 0.5rem 0; }
+.schedule-page .avail-ov-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
+.schedule-page .avail-ov { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; padding: 0.5rem 0.65rem; border: 1px solid #eef0f4; border-radius: 10px; background: #f9fafb; }
+.schedule-page .avail-ov-day { font-weight: 700; color: #1a1f3a; min-width: 92px; }
+.schedule-page .avail-ov-kind { font-size: 0.74rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 6px; white-space: nowrap; }
+.schedule-page .avail-ov-kind.blocked { background: #fee2e2; color: #b91c1c; }
+.schedule-page .avail-ov-kind.custom { background: #dbeafe; color: #1e40af; }
+.schedule-page .avail-ov-note { color: #6b7280; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-page .avail-ov-rm { margin-left: auto; flex: 0 0 auto; width: 24px; height: 24px; border: none; background: #fff; border: 1px solid #fecaca; color: #dc2626; border-radius: 6px; cursor: pointer; font-weight: 700; }
+.schedule-page .avail-ov-rm:hover { background: #fee2e2; }
+.schedule-page .avail-ov-add { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; padding-top: 0.75rem; border-top: 1px dashed #eef0f4; }
+.schedule-page .avail-ov-add input, .schedule-page .avail-ov-add select { padding: 0.45rem 0.5rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.82rem; }
+.schedule-page .avail-ov-add .avail-ov-note-in { flex: 1; min-width: 120px; }
+.schedule-page .avail-to { color: #9ca3af; }
+
+/* Q3.8 — On the Way */
+.schedule-page .btn-otw { margin-top: 0.5rem; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.8rem; background: #1a1f3a; color: #FDB813; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+.schedule-page .btn-otw:hover { box-shadow: 0 4px 12px rgba(26,31,58,0.3); }
+.schedule-page .otw-box { margin-top: 0.6rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 0.7rem 0.8rem; }
+.schedule-page .otw-head { font-size: 0.78rem; color: #92400e; font-weight: 600; }
+.schedule-page .otw-window { font-size: 1.15rem; font-weight: 800; color: #1a1f3a; margin: 0.25rem 0 0.5rem; }
+.schedule-page .otw-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* Q3.7 — enriched appointment detail */
+.schedule-page .detail-loading { display: flex; align-items: center; gap: 0.5rem; padding: 0.85rem; color: #6b7280; font-size: 0.85rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; margin-bottom: 0.85rem; }
+.schedule-page .detail-spinner { width: 15px; height: 15px; border: 2px solid #e5e7eb; border-top-color: #1a1f3a; border-radius: 50%; animation: sched-spin 0.7s linear infinite; display: inline-block; }
+@keyframes sched-spin { to { transform: rotate(360deg); } }
+.schedule-page .appt-client { background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.7rem 0.85rem; margin-bottom: 0.85rem; }
+.schedule-page .appt-client-name { font-weight: 700; color: #1a1f3a; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; }
+.schedule-page .appt-client-name .person-badge { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.1rem 0.35rem; border-radius: 4px; }
+.schedule-page .person-badge.claim { background: #dcfce7; color: #166534; }
+.schedule-page .person-badge.lead { background: #dbeafe; color: #1e40af; }
+.schedule-page .appt-quick { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.schedule-page .sms-composer { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.schedule-page .sms-composer textarea { width: 100%; padding: 0.5rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.85rem; resize: vertical; }
+.schedule-page .appt-cost { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; margin-bottom: 0.6rem; }
+.schedule-page .appt-notes { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.85rem; resize: vertical; }
+.schedule-page .btn-secondary.sm { padding: 0.35rem 0.7rem; font-size: 0.78rem; margin-top: 0.4rem; }
+.schedule-page .btn-primary.sm { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+.schedule-page .appt-history, .schedule-page .appt-changes { display: flex; flex-direction: column; gap: 0.35rem; }
+.schedule-page .appt-hist-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #374151; }
+.schedule-page .appt-hist-row .chip { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+.schedule-page .appt-hist-t { font-weight: 600; color: #1a1f3a; }
+.schedule-page .appt-hist-d { color: #6b7280; margin-left: auto; }
+.schedule-page .appt-change { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.78rem; }
+.schedule-page .appt-change-a { font-weight: 700; color: #1a1f3a; text-transform: capitalize; }
+.schedule-page .appt-change-by { color: #6b7280; }
+.schedule-page .appt-change-at { color: #9ca3af; margin-left: auto; white-space: nowrap; }
+.schedule-page .appt-joblinks { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.85rem; }
+
+/* Q3.5 — Open in Maps + Day Map */
+.schedule-page .meta-addr { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.schedule-page .maps-btn { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.72rem; font-weight: 700; color: #2563eb; text-decoration: none; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 6px; padding: 0.15rem 0.45rem; white-space: nowrap; }
+.schedule-page .maps-btn:hover { background: #dbeafe; }
+.schedule-page .ck-map-pin { background: none; border: none; }
+.schedule-page .ck-map-pin svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35)); }
+.schedule-page .modal-box.day-map-box { max-width: 640px; width: 92vw; }
+.schedule-page .route-btn { display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; width: 100%; justify-content: center; margin-bottom: 0.75rem; }
+.schedule-page .day-map { width: 100%; height: 300px; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb; position: relative; z-index: 0; }
+.schedule-page .day-stops { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; max-height: 220px; overflow-y: auto; }
+.schedule-page .day-stop { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid #eef0f4; border-radius: 10px; background: #f9fafb; }
+.schedule-page .day-stop-idx { flex: 0 0 22px; height: 22px; border-radius: 50%; background: #1a1f3a; color: #FDB813; font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.schedule-page .day-stop-info { flex: 1; min-width: 0; }
+.schedule-page .day-stop-title { font-size: 0.85rem; font-weight: 700; color: #1a1f3a; text-transform: capitalize; }
+.schedule-page .day-stop-meta { font-size: 0.75rem; color: #6b7280; }
+.schedule-page .day-stop-actions { display: flex; gap: 0.35rem; }
+.schedule-page .day-map-note { margin-top: 0.5rem; font-size: 0.75rem; color: #b45309; }
 
 /* Q3.4 — mandatory notify-choice modal */
 .schedule-page .modal-box.notify-choice { max-width: 440px; }
