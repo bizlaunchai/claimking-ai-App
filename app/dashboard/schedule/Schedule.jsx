@@ -1231,11 +1231,26 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
     const [reminder, setReminder] = useState(true);
     const [repeat, setRepeat] = useState('none');        // Q3.16 none|weekly|biweekly|monthly
     const [repeatCount, setRepeatCount] = useState(4);   // total occurrences
+    const [redeemable, setRedeemable] = useState([]);    // Q3.17 client's usable packages
+    const [redeemId, setRedeemId] = useState('');        // chosen client_package to redeem
     const [slots, setSlots] = useState(null);
     const [busy, setBusy] = useState(false);
 
     const leadId = person?.kind === 'lead' ? person.id : '';
     const claimId = person?.kind === 'claim' ? person.id : '';
+
+    // Q3.17 — a claim client may have a package to redeem for this booking.
+    useEffect(() => {
+        if (!claimId) { setRedeemable([]); setRedeemId(''); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const r = await axiosInstance.get(`/packages/client/${claimId}/redeemable`, { params: { type }, suppressErrorToast: true });
+                if (!cancelled) setRedeemable(r.data?.data || []);
+            } catch { if (!cancelled) setRedeemable([]); }
+        })();
+        return () => { cancelled = true; };
+    }, [claimId, type]);
 
     // Picking a person auto-fills the address when the field is still empty.
     const pickPerson = (p) => {
@@ -1281,6 +1296,14 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
             const res = await axiosInstance.post('/appointments', body);
             const made = res.data?.series?.created;
             toast.success(made && made > 1 ? `${made} appointments created (repeating)` : 'Appointment created');
+            // Q3.17 — redeem the chosen package against the new appointment.
+            if (redeemId && res.data?.data?.id) {
+                try {
+                    const rr = await axiosInstance.post(`/packages/redeem/${redeemId}`, { appointment_id: res.data.data.id });
+                    const left = rr.data?.data?.remaining_uses;
+                    toast.success(left != null ? `Package redeemed — ${left} left` : 'Package redeemed');
+                } catch { toast.error('Booked, but the package could not be redeemed'); }
+            }
             // Q3.11 — non-blocking heads-up if it's outside the rep's availability.
             if (res.data?.outside_availability) {
                 toast('Heads up — that slot is outside this person’s availability', { description: 'It was still booked. Check their working hours / blocked days if this was unintended.' });
@@ -1399,6 +1422,19 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                             </div>
                         )}
                     </div>
+
+                    {/* Q3.17 — redeem a client's package for this appointment */}
+                    {redeemable.length > 0 && (
+                        <>
+                            <label>Redeem package</label>
+                            <select value={redeemId} onChange={(e) => setRedeemId(e.target.value)}>
+                                <option value="">Don’t redeem</option>
+                                {redeemable.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.name}{p.remaining_uses != null ? ` — ${p.remaining_uses} left` : ''}</option>
+                                ))}
+                            </select>
+                        </>
+                    )}
 
                     <label className="check-row">
                         <input type="checkbox" checked={reminder} onChange={(e) => setReminder(e.target.checked)} />
