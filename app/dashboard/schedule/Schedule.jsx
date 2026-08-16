@@ -220,6 +220,7 @@ export default function Schedule() {
     const [personFilter, setPersonFilter] = useState('');   // Q3.3 '' = everyone; uuid | sub:uuid
     const [showDayMap, setShowDayMap] = useState(false);    // Q3.5 day-route map
     const [showJobsMap, setShowJobsMap] = useState(false);  // Q3.15 all-jobs map
+    const [showCalendars, setShowCalendars] = useState(false); // Q3.13 external calendar sync
     const [showTypes, setShowTypes] = useState(false);      // Q3.6 appointment type center
     const [apptTypes, setApptTypes] = useState([]);         // Q3.6 DB-driven types
     const [typesVersion, setTypesVersion] = useState(0);    // bump to re-render on type change
@@ -236,6 +237,13 @@ export default function Schedule() {
         } catch { /* keep built-in fallback */ }
     }, []);
     useEffect(() => { loadTypes(); }, [loadTypes]);
+
+    // Q3.13 — the external-calendar OAuth callback returns to ?calendar=connected|error.
+    useEffect(() => {
+        const c = search?.get('calendar');
+        if (c === 'connected') { toast.success('Calendar connected'); setShowCalendars(true); }
+        else if (c === 'error') { toast.error('Could not connect that calendar'); }
+    }, [search]);
 
     // Q3.14 — print-friendly crew sheet for the current range (day/week/month).
     // Server resolves client + assignee names; we group by day and print.
@@ -453,6 +461,7 @@ export default function Schedule() {
                 </div>
                 <div className="header-right">
                     <button className="btn-secondary" onClick={() => setShowAvail((s) => !s)} title="Working hours & blocked days"><Clock size={15} style={{ verticalAlign: '-3px' }} /> Availability</button>
+                    <button className="btn-secondary" onClick={() => setShowCalendars(true)} title="Connect Google / Outlook calendar"><span style={{ verticalAlign: '-1px', marginRight: 4 }}>🔗</span> Calendars</button>
                     {has('manage_appointment_types') && (
                         <button className="btn-secondary" onClick={() => setShowTypes(true)} title="Create & edit appointment types"><span style={{ verticalAlign: '-1px', marginRight: 4 }}>🎨</span> Types</button>
                     )}
@@ -510,6 +519,7 @@ export default function Schedule() {
                     </div>
                 </div>
 
+                {showCalendars && <CalendarSyncPanel onClose={() => setShowCalendars(false)} />}
                 {showTypes && <TypeCenterModal types={apptTypes} onClose={() => setShowTypes(false)} onChanged={loadTypes} />}
                 {showAvail && <AvailabilityPanel manageAll={manageAll} workers={workers} onClose={() => setShowAvail(false)} onChanged={load} />}
                 {showLinks && <BookingLinks manageAll={manageAll} nameOf={nameOf} onClose={() => setShowLinks(false)} />}
@@ -1422,6 +1432,101 @@ const daysSummary = (days) => {
     }
     return parts.join(', ');
 };
+
+// ==========================================================================
+// Q3.13 — connect Google / Outlook calendars. Two-way: outside events block
+// booking here; ClaimKing appointments push to the connected calendar.
+// ==========================================================================
+const CAL_PROVIDERS = [
+    { key: 'google', label: 'Google Calendar', color: '#ea4335' },
+    { key: 'outlook', label: 'Outlook Calendar', color: '#0078d4' },
+];
+function CalendarSyncPanel({ onClose }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState('');
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try { const r = await axiosInstance.get('/calendar/connections'); setData(r.data?.data || null); }
+        catch { setData(null); } finally { setLoading(false); }
+    }, []);
+    useEffect(() => { load(); }, [load]);
+
+    const connOf = (p) => (data?.connections || []).find((c) => c.provider === p);
+    const configured = (p) => (p === 'google' ? data?.google_configured : data?.outlook_configured);
+
+    const connect = async (p) => {
+        setBusy(p);
+        try { const r = await axiosInstance.get(`/calendar/connect/${p}`); if (r.data?.url) window.location.href = r.data.url; }
+        catch (e) { toast.error(e?.response?.data?.message || 'Could not start connect'); setBusy(''); }
+    };
+    const disconnect = async (p) => {
+        setBusy(p);
+        try { await axiosInstance.post(`/calendar/disconnect/${p}`); toast.success('Disconnected'); load(); }
+        catch { /* */ } finally { setBusy(''); }
+    };
+    const togglePush = async (p, enabled) => {
+        try { await axiosInstance.patch(`/calendar/push/${p}`, { enabled }); load(); }
+        catch { /* */ }
+    };
+
+    return (
+        <div className="modal-backdrop active" onClick={onClose}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                    <div className="modal-title">🔗 Calendar Sync</div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <p className="muted" style={{ marginTop: 0 }}>Connect your calendar so your outside events block booking here, and ClaimKing appointments show up on your calendar.</p>
+                    {loading ? <div className="today-empty">Loading…</div> : CAL_PROVIDERS.map((pr) => {
+                        const c = connOf(pr.key);
+                        const conf = configured(pr.key);
+                        return (
+                            <div className="cal-conn" key={pr.key}>
+                                <div className="cal-conn-top">
+                                    <span className="cal-dot" style={{ background: pr.color }} />
+                                    <span className="cal-name">{pr.label}</span>
+                                    {c && c.connection_status === 'connected' && <span className="cal-badge ok">Connected</span>}
+                                    {c && c.connection_status === 'error' && <span className="cal-badge err">Reconnect</span>}
+                                </div>
+                                {c ? (
+                                    <>
+                                        <div className="cal-email">{c.email || '—'}</div>
+                                        <label className="check-row" style={{ margin: '6px 0' }}>
+                                            <input type="checkbox" checked={c.push_enabled !== false} onChange={(e) => togglePush(pr.key, e.target.checked)} />
+                                            Push my ClaimKing appointments to this calendar
+                                        </label>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <button className="btn btn-sm btn-ghost" disabled={busy === pr.key} onClick={() => connect(pr.key)}>Reconnect</button>
+                                            <button className="btn btn-sm btn-ghost" style={{ color: '#b91c1c' }} disabled={busy === pr.key} onClick={() => disconnect(pr.key)}>Disconnect</button>
+                                        </div>
+                                    </>
+                                ) : conf ? (
+                                    <button className="btn btn-sm btn-primary" disabled={busy === pr.key} onClick={() => connect(pr.key)}>{busy === pr.key ? 'Opening…' : `Connect ${pr.label}`}</button>
+                                ) : (
+                                    <div className="muted" style={{ fontSize: 12 }}>Not configured yet — your admin needs to set up the {pr.label} app credentials.</div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="modal-footer"><button className="btn-secondary" onClick={onClose}>Close</button></div>
+                <style jsx>{`
+                    .cal-conn { border: 1px solid #eef0f4; border-radius: 12px; padding: .8rem .9rem; margin-bottom: .7rem; }
+                    .cal-conn-top { display: flex; align-items: center; gap: .5rem; }
+                    .cal-dot { width: 10px; height: 10px; border-radius: 50%; }
+                    .cal-name { font-weight: 700; color: #1a1f3a; font-size: .92rem; }
+                    .cal-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: auto; }
+                    .cal-badge.ok { background: #dcfce7; color: #065f46; }
+                    .cal-badge.err { background: #fee2e2; color: #991b1b; }
+                    .cal-email { font-size: .8rem; color: #6b7280; margin-top: 2px; }
+                `}</style>
+            </div>
+        </div>
+    );
+}
 
 // ==========================================================================
 // Q3.6 — Appointment Type creation center. Admin creates/edits types: name,
