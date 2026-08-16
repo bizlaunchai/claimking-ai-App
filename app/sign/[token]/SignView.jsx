@@ -84,6 +84,13 @@ const SignView = () => {
     const [step, setStep] = useState(0);
     const STEPS = ['Review', 'Your name', 'Signature', 'Confirm'];
 
+    // SignWell e-sign (real vendor). When the estimate resolve says esign is
+    // available we drive an embedded SignWell flow; on any failure we set
+    // `esignFallback` and the existing drawn-signature flow takes over.
+    const [esignUrl, setEsignUrl] = useState(null);
+    const [esignBusy, setEsignBusy] = useState(false);
+    const [esignFallback, setEsignFallback] = useState(false);
+
     // CK-13 — legal-defensibility: the homeowner must scroll to the bottom of the
     // CURRENT step (terms included) before the Next / Sign control unlocks. Tracked
     // per step; short steps that fit the viewport auto-satisfy it.
@@ -239,6 +246,47 @@ const SignView = () => {
         }
     };
 
+    // ── SignWell embedded signing ───────────────────────────────────────
+    const startSignwell = async () => {
+        setEsignBusy(true);
+        setSubmitError('');
+        try {
+            const res = await axiosInstance.post(`/sign-public/${token}/signwell/start`, {
+                signer_name: (signerName || data?.signer_name || '').trim() || undefined,
+            });
+            const d = res.data?.data || {};
+            if (d.completed) { setSubmitted(true); return; }
+            if (d.mode === 'signwell' && d.embedded_url) { setEsignUrl(d.embedded_url); return; }
+            // mode 'inapp' or anything unexpected → fall back to the drawn flow.
+            setEsignFallback(true);
+        } catch {
+            setEsignFallback(true);
+        } finally {
+            setEsignBusy(false);
+        }
+    };
+
+    // Poll for completion while the SignWell frame is open.
+    useEffect(() => {
+        if (!esignUrl || !token) return;
+        const id = setInterval(async () => {
+            try {
+                const res = await axiosInstance.get(`/sign-public/${token}/status`, { suppressErrorToast: true });
+                const s = res.data?.data || {};
+                if (s.esign_status === 'completed') {
+                    clearInterval(id);
+                    if (s.deposit_checkout_url) { window.location.href = s.deposit_checkout_url; return; }
+                    setSubmitted(true);
+                } else if (s.esign_status === 'declined') {
+                    clearInterval(id);
+                    setEsignUrl(null);
+                    setSubmitError('Signing was declined. You can try again.');
+                }
+            } catch { /* keep polling */ }
+        }, 3500);
+        return () => clearInterval(id);
+    }, [esignUrl, token]);
+
     // ─────────────────────────── Render ────────────────────────────────
     if (loading) {
         return (
@@ -293,6 +341,73 @@ const SignView = () => {
     const finalLabel = submitting
         ? (payAtSign ? 'Redirecting to payment…' : 'Submitting…')
         : (payAtSign ? `✓ Sign & Pay ${money(deposit.amount, deposit.currency)}` : '✓ Sign & submit');
+
+    // ── SignWell e-sign screen (real vendor) — replaces the drawn flow when the
+    // contractor has SignWell configured; on any failure we fall back below. ──
+    const esignAvailable = !!data?.esign_available && !esignFallback;
+    if (esignAvailable) {
+        return (
+            <div className="sv-shell">
+                <div className="sv-header">
+                    <div className="sv-brand">
+                        {logoSrc && <img src={logoSrc} alt={company.name ?? ''} className="sv-logo" onError={() => setLogoBroken(true)} />}
+                        <div>
+                            <div className="sv-brand-name">{company.name ?? 'Your Contractor'}</div>
+                            {company.website && <div className="sv-brand-sub">{company.website}</div>}
+                        </div>
+                    </div>
+                    <div className="sv-est-meta">
+                        <div className="sv-est-num">{e.estimate_number ?? 'Estimate'}</div>
+                        <div className="sv-est-title">{e.estimate_title ?? e.title ?? 'Insurance Estimate'}</div>
+                    </div>
+                </div>
+
+                {esignUrl ? (
+                    <div className="sv-card">
+                        <h1 className="sv-h1">Review &amp; sign your estimate</h1>
+                        <p className="sv-help">Sign securely below. This page updates automatically once you finish.</p>
+                        <div className="sv-esign-frame-wrap">
+                            <iframe title="Sign estimate" src={esignUrl} className="sv-esign-frame" allow="camera; microphone" />
+                        </div>
+                        <div className="sv-esign-foot">
+                            <span className="sv-esign-secure">🔒 Secure e-signature by SignWell</span>
+                            <a className="sv-btn sv-btn--ghost" href={esignUrl} target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="sv-card">
+                        <h1 className="sv-h1">Review &amp; sign your estimate</h1>
+                        <p className="sv-help">Here’s your estimate summary. Tap <strong>Sign securely</strong> to review the full document and sign.</p>
+                        <div className="sv-esign-summary">
+                            {(e.sections ?? []).map((s) => {
+                                const items = s.items ?? [];
+                                if (!items.length) return null;
+                                return (
+                                    <div key={s.id} className="sv-esum-sec">
+                                        <div className="sv-esum-sec-name">{s.name}</div>
+                                        {items.map((it) => (
+                                            <div key={it.id} className="sv-esum-row">
+                                                <span>{it.name}</span>
+                                                <span>{money((Number(it.qty) || 0) * (Number(it.price) || 0), e.deposit_currency)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                            <div className="sv-esum-total"><span>Total</span><span>{money(e.total_rcv, e.deposit_currency)}</span></div>
+                        </div>
+                        {submitError && <div className="sv-inline-error">{submitError}</div>}
+                        <button className="sv-btn sv-btn--primary sv-esign-cta" onClick={startSignwell} disabled={esignBusy}>
+                            {esignBusy ? 'Preparing your document…' : '✍ Sign securely'}
+                        </button>
+                        <button className="sv-esign-alt" onClick={() => setEsignFallback(true)} disabled={esignBusy}>
+                            Prefer to draw your signature instead?
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="sv-shell">
