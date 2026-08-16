@@ -29,6 +29,22 @@ const DOC_STATUS = {
 const money = (n) => '$' + (Number(n) || 0).toLocaleString();
 const tradeLabel = (t) => (t || '').replace(/_/g, ' ');
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+const slugTrade = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+
+// Q2.12 — the company's active trade types for the onboarding picker (token
+// endpoint, no auth). Falls back to the built-in six until it loads.
+function useTokenTrades(token) {
+    const [list, setList] = useState(TRADES.map((k) => ({ key: k, label: tradeLabel(k) })));
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        axiosInstance.get(`/sub-portal/${token}/trades`, { suppressErrorToast: true })
+            .then((r) => { const d = r.data?.data; if (!cancelled && Array.isArray(d) && d.length) setList(d.map((t) => ({ key: t.key, label: t.label }))); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [token]);
+    return list;
+}
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
 
 const toast = (msg, type = '') => {
@@ -297,6 +313,20 @@ function Wizard({ token, portal, reload }) {
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
 
+    // Q2.12 — company trade types + an "Other" type-in. A typed trade is added as
+    // a slug; on save it goes to the admin review queue (backend recordSuggestions).
+    const tradeOptions = useTokenTrades(token);
+    const [otherTrade, setOtherTrade] = useState('');
+    const addOtherTrade = () => {
+        const key = slugTrade(otherTrade);
+        if (!key) return;
+        setTrades((ts) => ts.includes(key) ? ts : [...ts, key]);
+        setOtherTrade('');
+    };
+    // Selected trades that aren't in the official list (sub's own customs) — show
+    // them as chips too so they can see + remove what they typed.
+    const customChips = trades.filter((t) => !tradeOptions.some((o) => o.key === t));
+
     // Q2.4 — resumable onboarding. The form already loads from the saved profile
     // (portal.profile), so a returning sub picks up where they left off. This
     // adds silent, debounced AUTO-SAVE of partial progress as they type — no
@@ -395,7 +425,16 @@ function Wizard({ token, portal, reload }) {
                     <div className="card">
                         <h3>Trades</h3>
                         <p className="muted">Pick every trade your crew works.</p>
-                        <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+                        <div className="trade-chips">
+                            {tradeOptions.map((t) => <button key={t.key} type="button" className={`trade-chip ${trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>)}
+                            {customChips.map((t) => <button key={t} type="button" className="trade-chip on" onClick={() => toggleTrade(t)} title="Your custom trade — pending office review">{tradeLabel(t)} ✕</button>)}
+                        </div>
+                        <div className="trade-other">
+                            <input value={otherTrade} onChange={(e) => setOtherTrade(e.target.value)} placeholder="Other trade not listed…"
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOtherTrade(); } }} />
+                            <button type="button" className="btn btn-sm btn-secondary" onClick={addOtherTrade}>Add</button>
+                        </div>
+                        {customChips.length > 0 && <p className="muted" style={{ fontSize: '0.78rem', marginTop: '0.4rem' }}>Custom trades are sent to the office to confirm.</p>}
                     </div>
 
                     <div className="wizard-save">
@@ -745,8 +784,10 @@ function ProfileTab({ token, portal, reload }) {
     const [pins, setPins] = useState(() => seedPins(portal)); // Q2.2 multi-pin
     const [trades, setTrades] = useState(p.trades || []);
     const [saving, setSaving] = useState(false);
+    const tradeOptions = useTokenTrades(token);
     const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
     const toggleTrade = (t) => setTrades((ts) => ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t]);
+    const customChips = trades.filter((t) => !tradeOptions.some((o) => o.key === t));
 
     const save = async () => {
         if (!pins.length) { toast('Add at least one service pin.', 'error'); return; }
@@ -767,7 +808,10 @@ function ProfileTab({ token, portal, reload }) {
             <div className="field"><label>Contact Name</label><input value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} /></div>
             <div className="field"><label>Phone</label><input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
             <div style={{ marginTop: '0.75rem' }}><label className="field-label">Service Locations</label><ServicePinsEditor pins={pins} setPins={setPins} mapId="profilePinMap" /></div>
-            <div style={{ marginTop: '0.75rem' }}><label className="field-label">Trades</label><div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div></div>
+            <div style={{ marginTop: '0.75rem' }}><label className="field-label">Trades</label><div className="trade-chips">
+                {tradeOptions.map((t) => <button key={t.key} type="button" className={`trade-chip ${trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>)}
+                {customChips.map((t) => <button key={t} type="button" className="trade-chip on" onClick={() => toggleTrade(t)}>{tradeLabel(t)} ✕</button>)}
+            </div></div>
             <button className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</button>
         </div>
     );

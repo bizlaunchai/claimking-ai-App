@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import 'leaflet/dist/leaflet.css';
 import './new-leads.css';
 
@@ -566,7 +567,19 @@ function NewLeadModal({ canViewAll, teamMembers, onClose, onCreated }) {
                         <div className="nl-field"><label>Last name</label><input value={f.last_name} onChange={(e) => set('last_name', e.target.value)} placeholder="Doe" /></div>
                         <div className="nl-field"><label>Phone</label><input type="tel" value={f.phone} onChange={(e) => set('phone', e.target.value)} placeholder="(330) 555-0100" /></div>
                         <div className="nl-field"><label>Email</label><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="jane@email.com" /></div>
-                        <div className="nl-field nl-col-2"><label>Address</label><input value={f.address_line1} onChange={(e) => set('address_line1', e.target.value)} placeholder="123 Main St" /></div>
+                        <div className="nl-field nl-col-2"><label>Address</label>
+                            <AddressAutocomplete
+                                placeholder="123 Main St"
+                                value={f.address_line1}
+                                onChange={(v) => set('address_line1', v)}
+                                onSelect={(p) => setF((prev) => ({
+                                    ...prev,
+                                    address_line1: p.address || prev.address_line1,
+                                    city: p.city || prev.city,
+                                    state: p.state || prev.state,
+                                    zip: p.zip || prev.zip,
+                                }))} />
+                        </div>
                         <div className="nl-field"><label>City</label><input value={f.city} onChange={(e) => set('city', e.target.value)} placeholder="Akron" /></div>
                         <div className="nl-field nl-field-3">
                             <div><label>State</label><input value={f.state} onChange={(e) => set('state', e.target.value)} placeholder="OH" /></div>

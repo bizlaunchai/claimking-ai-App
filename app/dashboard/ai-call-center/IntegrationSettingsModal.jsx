@@ -284,7 +284,7 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                                     ⚠️ {rcSubWarn}
                                 </div>
                             )}
-                            <a href="/RINGCENTRAL-SETUP-GUIDE.md" target="_blank" rel="noreferrer"
+                            <a href="/RINGCENTRAL-SETUP-GUIDE.html" target="_blank" rel="noreferrer"
                                 style={{ fontSize: 12, color: '#ea580c', fontWeight: 600, textDecoration: 'none' }}>
                                 📄 RingCentral setup guide — step by step
                             </a>

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast as sonner } from 'sonner';
 import 'leaflet/dist/leaflet.css';
 import axiosInstance from '@/lib/axiosInstance';
+import { useCompanyTrades } from '@/lib/useCompanyTrades';
 import './subs.css';
 
 /* =========================================================================
@@ -63,6 +64,7 @@ function ComplianceTag({ compliance }) {
    ADD SUB MODAL  → POST /subs
    ========================================================================= */
 function AddSubModal({ onClose, onSaved, toast }) {
+    const { trades: companyTrades } = useCompanyTrades();
     const [f, setF] = useState({ business_name: '', contact_name: '', email: '', phone: '', notes: '' });
     const [trades, setTrades] = useState([]);
     const [saving, setSaving] = useState(false);
@@ -94,7 +96,7 @@ function AddSubModal({ onClose, onSaved, toast }) {
                     <div className="field full"><label>Email <span className="req">*</span></label><input type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="crew@email.com" /></div>
                     <div className="field full">
                         <label>Trades <span className="req">*</span></label>
-                        <div className="trade-chips">{TRADES.map((t) => <button key={t} type="button" className={`trade-chip ${trades.includes(t) ? 'on' : ''}`} onClick={() => toggleTrade(t)}>{tradeLabel(t)}</button>)}</div>
+                        <div className="trade-chips">{companyTrades.map((t) => <button key={t.key} type="button" className={`trade-chip ${trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>)}</div>
                     </div>
                     <div className="field full"><label>Notes</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Internal notes (optional)" /></div>
                 </div>
@@ -461,6 +463,106 @@ function SubDrawer({ subId, onClose, onChanged, toast }) {
 /* =========================================================================
    MAIN
    ========================================================================= */
+/* =========================================================================
+   Q2.12 — TRADE TYPES MANAGER  (admin: create / rename / activate + review
+   sub-suggested customs). manage_subs-gated on the server.
+   ========================================================================= */
+function TradeManagerModal({ onClose, onChanged, toast }) {
+    const [active, setActive] = useState([]);
+    const [pending, setPending] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [newLabel, setNewLabel] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await axiosInstance.get('/company-trades/manage');
+            setActive(res.data?.data?.active || []);
+            setPending(res.data?.data?.pending || []);
+        } catch { /* */ } finally { setLoading(false); }
+    }, []);
+    useEffect(() => { load(); }, [load]);
+
+    const after = () => { load(); onChanged?.(); };
+
+    const add = async () => {
+        if (!newLabel.trim()) { toast('Name the trade first.', 'error'); return; }
+        setBusy(true);
+        try { await axiosInstance.post('/company-trades', { label: newLabel.trim() }); toast('Trade added.', 'success'); setNewLabel(''); after(); }
+        catch (e) { toast(e?.response?.data?.message || 'Add failed', 'error'); }
+        finally { setBusy(false); }
+    };
+    const rename = async (t, label) => {
+        try { await axiosInstance.patch(`/company-trades/${t.id}`, { label }); after(); }
+        catch { /* */ }
+    };
+    const removeTrade = async (t) => {
+        if (!window.confirm(t.is_builtin ? `Hide "${t.label}" from pickers?` : `Delete "${t.label}"?`)) return;
+        try { await axiosInstance.delete(`/company-trades/${t.id}`); toast(t.is_builtin ? 'Hidden.' : 'Deleted.', 'success'); after(); }
+        catch (e) { toast(e?.response?.data?.message || 'Failed', 'error'); }
+    };
+    const promote = async (t) => { try { await axiosInstance.post(`/company-trades/${t.id}/promote`); toast(`"${t.label}" added.`, 'success'); after(); } catch { /* */ } };
+    const reject = async (t) => { try { await axiosInstance.post(`/company-trades/${t.id}/reject`); after(); } catch { /* */ } };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                <div className="modal-head">
+                    <div><h2>Trade Types</h2><div className="sub">Used for sub matching &amp; job dispatch. Add your own — they apply to every future sub &amp; job.</div></div>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+
+                {pending.length > 0 && (
+                    <div className="tm-review">
+                        <div className="tm-review-head">◷ {pending.length} suggested by subs — review</div>
+                        {pending.map((t) => (
+                            <div key={t.id} className="tm-row">
+                                <span className="tm-label">{t.label}</span>
+                                <div className="tm-actions">
+                                    <button className="btn btn-sm btn-success" onClick={() => promote(t)}>Approve</button>
+                                    <button className="btn btn-sm btn-ghost" onClick={() => reject(t)}>Reject</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <div className="tm-add">
+                    <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="New trade (e.g. Solar Detach/Reset)"
+                        onKeyDown={(e) => { if (e.key === 'Enter') add(); }} />
+                    <button className="btn btn-primary btn-sm" disabled={busy} onClick={add}>Add</button>
+                </div>
+
+                <div className="tm-list">
+                    {loading ? <div className="empty">Loading…</div> : active.map((t) => (
+                        <div key={t.id} className="tm-row">
+                            <input className="tm-label-input" defaultValue={t.label} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== t.label) rename(t, v); }} />
+                            {t.is_builtin && <span className="tm-tag">built-in</span>}
+                            <button className="tm-del" onClick={() => removeTrade(t)}>{t.is_builtin ? 'Hide' : 'Delete'}</button>
+                        </div>
+                    ))}
+                </div>
+
+                <style jsx>{`
+                    .tm-review { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: .7rem .8rem; margin-bottom: 1rem; }
+                    .tm-review-head { font-size: .8rem; font-weight: 700; color: #92400e; margin-bottom: .5rem; }
+                    .tm-add { display: flex; gap: .5rem; margin-bottom: 1rem; }
+                    .tm-add input { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: .5rem .6rem; font-size: .85rem; }
+                    .tm-list { display: flex; flex-direction: column; gap: .4rem; max-height: 320px; overflow: auto; }
+                    .tm-row { display: flex; align-items: center; gap: .5rem; }
+                    .tm-label { flex: 1; font-weight: 600; color: #1a1f3a; font-size: .88rem; }
+                    .tm-label-input { flex: 1; border: 1px solid transparent; border-radius: 6px; padding: .35rem .5rem; font-size: .88rem; font-weight: 600; color: #1a1f3a; background: #f9fafb; }
+                    .tm-label-input:focus { border-color: #cbd5e1; background: #fff; outline: none; }
+                    .tm-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; background: #f3f4f6; border-radius: 999px; padding: 2px 7px; }
+                    .tm-actions { display: flex; gap: .35rem; }
+                    .tm-del { background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 7px; padding: .3rem .7rem; font-size: 12px; font-weight: 700; cursor: pointer; }
+                `}</style>
+            </div>
+        </div>
+    );
+}
+
 export default function SubsPage() {
     const [subs, setSubs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -470,6 +572,8 @@ export default function SubsPage() {
     const [search, setSearch] = useState('');
     const [drawerId, setDrawerId] = useState(null);
     const [showAdd, setShowAdd] = useState(false);
+    const [showTrades, setShowTrades] = useState(false);          // Q2.12 trade manager
+    const { trades: companyTrades, reload: reloadTrades } = useCompanyTrades();
 
     const toast = (msg, type = '') => {
         if (type === 'success') sonner.success(msg);
@@ -529,6 +633,7 @@ export default function SubsPage() {
                         <div className="page-title">Subcontractors</div>
                         <div className="page-subtitle">Network roster, compliance review, and payouts</div>
                     </div>
+                    <button className="btn btn-secondary" onClick={() => setShowTrades(true)}>🧰 Trades</button>
                     <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Invite Sub</button>
                 </div>
             </div>
@@ -554,7 +659,7 @@ export default function SubsPage() {
                         </select>
                         <select className="rep-filter" value={tradeFilter} onChange={(e) => setTradeFilter(e.target.value)}>
                             <option value="">All trades</option>
-                            {TRADES.map((t) => <option key={t} value={t} style={{ textTransform: 'capitalize' }}>{tradeLabel(t)}</option>)}
+                            {companyTrades.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                         </select>
                     </div>
                 </div>
@@ -569,6 +674,7 @@ export default function SubsPage() {
             </div>
 
             {showAdd && <AddSubModal toast={toast} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+            {showTrades && <TradeManagerModal toast={toast} onClose={() => setShowTrades(false)} onChanged={reloadTrades} />}
             {drawerId && <SubDrawer subId={drawerId} toast={toast} onClose={() => setDrawerId(null)} onChanged={load} />}
         </div>
     );

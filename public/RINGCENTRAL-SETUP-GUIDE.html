@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Connect RingCentral — ClaimKing.AI</title>
+<style>
+  :root {
+    --navy: #1a1f3a;
+    --orange: #ea580c;
+    --orange-soft: #fff7ed;
+    --orange-border: #fed7aa;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #eef0f4;
+    --bg: #f6f7f9;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --warn: #92400e;
+    --warn-bg: #fffbeb;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #1a1f3a 0%, #262c52 100%);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-accent {
+    position: absolute; inset: 0 0 auto 0; height: 4px;
+    background: linear-gradient(90deg, #ea580c, #f59e0b, #ea580c);
+  }
+  .hero-inner { max-width: 780px; margin: 0 auto; padding: 44px 20px 40px; position: relative; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; letter-spacing: .01em; opacity: .95; }
+  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: #ea580c; box-shadow: 0 0 0 4px rgba(234,88,12,.25); }
+  h1 { font-size: 30px; line-height: 1.15; margin: 18px 0 8px; letter-spacing: -.02em; font-weight: 800; }
+  .hero p { margin: 0; color: #c7cbda; font-size: 15px; max-width: 560px; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.14); color: #fff; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
+
+  /* Callout — the owner note */
+  .owner-note {
+    margin: 26px 0 0;
+    background: var(--warn-bg);
+    border: 1px solid #fcd34d;
+    border-radius: 14px;
+    padding: 16px 18px;
+    color: var(--warn);
+    font-size: 14px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .owner-note .ico { font-size: 18px; line-height: 1.4; }
+
+  /* Values card */
+  .values {
+    margin-top: 26px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 6px 24px rgba(15,23,42,.05);
+  }
+  .values h2 { margin: 0 0 4px; font-size: 16px; color: var(--navy); }
+  .values .sub { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+  .value-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .value-row:first-of-type { border-top: none; }
+  .value-num { flex: 0 0 30px; height: 30px; border-radius: 9px; background: var(--orange-soft); color: var(--orange); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .value-name { font-weight: 700; color: var(--navy); }
+
+  /* Steps */
+  .step { margin-top: 34px; }
+  .step-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .step-num {
+    flex: 0 0 40px; height: 40px; border-radius: 12px;
+    background: var(--navy); color: #fff; font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(26,31,58,.2);
+  }
+  .step-title { font-size: 19px; font-weight: 800; color: var(--navy); letter-spacing: -.01em; }
+  .step-body {
+    background: #fff; border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 22px; box-shadow: 0 4px 18px rgba(15,23,42,.04);
+  }
+  .step-body :first-child { margin-top: 0; }
+  .step-body :last-child { margin-bottom: 0; }
+  ol, ul { padding-left: 20px; margin: 10px 0; }
+  li { margin: 6px 0; }
+  p { margin: 10px 0; }
+  strong { color: var(--navy); }
+  code { background: #f1f2f5; border: 1px solid #e5e7eb; border-radius: 5px; padding: 1px 6px; font-size: 13px; font-family: "JetBrains Mono", ui-monospace, monospace; color: #b3541e; }
+
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 440px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #fafbfc; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td strong { color: var(--navy); }
+
+  .tip { background: var(--orange-soft); border: 1px solid var(--orange-border); border-radius: 12px; padding: 12px 14px; font-size: 13.5px; color: #9a3412; margin: 14px 0; }
+
+  .green-box {
+    background: var(--ok-bg); border: 1px solid #a7f3d0; border-radius: 12px;
+    padding: 14px 16px; color: #065f46; font-size: 14px; margin: 14px 0;
+  }
+
+  /* Security footer */
+  .security {
+    margin-top: 40px; background: #fff; border: 1px solid var(--line);
+    border-radius: 16px; padding: 20px 22px;
+  }
+  .security h3 { margin: 0 0 8px; font-size: 15px; color: var(--navy); }
+  .security ul { margin: 6px 0 0; }
+  .security li { color: var(--muted); font-size: 14px; }
+
+  .foot { text-align: center; margin-top: 40px; color: #9ca3af; font-size: 12px; }
+  .foot b { color: var(--muted); }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 24px; }
+    .step-title { font-size: 17px; }
+    .step-num { flex-basis: 34px; height: 34px; font-size: 16px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .hero { background: #1a1f3a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .step-body, .values, .security { box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-accent"></div>
+  <div class="hero-inner">
+    <div class="brand"><span class="dot"></span> ClaimKing<span style="color:#ea580c">.AI</span></div>
+    <h1>Connect RingCentral</h1>
+    <p>Link your company's RingCentral phone system so calls appear in ClaimKing automatically — including <strong style="color:#fff">who answered</strong> each call.</p>
+    <div class="meta">
+      <span class="chip">⏱ ~10 minutes</span>
+      <span class="chip">🔑 Account owner sets up once</span>
+      <span class="chip">🔒 Password never shared</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="owner-note">
+    <span class="ico">👤</span>
+    <div>
+      <strong>Only the RingCentral account owner (or a Super Admin) can create the app in Step 1.</strong>
+      If that isn't you, forward Steps&nbsp;1–3 to whoever owns your company's RingCentral account. Steps&nbsp;4–5 (pasting into ClaimKing) can be done by your ClaimKing admin.
+    </div>
+  </div>
+
+  <div class="values">
+    <h2>What you'll end up with</h2>
+    <p class="sub">Three values you paste into ClaimKing. Keep them private — treat them like a password.</p>
+    <div class="value-row"><span class="value-num">1</span><span class="value-name">Client ID</span></div>
+    <div class="value-row"><span class="value-num">2</span><span class="value-name">Client Secret</span></div>
+    <div class="value-row"><span class="value-num">3</span><span class="value-name">JWT Token</span></div>
+  </div>
+
+  <!-- Step 1 -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">1</div><div class="step-title">Create a RingCentral app</div></div>
+    <div class="step-body">
+      <ol>
+        <li>Go to the RingCentral Developer Console: <code>developers.ringcentral.com</code></li>
+        <li>Sign in with your <strong>company RingCentral account</strong> (the one that owns your phone system).</li>
+        <li>Click <strong>Console → Apps → Create App</strong>.</li>
+        <li>Choose:
+          <ul>
+            <li><strong>App type:</strong> REST API App</li>
+            <li><strong>Publish?</strong> No / Private (it's only for your company)</li>
+            <li><strong>Auth:</strong> Server-only (No UI) — the JWT machine-to-machine flow, no login pop-ups</li>
+          </ul>
+        </li>
+        <li>Name it something like <strong>"ClaimKing Call Sync"</strong> and add a short description.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">2</div><div class="step-title">Set the app permissions (scopes)</div></div>
+    <div class="step-body">
+      <p>On the app's <strong>Auth &amp; Security</strong> (or <strong>Settings</strong>) page, enable these permissions:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Permission</th><th>Why ClaimKing needs it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Read Accounts</strong></td><td>Read your account + extension list (to show <em>who answered</em>)</td></tr>
+            <tr><td><strong>Read Call Log</strong></td><td>Pull call history into the dashboard</td></tr>
+            <tr><td><strong>Read Presence</strong></td><td>Know call / agent status</td></tr>
+            <tr><td><strong>Webhook Subscriptions</strong></td><td>Receive new calls in real time</td></tr>
+            <tr><td><strong>RingOut</strong> <span style="color:#9ca3af">(optional)</span></td><td>Let staff click-to-call from ClaimKing (the "Call" button)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Set the <strong>Auth method</strong> to <strong>JWT</strong> (JSON Web Token), then save the app.</p>
+    </div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">3</div><div class="step-title">Get your three values</div></div>
+    <div class="step-body">
+      <p><strong>Client ID + Client Secret</strong></p>
+      <ul><li>On the app's <strong>Credentials</strong> page, copy the <strong>Client ID</strong> and <strong>Client Secret</strong>.</li></ul>
+      <p><strong>JWT Token</strong></p>
+      <ol>
+        <li>Go to <strong>Credentials → JWT</strong> (or your profile → Credentials).</li>
+        <li>Click <strong>Create JWT</strong>.</li>
+        <li>Scope it to <strong>this app</strong> ("ClaimKing Call Sync") and to your <strong>production</strong> environment.</li>
+        <li>Copy the generated <strong>JWT token</strong> — a long string. This is the only time it's shown in full, so copy it now.</li>
+      </ol>
+      <div class="tip">You now have <strong>Client ID</strong>, <strong>Client Secret</strong>, and <strong>JWT Token</strong>. Don't email or message these to anyone — you'll paste them straight into ClaimKing next.</div>
+    </div>
+  </section>
+
+  <!-- Step 4 -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">4</div><div class="step-title">Paste into ClaimKing</div></div>
+    <div class="step-body">
+      <ol>
+        <li>In ClaimKing, open <strong>AI Call Center → Settings (gear icon) → RingCentral</strong>.</li>
+        <li>Paste your <strong>Client ID</strong>, <strong>Client Secret</strong>, and <strong>JWT Token</strong> into the three fields.</li>
+        <li>Click <strong>Connect Phone</strong>.</li>
+      </ol>
+      <p>ClaimKing exchanges the JWT for a secure token, stores everything <strong>encrypted</strong>, and sets up the real-time webhook automatically.</p>
+    </div>
+  </section>
+
+  <!-- Step 5 -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">5</div><div class="step-title">Test the connection</div></div>
+    <div class="step-body">
+      <ol>
+        <li>Click <strong>Test Connection</strong>.</li>
+        <li>A green message confirms it worked and shows your <strong>account name</strong>, <strong>main number</strong>, and <strong>extension count</strong>, plus whether <strong>real-time call events are active</strong>.</li>
+        <li>If it's red, the message tells you what to fix — usually a mistyped value or a missing app permission from Step 2. Fix it, click <strong>Connect Phone</strong> again, then <strong>Test Connection</strong>.</li>
+      </ol>
+      <div class="green-box">✓ Once the test passes, new calls flow into <strong>AI Call Center</strong> automatically, tagged with <strong>who answered</strong>.</div>
+    </div>
+  </section>
+
+  <!-- After -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">✓</div><div class="step-title">After connecting</div></div>
+    <div class="step-body">
+      <ul>
+        <li>New calls appear in <strong>AI Call Center</strong> automatically, tagged with the answering extension.</li>
+        <li>To show names instead of raw extensions, open <strong>Settings → Answered-By mapping</strong> and match each RingCentral extension to a team member.</li>
+        <li>ClaimKing renews the webhook subscription automatically — you don't need to reconnect unless you regenerate your credentials.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Troubleshooting -->
+  <section class="step">
+    <div class="step-head"><div class="step-num">?</div><div class="step-title">Troubleshooting</div></div>
+    <div class="step-body">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Message</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><strong>"Credentials were rejected" / 401</strong></td><td>Re-check the Client ID / Secret / JWT for typos or extra spaces. Regenerate the JWT if unsure.</td></tr>
+            <tr><td><strong>"Webhook subscription is not active"</strong></td><td>Click <strong>Reconnect Phone</strong>. If it persists, confirm the <strong>Webhook Subscriptions</strong> permission is enabled (Step 2).</td></tr>
+            <tr><td><strong>Calls connect but no name shows</strong></td><td>Set up <strong>Answered-By mapping</strong> (extension → employee).</td></tr>
+            <tr><td><strong>Test passes but no new calls</strong></td><td>Make sure the app is in your <strong>production</strong> environment (not sandbox) and the JWT is scoped to production.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="security">
+    <h3>🔒 Security notes</h3>
+    <ul>
+      <li>ClaimKing <strong>never</strong> asks for your RingCentral <strong>password</strong> — only the app credentials above, which you can revoke any time from the RingCentral console.</li>
+      <li>All three values are stored <strong>encrypted</strong> in ClaimKing.</li>
+      <li>To disconnect, use <strong>Disconnect</strong> in the RingCentral settings — ClaimKing removes the webhook and clears the stored tokens.</li>
+    </ul>
+  </div>
+
+  <div class="foot">Need a hand? Reach out to your ClaimKing contact. · <b>ClaimKing.AI</b></div>
+
+</div>
+</body>
+</html>

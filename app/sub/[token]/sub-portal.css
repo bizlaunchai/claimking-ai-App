@@ -181,3 +181,7 @@
 .autosave-badge { font-size: 0.75rem; font-weight: 600; }
 .autosave-badge.saving { color: #9ca3af; }
 .autosave-badge.saved { color: #16a34a; }
+
+/* Q2.12 custom trade "Other" input */
+.sub-portal .trade-other { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.sub-portal .trade-other input { flex: 1; border: 1px solid #d1d5db; border-radius: 8px; padding: 0.45rem 0.6rem; font-size: 0.85rem; }
