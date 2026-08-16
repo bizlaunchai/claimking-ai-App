@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import {
-    Phone, Globe, CheckCircle2, AlertCircle, Loader2, XCircle, CircleDot,
+    Phone, Globe, CheckCircle2, AlertCircle, Loader2, XCircle, CircleDot, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
@@ -275,10 +275,13 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                                     value={ctmSecret} onChange={(e) => setCtmSecret(e.target.value)} />
                             </F>
                             <button className="ics-btn" onClick={saveCtm} disabled={ctmSt === 'loading'}>
-                                {summary.ctm.configured ? 'Re-sync 30-Day Data' : 'Sync 30-Day Data'} <SI status={ctmSt} />
+                                {summary.ctm.configured ? 'Reconnect & sync recent' : 'Connect & sync recent'} <SI status={ctmSt} />
                             </button>
-                            {ctmSt === 'success' && <div className="ics-ok">{ctmCount} calls synced successfully</div>}
+                            {ctmSt === 'success' && <div className="ics-ok">{ctmCount} recent calls synced</div>}
                             {ctmSt === 'error' && <Banner status="error" error={ctmErr} />}
+
+                            {/* Q5.1 — resumable historical import (runs in the background) */}
+                            {summary.ctm.configured && <CtmHistoricalSync />}
                         </div>
                     </div>
 
@@ -286,6 +289,126 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                     <AgentMappingSection open={open} />
                 </div>
             </div>
+        </div>
+    );
+}
+
+/**
+ * Q5.1 — Historical CTM import. Runs as a background job the user can leave and
+ * come back to. Polls /ctm-sync/status; shows live progress, imported/skipped
+ * counts, and resumes automatically after a hiccup (the backend cron continues
+ * the same job — re-running never duplicates calls).
+ */
+const RANGES = [
+    { key: '30', label: 'Last 30 days' },
+    { key: '90', label: 'Last 90 days' },
+    { key: '365', label: 'Last year' },
+    { key: 'all', label: 'All history' },
+];
+
+function CtmHistoricalSync() {
+    const [job, setJob] = useState(null);
+    const [range, setRange] = useState('all');
+    const [starting, setStarting] = useState(false);
+    const running = job?.status === 'running';
+
+    const fetchStatus = React.useCallback(async () => {
+        try {
+            const { data } = await axiosInstance.get('/ctm-sync/status', { suppressErrorToast: true });
+            setJob(data?.data ?? null);
+            return data?.data ?? null;
+        } catch { return null; }
+    }, []);
+
+    // Initial load + poll while running (so leaving and returning shows state).
+    useEffect(() => { fetchStatus(); }, [fetchStatus]);
+    useEffect(() => {
+        if (!running) return;
+        const t = setInterval(fetchStatus, 2500);
+        return () => clearInterval(t);
+    }, [running, fetchStatus]);
+
+    const start = async () => {
+        setStarting(true);
+        try {
+            const { data } = await axiosInstance.post('/ctm-sync/start', { range });
+            setJob(data?.data ?? null);
+            toast.success(data?.already_running ? 'Import already running' : 'Import started — you can leave this page');
+            fetchStatus();
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Could not start import');
+        } finally { setStarting(false); }
+    };
+
+    const cancel = async () => {
+        if (!job?.id) return;
+        try {
+            await axiosInstance.post(`/ctm-sync/${job.id}/cancel`);
+            toast('Import canceled');
+            fetchStatus();
+        } catch { /* */ }
+    };
+
+    const pct = job?.percent;
+    const done = job?.status === 'done';
+    const failed = job?.status === 'failed';
+
+    return (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: '1.5px solid #fed7aa', background: '#fff7ed' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#9a3412' }}>
+                <History size={15} /> Historical import
+            </div>
+            <div style={{ fontSize: 12, color: '#9a3412', opacity: 0.85, margin: '4px 0 12px' }}>
+                Import older calls in the background. You can close this and come back — a hiccup resumes where it left off, and re-running never duplicates calls.
+            </div>
+
+            {!running && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select className="ics-input" style={{ maxWidth: 200 }} value={range} onChange={(e) => setRange(e.target.value)} disabled={starting}>
+                        {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                    </select>
+                    <button className="ics-btn" onClick={start} disabled={starting}>
+                        {starting ? <Loader2 size={14} className="ics-spin" /> : <History size={14} />}
+                        {failed ? 'Retry import' : 'Start import'}
+                    </button>
+                </div>
+            )}
+
+            {running && (
+                <div>
+                    <div style={{ height: 10, borderRadius: 999, background: '#fde4cd', overflow: 'hidden', position: 'relative' }}>
+                        <div style={{
+                            height: '100%', borderRadius: 999, background: '#ea580c',
+                            width: pct != null ? `${pct}%` : '35%',
+                            transition: 'width 0.5s ease',
+                            animation: pct == null ? 'ics-indet 1.2s ease-in-out infinite' : 'none',
+                        }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 12, color: '#9a3412' }}>
+                        <span>
+                            Imported <strong>{job.imported}</strong>
+                            {job.total_estimate ? ` of ~${job.total_estimate}` : ''}
+                            {job.skipped ? ` · ${job.skipped} already had` : ''}
+                        </span>
+                        <button onClick={cancel} style={{ background: 'none', border: 'none', color: '#b91c1c', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+                    </div>
+                    {job.last_error && <div style={{ fontSize: 11, color: '#b45309', marginTop: 4 }}>Reconnecting… ({job.last_error})</div>}
+                </div>
+            )}
+
+            {done && (
+                <div className="ics-ok" style={{ marginTop: 4 }}>
+                    ✓ Import complete — {job.imported} imported{job.skipped ? `, ${job.skipped} already on file` : ''}
+                    {job.recordings_missing ? ` · ${job.recordings_missing} calls had no recording in CTM` : ''}
+                </div>
+            )}
+            {failed && (
+                <div className="ics-err" style={{ marginTop: 8 }}>
+                    <AlertCircle size={14} /> Import stopped: {job.last_error || 'unknown error'}. {job.imported > 0 ? `${job.imported} calls were imported before it stopped — ` : ''}Retry to continue.
+                </div>
+            )}
+
+            <style>{`@keyframes ics-indet { 0%{transform:translateX(-30%)} 50%{transform:translateX(180%)} 100%{transform:translateX(280%)} } .ics-spin{animation:spin 1s linear infinite}`}</style>
         </div>
     );
 }
