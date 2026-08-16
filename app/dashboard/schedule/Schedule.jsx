@@ -1386,6 +1386,76 @@ function SmsComposer({ to, onSent }) {
 }
 
 // ==========================================================================
+// Q3.10 — appointment photos (capture/upload → AI note → approve/post elsewhere)
+// Images stream through the authed /s3/file proxy, so we fetch them as blobs.
+// ==========================================================================
+const apptImgCache = new Map();
+function ApptAuthedThumb({ url, alt }) {
+    const [blob, setBlob] = useState(() => apptImgCache.get(url) || null);
+    useEffect(() => {
+        if (!url || apptImgCache.get(url)) { if (apptImgCache.get(url)) setBlob(apptImgCache.get(url)); return; }
+        let cancelled = false;
+        axiosInstance.get(url, { responseType: 'blob' })
+            .then((res) => { const u = URL.createObjectURL(res.data); apptImgCache.set(url, u); if (!cancelled) setBlob(u); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [url]);
+    if (!blob) return <div className="appt-photo-thumb appt-photo-loading">…</div>;
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="appt-photo-thumb" src={blob} alt={alt || 'Photo'} />;
+}
+
+function ApptPhotos({ appointmentId, claimId }) {
+    const [rows, setRows] = useState([]);
+    const [busy, setBusy] = useState(false);
+    const inputRef = useRef(null);
+    const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+
+    const load = useCallback(async () => {
+        try {
+            const { data } = await axiosInstance.get('/job-images', { params: { appointment_id: appointmentId }, suppressErrorToast: true });
+            setRows(Array.isArray(data?.data) ? data.data : []);
+        } catch { setRows([]); }
+    }, [appointmentId]);
+    useEffect(() => { load(); }, [load]);
+
+    const upload = async (file) => {
+        if (!file) return;
+        setBusy(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('appointment_id', appointmentId);
+            if (claimId) fd.append('claim_id', claimId);
+            await axiosInstance.post('/job-images', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            toast.success('Photo uploaded — AI note drafting');
+            load();
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Upload failed');
+        } finally { setBusy(false); }
+    };
+
+    return (
+        <div className="appt-photos">
+            <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
+            <button className="btn-secondary sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Uploading…' : '📷 Add photo'}</button>
+            {!claimId && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>Link this appointment to a client to post photos to their portal.</div>}
+            {rows.length > 0 && (
+                <div className="appt-photo-strip">
+                    {rows.map((r) => (
+                        <div key={r.id} title={r.caption || r.ai_note || ''} style={{ position: 'relative' }}>
+                            <ApptAuthedThumb url={r.s3_url ? `${apiOrigin}${r.s3_url}` : null} alt={r.caption} />
+                            {r.posted_to_portal && <span className="appt-photo-badge">portal</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>Review the AI note, approve &amp; post from <strong>Company Images</strong>.</div>
+        </div>
+    );
+}
+
+// ==========================================================================
 // Detail modal (reschedule / reassign / outcome / status)
 // ==========================================================================
 function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onReschedule, onAfter }) {
@@ -1521,6 +1591,11 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                     <div className="sched-sec-title">Notes</div>
                     <textarea className="appt-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Access, gate codes, what to bring, context…" rows={2} />
                     <button className="btn-secondary sm" disabled={savingNotes} onClick={saveNotes}>{savingNotes ? 'Saving…' : 'Save notes'}</button>
+
+                    {/* Q3.10 — Photos: capture/upload at the appointment. The AI drafts
+                        a note; approve + post to the client's portal from Company Images. */}
+                    <div className="sched-sec-title">Photos</div>
+                    <ApptPhotos appointmentId={appt.id} claimId={client?.claim_id || null} />
 
                     {/* Q3.7 — client history */}
                     {detail && (detail.history?.appointments?.length > 0 || detail.history?.jobs?.length > 0) && (

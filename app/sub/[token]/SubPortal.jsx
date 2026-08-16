@@ -509,11 +509,29 @@ function OfferCard({ token, offer, onResponded }) {
 }
 
 /* ── job status updater + photo upload ── */
+const subApiOrigin = () => (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+
 function JobCard({ token, job, reload }) {
     const inputRef = useRef(null);
     const [busy, setBusy] = useState('');
     const [dateVal, setDateVal] = useState(job.scheduled_start ? String(job.scheduled_start).slice(0, 10) : '');
     const photos = Array.isArray(job.completion_photos) ? job.completion_photos : [];
+
+    // Q3.10 — images this sub may see on the job: their own uploads + office
+    // photos toggled visible to them. Token routes are public, so a plain <img>
+    // src on the streamed file works (no auth header needed).
+    const [images, setImages] = useState([]);
+    const [imgBust, setImgBust] = useState(0);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const r = await axiosInstance.get(`/sub-portal/${token}/jobs/${job.id}/images`, { suppressErrorToast: true });
+                if (!cancelled) setImages(Array.isArray(r.data?.data) ? r.data.data : []);
+            } catch { if (!cancelled) setImages([]); }
+        })();
+        return () => { cancelled = true; };
+    }, [token, job.id, imgBust]);
     const windows = Array.isArray(job.availability_windows) ? job.availability_windows : [];
     const fmtDay = (d) => d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
@@ -557,7 +575,7 @@ function JobCard({ token, job, reload }) {
     const uploadPhoto = async (file) => {
         if (!file) return;
         setBusy('photo');
-        try { const fd = new FormData(); fd.append('file', file); fd.append('phase', 'completion'); await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/photos`, fd); toast('Photo added.', 'success'); reload(); }
+        try { const fd = new FormData(); fd.append('file', file); fd.append('phase', 'completion'); await axiosInstance.post(`/sub-portal/${token}/jobs/${job.id}/photos`, fd); toast('Photo added.', 'success'); setImgBust((n) => n + 1); reload(); }
         catch { /* */ } finally { setBusy(''); }
     };
 
@@ -653,6 +671,19 @@ function JobCard({ token, job, reload }) {
                 <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
                 <button className="btn btn-sm btn-ghost" disabled={busy === 'photo'} onClick={() => inputRef.current?.click()}>{busy === 'photo' ? 'Uploading…' : '📷 Add Photo'}</button>
             </div>
+
+            {/* Q3.10 — images visible to this sub: their own + office-shared */}
+            {images.length > 0 && (
+                <div className="jc-imgstrip">
+                    {images.map((im) => (
+                        <div className="jc-img" key={im.id} title={im.caption || ''}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`${subApiOrigin()}/sub-portal/${token}/jobs/${job.id}/images/${im.id}/file`} alt={im.caption || 'Job photo'} loading="lazy" />
+                            {im.shared_by_office && <span className="jc-img-tag">shared</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

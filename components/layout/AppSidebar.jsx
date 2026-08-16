@@ -402,6 +402,19 @@ function Sidebar({isCollapsed, setIsCollapsed, isMobileOpen = false, closeMobile
                             </Link>
                         </div>)}
 
+                        {has('view_schedule') && (<div className="nav-item">
+                            <Link href="/dashboard/company-images" className={`nav-link ${pathname.startsWith('/dashboard/company-images') ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Company Images">
+                                <span className="nav-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                                        <path d="M21 15l-5-5L5 21"/>
+                                    </svg>
+                                </span>
+                                <span className="nav-text">Company Images</span>
+                            </Link>
+                        </div>)}
+
                         {has('view_jobs') && (<div className="nav-item">
                             <Link href="/dashboard/jobs-ready" className={`nav-link ${pathname === '/dashboard/jobs-ready' ? 'active' : ''}`} onClick={handleNavClick} data-tooltip="Jobs Ready (Pre-Claim Staging)">
                                 <span className="nav-icon">
