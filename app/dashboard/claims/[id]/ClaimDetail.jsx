@@ -439,6 +439,9 @@ const ClaimDetail = ({ id }) => {
                         {claim.notes && <div className="cd-notes"><strong>Notes:</strong> {claim.notes}</div>}
                     </div>
 
+                    {/* Q3.17 — packages / memberships / gift certificates + balances */}
+                    <ClientPackages clientId={id} canManage={has('record_payments')} />
+
                     {/* Documents */}
                     <div className="current-stage-info" style={{ marginBottom: 0 }}>
                         <h3 className="current-stage-title">Documents ({uploads.length})</h3>
@@ -666,5 +669,81 @@ const ClaimDetail = ({ id }) => {
         </div>
     );
 };
+
+// ── Q3.17 — a client's packages/memberships + a "sell" flow ──────────────────
+function ClientPackages({ clientId, canManage }) {
+    const [owned, setOwned] = useState([]);
+    const [defs, setDefs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selling, setSelling] = useState('');   // '' | 'open' | package_id busy
+    const [pick, setPick] = useState('');
+    const money = (c) => `$${((Number(c) || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const [o, d] = await Promise.all([
+                axiosInstance.get(`/packages/client/${clientId}`, { suppressErrorToast: true }),
+                canManage ? axiosInstance.get('/packages', { suppressErrorToast: true }) : Promise.resolve({ data: { data: [] } }),
+            ]);
+            setOwned(o.data?.data || []);
+            setDefs(d.data?.data || []);
+        } catch { setOwned([]); } finally { setLoading(false); }
+    };
+    useEffect(() => { if (clientId) load(); /* eslint-disable-next-line */ }, [clientId]);
+
+    const sell = async (via) => {
+        if (!pick) { toast.error('Pick a package first.'); return; }
+        setSelling(pick);
+        try {
+            if (via === 'stripe') {
+                const r = await axiosInstance.post(`/packages/client/${clientId}/checkout`, { package_id: pick });
+                if (r.data?.data?.url) window.open(r.data.data.url, '_blank');
+            }
+            await axiosInstance.post(`/packages/client/${clientId}/sell`, { package_id: pick, via: via === 'stripe' ? 'stripe' : 'manual' });
+            toast.success('Package added to this client');
+            setPick(''); setSelling(''); load();
+        } catch (e) { toast.error(e?.response?.data?.message || 'Could not sell package'); setSelling(''); }
+    };
+
+    if (loading) return null;
+
+    return (
+        <div className="current-stage-info" style={{ marginBottom: 0 }}>
+            <h3 className="current-stage-title">Packages &amp; Memberships</h3>
+            {owned.length === 0
+                ? <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: '0.5rem 0' }}>No packages purchased.</p>
+                : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', margin: '0.5rem 0 0.75rem' }}>
+                        {owned.map((p) => (
+                            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0.8rem', border: '1px solid #eef0f4', borderRadius: 10, background: p.status === 'active' ? '#fff' : '#fafafa' }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, color: '#1a1f3a', fontSize: 14 }}>{p.name}</div>
+                                    <div style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{p.kind.replace(/_/g, ' ')}{p.purchased_via === 'stripe' ? ' · paid via Stripe' : ''}</div>
+                                </div>
+                                {p.remaining_uses != null && (
+                                    <span style={{ fontWeight: 800, color: p.remaining_uses > 0 ? '#059669' : '#9ca3af', fontSize: 15 }}>
+                                        {p.remaining_uses}<span style={{ fontWeight: 500, color: '#9ca3af', fontSize: 12 }}> / {p.total_uses} left</span>
+                                    </span>
+                                )}
+                                {p.status !== 'active' && <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: 999 }}>{p.status.replace('_', ' ')}</span>}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+            {canManage && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                    <select className="stage-selector" style={{ minWidth: 200 }} value={pick} onChange={(e) => setPick(e.target.value)}>
+                        <option value="">Sell a package…</option>
+                        {defs.map((d) => <option key={d.id} value={d.id}>{d.name} — {money(d.price_cents)}{d.total_uses ? ` · ${d.total_uses} sessions` : ''}</option>)}
+                    </select>
+                    <button className="show-more-btn" disabled={!pick || !!selling} onClick={() => sell('manual')}>Record sale</button>
+                    <button className="show-more-btn" disabled={!pick || !!selling} onClick={() => sell('stripe')}>Charge via Stripe</button>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default ClaimDetail;
