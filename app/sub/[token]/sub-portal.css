@@ -149,6 +149,11 @@
 .sub-portal .step-btn { flex: 1; border: 2px solid #e5e7eb; background: #fff; border-radius: 10px; padding: 0.5rem 0.3rem; font-size: 0.75rem; font-weight: 700; color: #6b7280; cursor: pointer; }
 .sub-portal .step-btn.on { background: #16a34a; border-color: #16a34a; color: #fff; }
 .sub-portal .jc-photos { display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.5rem; border-top: 1px dashed #e5e7eb; }
+/* Q3.10 — sub-visible job images strip */
+.sub-portal .jc-imgstrip { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.sub-portal .jc-img { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid #eef0f4; background: #f3f4f6; }
+.sub-portal .jc-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sub-portal .jc-img-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(26,31,58,0.75); color: #fff; font-size: 9px; font-weight: 700; text-align: center; padding: 1px 0; }
 
 /* payments */
 .sub-portal .ytd-card { background: #1a1f3a; color: #fff; border-radius: 14px; padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.85rem; }

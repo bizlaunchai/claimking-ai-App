@@ -8,6 +8,7 @@ import PortalPolicyAnalyses from './PortalPolicyAnalyses.jsx';
 import PortalTimeline from './PortalTimeline.jsx';
 import PortalMessages from './PortalMessages.jsx';
 import PortalMockups from './PortalMockups.jsx';
+import PortalPhotos from './PortalPhotos.jsx';
 import PortalDocuments from './PortalDocuments.jsx';
 import PortalInsuranceComm from './PortalInsuranceComm.jsx';
 
@@ -201,6 +202,7 @@ export default function PortalView() {
     const estimateId = search?.get('estimate') || undefined;
     const mockupId = search?.get('mockup') || undefined;
     const documentId = search?.get('document') || undefined;
+    const photoId = search?.get('photo') || undefined;
     const focusTab = search?.get('focus') || undefined;
 
     const [state, setState] = useState({ loading: true, client: null, error: null });
@@ -214,12 +216,13 @@ export default function PortalView() {
     // useState) so the server-rendered 'overview' and the client's first render
     // agree — flipping the tab post-mount avoids a hydration mismatch.
     useEffect(() => {
-        const valid = ['overview', 'estimate', 'insurance', 'documents', 'mockups', 'messages'];
+        const valid = ['overview', 'estimate', 'insurance', 'documents', 'mockups', 'photos', 'messages'];
         if (estimateId || analysisId) setActiveTab('estimate');
         else if (mockupId) setActiveTab('mockups');
+        else if (photoId) setActiveTab('photos');
         else if (documentId) setActiveTab('documents');
         else if (focusTab && valid.includes(focusTab)) setActiveTab(focusTab);
-    }, [estimateId, analysisId, mockupId, documentId, focusTab]);
+    }, [estimateId, analysisId, mockupId, documentId, photoId, focusTab]);
 
     useEffect(() => {
         if (!token) return;
@@ -343,6 +346,7 @@ export default function PortalView() {
         { key: 'insurance', label: 'Insurance Communication', icon: <Icon.Insurance width="16" height="16" /> },
         { key: 'documents', label: 'Documents', icon: <Icon.Folder width="16" height="16" /> },
         { key: 'mockups',   label: '3D Mockups', icon: <Icon.Spark width="16" height="16" /> },
+        { key: 'photos',    label: 'Project Photos', icon: <Icon.Home width="16" height="16" /> },
         { key: 'messages',  label: 'Messages',  icon: <Icon.Message width="16" height="16" /> },
     ];
 
@@ -570,6 +574,17 @@ export default function PortalView() {
                         subtitle="Color and material previews of your finished roof"
                     >
                         <PortalMockups highlightId={mockupId} />
+                    </SectionCard>
+                )}
+
+                {activeTab === 'photos' && (
+                    <SectionCard
+                        icon={<Icon.Home width="18" height="18" />}
+                        accent="green"
+                        title="Project Photos"
+                        subtitle="Photos of your property as the work progresses"
+                    >
+                        <PortalPhotos highlightId={photoId} />
                     </SectionCard>
                 )}
 

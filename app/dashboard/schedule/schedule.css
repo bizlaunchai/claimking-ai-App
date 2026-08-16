@@ -366,3 +366,10 @@
     .schedule-page .sched-view-btn { flex: 1; }
     .schedule-page .grid2 { grid-template-columns: 1fr; }
 }
+
+/* Q3.10 appointment photos */
+.appt-photos { display: flex; flex-direction: column; gap: 0.3rem; }
+.appt-photo-strip { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
+.appt-photo-thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eef0f4; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 11px; }
+.appt-photo-loading { }
+.appt-photo-badge { position: absolute; bottom: 2px; left: 2px; background: rgba(6,95,70,0.85); color: #fff; font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 999px; }
