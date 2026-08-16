@@ -460,3 +460,22 @@
 .sv-pay-amount { font-size: 34px; font-weight: 800; color: #1e3a8a; line-height: 1.1; }
 .sv-pay-box.muted .sv-pay-amount { color: #475569; }
 .sv-pay-label { font-size: 12.5px; color: #64748b; margin-top: 6px; line-height: 1.5; }
+
+/* ── SignWell e-sign (real vendor) ── */
+.sv-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 22px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; text-decoration: none; }
+.sv-btn--primary { background: #1a1f3a; color: #FDB813; }
+.sv-btn--primary:hover:not(:disabled) { background: #12162b; }
+.sv-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-btn--ghost { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+.sv-inline-error { margin-top: 10px; font-size: 13px; font-weight: 600; color: #dc2626; text-align: center; }
+.sv-esign-summary { border: 1px solid #eef0f4; border-radius: 12px; padding: 14px 16px; margin: 8px 0 18px; background: #fbfbfd; }
+.sv-esum-sec { margin-bottom: 12px; }
+.sv-esum-sec-name { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 6px; }
+.sv-esum-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 3px 0; color: #374151; }
+.sv-esum-total { display: flex; justify-content: space-between; gap: 12px; font-size: 17px; font-weight: 800; color: #1a1f3a; border-top: 2px solid #1a1f3a; margin-top: 8px; padding-top: 10px; }
+.sv-esign-cta { width: 100%; }
+.sv-esign-alt { display: block; margin: 12px auto 0; background: none; border: none; color: #64748b; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.sv-esign-frame-wrap { margin: 10px 0; }
+.sv-esign-frame { width: 100%; height: 70vh; border: 1px solid #eef0f4; border-radius: 12px; background: #fff; }
+.sv-esign-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sv-esign-secure { font-size: 13px; color: #64748b; }

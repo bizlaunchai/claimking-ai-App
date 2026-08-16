@@ -200,6 +200,65 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
     const [agreed, setAgreed] = useState(false);
     const [empty, setEmpty] = useState(true);
     const [busy, setBusy] = useState(false);
+    // Q2.5b — resolve the signing MODE first: 'signwell' (real e-sign vendor,
+    // embedded iframe) when configured, else 'inapp' (SignaturePad fallback).
+    const [mode, setMode] = useState('loading'); // loading | inapp | signwell
+    const [embeddedUrl, setEmbeddedUrl] = useState('');
+    const [clauses, setClauses] = useState(null); // in-app preview only
+
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                const res = await axiosInstance.post(`/sub-portal/${token}/sign-agreement/start`);
+                const d = res.data?.data || {};
+                if (!alive) return;
+                if (d.mode === 'signwell' && d.embedded_url) {
+                    setEmbeddedUrl(d.embedded_url);
+                    setMode('signwell');
+                    return;
+                }
+                setMode('inapp');
+            } catch {
+                if (alive) setMode('inapp'); // degrade to in-app on any error
+            }
+        })();
+        return () => { alive = false; };
+    }, [token]);
+
+    // In-app mode: fetch the company's current agreement text for the preview.
+    useEffect(() => {
+        if (mode !== 'inapp') return;
+        let alive = true;
+        axiosInstance.get(`/sub-portal/${token}/agreement`)
+            .then((res) => { if (alive) setClauses(res.data?.data?.clauses || null); })
+            .catch(() => { if (alive) setClauses(null); });
+        return () => { alive = false; };
+    }, [mode, token]);
+
+    // SignWell mode: poll status; finalize + close when the envelope completes.
+    useEffect(() => {
+        if (mode !== 'signwell') return;
+        let alive = true;
+        const id = setInterval(async () => {
+            try {
+                const res = await axiosInstance.get(`/sub-portal/${token}/sign-agreement/status`);
+                const s = res.data?.data || {};
+                if (!alive) return;
+                if (s.esign_status === 'completed') {
+                    clearInterval(id);
+                    toast('Agreement signed.', 'success');
+                    onSigned();
+                } else if (s.esign_status === 'declined') {
+                    clearInterval(id);
+                    toast('Signing was declined.', 'error');
+                }
+            } catch { /* keep polling */ }
+        }, 3500);
+        return () => { alive = false; clearInterval(id); };
+    }, [mode, token, onSigned, toast]);
+
+    const shown = (Array.isArray(clauses) && clauses.length) ? clauses : AGREEMENT_PREVIEW;
 
     const sign = async () => {
         if (!name.trim()) { toast('Type your legal name to sign.', 'error'); return; }
@@ -217,30 +276,56 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
     return (
         <div className="sign-modal-wrap">
             <div className="sign-modal-overlay" onClick={busy ? undefined : onClose} />
-            <div className="sign-modal" role="dialog" aria-modal="true">
+            <div className={`sign-modal${mode === 'signwell' ? ' sign-modal-wide' : ''}`} role="dialog" aria-modal="true">
                 <div className="sign-modal-head">
                     <h3>Subcontractor Agreement</h3>
                     <button className="sign-close" onClick={onClose} disabled={busy}>&times;</button>
                 </div>
-                <div className="sign-modal-body">
-                    <div className="agreement-text">
-                        {AGREEMENT_PREVIEW.map((c, i) => <p key={i}>{i === 0 ? c : `${i}. ${c}`}</p>)}
-                        <p className="muted">The full agreement is recorded with your signature.</p>
+
+                {mode === 'loading' && (
+                    <div className="sign-modal-body" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                        <span className="doc-spin dark" /> Preparing your agreement…
                     </div>
-                    <div className="field"><label>Your legal name</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full legal name" /></div>
-                    <div className="field">
-                        <label>Signature</label>
-                        <div className="sig-pad-box">
-                            <SignaturePad ref={padRef} height={160} onChange={({ isEmpty }) => setEmpty(isEmpty)} />
+                )}
+
+                {mode === 'signwell' && (
+                    <>
+                        <div className="esign-frame-wrap">
+                            <iframe title="Sign agreement" src={embeddedUrl} className="esign-frame" allow="camera; microphone" />
                         </div>
-                        <button type="button" className="sig-clear" onClick={() => { padRef.current?.clear(); setEmpty(true); }} disabled={empty || busy}>Clear</button>
-                    </div>
-                    <label className="agree-row"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> I have read and agree to the Subcontractor Agreement.</label>
-                </div>
-                <div className="sign-modal-foot">
-                    <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-                    <button className="btn btn-primary btn-busy" onClick={sign} disabled={busy || !name.trim() || !agreed || empty}>{busy ? <><span className="doc-spin dark" />Signing…</> : '✍ Sign Agreement'}</button>
-                </div>
+                        <div className="sign-modal-foot">
+                            <span className="esign-secure">🔒 Secure e-signature by SignWell — this window closes automatically once you finish.</span>
+                            <a className="btn btn-ghost" href={embeddedUrl} target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
+                            <button className="btn btn-ghost" onClick={onClose}>Close</button>
+                        </div>
+                    </>
+                )}
+
+                {mode === 'inapp' && (
+                    <>
+                        <div className="sign-modal-body">
+                            <div className="agreement-text">
+                                {clauses === null
+                                    ? AGREEMENT_PREVIEW.map((c, i) => <p key={i}>{i === 0 ? c : `${i}. ${c}`}</p>)
+                                    : shown.map((c, i) => <p key={i}>{c}</p>)}
+                                <p className="muted">The full agreement is recorded with your signature.</p>
+                            </div>
+                            <div className="field"><label>Your legal name</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full legal name" /></div>
+                            <div className="field">
+                                <label>Signature</label>
+                                <div className="sig-pad-box">
+                                    <SignaturePad ref={padRef} height={160} onChange={({ isEmpty }) => setEmpty(isEmpty)} />
+                                </div>
+                                <button type="button" className="sig-clear" onClick={() => { padRef.current?.clear(); setEmpty(true); }} disabled={empty || busy}>Clear</button>
+                            </div>
+                            <label className="agree-row"><input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} /> I have read and agree to the Subcontractor Agreement.</label>
+                        </div>
+                        <div className="sign-modal-foot">
+                            <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+                            <button className="btn btn-primary btn-busy" onClick={sign} disabled={busy || !name.trim() || !agreed || empty}>{busy ? <><span className="doc-spin dark" />Signing…</> : '✍ Sign Agreement'}</button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
