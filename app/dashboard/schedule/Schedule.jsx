@@ -489,6 +489,87 @@ function TodayPanel({ todays, nameOf, onOpen, onOutcome }) {
 }
 
 // ==========================================================================
+// Q3.1 — client/lead search-first picker for the New Appointment flow
+// ==========================================================================
+function PersonSearch({ onPick }) {
+    const [q, setQ] = useState('');
+    const [results, setResults] = useState(null); // null = idle, [] = no match
+    const [searching, setSearching] = useState(false);
+    const [adding, setAdding] = useState(false);   // new-person mini-form open
+    const [nf, setNf] = useState({ name: '', phone: '', email: '', address: '' });
+    const [creating, setCreating] = useState(false);
+    const timer = useRef(null);
+
+    useEffect(() => {
+        const term = q.trim();
+        if (timer.current) clearTimeout(timer.current);
+        if (term.length < 2) { setResults(null); setSearching(false); return; }
+        setSearching(true);
+        timer.current = setTimeout(async () => {
+            try {
+                const res = await axiosInstance.get('/appointments/people', { params: { q: term }, suppressErrorToast: true });
+                setResults(res.data?.data || []);
+            } catch { setResults([]); } finally { setSearching(false); }
+        }, 300);
+        return () => timer.current && clearTimeout(timer.current);
+    }, [q]);
+
+    const createPerson = async () => {
+        if (!nf.name.trim()) { toast.error('Enter a name'); return; }
+        setCreating(true);
+        try {
+            const res = await axiosInstance.post('/appointments/people', {
+                name: nf.name.trim(), phone: nf.phone.trim() || undefined,
+                email: nf.email.trim() || undefined, address: nf.address.trim() || undefined,
+            });
+            const p = res.data?.data;
+            if (p?.existed) toast.info('Matched an existing record');
+            else toast.success('New client added');
+            onPick(p);
+        } catch (e) { toast.error(e?.userMessage || 'Could not add client'); }
+        finally { setCreating(false); }
+    };
+
+    if (adding) {
+        return (
+            <div className="person-new">
+                <input autoFocus placeholder="Full name *" value={nf.name} onChange={(e) => setNf((s) => ({ ...s, name: e.target.value }))} />
+                <div className="grid2">
+                    <input placeholder="Phone" value={nf.phone} onChange={(e) => setNf((s) => ({ ...s, phone: e.target.value }))} />
+                    <input placeholder="Email" value={nf.email} onChange={(e) => setNf((s) => ({ ...s, email: e.target.value }))} />
+                </div>
+                <input placeholder="Address" value={nf.address} onChange={(e) => setNf((s) => ({ ...s, address: e.target.value }))} />
+                <div className="person-new-actions">
+                    <button className="btn-link" onClick={() => setAdding(false)}>← Back to search</button>
+                    <button className="btn-primary sm" disabled={creating} onClick={createPerson}>{creating ? 'Adding…' : 'Add & select'}</button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="person-search">
+            <input autoFocus placeholder="Search by name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+            {searching && <div className="person-hint muted">Searching…</div>}
+            {results && results.length > 0 && (
+                <div className="person-results">
+                    {results.map((p) => (
+                        <button key={`${p.kind}:${p.id}`} className="person-result" onClick={() => onPick(p)}>
+                            <span className="person-name">{p.name}</span>
+                            <span className="person-sub"><span className={`person-badge ${p.kind}`}>{p.sub_label}</span>{p.phone ? ` · ${p.phone}` : ''}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {results && results.length === 0 && !searching && (
+                <div className="person-hint muted">No match for “{q.trim()}”.</div>
+            )}
+            <button className="btn-link person-add" onClick={() => { setNf((s) => ({ ...s, name: q.trim() })); setAdding(true); }}>+ Add a new client</button>
+        </div>
+    );
+}
+
+// ==========================================================================
 // New Appointment modal
 // ==========================================================================
 function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSaved }) {
@@ -498,11 +579,25 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
     const [duration, setDuration] = useState(60);
     const [assignee, setAssignee] = useState('');
     const [address, setAddress] = useState(prefill?.address || '');
-    const [leadId] = useState(prefill?.lead_id || '');
-    const [claimId] = useState(prefill?.claim_id || '');
+    // Q3.1 — the add flow starts with a client/lead lookup. `person` holds the
+    // chosen client { kind:'lead'|'claim', id, name, phone, address, ... }.
+    const [person, setPerson] = useState(() => {
+        if (prefill?.claim_id) return { kind: 'claim', id: prefill.claim_id, name: prefill.name || 'Linked claim', sub_label: 'Client / claim', address: prefill.address || null };
+        if (prefill?.lead_id) return { kind: 'lead', id: prefill.lead_id, name: prefill.name || 'Linked lead', sub_label: 'Lead', address: prefill.address || null };
+        return null;
+    });
     const [reminder, setReminder] = useState(true);
     const [slots, setSlots] = useState(null);
     const [busy, setBusy] = useState(false);
+
+    const leadId = person?.kind === 'lead' ? person.id : '';
+    const claimId = person?.kind === 'claim' ? person.id : '';
+
+    // Picking a person auto-fills the address when the field is still empty.
+    const pickPerson = (p) => {
+        setPerson(p);
+        if (p?.address && !address.trim()) setAddress(p.address);
+    };
 
     // Inline availability for the chosen assignee + date (packet §5.4.5).
     useEffect(() => {
@@ -554,8 +649,22 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
-                    {(leadId || claimId) && (
-                        <div className="sched-linkchip">{leadId ? 'Linked to lead' : 'Linked to claim'} · booking will update it</div>
+                    {/* Q3.1 — who is this for? Search a client/lead first, or add a new one. */}
+                    <label>Client</label>
+                    {person ? (
+                        <div className="person-card">
+                            <div className="person-info">
+                                <div className="person-name">{person.name}</div>
+                                <div className="person-sub">
+                                    <span className={`person-badge ${person.kind}`}>{person.sub_label}</span>
+                                    {person.phone ? ` · ${person.phone}` : ''}
+                                    {person.address ? ` · ${person.address}` : ''}
+                                </div>
+                            </div>
+                            <button className="btn-link" onClick={() => setPerson(null)}>Change</button>
+                        </div>
+                    ) : (
+                        <PersonSearch onPick={pickPerson} />
                     )}
                     <label>Type</label>
                     <div className="type-row">
