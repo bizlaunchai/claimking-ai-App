@@ -52,6 +52,13 @@
     font-weight: 700; font-size: 0.9rem; color: #1a1f3a; cursor: pointer;
 }
 .book-page .bk-slot:hover { border-color: #FDB813; background: #fef9e6; }
+/* Full-width messages inside the slot grid (loading / empty / error) */
+.book-page .bk-slots-msg { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 1.25rem 0.5rem; text-align: center; }
+.book-page .bk-retry {
+    padding: 0.5rem 1rem; border: 1px solid #e5e7eb; border-radius: 10px; background: white;
+    font-weight: 700; font-size: 0.85rem; color: #1a1f3a; cursor: pointer;
+}
+.book-page .bk-retry:hover { border-color: #FDB813; background: #fef9e6; }
 
 /* Form */
 .book-page .bk-form { display: flex; flex-direction: column; }
@@ -67,6 +74,9 @@
     font-size: 1rem; font-family: inherit; background: white;
 }
 .book-page .bk-form input:focus, .book-page .bk-form textarea:focus { outline: none; border-color: #FDB813; }
+/* Beats the app-wide `input { … !important }` block in globals.css — must use !important + higher specificity. */
+.book-page .bk-form input.invalid { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+.book-page .bk-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 0.35rem; }
 .book-page .bk-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .book-page .bk-captcha { margin-top: 1rem; }
 .book-page .bk-err { color: #b91c1c; font-size: 0.82rem; font-weight: 600; margin-top: 0.75rem; }

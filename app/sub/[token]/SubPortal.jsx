@@ -415,18 +415,20 @@ function DocRow({ token, doc, onUploaded, profile }) {
             </div>
             <span className={`doc-status ${cls}`}>{label}</span>
             {isAgreement ? (
-                <button className="btn btn-sm btn-secondary" onClick={() => setShowSign(true)}>{['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign'}</button>
+                <div className="doc-actions">
+                    <button className="btn btn-sm btn-secondary" onClick={() => setShowSign(true)}>{['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign'}</button>
+                </div>
             ) : isBank ? (
-                <>
+                <div className="doc-actions doc-actions-bank">
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
                     <button className="btn btn-sm btn-primary btn-busy" disabled={busy} onClick={connectBank}>{busy ? <><span className="doc-spin dark" />Connecting…</> : (bankConnected ? '🏦 Reconnect' : '🏦 Connect bank')}</button>
                     <button className="link-btn" disabled={busy} onClick={() => inputRef.current?.click()}>or upload a voided check</button>
-                </>
+                </div>
             ) : (
-                <>
+                <div className="doc-actions">
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
                     <button className="btn btn-sm btn-secondary btn-busy" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? <><span className="doc-spin" />Uploading…</> : (doc.status === 'missing' ? 'Upload' : 'Replace')}</button>
-                </>
+                </div>
             )}
             {showSign && <SignAgreementModal token={token} toast={toast} onClose={() => setShowSign(false)} onSigned={() => { setShowSign(false); onUploaded(); }} />}
         </div>

@@ -2,6 +2,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
 import axiosInstance from "@/lib/axiosInstance.js";
+import { LoadingBlock } from "@/components/ui/Loader.jsx";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 const DashboardPage = () => {
     // Initial State with 0/Default values (No Dummy Data)
@@ -27,6 +30,7 @@ const DashboardPage = () => {
     });
 
     const [scope, setScope] = useState(null); // { claims:'all'|'own', leads:'all'|'own' }
+    const [loading, setLoading] = useState(true); // first-load state → skeleton/spinner
 
     // Real, server-side own-only-scoped dashboard numbers (task 5.1). An own-only
     // user's totals reflect only their own pipeline — the backend enforces it.
@@ -70,6 +74,8 @@ const DashboardPage = () => {
                 }));
             } catch {
                 /* leave the zero-state defaults */
+            } finally {
+                if (!cancelled) setLoading(false);
             }
         })();
         return () => { cancelled = true; };
@@ -151,7 +157,7 @@ const DashboardPage = () => {
             typesChartInstance.current?.destroy();
             insuranceChartInstance.current?.destroy();
         };
-    }, [dashboardData]);
+    }, [dashboardData, loading]);
 
     return (
         <div className="dashboard-content">
@@ -164,15 +170,25 @@ const DashboardPage = () => {
                         📊 These numbers reflect <b>your own pipeline</b> only.
                     </div>
                 )}
-                {/* KPI Cards (Always Visible) */}
+                {/* KPI Cards — skeleton while first load is in flight */}
                 <div className="kpi-grid">
-                    {dashboardData.kpis.map((kpi, i) => (
-                        <div key={i} className="kpi-card">
-                            <div className="kpi-label">{kpi.label}</div>
-                            <div className="kpi-value">{kpi.value}</div>
-                            <span className="kpi-change positive">{kpi.change}</span>
-                        </div>
-                    ))}
+                    {loading
+                        ? Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="kpi-card" style={{ overflow: "hidden" }}>
+                                <SkeletonTheme baseColor="#eef0f3" highlightColor="#f8f9fb" borderRadius={7}>
+                                    <div style={{ marginBottom: 12 }}><Skeleton height={11} width="62%" /></div>
+                                    <div style={{ marginBottom: 12 }}><Skeleton height={26} width="45%" /></div>
+                                    <div><Skeleton height={18} width="34%" /></div>
+                                </SkeletonTheme>
+                            </div>
+                        ))
+                        : dashboardData.kpis.map((kpi, i) => (
+                            <div key={i} className="kpi-card">
+                                <div className="kpi-label">{kpi.label}</div>
+                                <div className="kpi-value">{kpi.value}</div>
+                                <span className="kpi-change positive">{kpi.change}</span>
+                            </div>
+                        ))}
                 </div>
 
                 <div className="chart-grid">
@@ -181,7 +197,9 @@ const DashboardPage = () => {
                             <div className="chart-title">Claims Volume Trend</div>
                         </div>
                         <div className="chart-container">
-                            <canvas ref={claimsChartRef}></canvas>
+                            {loading
+                                ? <LoadingBlock label="Loading chart…" style={{ height: "100%" }} />
+                                : <canvas ref={claimsChartRef}></canvas>}
                         </div>
                     </div>
 
@@ -190,7 +208,9 @@ const DashboardPage = () => {
                             <div className="chart-title">Claim Types Breakdown</div>
                         </div>
                         <div className="chart-container">
-                            <canvas ref={typesChartRef}></canvas>
+                            {loading
+                                ? <LoadingBlock label="Loading chart…" style={{ height: "100%" }} />
+                                : <canvas ref={typesChartRef}></canvas>}
                         </div>
                     </div>
 
@@ -199,12 +219,21 @@ const DashboardPage = () => {
                             <div className="chart-title">AI Performance Metrics</div>
                         </div>
                         <div className="ai-grid">
-                            {dashboardData.aiMetrics.map((m, i) => (
-                                <div key={i} className="ai-metric">
-                                    <div className="ai-metric-value">{m.value}</div>
-                                    <div className="ai-metric-label">{m.label}</div>
-                                </div>
-                            ))}
+                            {loading
+                                ? Array.from({ length: 5 }).map((_, i) => (
+                                    <div key={i} className="ai-metric" style={{ overflow: "hidden", textAlign: "center" }}>
+                                        <SkeletonTheme baseColor="rgba(255,255,255,0.45)" highlightColor="rgba(255,255,255,0.9)" borderRadius={7}>
+                                            <div style={{ marginBottom: 10 }}><Skeleton height={22} width="55%" /></div>
+                                            <div><Skeleton height={12} width="72%" /></div>
+                                        </SkeletonTheme>
+                                    </div>
+                                ))
+                                : dashboardData.aiMetrics.map((m, i) => (
+                                    <div key={i} className="ai-metric">
+                                        <div className="ai-metric-value">{m.value}</div>
+                                        <div className="ai-metric-label">{m.label}</div>
+                                    </div>
+                                ))}
                         </div>
                     </div>
                 </div>
