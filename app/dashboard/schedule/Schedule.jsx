@@ -1229,8 +1229,10 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
         return null;
     });
     const [reminder, setReminder] = useState(true);
-    const [repeat, setRepeat] = useState('none');        // Q3.16 none|weekly|biweekly|monthly
+    const [repeat, setRepeat] = useState('none');        // Q3.16 none|daily|weekly|biweekly|monthly|custom
     const [repeatCount, setRepeatCount] = useState(4);   // total occurrences
+    const [repeatInterval, setRepeatInterval] = useState(3); // custom: every N units
+    const [repeatUnit, setRepeatUnit] = useState('week');    // custom: day|week|month
     const [redeemable, setRedeemable] = useState([]);    // Q3.17 client's usable packages
     const [redeemId, setRedeemId] = useState('');        // chosen client_package to redeem
     const [slots, setSlots] = useState(null);
@@ -1292,7 +1294,13 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
             if (address.trim()) body.address = address.trim();
             if (leadId) body.lead_id = leadId;
             if (claimId) body.claim_id = claimId;
-            if (repeat !== 'none') body.recurrence = { freq: repeat, count: Math.max(2, Math.min(60, Number(repeatCount) || 2)) };
+            if (repeat !== 'none') {
+                body.recurrence = { freq: repeat, count: Math.max(2, Math.min(60, Number(repeatCount) || 2)) };
+                if (repeat === 'custom') {
+                    body.recurrence.interval = Math.max(1, Math.min(52, Number(repeatInterval) || 1));
+                    body.recurrence.unit = repeatUnit;
+                }
+            }
             const res = await axiosInstance.post('/appointments', body);
             const made = res.data?.series?.created;
             toast.success(made && made > 1 ? `${made} appointments created (repeating)` : 'Appointment created');
@@ -1411,9 +1419,11 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                     <div className="grid2">
                         <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
                             <option value="none">Does not repeat</option>
+                            <option value="daily">Daily</option>
                             <option value="weekly">Weekly</option>
                             <option value="biweekly">Every 2 weeks</option>
                             <option value="monthly">Monthly</option>
+                            <option value="custom">Custom…</option>
                         </select>
                         {repeat !== 'none' && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1422,6 +1432,17 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                             </div>
                         )}
                     </div>
+                    {repeat === 'custom' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                            <span className="muted">Every</span>
+                            <input type="number" min="1" max="52" value={repeatInterval} onChange={(e) => setRepeatInterval(e.target.value)} style={{ width: 60 }} />
+                            <select value={repeatUnit} onChange={(e) => setRepeatUnit(e.target.value)}>
+                                <option value="day">day(s)</option>
+                                <option value="week">week(s)</option>
+                                <option value="month">month(s)</option>
+                            </select>
+                        </div>
+                    )}
 
                     {/* Q3.17 — redeem a client's package for this appointment */}
                     {redeemable.length > 0 && (
@@ -2146,6 +2167,29 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
         } catch (e) { toast.error(e?.userMessage || 'Could not notify'); }
     };
 
+    // Q3.7 — real send actions (were route-only)
+    const [sending37, setSending37] = useState('');
+    const sendInvoice = async () => {
+        setSending37('invoice');
+        try {
+            const res = await axiosInstance.post(`/appointments/${appt.id}/send-invoice`);
+            const n = res.data?.data?.notified;
+            if (n && (n.email || n.sms)) toast.success('Final invoice sent to the client');
+            else toast.warning('Invoice ready, but the client had no reachable email/phone');
+        } catch (e) { toast.error(e?.userMessage || e?.response?.data?.message || 'Could not send invoice'); }
+        finally { setSending37(''); }
+    };
+    const requestReview = async () => {
+        setSending37('review');
+        try {
+            const res = await axiosInstance.post(`/appointments/${appt.id}/request-review`);
+            const n = res.data?.data?.notified;
+            if (n && (n.email || n.sms)) toast.success('Review request sent to the client');
+            else toast.warning('Sent, but the client had no reachable email/phone');
+        } catch (e) { toast.error(e?.userMessage || e?.response?.data?.message || 'Could not request a review'); }
+        finally { setSending37(''); }
+    };
+
     const applyReschedule = async () => {
         setBusy(true);
         const ns = new Date(`${date}T${time}:00`);
@@ -2282,11 +2326,11 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                         </>
                     )}
 
-                    {/* Q3.7 — job-linked actions (route to the claim where these live) */}
+                    {/* Q3.7 — real send actions: invoice + review request to the client */}
                     {client?.claim_id && (
                         <div className="appt-joblinks">
-                            <button className="btn-secondary sm" onClick={goToPortal} title="Send the final invoice from the client's claim">Send Final Invoice →</button>
-                            <button className="btn-secondary sm" onClick={goToPortal} title="Request a review from the client's claim">Request Review →</button>
+                            <button className="btn-secondary sm" disabled={!!sending37} onClick={sendInvoice} title="Email/text the client their final invoice">{sending37 === 'invoice' ? 'Sending…' : '📄 Send Final Invoice'}</button>
+                            <button className="btn-secondary sm" disabled={!!sending37} onClick={requestReview} title="Email/text the client your review link">{sending37 === 'review' ? 'Sending…' : '⭐ Request Review'}</button>
                         </div>
                     )}
 
