@@ -936,7 +936,7 @@ const EmailAssistant = () => {
                                         Set up automatic forwarding or BCC insurance emails to:
                                     </div>
                                     <span className="forward-email">
-                                        {summary?.forwardingAddress || 'Loading…'}
+                                        {summary?.forwardingAddress || <span className="ck-load-inline"><span className="ck-spinner sm" />Loading…</span>}
                                     </span>
                                 </div>
                                 <button
@@ -1262,7 +1262,7 @@ const EmailAssistant = () => {
                                     <div className="empty-title">No texts found</div>
                                     <div className="empty-text">
                                         {!summary
-                                            ? 'Loading…'
+                                            ? <span className="ck-load-inline"><span className="ck-spinner sm" />Loading…</span>
                                             : 'Provision a number on the SMS Setup tab — inbound texts will appear here.'}
                                     </div>
                                 </div>
@@ -1818,7 +1818,7 @@ const EmailAssistant = () => {
                                 style={{ width: '100%', marginBottom: 12 }}
                             />
                             {!claimOptionsLoaded ? (
-                                <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>Loading claims…</p>
+                                <p className="ck-load-inline" style={{ fontSize: '0.85rem' }}><span className="ck-spinner sm" />Loading claims…</p>
                             ) : (() => {
                                 const q = claimQuery.trim().toLowerCase();
                                 const filtered = q

@@ -394,7 +394,7 @@ const StormTracking = () => {
                             className="control-btn"
                             onClick={loadAlerts}
                             disabled={loadingAlerts}
-                        >{loadingAlerts ? 'Refreshing…' : 'Refresh'}</button>
+                        >{loadingAlerts ? <><span className="ck-spinner sm ck-btn-spin" />Refreshing…</> : 'Refresh'}</button>
                     </div>
                 </div>
                 <div id="stormMap" style={{ height: 500, width: '100%' }}>
@@ -679,7 +679,7 @@ const HistoryTab = () => {
                             >{r.label}</button>
                         ))}
                         <button className="control-btn" onClick={loadEvents} disabled={loading}>
-                            {loading ? 'Loading…' : 'Apply'}
+                            {loading ? <><span className="ck-spinner sm ck-btn-spin" />Loading…</> : 'Apply'}
                         </button>
                     </div>
                 </div>
@@ -764,7 +764,7 @@ const HistoryTab = () => {
                         </div>
 
                         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={findHomes} disabled={homesLoading}>
-                            {homesLoading ? 'Searching…' : 'Find homes in this area'}
+                            {homesLoading ? <><span className="ck-spinner sm ck-btn-spin" />Searching…</> : 'Find homes in this area'}
                         </button>
 
                         {homes != null && (

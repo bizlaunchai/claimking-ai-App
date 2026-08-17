@@ -119,7 +119,7 @@ export default function BookPage({ slug }) {
     };
 
     // ── render ────────────────────────────────────────────────────────────────
-    if (phase === 'loading') return <Shell><div className="bk-center">Loading…</div></Shell>;
+    if (phase === 'loading') return <Shell><div className="bk-center ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div></Shell>;
     if (phase === 'notfound') return <Shell><div className="bk-center"><h2>Booking page not found</h2><p>This link may be disabled or incorrect.</p></div></Shell>;
     if (phase === 'error') return <Shell><div className="bk-center"><h2>Something went wrong</h2><p>Please refresh and try again.</p></div></Shell>;
 
@@ -156,7 +156,7 @@ export default function BookPage({ slug }) {
 
             {phase === 'pick' && (
                 <div className="bk-slots">
-                    {slots === null && <div className="bk-muted">Loading times…</div>}
+                    {slots === null && <div className="bk-muted ck-load-inline"><span className="ck-spinner sm" />Loading times…</div>}
                     {slots?.length === 0 && <div className="bk-muted">No open times this day — try another date.</div>}
                     {slots?.map((s) => (
                         <button key={s.start} className="bk-slot" onClick={() => pickSlot(s)}>{fmtTime(s.start)}</button>

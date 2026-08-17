@@ -247,7 +247,7 @@ const GoogleMyBusinessPage = () => {
 
     // ── Connect-banner short-circuit ─────────────────────────────────────
     if (loading) {
-        return <div className="gmb-page"><div className="gmb-loading">Loading…</div></div>;
+        return <div className="gmb-page"><div className="gmb-loading ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div></div>;
     }
 
     const isConnected = connection && connection.connection_status === "connected";
@@ -457,7 +457,7 @@ const Header = ({ onRefresh, refreshing, connected }) => (
         </div>
         {connected && (
             <button className="gmb-btn-secondary" onClick={onRefresh} disabled={refreshing}>
-                {refreshing ? "Refreshing…" : "Refresh from Google"}
+                {refreshing ? <><span className="ck-spinner sm ck-btn-spin" />Refreshing…</> : "Refresh from Google"}
             </button>
         )}
     </div>
@@ -677,7 +677,7 @@ const ReviewsTab = ({ reviews, filter, setFilter, onChanged }) => {
                         <div className="gmb-modal-footer">
                             <button className="gmb-btn-secondary" onClick={() => setReplyModal(null)}>Cancel</button>
                             <button className="gmb-btn-primary" disabled={posting} onClick={submitReply}>
-                                {posting ? "Posting…" : "Post reply"}
+                                {posting ? <><span className="ck-spinner sm ck-btn-spin" />Posting…</> : "Post reply"}
                             </button>
                         </div>
                     </div>
@@ -714,7 +714,7 @@ const PostsTab = ({ posts, content, setContent, postType, setPostType, publishin
                         Save Draft
                     </button>
                     <button className="gmb-btn-primary" disabled={publishing} onClick={() => onPublish(true)}>
-                        {publishing ? "Publishing…" : "Publish Now"}
+                        {publishing ? <><span className="ck-spinner sm ck-btn-spin" />Publishing…</> : "Publish Now"}
                     </button>
                 </div>
             </div>
@@ -750,7 +750,7 @@ const AutopostTab = ({
     onSaveSettings, onUpload, onDeleteImage, onToggleImageAutopost,
     onGenerateNow, onApprove, onSkip, onDeletePost,
 }) => {
-    if (!settings) return <div className="gmb-loading">Loading…</div>;
+    if (!settings) return <div className="gmb-loading ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>;
     const set = (patch) => setSettings({ ...settings, ...patch });
 
     return (
@@ -836,7 +836,7 @@ const AutopostTab = ({
                         />
                     </div>
                     <button className="gmb-btn-primary" disabled={savingSettings} onClick={onSaveSettings}>
-                        {savingSettings ? "Saving…" : "Save Settings"}
+                        {savingSettings ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : "Save Settings"}
                     </button>
                 </div>
 
@@ -858,7 +858,7 @@ const AutopostTab = ({
                         disabled={generatingNow}
                         onClick={onGenerateNow}
                     >
-                        {generatingNow ? "Generating…" : "✨ Generate one now"}
+                        {generatingNow ? <><span className="ck-spinner sm ck-btn-spin" />Generating…</> : "✨ Generate one now"}
                     </button>
                 </div>
             </div>
@@ -1051,7 +1051,7 @@ const QATab = ({ questions, onChanged }) => {
                         <div className="gmb-modal-footer">
                             <button className="gmb-btn-secondary" onClick={() => setAnswering(null)}>Cancel</button>
                             <button className="gmb-btn-primary" disabled={saving} onClick={submit}>
-                                {saving ? "Posting…" : "Post answer"}
+                                {saving ? <><span className="ck-spinner sm ck-btn-spin" />Posting…</> : "Post answer"}
                             </button>
                         </div>
                     </div>
@@ -1105,7 +1105,7 @@ const SettingsTab = ({ settings, setSettings, onSave, onDisconnect, saving }) =>
             )}
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
                 <button className="gmb-btn-primary" disabled={saving} onClick={onSave}>
-                    {saving ? "Saving…" : "Save settings"}
+                    {saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : "Save settings"}
                 </button>
                 <button className="gmb-btn-secondary" onClick={onDisconnect}>
                     Disconnect Google Business Profile

@@ -235,7 +235,7 @@ export default function AiUsageAdmin() {
                     ))}
                 </div>
 
-                {loading && <div className="aiu-card" style={{ padding: 24, color: '#6b7280' }}>Loading…</div>}
+                {loading && <div className="aiu-card ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>}
 
                 {!loading && tab === 'overview' && <Overview status={status} cpf={cpf} daily={daily} rangeLabel={range.label} />}
                 {!loading && tab === 'caps' && <CapsTab settings={settings} companies={companies} onSaved={fetchAll} />}
@@ -407,7 +407,7 @@ function CapRow({ row, companyName, onSaved }) {
                 <Field label="Alert email" wide><input type="email" className="aiu-input" value={d.alert_email} onChange={(e) => set('alert_email', e.target.value)} placeholder="ops@company.com" /></Field>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-                <button className="aiu-btn aiu-btn-primary" onClick={save} disabled={saving}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
+                <button className="aiu-btn aiu-btn-primary" onClick={save} disabled={saving}>{saving ? <span className="ck-spinner sm" /> : <Save size={14} />} {saving ? 'Saving…' : 'Save'}</button>
             </div>
         </div>
     );
@@ -455,7 +455,7 @@ function NewCompanyCap({ companies, settings, onSaved }) {
                         toast.success('Override created — edit its caps above');
                         setOpen(false); setCompanyId(''); onSaved();
                     } catch { /* toasted */ } finally { setSaving(false); }
-                }}>{saving ? 'Creating…' : 'Create'}</button>
+                }}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Creating…</> : 'Create'}</button>
             </div>
         </div>
     );
@@ -559,7 +559,7 @@ function ModelRow({ m, onSaved }) {
                 <Field label="Fallback models (comma-separated)" wide><input className="aiu-input" value={d.fallback_models} onChange={(e) => set('fallback_models', e.target.value)} placeholder="claude-sonnet-5, claude-haiku-4-5-20251001" /></Field>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-                <button className="aiu-btn aiu-btn-primary" onClick={save} disabled={saving}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
+                <button className="aiu-btn aiu-btn-primary" onClick={save} disabled={saving}>{saving ? <span className="ck-spinner sm" /> : <Save size={14} />} {saving ? 'Saving…' : 'Save'}</button>
             </div>
         </div>
     );
@@ -605,7 +605,7 @@ function RecentTab() {
                         </select>
                     </label>
                     <button className="aiu-btn aiu-btn-ghost" onClick={() => load(page, pageSize)} disabled={loading}>
-                        <RefreshCw size={13} /> {loading ? 'Loading…' : 'Reload'}
+                        {loading ? <span className="ck-spinner sm" /> : <RefreshCw size={13} />} {loading ? 'Loading…' : 'Reload'}
                     </button>
                 </div>
             </div>

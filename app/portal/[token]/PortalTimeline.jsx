@@ -222,7 +222,7 @@ export default function PortalTimeline() {
                                     cursor: 'pointer',
                                 }}
                             >
-                                {loadingMore ? 'Loading…' : 'Load older activity'}
+                                {loadingMore ? <><span className="ck-spinner sm ck-btn-spin" />Loading…</> : 'Load older activity'}
                             </button>
                         </div>
                     )}

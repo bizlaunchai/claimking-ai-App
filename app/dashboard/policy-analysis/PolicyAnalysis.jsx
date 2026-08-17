@@ -72,7 +72,7 @@ const AuthedDocPreview = ({ fileKey, fileMime }) => {
     }, [fileKey]);
 
     if (failed) return <div className="doc-preview-empty">Preview unavailable.</div>;
-    if (!url) return <div className="doc-preview-empty">Loading document…</div>;
+    if (!url) return <div className="doc-preview-empty ck-load-block"><span className="ck-spinner" /><span>Loading document…</span></div>;
     if (fileMime && fileMime.startsWith('image/')) {
         return <img src={url} alt="Original document" className="doc-preview-img" />;
     }

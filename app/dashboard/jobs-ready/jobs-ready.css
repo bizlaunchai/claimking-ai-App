@@ -541,3 +541,36 @@
 .est-card.no-est { border-style: dashed; }
 .est-more { align-self: flex-start; background: none; border: none; padding: 0.15rem 0.1rem; font-size: 0.8rem; font-weight: 600; color: #2563eb; cursor: pointer; }
 .est-more:hover { text-decoration: underline; }
+
+/* -------------------------------------------------------------------------
+   Skeleton loaders — client search + estimate list (no plain "Loading…" text)
+   ------------------------------------------------------------------------- */
+.subjobs .sk-line { border-radius: 5px; height: 11px; }
+.subjobs .sk-bar { border-radius: 6px; }
+
+/* Inline spinner in the search input while querying */
+.field.full { position: relative; }
+.cr-searching-icon { position: absolute; right: 0.85rem; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; border: 2px solid #e5e7eb; border-top-color: #FDB813; border-radius: 50%; animation: cr-spin 0.7s linear infinite; pointer-events: none; }
+.cr-input-wrap { position: relative; width: 100%; }
+.cr-input-wrap input { width: 100%; }
+@keyframes cr-spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+/* Client dropdown skeleton rows */
+.client-result.sk { display: flex; flex-direction: column; gap: 6px; cursor: default; }
+.client-result.sk .sk-line.name { width: 45%; height: 12px; }
+.client-result.sk .sk-line.addr { width: 68%; height: 9px; }
+.client-result.sk:nth-child(2) .sk-line.name { width: 38%; }
+.client-result.sk:nth-child(2) .sk-line.addr { width: 55%; }
+.client-result.sk:nth-child(3) .sk-line.name { width: 52%; }
+.client-result.sk:nth-child(3) .sk-line.addr { width: 60%; }
+.client-result.empty { display: flex; align-items: center; gap: 0.5rem; }
+.client-result.empty .empty-emoji { font-size: 0.95rem; }
+
+/* Estimate list skeleton cards */
+.est-card.sk { pointer-events: none; }
+.est-card.sk .est-main { flex: 1; gap: 6px; }
+.est-card.sk .sk-line.title { width: 55%; height: 12px; }
+.est-card.sk .sk-line.meta { width: 32%; height: 9px; }
+.est-card.sk .sk-bar.total { width: 46px; height: 14px; }
+.est-card.sk:nth-child(2) .sk-line.title { width: 42%; }
+.est-card.sk:nth-child(2) .sk-line.meta { width: 40%; }

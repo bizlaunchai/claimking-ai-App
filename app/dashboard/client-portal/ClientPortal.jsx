@@ -761,7 +761,7 @@ const ClientPortal = () => {
                 </div>
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>Loading clients...</div>
+                    <div className="ck-load-block"><span className="ck-spinner" /><span>Loading clients…</span></div>
                 ) : (
                     <>
                         <div className="clients-grid" style={{ display: currentView === 'grid' ? 'grid' : 'none' }}>
@@ -1211,7 +1211,7 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                         disabled={submitting}
                         className="px-5 py-2.5 rounded-md text-sm font-semibold cursor-pointer transition-all border-0 inline-flex items-center gap-2 bg-gradient-to-br from-[#FDB813] to-[#d4a000] text-[#1a1f3a] shadow-[0_2px_8px_rgba(253,184,19,0.3)] hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(253,184,19,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
                     >
-                        {submitting ? 'Saving...' : (
+                        {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : (
                             <>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <polyline points="20 6 9 17 4 12" />
@@ -1421,7 +1421,7 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
                 <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose} disabled={submitting}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
-                        {submitting ? 'Saving...' : 'Update Client'}
+                        {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Update Client'}
                     </button>
                 </div>
             </div>
@@ -1648,7 +1648,7 @@ const ExportClientsModal = ({
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                         {exporting
-                            ? 'Preparing…'
+                            ? <><span className="ck-spinner sm ck-btn-spin" />Preparing…</>
                             : `Download ${selectedCount} ${selectedCount === 1 ? 'client' : 'clients'}`}
                     </button>
                 </div>
@@ -1764,7 +1764,7 @@ const StageManagerModal = ({ isOpen, onClose, onSaved }) => {
                     <button className="btn btn-outline" onClick={reset} disabled={saving}>Reset Defaults</button>
                     <div style={{ display: 'flex', gap: 10 }}>
                         <button className="btn btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
-                        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Stages'}</button>
+                        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save Stages'}</button>
                     </div>
                 </div>
             </div>
@@ -1974,7 +1974,7 @@ const BulkImportModal = ({ isOpen, onClose, onImported }) => {
                 <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
                     <button className="btn btn-outline" onClick={onClose}>Cancel</button>
                     <button className="btn btn-primary" disabled={importing} onClick={runImport}>
-                        {importing ? (importProgress || 'Importing...') : 'Start Import'}
+                        {importing ? <><span className="ck-spinner sm ck-btn-spin" />{importProgress || 'Importing…'}</> : 'Start Import'}
                     </button>
                 </div>
             </div>
@@ -2313,7 +2313,7 @@ const SharePortalModal = ({ client, onClose }) => {
                                 disabled={busy}
                                 style={primaryBtn}
                             >
-                                {busy ? 'Generating…' : 'Generate Portal Link'}
+                                {busy ? <><span className="ck-spinner sm ck-btn-spin" />Generating…</> : 'Generate Portal Link'}
                             </button>
                         </>
                     ) : (
@@ -2479,7 +2479,7 @@ const SendLinkRow = ({ client, disabled }) => {
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                 >
-                    {sending === 'email' ? 'Sending…' : `Email${client.email ? ` → ${client.email}` : ''}`}
+                    {sending === 'email' ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : `Email${client.email ? ` → ${client.email}` : ''}`}
                 </button>
                 <button
                     onClick={() => send('sms')}
@@ -2494,7 +2494,7 @@ const SendLinkRow = ({ client, disabled }) => {
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                 >
-                    {sending === 'sms' ? 'Sending…' : `SMS${client.phone ? ` → ${client.phone}` : ''}`}
+                    {sending === 'sms' ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : `SMS${client.phone ? ` → ${client.phone}` : ''}`}
                 </button>
             </div>
 
@@ -2830,7 +2830,7 @@ const ClientMessagesModal = ({ client, onClose }) => {
                                 opacity: sending || !draft.trim() ? 0.6 : 1,
                             }}
                         >
-                            {sending ? 'Sending…' : 'Send reply'}
+                            {sending ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send reply'}
                         </button>
                     </div>
                 </div>
