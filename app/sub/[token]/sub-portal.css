@@ -64,7 +64,16 @@
 .sub-portal .review-banner { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
 
 .sub-portal .doc-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.sub-portal .doc-row { display: flex; align-items: center; gap: 0.6rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.6rem 0.75rem; }
+.sub-portal .doc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.6rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.6rem 0.75rem; }
+.sub-portal .doc-actions { display: flex; align-items: center; gap: 0.5rem; flex: none; }
+.sub-portal .doc-actions-bank { flex-wrap: wrap; justify-content: flex-end; }
+/* Narrow screens: give the doc name the full first line, drop the action(s)
+   to their own full-width row so nothing gets crushed (e.g. Bank / ACH). */
+@media (max-width: 480px) {
+  .sub-portal .doc-actions { width: 100%; margin-top: 0.1rem; }
+  .sub-portal .doc-actions .btn { flex: 1; }
+  .sub-portal .doc-actions-bank .link-btn { flex: 1 0 100%; text-align: center; padding-top: 0.15rem; }
+}
 .sub-portal .doc-name { font-size: 0.82rem; font-weight: 600; color: #1f2937; }
 .sub-portal .doc-note { font-size: 0.68rem; color: #6b7280; }
 .sub-portal .doc-note.err { color: #dc2626; }
