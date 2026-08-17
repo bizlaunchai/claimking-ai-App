@@ -515,7 +515,7 @@ export default function Schedule() {
                         <button className="btn-secondary" onClick={() => setShowTypes(true)} title="Create & edit appointment types"><span style={{ verticalAlign: '-1px', marginRight: 4 }}>🎨</span> Types</button>
                     )}
                     <button className="btn-secondary" onClick={() => setShowLinks((s) => !s)} title="Booking links"><Link2 size={15} style={{ verticalAlign: '-3px' }} /> Booking Links</button>
-                    <button className="btn-secondary" onClick={load} title="Refresh"><RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh</button>
+                    <button className="btn-secondary" onClick={load} disabled={loading} title="Refresh">{loading ? <span className="ck-spinner sm ck-btn-spin" /> : <RefreshCw size={15} style={{ verticalAlign: '-3px' }} />} Refresh</button>
                     <button className="btn-primary" onClick={() => setModal({ mode: 'create' })}><Plus size={16} style={{ verticalAlign: '-3px' }} /> New Appointment</button>
                 </div>
             </div>
@@ -1571,7 +1571,7 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                 </div>
                 <div className="modal-footer">
                     <button className="btn-secondary" onClick={onClose}>Cancel</button>
-                    <button className="btn-primary" disabled={busy} onClick={save}>Create</button>
+                    <button className="btn-primary" disabled={busy} onClick={save}>{busy ? <><span className="ck-spinner sm ck-btn-spin" />Creating…</> : 'Create'}</button>
                 </div>
             </div>
         </div>
@@ -2278,6 +2278,7 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
     const [duration, setDuration] = useState(Math.round((appt._e - appt._s) / 60000));
     const [assignee, setAssignee] = useState(appt.assigned_to || '');
     const [busy, setBusy] = useState(false);
+    const [busyKind, setBusyKind] = useState(''); // which footer action is running: 'save' | 'cancel' | 'out:completed' | 'out:no_show'
     const [seriesScope, setSeriesScope] = useState('one'); // Q3.16 one | future
     const isSeries = !!appt.series_id;
     const done = ['completed', 'no_show', 'cancelled'].includes(appt.status);
@@ -2348,18 +2349,25 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
         finally { setSending37(''); }
     };
 
+    // Wrap the parent outcome save so Done / No-show show their own spinner
+    // (the parent's saveOutcome doesn't touch this modal's busy state).
+    const doOutcome = async (o) => {
+        setBusy(true); setBusyKind(`out:${o}`);
+        try { await onOutcome(appt, o); }
+        finally { setBusy(false); setBusyKind(''); }
+    };
     const applyReschedule = async () => {
-        setBusy(true);
+        setBusy(true); setBusyKind('save');
         const ns = new Date(`${date}T${time}:00`);
         const ne = new Date(ns.getTime() + duration * 60000);
         const r = await onReschedule(appt, ns, ne, manageAll ? (assignee || null) : undefined);
-        setBusy(false);
+        setBusy(false); setBusyKind('');
         // 'deferred' → the notify-choice modal took over (a time change on a
         // linked appointment); this detail modal was already closed by the parent.
         if (r === true) onAfter();
     };
     const cancelAppt = async () => {
-        setBusy(true);
+        setBusy(true); setBusyKind('cancel');
         try {
             const body = { status: 'cancelled' };
             if (isSeries && seriesScope === 'future') body.scope = 'future';
@@ -2368,7 +2376,7 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
             toast.success(n > 0 ? `Cancelled this + ${n} following` : 'Appointment cancelled');
             onAfter();
         } catch (e) { toast.error(e?.userMessage || 'Could not cancel'); }
-        finally { setBusy(false); }
+        finally { setBusy(false); setBusyKind(''); }
     };
 
     return (
@@ -2518,7 +2526,7 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                                     </div>
                                 )}
                             </div>
-                            <button className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={busy} onClick={applyReschedule}>Save changes</button>
+                            <button className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={busy} onClick={applyReschedule}>{busyKind === 'save' ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save changes'}</button>
                         </>
                     )}
 
@@ -2540,10 +2548,10 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                     {!done ? (
                         <>
                             <div className="footer-left">
-                                <button className="btn-success" disabled={busy} onClick={() => onOutcome(appt, 'completed')}><Check size={14} style={{ verticalAlign: '-2px' }} /> Done</button>
-                                <button className="btn-danger" disabled={busy} onClick={() => onOutcome(appt, 'no_show')}><XCircle size={14} style={{ verticalAlign: '-2px' }} /> No-show</button>
+                                <button className="btn-success" disabled={busy} onClick={() => doOutcome('completed')}>{busyKind === 'out:completed' ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : <><Check size={14} style={{ verticalAlign: '-2px' }} /> Done</>}</button>
+                                <button className="btn-danger" disabled={busy} onClick={() => doOutcome('no_show')}>{busyKind === 'out:no_show' ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : <><XCircle size={14} style={{ verticalAlign: '-2px' }} /> No-show</>}</button>
                             </div>
-                            <button className="btn-secondary" disabled={busy} onClick={cancelAppt}>Cancel appt</button>
+                            <button className="btn-secondary" disabled={busy} onClick={cancelAppt}>{busyKind === 'cancel' ? <><span className="ck-spinner sm ck-btn-spin" />Cancelling…</> : 'Cancel appt'}</button>
                         </>
                     ) : (
                         <button className="btn-secondary" onClick={onClose}>Close</button>

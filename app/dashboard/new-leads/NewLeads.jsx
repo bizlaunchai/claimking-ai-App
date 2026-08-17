@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import 'leaflet/dist/leaflet.css';
@@ -198,10 +200,12 @@ export default function NewLeads() {
 
     const [rows, setRows] = useState([]);
     const [board, setBoard] = useState({});
+    const [boardReady, setBoardReady] = useState(false); // first /leads/board fetch done → stop skeletoning stats
     const [loading, setLoading] = useState(true);
     const [teamMembers, setTeamMembers] = useState([]);
 
     const [busyId, setBusyId] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);  // header Refresh in-flight
     const [menuId, setMenuId] = useState(null);           // open overflow menu
     const [reasonModal, setReasonModal] = useState(null); // { lead, to }
     const [drawerId, setDrawerId] = useState(null);       // open detail drawer
@@ -218,6 +222,7 @@ export default function NewLeads() {
             const res = await axiosInstance.get('/leads/board', { suppressErrorToast: true });
             setBoard(res.data?.data || {});
         } catch { /* counts degrade to 0 */ }
+        finally { setBoardReady(true); }
     }, []);
 
     const loadRows = useCallback(async () => {
@@ -238,7 +243,11 @@ export default function NewLeads() {
         }
     }, [tab, canViewAll, employeeFilter]);
 
-    const refresh = useCallback(() => { loadBoard(); loadRows(); }, [loadBoard, loadRows]);
+    const refresh = useCallback(async () => {
+        setRefreshing(true);
+        try { await Promise.all([loadBoard(), loadRows()]); }
+        finally { setRefreshing(false); }
+    }, [loadBoard, loadRows]);
 
     useEffect(() => { loadBoard(); }, [loadBoard]);
     useEffect(() => { loadRows(); }, [loadRows]);
@@ -366,8 +375,11 @@ export default function NewLeads() {
                     </div>
                 </div>
                 <div className="header-right">
-                    <button className="btn-secondary" onClick={refresh} title="Refresh">
-                        <RefreshCw size={15} style={{ verticalAlign: '-3px' }} /> Refresh
+                    <button className="btn-secondary" onClick={refresh} disabled={refreshing} title="Refresh">
+                        {refreshing
+                            ? <span className="ck-spinner sm ck-btn-spin" />
+                            : <RefreshCw size={15} style={{ verticalAlign: '-3px' }} />}
+                        {refreshing ? 'Refreshing…' : 'Refresh'}
                     </button>
                     <button className="btn-primary" onClick={() => setShowCreate(true)}>
                         <Plus size={16} style={{ verticalAlign: '-3px' }} /> New Lead
@@ -380,22 +392,22 @@ export default function NewLeads() {
                 <div className="stats-grid">
                     <div className="stat-card">
                         <div className="stat-label">Total Leads</div>
-                        <div className="stat-value">{stat('total')}</div>
+                        <div className="stat-value">{boardReady ? stat('total') : <Skeleton width={52} height={30} borderRadius={7} />}</div>
                         <div className="stat-meta">All statuses</div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Hot Queue</div>
-                        <div className="stat-value">{stat('hot')}</div>
+                        <div className="stat-value">{boardReady ? stat('hot') : <Skeleton width={52} height={30} borderRadius={7} />}</div>
                         <div className="stat-meta">New + Contacted</div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Converted</div>
-                        <div className="stat-value">{converted}</div>
+                        <div className="stat-value">{boardReady ? converted : <Skeleton width={52} height={30} borderRadius={7} />}</div>
                         <div className="stat-meta">Claim Started + Job Approved</div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">No Reply</div>
-                        <div className="stat-value">{stat('no_reply')}</div>
+                        <div className="stat-value">{boardReady ? stat('no_reply') : <Skeleton width={52} height={30} borderRadius={7} />}</div>
                         <div className="stat-meta">Needs re-engagement</div>
                     </div>
                 </div>
@@ -409,7 +421,11 @@ export default function NewLeads() {
                             onClick={() => setTab(t.key)}
                         >
                             {t.label}
-                            <span className="tab-count">{board[t.key] ?? 0}</span>
+                            <span className="tab-count">
+                                {boardReady
+                                    ? (board[t.key] ?? 0)
+                                    : <Skeleton width={11} height={9} borderRadius={4} baseColor="#e2e4e8" highlightColor="#f2f3f5" />}
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -754,6 +770,7 @@ function QueueView({
                                                     </div>
                                                 )}
                                             </div>
+                                            {busy && <span className="ck-spinner sm" style={{ color: '#1a1f3a', marginLeft: 2 }} title="Working…" />}
                                         </div>
                                     </td>
 
@@ -990,6 +1007,7 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
     const [touches, setTouches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [busyKind, setBusyKind] = useState(null); // which action is running: 'call' | 'convert' | null
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -1009,8 +1027,9 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
 
     useEffect(() => { load(); }, [load]);
 
-    const act = async (fn, msg) => {
+    const act = async (fn, msg, kind) => {
         setBusy(true);
+        setBusyKind(kind || null);
         try {
             await fn();
             if (msg) toast.success(msg);
@@ -1020,6 +1039,7 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
             toast.error(e?.userMessage || 'Action failed');
         } finally {
             setBusy(false);
+            setBusyKind(null);
         }
     };
 
@@ -1028,12 +1048,13 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
     const convert = () => act(async () => {
         const res = await axiosInstance.post(`/leads/${leadId}/convert`, {});
         if (res.data?.claim_id) { onClose(); router.push('/dashboard/claims'); }
-    }, 'Converted — claim created');
+    }, 'Converted — claim created', 'convert');
 
     // Callback via RingCentral RingOut — rings the rep's phone, then the lead;
     // logs the touch + auto-advances New → Contacted (§4.2 / task 4.4).
     const callLead = async () => {
         setBusy(true);
+        setBusyKind('call');
         try {
             const res = await axiosInstance.post(`/leads/${leadId}/call`, {});
             toast.success(res.data?.message || 'Ringing your phone…');
@@ -1043,6 +1064,7 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
             toast.error(e?.userMessage || 'Could not place the call');
         } finally {
             setBusy(false);
+            setBusyKind(null);
         }
     };
 
@@ -1081,7 +1103,7 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
                                     {lead.phone && (
                                         <button className="filter-select" style={{ padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}
                                             disabled={busy} onClick={callLead} title="Ring your phone, then connect the lead">
-                                            📞 Call
+                                            {busyKind === 'call' ? <><span className="ck-spinner sm ck-btn-spin" />Calling…</> : '📞 Call'}
                                         </button>
                                     )}
                                 </span>
@@ -1180,7 +1202,9 @@ function LeadDrawer({ leadId, nameOf, canConvert, canViewAll, teamMembers, onClo
 
                             {canConvert && ALLOWED_NEXT[lead.status]?.includes('claim_started') && (
                                 <button className="btn-success" style={{ width: '100%', marginTop: '0.75rem' }} disabled={busy} onClick={convert}>
-                                    <ArrowRightCircle size={15} style={{ verticalAlign: '-3px' }} /> Convert to Claim
+                                    {busyKind === 'convert'
+                                        ? <><span className="ck-spinner sm ck-btn-spin" />Converting…</>
+                                        : <><ArrowRightCircle size={15} style={{ verticalAlign: '-3px' }} /> Convert to Claim</>}
                                 </button>
                             )}
                         </div>
