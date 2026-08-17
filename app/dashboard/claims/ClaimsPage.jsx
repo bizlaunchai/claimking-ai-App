@@ -708,9 +708,9 @@ const ClaimsManagement = () => {
     // Persist a stage change to the backend (client_portal.claim_status).
     // Backend logs the activity event + recomputes action_required on update,
     // so we silently refetch to pick up the true attention state.
-    const persistStage = async (claimId, newStage) => {
+    const persistStage = async (claimId, newStage, reason) => {
         try {
-            await axiosInstance.put(`/client-portal/${claimId}`, { claim_status: newStage });
+            await axiosInstance.put(`/client-portal/${claimId}`, { claim_status: newStage, ...(reason ? { status_change_reason: reason } : {}) });
             toast.success(`Moved to ${newStage}. ${stageLabel(newStage)}`);
             fetchClaims({ silent: true });
         } catch {
@@ -719,11 +719,20 @@ const ClaimsManagement = () => {
         }
     };
 
+    // §4.7 — apply the move; a BACKWARD move (to an earlier stage) requires a note.
+    const [backNote, setBackNote] = useState(null); // { claimId, newStage }
+    const doStageMove = (claimId, newStage, reason) => { applyStageLocally(claimId, newStage); persistStage(claimId, newStage, reason); };
+    const guardedMove = (claimId, newStage) => {
+        const cur = allClaims.find((c) => c.id === claimId)?.stage;
+        if (cur != null && newStage < cur) { setBackNote({ claimId, newStage }); return false; }
+        doStageMove(claimId, newStage);
+        return true;
+    };
+
     // Move claim to stage (from the move-stage menu)
     const moveClaimToStage = (claimId, newStage) => {
-        applyStageLocally(claimId, newStage);
         closeMoveMenu();
-        persistStage(claimId, newStage);
+        guardedMove(claimId, newStage);
     };
 
     // ── Bulk selection (list view) ────────────────────────────────────────
@@ -867,8 +876,7 @@ const ClaimsManagement = () => {
         if (!claimId) return;
         const claim = allClaims.find(c => c.id === claimId);
         if (!claim || claim.stage === newStage) return;
-        applyStageLocally(claimId, newStage);
-        persistStage(claimId, newStage);
+        guardedMove(claimId, newStage);
     };
 
     // Update List View
@@ -977,8 +985,7 @@ const ClaimsManagement = () => {
 
     // Move claim to different stage from the list-view dropdown
     const moveToStage = (claimId, newStage) => {
-        applyStageLocally(claimId, newStage);
-        persistStage(claimId, newStage);
+        guardedMove(claimId, newStage);
     };
 
     // View claim details from list — open the dedicated detail page
@@ -1928,6 +1935,15 @@ const ClaimsManagement = () => {
                 </div>
             )}
 
+            {/* §4.7 — backward stage move requires a note */}
+            {backNote && (
+                <BackwardNoteModal
+                    toLabel={stageLabel(backNote.newStage)}
+                    onCancel={() => setBackNote(null)}
+                    onConfirm={(note) => { doStageMove(backNote.claimId, backNote.newStage, note); setBackNote(null); }}
+                />
+            )}
+
             {/* New Claim Form Modal */}
             {showNewClaimModal && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" id="newClaimModal">
@@ -2172,5 +2188,31 @@ const ClaimsManagement = () => {
         </div>
     );
 };
+
+// §4.7 — a backward stage move usually means something went wrong; capture why.
+function BackwardNoteModal({ toLabel, onCancel, onConfirm }) {
+    const [note, setNote] = useState('');
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                <h3 className="text-lg font-bold text-[#1a1f3a] mb-1">Moving back to “{toLabel}”</h3>
+                <p className="text-sm text-gray-500 mb-3">Moving a claim backward usually means something changed — add a quick note for the record.</p>
+                <textarea
+                    autoFocus
+                    className="w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:border-[#FDB813] focus:ring-2 focus:ring-[#FDB813]/20"
+                    rows={3}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="e.g. Adjuster requested a re-inspection…"
+                />
+                <div className="flex justify-end gap-2 mt-4">
+                    <button className="modal-btn secondary" onClick={onCancel}>Cancel</button>
+                    <button className="modal-btn primary" disabled={!note.trim()} onClick={() => onConfirm(note.trim())}>Move &amp; save note</button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default ClaimsManagement;

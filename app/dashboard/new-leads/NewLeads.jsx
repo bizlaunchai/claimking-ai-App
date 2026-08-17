@@ -53,6 +53,20 @@ const ALLOWED_NEXT = {
 
 const REASON_REQUIRED = new Set(['declined', 'do_not_contact']);
 
+// §1.5 — per-status guidance shown when a column/tab is empty ("how leads get here").
+const STATUS_HINT = {
+    new: 'New leads land here from calls, web forms, and integrations.',
+    contacted: 'Leads move here once you log a call or text.',
+    no_reply: 'Leads land here after outreach with no response.',
+    estimate_scheduled: 'Leads move here automatically when an appointment is booked.',
+    estimate_sent: 'Leads move here automatically when an estimate is sent.',
+    follow_up: 'Park leads here that need a later touch.',
+    claim_started: 'Leads move here when they convert to a claim.',
+    job_approved: 'Converted, approved jobs show here.',
+    declined: 'Leads you declined (with a reason) show here.',
+    do_not_contact: 'Contacts who opted out show here.',
+};
+
 // Known source keys → display label + pill colour class. Unknown sources fall
 // back to a neutral pill with the raw key title-cased.
 const SOURCE_META = {
@@ -129,6 +143,7 @@ const StatusPill = ({ status }) => {
 function StatusMenu({ lead, onChange, disabled }) {
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState(null);
+    const [note, setNote] = useState(''); // §1.5 optional quick-note on the move
     const nexts = ALLOWED_NEXT[lead.status] || [];
     const toggle = (e) => {
         e.stopPropagation();
@@ -151,14 +166,15 @@ function StatusMenu({ lead, onChange, disabled }) {
                 {!!nexts.length && <ChevronDown size={12} className="nl-status-caret" />}
             </button>
             {open && nexts.length > 0 && (
-                <div className="nl-status-dropdown" style={{ position: 'fixed', top: pos?.top, left: pos?.left }}>
+                <div className="nl-status-dropdown" style={{ position: 'fixed', top: pos?.top, left: pos?.left }} onClick={(e) => e.stopPropagation()}>
                     <div className="nl-status-dd-head">Move to…</div>
                     {nexts.map((s) => (
-                        <button key={s} type="button" className="nl-status-dd-item" onClick={() => { setOpen(false); onChange(lead, s); }}>
+                        <button key={s} type="button" className="nl-status-dd-item" onClick={() => { setOpen(false); onChange(lead, s, note.trim() || undefined); setNote(''); }}>
                             <span className={`nl-kdot ${STATUS_META[s].cls}`} /> {STATUS_META[s].label}
                             {REASON_REQUIRED.has(s) && <span className="nl-dd-note">reason</span>}
                         </button>
                     ))}
+                    <input className="nl-status-dd-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional)…" maxLength={500} />
                 </div>
             )}
         </span>
@@ -329,10 +345,10 @@ export default function NewLeads() {
     };
     // Click-to-change status (Q1.3): reason-required moves route through the modal,
     // everything else applies immediately. Shared by the Queue + Kanban badges.
-    const changeStatus = (lead, to) => {
+    const changeStatus = (lead, to, note) => {
         if (!to || to === lead.status) return;
-        if (REASON_REQUIRED.has(to)) askReason(lead, to);
-        else setStatus(lead, to);
+        if (REASON_REQUIRED.has(to)) askReason(lead, to);   // required reason wins over the optional quick-note
+        else setStatus(lead, to, note);                     // §1.5 — optional note logged with the move
     };
 
     // ── stats derived from the (unfiltered) board counts ──────────────────────
@@ -526,7 +542,22 @@ function NewLeadModal({ canViewAll, teamMembers, onClose, onCreated }) {
         damage_type: '', source: 'manual', status: 'new', notes: '', assigned_to: '',
     });
     const [busy, setBusy] = useState(false);
+    const [dupHit, setDupHit] = useState(null); // §1.5 inline duplicate warning
     const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+    // §1.5 — as they type phone/email, surface an existing client/lead match.
+    useEffect(() => {
+        const phone = f.phone.trim(), email = f.email.trim();
+        if (phone.replace(/\D/g, '').length < 7 && !email.includes('@')) { setDupHit(null); return; }
+        let alive = true;
+        const t = setTimeout(async () => {
+            try {
+                const res = await axiosInstance.get('/leads/check-duplicate', { params: { phone, email }, suppressErrorToast: true });
+                if (alive) setDupHit(res.data?.data?.duplicate || null);
+            } catch { if (alive) setDupHit(null); }
+        }, 500);
+        return () => { alive = false; clearTimeout(t); };
+    }, [f.phone, f.email]);
 
     const submit = async () => {
         if (!f.first_name.trim() && !f.last_name.trim() && !f.phone.trim() && !f.email.trim()) {
@@ -562,6 +593,11 @@ function NewLeadModal({ canViewAll, teamMembers, onClose, onCreated }) {
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
+                    {dupHit && (
+                        <div className="nl-dup-warn">
+                            ⚠ Looks like {dupHit.name ? <strong>{dupHit.name}</strong> : 'this contact'} is already in the system as a {dupHit.type === 'client' ? 'client' : 'lead'}. You can still create — a duplicate submission merges into the existing record.
+                        </div>
+                    )}
                     <div className="nl-form-grid">
                         <div className="nl-field"><label>First name</label><input value={f.first_name} onChange={(e) => set('first_name', e.target.value)} placeholder="Jane" /></div>
                         <div className="nl-field"><label>Last name</label><input value={f.last_name} onChange={(e) => set('last_name', e.target.value)} placeholder="Doe" /></div>
@@ -632,7 +668,7 @@ function QueueView({
         return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
     }, [menuId, setMenuId]);
     if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
-    if (!rows.length) return <div className="nl-panel"><div className="empty-state">No leads in this view.</div></div>;
+    if (!rows.length) return <div className="nl-panel"><div className="empty-state">No leads match this view.<br /><span style={{ fontSize: '0.82rem', color: '#9ca3af' }}>New leads arrive from calls, web forms, and integrations — or add one with “+ New Lead”.</span></div></div>;
 
     return (
         <div className="table-card nl-panel">
@@ -827,7 +863,7 @@ function KanbanView({ loading, rows, busyId, onMove, onChangeStatus, onOpen }) {
                                 </div>
                             </div>
                         ))}
-                        {!byStatus[status].length && <div className="nl-kempty">—</div>}
+                        {!byStatus[status].length && <div className="nl-kempty">{STATUS_HINT[status] || 'No leads yet.'}</div>}
                     </div>
                 </div>
             ))}

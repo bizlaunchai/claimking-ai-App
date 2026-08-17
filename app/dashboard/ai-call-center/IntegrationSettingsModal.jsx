@@ -324,6 +324,8 @@ export default function IntegrationSettingsModal({ open, onClose }) {
 
                             {/* Q5.1 — resumable historical import (runs in the background) */}
                             {summary.ctm.configured && <CtmHistoricalSync />}
+                            {/* §5.3 — sync health + calls-per-month spot-check */}
+                            {summary.ctm.configured && <SyncHealthPanel />}
                         </div>
                     </div>
 
@@ -331,6 +333,87 @@ export default function IntegrationSettingsModal({ open, onClose }) {
                     <AgentMappingSection open={open} />
                 </div>
             </div>
+        </div>
+    );
+}
+
+/**
+ * §5.3 — Sync health panel + calls-per-month spot-check. Read-only; helps Nate
+ * confirm the CTM import is healthy and eyeball totals vs CTM's own dashboard.
+ */
+function SyncHealthPanel() {
+    const [health, setHealth] = useState(null);
+    const [monthly, setMonthly] = useState(null);
+    const [busy, setBusy] = useState(false);
+
+    const load = React.useCallback(async () => {
+        try {
+            const [h, m] = await Promise.all([
+                axiosInstance.get('/ctm-sync/health', { suppressErrorToast: true }),
+                axiosInstance.get('/ctm-sync/monthly', { suppressErrorToast: true }),
+            ]);
+            setHealth(h.data?.data || null);
+            setMonthly(m.data?.data || []);
+        } catch { /* leave nulls */ }
+    }, []);
+    useEffect(() => { load(); }, [load]);
+
+    const retry = async () => {
+        setBusy(true);
+        try { await axiosInstance.post('/ctm-sync/start', { range: 'all' }); await load(); }
+        catch { /* interceptor toasts */ } finally { setBusy(false); }
+    };
+
+    const job = health?.last_job;
+    const maxCount = Math.max(1, ...(monthly || []).map((r) => r.count));
+    const fmt = (d) => (d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+
+    return (
+        <div className="ics-health">
+            <div className="ics-health-head">Sync health</div>
+            <div className="ics-health-grid">
+                <div><span className="ics-hl">Last import</span><span className="ics-hv">{job ? fmt(job.finished_at || job.created_at) : '—'}</span></div>
+                <div><span className="ics-hl">Imported today</span><span className="ics-hv">{health?.imported_today ?? 0}</span></div>
+                <div><span className="ics-hl">Total imported</span><span className="ics-hv">{health?.total_imported ?? 0}</span></div>
+                <div><span className="ics-hl">Last job</span><span className={`ics-hv ics-st-${job?.status || 'none'}`}>{job?.status || 'none'}</span></div>
+            </div>
+            {job?.status === 'failed' && (
+                <div className="ics-health-fail">
+                    <span>⚠ Last import failed{job.last_error ? `: ${job.last_error}` : ''}</span>
+                    <button className="ics-btn sm" onClick={retry} disabled={busy}>{busy ? 'Retrying…' : 'Retry'}</button>
+                </div>
+            )}
+            <div className="ics-health-head" style={{ marginTop: 14 }}>Calls per month <span className="ics-hl">(CTM — vs CTM dashboard)</span></div>
+            {monthly === null ? <div className="ics-hl">Loading…</div>
+                : !monthly.length ? <div className="ics-hl">No CTM calls in the last 12 months.</div>
+                    : (
+                        <div className="ics-months">
+                            {monthly.map((r) => (
+                                <div key={r.month} className="ics-mrow">
+                                    <span className="ics-mlabel">{r.month}</span>
+                                    <span className="ics-mbar"><span style={{ width: `${(r.count / maxCount) * 100}%` }} /></span>
+                                    <span className="ics-mcount">{r.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+            <style jsx>{`
+                .ics-health { margin-top: 14px; border-top: 1px solid #eef0f4; padding-top: 12px; }
+                .ics-health-head { font-size: .8rem; font-weight: 800; color: #1a1f3a; margin-bottom: 8px; }
+                .ics-health-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+                .ics-health-grid > div { background: #f8fafc; border: 1px solid #eef0f4; border-radius: 8px; padding: 7px 10px; display: flex; flex-direction: column; gap: 2px; }
+                .ics-hl { font-size: .68rem; color: #6b7280; font-weight: 600; }
+                .ics-hv { font-size: .9rem; font-weight: 800; color: #1a1f3a; }
+                .ics-st-failed { color: #dc2626; } .ics-st-done { color: #16a34a; } .ics-st-running { color: #d97706; }
+                .ics-health-fail { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 8px; padding: 7px 10px; font-size: .78rem; }
+                .ics-months { display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow: auto; }
+                .ics-mrow { display: grid; grid-template-columns: 58px 1fr 46px; align-items: center; gap: 8px; }
+                .ics-mlabel { font-size: .72rem; color: #6b7280; font-variant-numeric: tabular-nums; }
+                .ics-mbar { background: #eef0f4; border-radius: 999px; height: 10px; overflow: hidden; }
+                .ics-mbar > span { display: block; height: 100%; background: linear-gradient(90deg, #FDB813, #d4a000); border-radius: 999px; }
+                .ics-mcount { font-size: .74rem; font-weight: 700; color: #1a1f3a; text-align: right; font-variant-numeric: tabular-nums; }
+                .ics-btn.sm { padding: 4px 10px; font-size: .74rem; }
+            `}</style>
         </div>
     );
 }
