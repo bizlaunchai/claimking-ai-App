@@ -683,7 +683,7 @@ const SupplementsManagement = () => {
                              strokeWidth="2">
                             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                         </svg>
-                        {generating ? 'Generating…' : 'Generate Supplement with AI'}
+                        {generating ? <><span className="ck-spinner sm ck-btn-spin" />Generating…</> : 'Generate Supplement with AI'}
                     </button>
                     {supplementItems.length > 0 && (
                         <>

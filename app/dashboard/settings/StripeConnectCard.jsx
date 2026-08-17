@@ -125,13 +125,13 @@ export default function StripeConnectCard() {
                         {!connected && (
                             <button onClick={connect} disabled={working || loading} style={btnPrimary}>
                                 {working ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                                {working ? 'Starting…' : 'Connect Stripe'}
+                                {working ? <><span className="ck-spinner sm ck-btn-spin" />Starting…</> : 'Connect Stripe'}
                             </button>
                         )}
                         {incomplete && (
                             <button onClick={connect} disabled={working || loading} style={btnPrimary}>
                                 {working ? <Loader2 size={14} /> : <ExternalLink size={14} />}
-                                {working ? 'Opening…' : 'Finish setup'}
+                                {working ? <><span className="ck-spinner sm ck-btn-spin" />Opening…</> : 'Finish setup'}
                             </button>
                         )}
                         {connected && (

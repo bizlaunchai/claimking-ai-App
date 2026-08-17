@@ -377,11 +377,11 @@ const CRMSync = () => {
                             <button type="button" className="crm-btn-secondary" onClick={closeConnect} disabled={connecting}>Cancel</button>
                             {connectFor.auth === 'api_key' ? (
                                 <button type="button" className="crm-btn-primary" onClick={submitApiKey} disabled={connecting}>
-                                    {connecting ? 'Connecting…' : 'Connect'}
+                                    {connecting ? <><span className="ck-spinner sm ck-btn-spin" />Connecting…</> : 'Connect'}
                                 </button>
                             ) : (
                                 <button type="button" className="crm-btn-primary" onClick={startOAuth} disabled={connecting}>
-                                    {connecting ? 'Redirecting…' : `Continue to ${connectFor.name}`}
+                                    {connecting ? <><span className="ck-spinner sm ck-btn-spin" />Redirecting…</> : `Continue to ${connectFor.name}`}
                                 </button>
                             )}
                         </div>

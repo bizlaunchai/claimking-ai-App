@@ -218,12 +218,22 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                     {mode === 'client' && !selectedClient && (
                         <div className="field full" style={{ position: 'relative', marginTop: '0.75rem' }}>
                             <label>Search client by name</label>
-                            <input type="text" value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Start typing a client's name…" autoFocus />
+                            <div className="cr-input-wrap">
+                                <input type="text" value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Start typing a client's name…" autoFocus />
+                                {searchingClients && <span className="cr-searching-icon" aria-label="Searching" />}
+                            </div>
                             {(searchingClients || clientResults.length > 0) && clientQuery.trim().length >= 2 && (
                                 <div className="client-results">
-                                    {searchingClients && <div className="client-result muted">Searching…</div>}
-                                    {!searchingClients && clientResults.length === 0 && <div className="client-result muted">No matching clients.</div>}
-                                    {clientResults.map((c) => (
+                                    {searchingClients && [0, 1, 2].map((i) => (
+                                        <div className="client-result sk" key={`sk-${i}`}>
+                                            <span className="sk-shimmer sk-line name" />
+                                            <span className="sk-shimmer sk-line addr" />
+                                        </div>
+                                    ))}
+                                    {!searchingClients && clientResults.length === 0 && (
+                                        <div className="client-result empty muted"><span className="empty-emoji">🔍</span>No matching clients.</div>
+                                    )}
+                                    {!searchingClients && clientResults.map((c) => (
                                         <button type="button" key={c.id} className="client-result" onClick={() => pickClient(c)}>
                                             <span className="cr-name">{clientName(c)}</span>
                                             <span className="cr-addr">{clientAddr(c) || 'No address'}</span>
@@ -245,7 +255,17 @@ function CreateJobModal({ onClose, onSaved, toast }) {
                             </div>
                             <div className="pc-est-label">Base this job on an estimate</div>
                             {loadingEstimates ? (
-                                <div className="hint">Loading estimates…</div>
+                                <div className="est-list">
+                                    {[0, 1, 2].map((i) => (
+                                        <div className="est-card sk" key={`est-sk-${i}`}>
+                                            <div className="est-main">
+                                                <span className="sk-shimmer sk-line title" />
+                                                <span className="sk-shimmer sk-line meta" />
+                                            </div>
+                                            <span className="sk-shimmer sk-bar total" />
+                                        </div>
+                                    ))}
+                                </div>
                             ) : (
                                 <div className="est-list">
                                     {estimates.length === 0 && <div className="hint">No estimates for this client yet — you can still create the job.</div>}
@@ -568,7 +588,7 @@ function DispatchTracker({ job, canDispatch, canApprove, toast, onChanged }) {
         } catch { /* interceptor shows "already filled" etc. */ } finally { setActing(''); }
     };
 
-    if (dispatch === undefined) return <div className="hint">Loading dispatch…</div>;
+    if (dispatch === undefined) return <div className="hint ck-load-inline"><span className="ck-spinner sm" />Loading dispatch…</div>;
     if (dispatch === null) return <div className="hint">No dispatch sent for this job yet.</div>;
 
     const respMeta = {
@@ -669,7 +689,7 @@ function JobModal({ jobId, team, onClose, onChanged, toast }) {
     };
 
     if (!job || !edit) {
-        return <Modal onClose={onClose}><div className="modal-body" style={{ padding: '3rem', textAlign: 'center' }}><div className="hint">Loading job…</div></div></Modal>;
+        return <Modal onClose={onClose}><div className="modal-body" style={{ padding: '3rem' }}><div className="ck-load-block"><span className="ck-spinner" /><span>Loading job…</span></div></div></Modal>;
     }
 
     const setE = (k, v) => setEdit((s) => ({ ...s, [k]: v }));

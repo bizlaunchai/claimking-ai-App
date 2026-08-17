@@ -621,11 +621,10 @@ const DocumentGenerator = () => {
                             >
                                 {isGenerating ? (
                                     <>
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                                            <polyline points="22 4 12 14.01 9 11.01"/>
+                                        <svg className="ck-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                                         </svg>
-                                        Generating...
+                                        Generating…
                                     </>
                                 ) : (
                                     <>
@@ -667,13 +666,13 @@ const DocumentGenerator = () => {
                 <div className="section-header">
                     <h2 className="section-title">Recently Generated</h2>
                     <button className="nav-btn" onClick={fetchRecentDocs} disabled={recentLoading}>
-                        {recentLoading ? 'Loading…' : 'Refresh'}
+                        {recentLoading ? <><span className="ck-spinner sm ck-btn-spin" />Loading…</> : 'Refresh'}
                     </button>
                 </div>
                 <div className="recent-list">
                     {recentLoading && recentDocs.length === 0 && (
-                        <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
-                            Loading…
+                        <div className="ck-load-block" style={{ padding: '24px', minHeight: 0 }}>
+                            <span className="ck-spinner" /><span>Loading…</span>
                         </div>
                     )}
                     {!recentLoading && recentDocs.length === 0 && (

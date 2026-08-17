@@ -103,7 +103,7 @@ export default function AcceptInvitePage() {
     if (loadingInvite || authChecking) {
         return (
             <Layout>
-                <div style={styles.loading}>Loading invitation…</div>
+                <div style={styles.loading} className="ck-load-block"><span className="ck-spinner" /><span>Loading invitation…</span></div>
             </Layout>
         );
     }

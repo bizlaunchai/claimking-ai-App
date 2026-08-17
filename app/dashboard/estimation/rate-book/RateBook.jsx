@@ -327,7 +327,7 @@ const RateBook = () => {
                             onClick={saveAll}
                             disabled={saving}
                         >
-                            {saving ? 'Saving…' : 'Save all'}
+                            {saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save all'}
                         </button>
                     </>
                 )}
@@ -336,7 +336,7 @@ const RateBook = () => {
             {/* ─────────────── Table ─────────────── */}
             <div className="rb-table-wrap">
                 {loading && rows.length === 0 ? (
-                    <div className="rb-loader">Loading rates…</div>
+                    <div className="rb-loader ck-load-block"><span className="ck-spinner" /><span>Loading rates…</span></div>
                 ) : rows.length === 0 ? (
                     <div className="rb-empty">
                         <h3>No rates yet</h3>
@@ -484,7 +484,7 @@ const RateBook = () => {
                                             onClick={runExtraction}
                                             disabled={!uploadFile || extracting}
                                         >
-                                            {extracting ? 'Extracting…' : <><Sparkles size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Extract with AI</>}
+                                            {extracting ? <><span className="ck-spinner sm ck-btn-spin" />Extracting…</> : <><Sparkles size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />Extract with AI</>}
                                         </button>
                                     </div>
                                 </>
@@ -564,7 +564,7 @@ const RateBook = () => {
                                             onClick={acceptPreview}
                                             disabled={acceptingPreview || selectedPreview.size === 0}
                                         >
-                                            {acceptingPreview ? 'Saving…' : `Add ${selectedPreview.size} to rate book`}
+                                            {acceptingPreview ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : `Add ${selectedPreview.size} to rate book`}
                                         </button>
                                     </div>
                                 </>

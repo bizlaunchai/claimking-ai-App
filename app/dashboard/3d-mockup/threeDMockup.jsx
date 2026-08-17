@@ -229,7 +229,7 @@ const AuthedImage = ({ src, alt = '', style, className }) => {
 
     if (isLocalUrl) return <img src={src} alt={alt} style={style} className={className} />;
     if (errored) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Image unavailable</div>;
-    if (!blobUrl) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 12 }}>Loading…</div>;
+    if (!blobUrl) return <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}><span className="ck-spinner" aria-label="Loading" /></div>;
     return <img src={blobUrl} alt={alt} style={style} className={className} />;
 };
 

@@ -380,11 +380,11 @@ function SyncHealthPanel() {
             {job?.status === 'failed' && (
                 <div className="ics-health-fail">
                     <span>⚠ Last import failed{job.last_error ? `: ${job.last_error}` : ''}</span>
-                    <button className="ics-btn sm" onClick={retry} disabled={busy}>{busy ? 'Retrying…' : 'Retry'}</button>
+                    <button className="ics-btn sm" onClick={retry} disabled={busy}>{busy ? <><span className="ck-spinner sm ck-btn-spin" />Retrying…</> : 'Retry'}</button>
                 </div>
             )}
             <div className="ics-health-head" style={{ marginTop: 14 }}>Calls per month <span className="ics-hl">(CTM — vs CTM dashboard)</span></div>
-            {monthly === null ? <div className="ics-hl">Loading…</div>
+            {monthly === null ? <div className="ics-hl ck-load-inline"><span className="ck-spinner sm" />Loading…</div>
                 : !monthly.length ? <div className="ics-hl">No CTM calls in the last 12 months.</div>
                     : (
                         <div className="ics-months">

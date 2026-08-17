@@ -244,7 +244,7 @@ const ConnectionDetail = () => {
 
     // ─── Render ──────────────────────────────────────────────────────────
     if (loading || !conn) {
-        return <div style={{ padding: 24, color: '#6b7280' }}>Loading connection…</div>;
+        return <div className="ck-load-block"><span className="ck-spinner" /><span>Loading connection…</span></div>;
     }
 
     return (
@@ -311,7 +311,7 @@ const ConnectionDetail = () => {
 
                         <div className="crm-action-row">
                             <button type="button" className="crm-btn-primary" onClick={triggerPull} disabled={pulling}>
-                                {pulling ? 'Pulling…' : '↓ Pull recent contacts'}
+                                {pulling ? <><span className="ck-spinner sm ck-btn-spin" />Pulling…</> : '↓ Pull recent contacts'}
                             </button>
                             <span className="crm-hint" style={{ marginLeft: 12 }}>
                                 Use the Claims page to push a specific claim — auto-push runs in the background.
@@ -331,7 +331,7 @@ const ConnectionDetail = () => {
                         <div style={{ marginTop: '1.5rem' }}>
                             <h4 className="crm-h4">Recent events</h4>
                             {logLoading ? (
-                                <div className="crm-hint">Loading…</div>
+                                <div className="crm-hint ck-load-inline"><span className="ck-spinner sm" />Loading…</div>
                             ) : log.length === 0 ? (
                                 <div className="crm-hint">No sync events yet.</div>
                             ) : (
@@ -406,7 +406,7 @@ const ConnectionDetail = () => {
 
                         <div className="crm-action-row" style={{ marginTop: '2rem' }}>
                             <button type="button" className="crm-btn-primary" onClick={saveSettings} disabled={savingSettings}>
-                                {savingSettings ? 'Saving…' : 'Save settings'}
+                                {savingSettings ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save settings'}
                             </button>
                         </div>
                     </div>
@@ -424,7 +424,7 @@ const ConnectionDetail = () => {
                         </div>
 
                         {mappingsLoading ? (
-                            <div className="crm-hint">Loading…</div>
+                            <div className="crm-hint ck-load-inline"><span className="ck-spinner sm" />Loading…</div>
                         ) : (
                             <div className="crm-mapping-table">
                                 <div className="crm-mapping-row crm-mapping-head">
@@ -485,7 +485,7 @@ const ConnectionDetail = () => {
 
                         <div className="crm-action-row" style={{ marginTop: '1rem' }}>
                             <button type="button" className="crm-btn-primary" onClick={saveMappings} disabled={savingMappings}>
-                                {savingMappings ? 'Saving…' : `Save ${mappings.length} mappings`}
+                                {savingMappings ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : `Save ${mappings.length} mappings`}
                             </button>
                         </div>
                     </div>
@@ -495,7 +495,7 @@ const ConnectionDetail = () => {
                 {tab === 'log' && (
                     <div className="crm-tab-body">
                         {logLoading ? (
-                            <div className="crm-hint">Loading…</div>
+                            <div className="crm-hint ck-load-inline"><span className="ck-spinner sm" />Loading…</div>
                         ) : log.length === 0 ? (
                             <div className="crm-hint">No sync events yet.</div>
                         ) : (

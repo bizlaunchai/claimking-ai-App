@@ -92,7 +92,7 @@ export default function PortalInsuranceComm() {
     };
 
     if (loading) {
-        return <p className="text-gray-500 text-sm">Loading updates…</p>;
+        return <div className="ck-load-block" style={{ padding: '1.5rem', minHeight: 0 }}><span className="ck-spinner" /><span>Loading updates…</span></div>;
     }
 
     if (items.length === 0) {

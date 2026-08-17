@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function Page() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div className="ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>}>
             <AdminPlans />
         </Suspense>
     );

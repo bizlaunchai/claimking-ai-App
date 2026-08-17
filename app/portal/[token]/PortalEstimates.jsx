@@ -128,7 +128,7 @@ const PortalEstimates = ({ clientId, estimateId }) => {
     };
 
     if (loading) {
-        return <p className="text-gray-500 text-sm">Loading estimates…</p>;
+        return <div className="ck-load-block" style={{ padding: '1.5rem', minHeight: 0 }}><span className="ck-spinner" /><span>Loading estimates…</span></div>;
     }
     if (error === 'Not found') {
         return (
@@ -251,7 +251,7 @@ const PortalEstimates = ({ clientId, estimateId }) => {
                                 className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-800 text-sm font-medium rounded hover:bg-gray-50 disabled:opacity-60"
                             >
                                 {detailLoadingId === e.id
-                                    ? 'Loading…'
+                                    ? <><span className="ck-spinner sm ck-btn-spin" />Loading…</>
                                     : expandedId === e.id ? 'Hide details' : 'View estimate'}
                             </button>
                             <button

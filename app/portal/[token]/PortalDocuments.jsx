@@ -110,7 +110,7 @@ export default function PortalDocuments() {
     };
 
     if (loading) {
-        return <p className="text-gray-500 text-sm">Loading documents…</p>;
+        return <div className="ck-load-block" style={{ padding: '1.5rem', minHeight: 0 }}><span className="ck-spinner" /><span>Loading documents…</span></div>;
     }
 
     if (items.length === 0) {

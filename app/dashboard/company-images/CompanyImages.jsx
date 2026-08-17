@@ -365,7 +365,7 @@ function ImageEditor({ row, onClose, onSaved }) {
                     <span className="ie-hint">{hint}</span>
                     <div style={{ flex: 1 }} />
                     <button className="ie-btn" onClick={onClose} disabled={saving}>Cancel</button>
-                    <button className="ie-btn primary" onClick={save} disabled={saving || !ready}>{saving ? 'Saving…' : 'Save edited photo'}</button>
+                    <button className="ie-btn primary" onClick={save} disabled={saving || !ready}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save edited photo'}</button>
                 </div>
             </div>
             <style jsx>{`

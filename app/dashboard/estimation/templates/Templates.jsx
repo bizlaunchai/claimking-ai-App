@@ -222,7 +222,7 @@ const Templates = () => {
             </div>
 
             {loading ? (
-                <div className="tpl-empty">Loading…</div>
+                <div className="tpl-empty ck-load-block"><span className="ck-spinner" /><span>Loading templates…</span></div>
             ) : list.length === 0 ? (
                 <div className="tpl-empty">
                     <strong>No {tab} yet</strong>
@@ -433,7 +433,7 @@ const Templates = () => {
                         <footer>
                             <button className="tpl-btn ghost" onClick={() => setEditingTpl(null)} disabled={saving}>Cancel</button>
                             <button className="tpl-btn" onClick={saveTemplate} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save template'}
+                                {saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save template'}
                             </button>
                         </footer>
                     </div>
@@ -541,7 +541,7 @@ const Templates = () => {
                         <footer>
                             <button className="tpl-btn ghost" onClick={() => setEditingBundle(null)} disabled={saving}>Cancel</button>
                             <button className="tpl-btn" onClick={saveBundle} disabled={saving}>
-                                {saving ? 'Saving…' : 'Save bundle'}
+                                {saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save bundle'}
                             </button>
                         </footer>
                     </div>

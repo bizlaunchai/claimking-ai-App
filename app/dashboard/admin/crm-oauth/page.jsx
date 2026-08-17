@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 const Page = () => (
-    <Suspense fallback={<div style={{ padding: 40, color: '#6b7280' }}>Loading CRM OAuth settings…</div>}>
+    <Suspense fallback={<div className="ck-load-block" style={{ padding: 40 }}><span className="ck-spinner" /><span>Loading CRM OAuth settings…</span></div>}>
         <AdminCrmOAuth />
     </Suspense>
 );

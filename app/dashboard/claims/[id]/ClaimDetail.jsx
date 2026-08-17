@@ -329,7 +329,7 @@ const ClaimDetail = ({ id }) => {
                                 disabled={sendingToJobs}
                                 title="Create the linked job in Jobs Ready, pre-filled from this claim"
                             >
-                                {sendingToJobs ? 'Sending…' : '→ Send to Jobs Ready'}
+                                {sendingToJobs ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : '→ Send to Jobs Ready'}
                             </button>
                         )}
                     </div>
@@ -452,7 +452,7 @@ const ClaimDetail = ({ id }) => {
                                         onChange={(e) => { onUpload(t.key, e.target.files); e.target.value = ''; }} />
                                     <button className="show-more-btn" style={{ padding: '0.5rem 1rem' }} disabled={uploadingType === t.key}
                                         onClick={() => fileRefs[t.key].current?.click()}>
-                                        {uploadingType === t.key ? 'Uploading…' : `+ ${t.label}`}
+                                        {uploadingType === t.key ? <><span className="ck-spinner sm ck-btn-spin" />Uploading…</> : `+ ${t.label}`}
                                     </button>
                                 </div>
                             ))}
@@ -660,7 +660,7 @@ const ClaimDetail = ({ id }) => {
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                             <button type="button" className="table-action-btn" disabled={commSubmitting} onClick={() => setCommModalOpen(false)}>Cancel</button>
                             <button type="button" className="table-action-btn primary" disabled={commSubmitting} onClick={submitComm}>
-                                {commSubmitting ? 'Adding…' : 'Add Entry'}
+                                {commSubmitting ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add Entry'}
                             </button>
                         </div>
                     </div>

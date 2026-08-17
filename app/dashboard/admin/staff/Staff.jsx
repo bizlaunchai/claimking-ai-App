@@ -307,7 +307,7 @@ const AddStaffModal = ({ onClose, onAdded }) => {
                             style={{ ...styles.input, flex: 1 }}
                         />
                         <button onClick={findUser} disabled={lookupBusy || !email.trim()} style={styles.btnSecondary}>
-                            {lookupBusy ? 'Looking…' : 'Find user'}
+                            {lookupBusy ? <><span className="ck-spinner sm ck-btn-spin" />Looking…</> : 'Find user'}
                         </button>
                     </div>
                     {lookupErr && <div style={styles.err}>{lookupErr}</div>}
@@ -346,7 +346,7 @@ const AddStaffModal = ({ onClose, onAdded }) => {
                         disabled={submitting || !targetUserId}
                         style={styles.btnPrimary}
                     >
-                        {submitting ? 'Adding…' : 'Add as Staff'}
+                        {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add as Staff'}
                     </button>
                 </div>
             </div>
@@ -411,7 +411,7 @@ const EditPermissionsModal = ({ staff, onClose, onSaved }) => {
                 <div className="st-modal-actions">
                     <button onClick={onClose} style={styles.btnSecondary}>Cancel</button>
                     <button onClick={submit} disabled={submitting} style={styles.btnPrimary}>
-                        {submitting ? 'Saving…' : 'Save'}
+                        {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save'}
                     </button>
                 </div>
             </div>

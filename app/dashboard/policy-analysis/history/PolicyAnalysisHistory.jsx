@@ -132,7 +132,7 @@ const PolicyAnalysisHistory = () => {
 
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     {loading ? (
-                        <div className="p-8 text-center text-gray-500">Loading…</div>
+                        <div className="ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>
                     ) : rows.length === 0 ? (
                         <div className="p-8 text-center text-gray-500">
                             No analyses yet. <Link href="/dashboard/policy-analysis" className="text-blue-600 underline">Run your first analysis →</Link>

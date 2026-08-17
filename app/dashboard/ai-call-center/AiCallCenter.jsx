@@ -347,7 +347,7 @@ const AICallCenter = () => {
                             title={lastRefreshed ? `Last refreshed: ${lastRefreshed.toLocaleTimeString()}` : 'Click to fetch the latest calls'}
                         >
                             <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none', fontSize: '1rem' }}>⟳</span>
-                            {refreshing ? 'Refreshing…' : 'Refresh'}
+                            {refreshing ? <><span className="ck-spinner sm ck-btn-spin" />Refreshing…</> : 'Refresh'}
                         </button>
                         <button
                             type="button"
@@ -538,7 +538,7 @@ const AICallCenter = () => {
                 <div className="card-header">
                     <h2 className="card-title">{activeTab === 'unmatched' ? 'Unmatched Calls' : 'Recent Call History'}</h2>
                     <p className="card-subtitle">
-                        {loading ? 'Loading…' : `${totalCalls} call${totalCalls === 1 ? '' : 's'}`}
+                        {loading ? <span className="ck-load-inline"><span className="ck-spinner sm" />Loading…</span> : `${totalCalls} call${totalCalls === 1 ? '' : 's'}`}
                     </p>
                 </div>
                 {!canViewLog ? (
@@ -778,7 +778,7 @@ const AICallCenter = () => {
                                                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                                     </button>
                                                     <div style={{ fontSize: 12, color: '#6b7280' }}>
-                                                        {recordingLoading ? 'Loading…' : 'Click to play'}
+                                                        {recordingLoading ? <span className="ck-load-inline"><span className="ck-spinner sm" />Loading…</span> : 'Click to play'}
                                                     </div>
                                                 </>
                                             )}
@@ -815,7 +815,7 @@ const AICallCenter = () => {
                             <button className="pagination-btn" disabled={callbackBusy} onClick={() => setCallbackFor(null)}>Cancel</button>
                             <button className="pagination-btn" disabled={callbackBusy} onClick={doCallback}
                                 style={{ background: '#16a34a', color: '#fff', borderColor: '#16a34a' }}>
-                                {callbackBusy ? 'Ringing…' : '📞 Ring my phone'}
+                                {callbackBusy ? <><span className="ck-spinner sm ck-btn-spin" />Ringing…</> : '📞 Ring my phone'}
                             </button>
                         </div>
                     </div>

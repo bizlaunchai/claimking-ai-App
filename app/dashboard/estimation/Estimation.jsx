@@ -55,7 +55,7 @@ function AuthedPhotoThumb({ src, imgStyle }) {
         return () => { active = false; };
     }, [src]);
     if (!url) {
-        return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: 11 }}>Loading…</div>;
+        return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}><span className="ck-spinner" style={{ fontSize: 18 }} /></div>;
     }
     const style = imgStyle ?? { width: '100%', height: '100%', objectFit: 'cover', display: 'block' };
     return <img src={url} alt="" style={style} />;
@@ -4272,7 +4272,7 @@ const Estimation = () => {
                     }}>
                         <label style={{ fontWeight: 600, color: "#374151" }}>Measurement report:</label>
                         {clientMeasurementsLoading ? (
-                            <span style={{ color: "#9ca3af" }}>Loading…</span>
+                            <span className="ck-load-inline"><span className="ck-spinner sm" />Loading…</span>
                         ) : clientMeasurements.length === 0 ? (
                             <span style={{ color: "#6b7280" }}>
                                 No measurement reports on file ·{" "}
@@ -4364,7 +4364,7 @@ const Estimation = () => {
                                 disabled={reviewLoading}
                                 style={{ cursor: reviewLoading ? 'wait' : 'pointer', opacity: reviewLoading ? 0.7 : 1 }}
                             >
-                                <svg className="icon icon-sm" style={{ verticalAlign: "middle" }}><use href="#i-refresh" /></svg>
+                                <svg className={`icon icon-sm ${reviewLoading ? 'ck-spin' : ''}`} style={{ verticalAlign: "middle" }}><use href="#i-refresh" /></svg>
                                 {reviewLoading ? 'Reviewing…' : 'AI Review'}
                                 {!reviewLoading && reviewCost?.credits_cost > 0 && (
                                     <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, background: 'rgba(26,31,58,0.14)', color: '#1a1f3a', padding: '2px 6px', borderRadius: 10, verticalAlign: 'middle' }}>{reviewCost.credits_cost} credits</span>
@@ -5120,7 +5120,7 @@ const Estimation = () => {
 
                                     {/* Photo grid */}
                                     {photosLoading && photos.length === 0 ? (
-                                        <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>Loading photos…</div>
+                                        <div className="ck-load-block" style={{ padding: 20, minHeight: 0 }}><span className="ck-spinner" /><span>Loading photos…</span></div>
                                     ) : photos.length === 0 ? (
                                         <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 12, fontStyle: 'italic', marginTop: 10 }}>
                                             No photos yet. Upload damage shots above.
@@ -5268,7 +5268,7 @@ const Estimation = () => {
                                                     onClick={sendSignLink}
                                                     disabled={signing || !currentEstimateId}
                                                 >
-                                                    <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-send" /></svg>
+                                                    <svg className={`icon icon-sm ${signing ? 'ck-spin' : ''}`} style={{ verticalAlign: 'middle' }}><use href={signing ? '#i-refresh' : '#i-send'} /></svg>
                                                     {signing
                                                         ? 'Sending…'
                                                         : (Number(signDeposit) > 0
@@ -5306,7 +5306,7 @@ const Estimation = () => {
                                                     onClick={signInPerson}
                                                     disabled={signing || !currentEstimateId}
                                                 >
-                                                    <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-check" /></svg>
+                                                    <svg className={`icon icon-sm ${signing ? 'ck-spin' : ''}`} style={{ verticalAlign: 'middle' }}><use href={signing ? '#i-refresh' : '#i-check'} /></svg>
                                                     {signing ? 'Saving…' : 'Save signature'}
                                                 </button>
                                             </>
@@ -5485,7 +5485,7 @@ const Estimation = () => {
                                             onClick={depositMethod === 'manual' ? recordManualDeposit : sendPaymentLink}
                                             disabled={depositLoading || !currentEstimateId}
                                         >
-                                            <svg className="icon icon-sm" style={{ verticalAlign: 'middle' }}><use href="#i-card" /></svg>
+                                            <svg className={`icon icon-sm ${depositLoading ? 'ck-spin' : ''}`} style={{ verticalAlign: 'middle' }}><use href={depositLoading ? '#i-refresh' : '#i-card'} /></svg>
                                             {depositLoading
                                                 ? 'Working…'
                                                 : depositMethod === 'manual'
@@ -5594,7 +5594,7 @@ const Estimation = () => {
                                 </div>
                             )}
 
-                            {tplListLoading && <div style={{ padding: 20, textAlign: 'center', color: '#6b7280' }}>Loading…</div>}
+                            {tplListLoading && <div className="ck-load-block" style={{ padding: 20, minHeight: 0 }}><span className="ck-spinner" /><span>Loading templates…</span></div>}
 
                             {!tplListLoading && tplList.length === 0 && (
                                 <div style={{ padding: 20, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
@@ -5675,7 +5675,7 @@ const Estimation = () => {
                                 onClick={submitSaveAsTemplate}
                                 disabled={saveTplSaving}
                                 style={{ padding: '8px 14px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: saveTplSaving ? 'wait' : 'pointer', opacity: saveTplSaving ? 0.6 : 1 }}
-                            >{saveTplSaving ? 'Saving…' : 'Save template'}</button>
+                            >{saveTplSaving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save template'}</button>
                         </div>
                     </div>
                 </div>
@@ -5732,7 +5732,7 @@ const Estimation = () => {
                                         <button onClick={() => setChangesOpen(false)} style={{ padding: '9px 14px', background: '#f3f4f6', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                                         <button onClick={runAiChanges} disabled={changesLoading} style={{ padding: '9px 16px', background: '#1a1f3a', color: '#FDB813', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: changesLoading ? 'wait' : 'pointer', opacity: changesLoading ? 0.7 : 1 }}>
                                             {changesLoading
-                                                ? 'Thinking…'
+                                                ? <><span className="ck-spinner sm ck-btn-spin" />Thinking…</>
                                                 : reviewCost?.credits_cost > 0
                                                     ? `Ask AI (${reviewCost.credits_cost} credits)`
                                                     : 'Ask AI'}
@@ -6234,7 +6234,7 @@ const Estimation = () => {
                         <div className="px-[22px] py-[14px] border-t border-gray-200 flex justify-end gap-2 bg-gray-50 rounded-b-xl">
                             <button className="btn btn-secondary" onClick={() => setAiModal(false)} disabled={aiGenerating}>Cancel</button>
                             <button className="btn btn-primary" onClick={generateAIEstimate} disabled={aiGenerating}>
-                                <svg className="icon icon-sm"><use href="#i-sparkle" /></svg>
+                                <svg className={`icon icon-sm ${aiGenerating ? 'ck-spin' : ''}`}><use href={aiGenerating ? '#i-refresh' : '#i-sparkle'} /></svg>
                                 {aiGenerating ? "Generating…" : "Generate Estimate"}
                             </button>
                         </div>
@@ -6629,7 +6629,7 @@ const Estimation = () => {
                         <div style={{ padding: "14px 20px", borderTop: "1px solid #eef0f3", display: "flex", justifyContent: "flex-end", gap: 8 }}>
                             <button onClick={() => setBulkResult(null)} disabled={bulkImporting} style={{ padding: "9px 14px", background: "#f3f4f6", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: bulkImporting ? "not-allowed" : "pointer", opacity: bulkImporting ? 0.6 : 1 }}>Cancel</button>
                             <button onClick={importBulk} disabled={!bulkResult.valid.length || bulkImporting} style={{ padding: "9px 16px", background: (bulkResult.valid.length && !bulkImporting) ? "#1a1f3a" : "#9ca3af", color: "#FDB813", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: (bulkResult.valid.length && !bulkImporting) ? "pointer" : "not-allowed" }}>
-                                {bulkImporting ? "Saving…" : `Import ${bulkResult.valid.length} item${bulkResult.valid.length === 1 ? "" : "s"}`}
+                                {bulkImporting ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : `Import ${bulkResult.valid.length} item${bulkResult.valid.length === 1 ? "" : "s"}`}
                             </button>
                         </div>
                     </div>
@@ -6694,8 +6694,8 @@ const Estimation = () => {
                         </div>
                         <div className="p-[22px]">
                             {savedEstimatesLoading ? (
-                                <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280", fontSize: 13 }}>
-                                    Loading…
+                                <div className="ck-load-block" style={{ padding: "2rem", minHeight: 0 }}>
+                                    <span className="ck-spinner" /><span>Loading…</span>
                                 </div>
                             ) : savedEstimates.length === 0 ? (
                                 <div style={{

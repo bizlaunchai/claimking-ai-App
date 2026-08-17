@@ -598,7 +598,7 @@ const Page = () => {
                                     }
                                 >
                                     {extracting
-                                        ? 'Extracting…'
+                                        ? <><span className="ck-spinner sm ck-btn-spin" />Extracting…</>
                                         : !aiReady
                                             ? 'AI not configured'
                                             : featureDisabledByAdmin
@@ -1010,14 +1010,14 @@ function ExtractedPanel({
                             onClick={onSave} disabled={savingEdits || confirming}
                             style={{ padding: '8px 14px', fontSize: 13 }}
                         >
-                            {savingEdits ? 'Saving…' : 'Save Edits'}
+                            {savingEdits ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save Edits'}
                         </button>
                         <button
                             type="button" className="btn btn-primary"
                             onClick={onConfirm} disabled={savingEdits || confirming}
                             style={{ padding: '8px 14px', fontSize: 13 }}
                         >
-                            {confirming ? 'Confirming…' : 'Confirm Measurements'}
+                            {confirming ? <><span className="ck-spinner sm ck-btn-spin" />Confirming…</> : 'Confirm Measurements'}
                         </button>
                     </>
                 )}
@@ -1054,8 +1054,9 @@ function SavedReportsList({ reports, loading, onSelect, onUseInEstimate, onDelet
 
     if (loading) {
         return (
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                Loading reports…
+            <div className="ck-load-block">
+                <span className="ck-spinner" />
+                <span>Loading reports…</span>
             </div>
         );
     }

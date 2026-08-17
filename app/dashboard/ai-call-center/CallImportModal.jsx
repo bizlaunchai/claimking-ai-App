@@ -62,7 +62,7 @@ export default function CallImportModal({ open, onClose, onImported }) {
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); }}>
                         <Upload size={26} color="#9ca3af" style={{ margin: '0 auto 8px' }} />
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{busy === 'upload' ? 'Importing…' : 'Click or drop your CSV here'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{busy === 'upload' ? <><span className="ck-spinner sm ck-btn-spin" />Importing…</> : 'Click or drop your CSV here'}</div>
                         <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>date, time, direction, from, to, duration, answered_by, source, campaign, notes</div>
                         <input ref={inputRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => upload(e.target.files?.[0])} />
                     </div>

@@ -390,7 +390,7 @@ export default function FeatureCostsAdmin() {
                                     onClick={createNew}
                                     disabled={creating || !newRow.feature_key}
                                 >
-                                    <Plus size={14} /> {creating ? 'Creating…' : 'Create'}
+                                    {creating ? <span className="ck-spinner sm" /> : <Plus size={14} />} {creating ? 'Creating…' : 'Create'}
                                 </button>
                             </div>
                         )}
@@ -420,7 +420,7 @@ export default function FeatureCostsAdmin() {
                     </div>
 
                     {loading && (
-                        <div style={{ padding: 20, color: '#6b7280', fontSize: 13 }}>Loading…</div>
+                        <div className="ck-load-block" style={{ minHeight: 0, padding: 20 }}><span className="ck-spinner" /><span>Loading…</span></div>
                     )}
 
                     {!loading && filtered.length === 0 && (
@@ -499,7 +499,7 @@ export default function FeatureCostsAdmin() {
                                         onClick={() => saveOne(item)}
                                         disabled={!dirty || saving}
                                     >
-                                        <Save size={14} /> {saving ? 'Saving…' : (dirty ? 'Save' : 'Saved')}
+                                        {saving ? <span className="ck-spinner sm" /> : <Save size={14} />} {saving ? 'Saving…' : (dirty ? 'Save' : 'Saved')}
                                     </button>
                                     <button
                                         className="fc-btn fc-btn-danger"

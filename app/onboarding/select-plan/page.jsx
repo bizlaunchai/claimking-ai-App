@@ -107,7 +107,7 @@ export default function SelectPlanPage() {
                 {error && <div style={styles.errorBox}>{error}</div>}
 
                 {loading ? (
-                    <div style={styles.loading}>Loading plans…</div>
+                    <div style={styles.loading} className="ck-load-block"><span className="ck-spinner" /><span>Loading plans…</span></div>
                 ) : plans.length === 0 ? (
                     <div style={styles.empty}>
                         No active plans available. Contact support.

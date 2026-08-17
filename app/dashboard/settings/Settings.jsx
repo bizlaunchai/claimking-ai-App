@@ -56,7 +56,7 @@ function IntakeKeyCard({ token }) {
                 Send website-form leads straight into New Leads via Zapier (“Webhooks by Zapier”) or any tool that can POST JSON.
                 Retry-safe — a resent submission won’t create a duplicate. See <strong>ZAPIER-INTAKE-GUIDE.md</strong> for a step-by-step setup.
             </p>
-            {loading ? <div className="setting-description">Loading…</div> : !data ? (
+            {loading ? <div className="setting-description ck-load-inline"><span className="ck-spinner sm" />Loading…</div> : !data ? (
                 <div className="setting-description">Couldn’t load your intake key. You need the “Manage API settings” permission.</div>
             ) : (
                 <div className="intake-key-box">
@@ -76,7 +76,7 @@ function IntakeKeyCard({ token }) {
                         <span className="intake-val">{data.last_used_at ? new Date(data.last_used_at).toLocaleString() : 'No leads received yet'}</span>
                     </div>
                     <div className="intake-actions">
-                        <button type="button" className="btn-secondary" onClick={regenerate} disabled={rotating}>{rotating ? 'Rotating…' : '↻ Regenerate key'}</button>
+                        <button type="button" className="btn-secondary" onClick={regenerate} disabled={rotating}>{rotating ? <><span className="ck-spinner sm ck-btn-spin" />Rotating…</> : '↻ Regenerate key'}</button>
                     </div>
                     <div className="intake-fields">
                         <strong>Body fields (JSON):</strong> first_name, last_name, phone, email, address_line1, city, state, zip, damage_type, source, source_detail. Unknown fields are ignored; <code>source</code> defaults to <code>web_form</code>.
@@ -455,7 +455,7 @@ const Settings = () => {
                                     <polyline points="17 21 17 13 7 13 7 21"/>
                                     <polyline points="7 3 7 8 15 8"/>
                                 </svg>
-                                {isSaving ? 'Saving…' : 'Save All Settings'}
+                                {isSaving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save All Settings'}
                             </button>
                         </div>
 
@@ -1548,7 +1548,7 @@ const Settings = () => {
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <h3 className="section-title" style={{ margin: 0 }}>Notification History</h3>
                                         <button type="button" className="header-btn" onClick={loadNotifLog} disabled={notifLoading}>
-                                            {notifLoading ? 'Refreshing…' : 'Refresh'}
+                                            {notifLoading ? <><span className="ck-spinner sm ck-btn-spin" />Refreshing…</> : 'Refresh'}
                                         </button>
                                     </div>
                                     <p className="form-help" style={{ marginTop: 4 }}>

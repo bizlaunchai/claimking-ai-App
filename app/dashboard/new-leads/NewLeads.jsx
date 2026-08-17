@@ -633,7 +633,7 @@ function NewLeadModal({ canViewAll, teamMembers, onClose, onCreated }) {
                 </div>
                 <div className="modal-footer">
                     <button className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
-                    <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? 'Creating…' : 'Create Lead'}</button>
+                    <button className="btn-primary" onClick={submit} disabled={busy}>{busy ? <><span className="ck-spinner sm ck-btn-spin" />Creating…</> : 'Create Lead'}</button>
                 </div>
             </div>
         </div>
@@ -667,7 +667,7 @@ function QueueView({
         window.addEventListener('scroll', close, true);
         return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
     }, [menuId, setMenuId]);
-    if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
+    if (loading) return <div className="nl-panel"><div className="empty-state ck-load-block"><span className="ck-spinner" /><span>Loading leads…</span></div></div>;
     if (!rows.length) return <div className="nl-panel"><div className="empty-state">No leads match this view.<br /><span style={{ fontSize: '0.82rem', color: '#9ca3af' }}>New leads arrive from calls, web forms, and integrations — or add one with “+ New Lead”.</span></div></div>;
 
     return (
@@ -811,7 +811,7 @@ function KanbanView({ loading, rows, busyId, onMove, onChangeStatus, onOpen }) {
         return g;
     }, [rows]);
 
-    if (loading) return <div className="nl-panel"><div className="empty-state">Loading leads…</div></div>;
+    if (loading) return <div className="nl-panel"><div className="empty-state ck-load-block"><span className="ck-spinner" /><span>Loading leads…</span></div></div>;
 
     const onDrop = (status) => {
         setOverCol(null);

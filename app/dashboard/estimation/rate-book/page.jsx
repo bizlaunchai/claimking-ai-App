@@ -8,7 +8,7 @@ export const metadata = {
 
 const Page = () => {
     return (
-        <Suspense fallback={<div style={{ padding: 24, color: '#6b7280' }}>Loading rate book…</div>}>
+        <Suspense fallback={<div className="ck-load-block"><span className="ck-spinner" /><span>Loading rate book…</span></div>}>
             <RateBook />
         </Suspense>
     );

@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 const Page = () => (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>}>
         <PolicyAnalysisHistory />
     </Suspense>
 );

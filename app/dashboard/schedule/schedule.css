@@ -373,6 +373,30 @@
 .appt-photo-thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #eef0f4; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 11px; }
 .appt-photo-loading { }
 .appt-photo-badge { position: absolute; bottom: 2px; left: 2px; background: rgba(6,95,70,0.85); color: #fff; font-size: 9px; font-weight: 700; padding: 0 5px; border-radius: 999px; }
+/* Delete (×) on each thumb — always visible so the photo reads as removable;
+   hover just deepens it to a solid red for affordance. */
+.appt-photo-item .appt-photo-del {
+    position: absolute; top: -6px; right: -6px;
+    width: 20px; height: 20px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #fecaca; border-radius: 50%;
+    background: #fff; color: #dc2626;
+    font-size: 14px; line-height: 1; font-weight: 700; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+    opacity: 1; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.appt-photo-item:hover .appt-photo-del,
+.appt-photo-del:hover,
+.appt-photo-del:focus-visible { background: #dc2626; color: #fff; border-color: #dc2626; }
+.appt-photo-del:disabled { cursor: default; background: #fff; color: #9ca3af; border-color: #e5e7eb; }
+/* Deleting overlay — dim the thumb + centered spinner while the DELETE runs. */
+.appt-photo-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.7); border-radius: 8px;
+}
+.appt-photo-overlay .ck-spinner { color: #dc2626; }
+.appt-photo-item.deleting .appt-photo-thumb { filter: grayscale(0.4); }
 
 /* Q3.15 all-jobs map legend */
 .schedule-page .jobs-map-legend { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; padding: 0.75rem; background: #f9fafb; border: 1px solid #eef0f4; border-radius: 10px; }

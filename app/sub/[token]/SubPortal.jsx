@@ -902,7 +902,7 @@ function ActivePortal({ token, portal, reload }) {
             </div>
             <div className="tab-body">
                 {loading && ['offers', 'jobs', 'payments'].includes(tab) ? (
-                    <div className="muted" style={{ padding: '2rem', textAlign: 'center' }}>Loading…</div>
+                    <div className="ck-load-block" style={{ padding: '2rem' }}><span className="ck-spinner" /><span>Loading…</span></div>
                 ) : tab === 'offers' ? (
                     offers.length ? offers.map((o) => <OfferCard key={o.dispatch_id} token={token} offer={o} onResponded={loadTab} />) : <div className="empty">No open offers right now.</div>
                 ) : tab === 'jobs' ? (
@@ -974,7 +974,7 @@ export default function SubPortal({ token }) {
     }, [token]);
     useEffect(() => { load(); }, [load]);
 
-    if (portal === undefined) return <div className="sub-portal"><div className="sp-loading">Loading your portal…</div></div>;
+    if (portal === undefined) return <div className="sub-portal"><div className="sp-loading ck-load-block"><span className="ck-spinner" /><span>Loading your portal…</span></div></div>;
     if (portal === null) return <div className="sub-portal"><div className="sp-error">This link is invalid or has expired. Please contact the company that invited you.</div></div>;
 
     const name = portal.profile?.business_name || 'Contractor';

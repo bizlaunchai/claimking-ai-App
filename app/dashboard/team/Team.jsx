@@ -535,7 +535,7 @@ const Team = () => {
                             </thead>
                             <tbody>
                                 {loading && (
-                                    <tr><td colSpan="6" style={{ textAlign: 'center', color: '#6b7280' }}>Loading…</td></tr>
+                                    <tr><td colSpan="6"><div className="ck-load-block" style={{ minHeight: 0, padding: '1.5rem' }}><span className="ck-spinner" /><span>Loading team…</span></div></td></tr>
                                 )}
                                 {!loading && memberRowsForTable.length === 0 && (
                                     <tr><td colSpan="6" style={{ textAlign: 'center', color: '#6b7280' }}>
@@ -850,7 +850,7 @@ const InviteModal = ({ onClose, onSent }) => {
                             Cancel
                         </button>
                         <button type="submit" className="btn-primary" disabled={submitting}>
-                            {submitting ? 'Sending...' : 'Send Invitation'}
+                            {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send Invitation'}
                         </button>
                     </div>
                 </form>
@@ -1008,7 +1008,7 @@ const RolesPermissionsEditor = ({ onSave }) => {
                     {dirty && <span className="perms-dirty-badge">Unsaved changes</span>}
                     <button className="btn-secondary" onClick={resetDefaults}>Reset to Defaults</button>
                     <button className="btn-primary" onClick={handleSave} disabled={!dirty || saving}>
-                        {saving ? 'Saving…' : 'Save Changes'}
+                        {saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -1414,7 +1414,7 @@ const UserPermissionsModal = ({ member, onClose, onSaved }) => {
                         </div>
                         <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>Cancel</button>
                         <button type="submit" className="btn-primary" disabled={submitting}>
-                            {submitting ? 'Saving...' : 'Save Permissions'}
+                            {submitting ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save Permissions'}
                         </button>
                     </div>
                 </form>
