@@ -147,7 +147,7 @@ const Settings = () => {
     const [company, setCompany] = useState({
         business_name: '', business_dba: '', business_license: '', business_tax_id: '',
         address: '', city: '', state: '', zip_code: '',
-        business_phone: '', business_email: '', business_website: '',
+        business_phone: '', business_email: '', business_website: '', review_link: '',
         service_radius: 50, service_type: '', service_states: [],
         notify_email: '', notify_phone: '',
         notify_on_signature: true, notify_on_payment: true, notify_sms_enabled: false,
@@ -273,6 +273,7 @@ const Settings = () => {
                     business_phone: p.business_phone || '',
                     business_email: p.business_email || '',
                     business_website: p.business_website || '',
+                    review_link: p.review_link || '',
                     service_radius: p.service_radius ?? 50,
                     service_type: p.service_type || '',
                     service_states: Array.isArray(p.service_states) ? p.service_states : [],
@@ -351,6 +352,7 @@ const Settings = () => {
                 business_phone: company.business_phone,
                 business_email: company.business_email,
                 business_website: company.business_website,
+                review_link: company.review_link,
                 service_radius: Number(company.service_radius) || 0,
                 service_type: company.service_type,
                 service_states: company.service_states,
@@ -554,6 +556,11 @@ const Settings = () => {
                                             <label className="form-label">Website</label>
                                             <input type="url" className="form-input" value={company.business_website}
                                                 onChange={(e) => setC('business_website', e.target.value)} placeholder="https://" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Review link</label>
+                                            <input type="url" className="form-input" value={company.review_link}
+                                                onChange={(e) => setC('review_link', e.target.value)} placeholder="Google review URL — used by “Request Review”" />
                                         </div>
                                     </div>
                                 </div>
