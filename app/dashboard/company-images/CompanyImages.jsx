@@ -84,6 +84,344 @@ function AuthedImage({ src, alt = '', style, className, onClick, eager = false }
 
 const apiOrigin = () => (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 const s3Src = (row) => (row?.s3_url ? `${apiOrigin()}${row.s3_url}` : null);
+
+/* Q3.10 — in-browser photo editor: rotate · crop · draw · text.
+   Loads the authed image into a canvas; the edited result uploads as a NEW
+   job-image anchored to the same job/claim/appointment (original is kept). */
+const IE_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff', '#111827'];
+function ImageEditor({ row, onClose, onSaved }) {
+    const viewRef = useRef(null);      // visible canvas
+    const stageRef = useRef(null);     // wrapper (== canvas display box) for crop overlay
+    const baseRef = useRef(null);      // offscreen source-of-truth canvas
+    const origRef = useRef(null);      // pristine original (for Reset)
+    const histRef = useRef([]);        // undo stack (canvas copies)
+    const drawing = useRef(false);
+    const dragRef = useRef(null);      // active crop drag
+    const [ready, setReady] = useState(false);
+    const [tool, setTool] = useState(null);   // null | 'draw' | 'text' | 'crop'
+    const [color, setColor] = useState('#ef4444');
+    const [brush, setBrush] = useState(6);
+    const [saving, setSaving] = useState(false);
+    const [canUndo, setCanUndo] = useState(false);
+    const [cropBox, setCropBox] = useState(null); // {left,top,width,height} in display px
+    const [textObj, setTextObj] = useState(null); // {left,top,value,size} in display px — live inline text
+    const textAreaRef = useRef(null);
+
+    const copyCanvas = (src) => { const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); return c; };
+    const snapshot = () => { const b = baseRef.current; if (!b) return; histRef.current.push(copyCanvas(b)); if (histRef.current.length > 25) histRef.current.shift(); setCanUndo(true); };
+
+    const render = useCallback(() => {
+        const base = baseRef.current, view = viewRef.current;
+        if (!base || !view) return;
+        view.width = base.width; view.height = base.height;
+        view.getContext('2d').drawImage(base, 0, 0);
+    }, []);
+
+    useEffect(() => {
+        let url = null, cancelled = false;
+        (async () => {
+            try {
+                const res = await axiosInstance.get(s3Src(row), { responseType: 'blob' });
+                url = URL.createObjectURL(res.data);
+                const img = new Image();
+                img.onload = () => {
+                    if (cancelled) return;
+                    const cap = 1800;
+                    const scale = Math.min(1, cap / Math.max(img.width, img.height));
+                    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+                    const mk = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+                    const base = mk(); base.getContext('2d').drawImage(img, 0, 0, w, h);
+                    baseRef.current = base; origRef.current = copyCanvas(base);
+                    setReady(true); render();
+                };
+                img.src = url;
+            } catch { toast.error('Could not load the image to edit.'); onClose(); }
+        })();
+        return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+    }, [row, render, onClose]);
+
+    // ── freehand draw + click-to-text (canvas pointer) ──
+    const toBase = (e) => {
+        const v = viewRef.current, r = v.getBoundingClientRect();
+        return { x: (e.clientX - r.left) * (v.width / r.width), y: (e.clientY - r.top) * (v.height / r.height), scale: v.width / r.width };
+    };
+    const onDown = (e) => {
+        if (!ready) return;
+        if (tool === 'draw') {
+            const p = toBase(e);
+            snapshot();
+            drawing.current = true;
+            const ctx = baseRef.current.getContext('2d');
+            ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, brush * p.scale);
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        } else if (tool === 'text' && !textObj) {
+            // Click to drop an inline, editable text box at that spot.
+            const r = viewRef.current.getBoundingClientRect();
+            setTextObj({ left: e.clientX - r.left, top: e.clientY - r.top, value: '', size: Math.max(16, r.width / 22) });
+            requestAnimationFrame(() => textAreaRef.current?.focus());
+        }
+    };
+    const onMove = (e) => {
+        if (!drawing.current || tool !== 'draw') return;
+        const p = toBase(e);
+        const ctx = baseRef.current.getContext('2d');
+        ctx.lineTo(p.x, p.y); ctx.stroke(); render();
+    };
+    const onUp = () => { if (drawing.current) baseRef.current?.getContext('2d').closePath(); drawing.current = false; };
+
+    // ── interactive crop overlay (movable + 8 resize handles) ──
+    const enterCrop = () => {
+        commitText();
+        setTool('crop');
+        requestAnimationFrame(() => {
+            const v = viewRef.current; if (!v) return;
+            const r = v.getBoundingClientRect();
+            const w = r.width * 0.7, h = r.height * 0.7;
+            setCropBox({ left: (r.width - w) / 2, top: (r.height - h) / 2, width: w, height: h });
+        });
+    };
+    const startDrag = (mode) => (e) => {
+        e.preventDefault(); e.stopPropagation();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        const r = viewRef.current.getBoundingClientRect();
+        dragRef.current = { mode, sx: e.clientX, sy: e.clientY, box0: { ...cropBox }, W: r.width, H: r.height };
+    };
+    const onDragMove = (e) => {
+        const d = dragRef.current; if (!d) return;
+        const dx = e.clientX - d.sx, dy = e.clientY - d.sy, min = 30;
+        let { left, top, width, height } = d.box0;
+        if (d.mode === 'move') {
+            left = Math.max(0, Math.min(d.box0.left + dx, d.W - width));
+            top = Math.max(0, Math.min(d.box0.top + dy, d.H - height));
+        } else {
+            if (d.mode.includes('e')) width = Math.max(min, Math.min(d.box0.width + dx, d.W - d.box0.left));
+            if (d.mode.includes('s')) height = Math.max(min, Math.min(d.box0.height + dy, d.H - d.box0.top));
+            if (d.mode.includes('w')) { const nl = Math.max(0, Math.min(d.box0.left + dx, d.box0.left + d.box0.width - min)); left = nl; width = d.box0.left + d.box0.width - nl; }
+            if (d.mode.includes('n')) { const nt = Math.max(0, Math.min(d.box0.top + dy, d.box0.top + d.box0.height - min)); top = nt; height = d.box0.top + d.box0.height - nt; }
+        }
+        setCropBox({ left, top, width, height });
+    };
+    const onDragEnd = (e) => { e.currentTarget.releasePointerCapture?.(e.pointerId); dragRef.current = null; };
+    const applyCrop = () => {
+        const base = baseRef.current, v = viewRef.current, box = cropBox;
+        if (!base || !v || !box) return;
+        const r = v.getBoundingClientRect();
+        const sc = base.width / r.width;
+        const x = box.left * sc, y = box.top * sc, w = box.width * sc, h = box.height * sc;
+        if (w < 8 || h < 8) return;
+        snapshot();
+        const out = document.createElement('canvas'); out.width = Math.round(w); out.height = Math.round(h);
+        out.getContext('2d').drawImage(base, x, y, w, h, 0, 0, w, h);
+        baseRef.current = out; setCropBox(null); setTool(null); render();
+    };
+    const cancelCrop = () => { setCropBox(null); setTool(null); };
+
+    // ── inline text: move + resize + bake ──
+    const textDragRef = useRef(null);
+    const startTextDrag = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        const r = viewRef.current.getBoundingClientRect();
+        textDragRef.current = { sx: e.clientX, sy: e.clientY, l0: textObj.left, t0: textObj.top, W: r.width, H: r.height };
+    };
+    const onTextMove = (e) => {
+        const d = textDragRef.current; if (!d) return;
+        setTextObj((t) => t && ({ ...t, left: Math.max(0, Math.min(d.l0 + (e.clientX - d.sx), d.W - 20)), top: Math.max(0, Math.min(d.t0 + (e.clientY - d.sy), d.H - 10)) }));
+    };
+    const onTextEnd = (e) => { e.currentTarget.releasePointerCapture?.(e.pointerId); textDragRef.current = null; };
+    const bumpText = (delta) => setTextObj((t) => t && ({ ...t, size: Math.max(10, Math.min(220, t.size + delta)) }));
+    const bakeTextNow = (t) => {
+        const base = baseRef.current, v = viewRef.current;
+        if (!base || !v || !t || !t.value.trim()) return;
+        const r = v.getBoundingClientRect(), sc = base.width / r.width;
+        snapshot();
+        const ctx = base.getContext('2d');
+        const fs = t.size * sc;
+        ctx.font = `bold ${fs}px system-ui, -apple-system, sans-serif`;
+        ctx.fillStyle = color; ctx.textBaseline = 'top';
+        ctx.strokeStyle = color === '#ffffff' ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.9)'; ctx.lineWidth = Math.max(1, fs / 8);
+        const lh = fs * 1.25;
+        t.value.split('\n').forEach((ln, i) => { const y = t.top * sc + i * lh; ctx.strokeText(ln, t.left * sc, y); ctx.fillText(ln, t.left * sc, y); });
+        render();
+    };
+    const applyText = () => { bakeTextNow(textObj); setTextObj(null); };
+    const cancelText = () => setTextObj(null);
+    const commitText = () => { if (textObj?.value.trim()) bakeTextNow(textObj); setTextObj(null); };
+
+    const transform = (fn) => { const b = baseRef.current; if (!b) return; commitText(); snapshot(); baseRef.current = fn(b); setCropBox(null); render(); };
+    const rotate = (dir) => transform((b) => { const c = document.createElement('canvas'); c.width = b.height; c.height = b.width; const ctx = c.getContext('2d'); ctx.translate(c.width / 2, c.height / 2); ctx.rotate((dir === 'cw' ? 90 : -90) * Math.PI / 180); ctx.drawImage(b, -b.width / 2, -b.height / 2); return c; });
+    const flipH = () => transform((b) => { const c = document.createElement('canvas'); c.width = b.width; c.height = b.height; const ctx = c.getContext('2d'); ctx.translate(b.width, 0); ctx.scale(-1, 1); ctx.drawImage(b, 0, 0); return c; });
+    const undo = () => { const prev = histRef.current.pop(); if (!prev) return; baseRef.current = prev; setCanUndo(histRef.current.length > 0); setCropBox(null); render(); };
+    const reset = () => { snapshot(); baseRef.current = copyCanvas(origRef.current); setCropBox(null); setTool(null); render(); };
+
+    const save = async () => {
+        const base = baseRef.current; if (!base) return;
+        if (textObj?.value.trim()) bakeTextNow(textObj); // bake any un-applied text first
+        setSaving(true);
+        try {
+            const blob = await new Promise((res) => base.toBlob(res, 'image/jpeg', 0.9));
+            if (!blob) throw new Error('export failed');
+            const fd = new FormData();
+            fd.append('file', new File([blob], `edited-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+            if (row.job_id) fd.append('job_id', row.job_id);
+            if (row.appointment_id) fd.append('appointment_id', row.appointment_id);
+            if (row.claim_id) fd.append('claim_id', row.claim_id);
+            fd.append('caption', row.caption || '');
+            await axiosInstance.post('/job-images', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            toast.success('Edited photo saved');
+            onSaved();
+        } catch (e) { toast.error(e?.response?.data?.message || 'Could not save the edited photo'); }
+        finally { setSaving(false); }
+    };
+
+    const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+    const hint = tool === 'crop' ? 'Drag the box to move it, or grab a handle to resize — then Apply.'
+        : tool === 'draw' ? 'Drag on the photo to draw.'
+        : tool === 'text' ? (textObj ? 'Type inline · drag ✥ to move · A−/A+ to resize · Enter or Add text to place' : 'Click on the photo to add text.') : 'Pick a tool to start editing.';
+
+    return (
+        <div className="ie-back" onClick={saving ? undefined : onClose}>
+            <div className="ie-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="ie-head"><h2>Edit photo</h2><button className="ie-x" onClick={onClose} disabled={saving}>×</button></div>
+
+                <div className="ie-toolbar">
+                    <div className="ie-group">
+                        <button className="ie-tool" onClick={() => rotate('ccw')} title="Rotate left"><span className="ie-i">⟲</span></button>
+                        <button className="ie-tool" onClick={() => rotate('cw')} title="Rotate right"><span className="ie-i">⟳</span></button>
+                        <button className="ie-tool" onClick={flipH} title="Flip horizontal"><span className="ie-i">⇋</span></button>
+                    </div>
+                    <span className="ie-div" />
+                    <div className="ie-group">
+                        <button className={`ie-tool ${tool === 'crop' ? 'on' : ''}`} onClick={() => (tool === 'crop' ? cancelCrop() : enterCrop())} title="Crop"><span className="ie-i">▢</span> Crop</button>
+                        <button className={`ie-tool ${tool === 'draw' ? 'on' : ''}`} onClick={() => { commitText(); setTool(tool === 'draw' ? null : 'draw'); }} title="Draw"><span className="ie-i">✎</span> Draw</button>
+                        <button className={`ie-tool ${tool === 'text' ? 'on' : ''}`} onClick={() => { if (tool === 'text') { commitText(); setTool(null); } else { setTool('text'); } }} title="Add text"><span className="ie-i">A</span> Text</button>
+                    </div>
+                    <span className="ie-div" />
+                    <div className="ie-group">
+                        <button className="ie-tool" onClick={undo} disabled={!canUndo} title="Undo"><span className="ie-i">↶</span> Undo</button>
+                        <button className="ie-tool" onClick={reset} title="Reset to original"><span className="ie-i">↺</span> Reset</button>
+                    </div>
+
+                    {(tool === 'draw' || tool === 'text') && (
+                        <div className="ie-context">
+                            <div className="ie-swatches">
+                                {IE_COLORS.map((c) => <button key={c} className={`ie-sw ${color === c ? 'on' : ''}`} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />)}
+                                <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="ie-color" title="Custom colour" />
+                            </div>
+                            {tool === 'draw' && (
+                                <label className="ie-brush">Size <input type="range" min="2" max="40" value={brush} onChange={(e) => setBrush(Number(e.target.value))} /><span className="ie-dot" style={{ width: brush, height: brush, background: color }} /></label>
+                            )}
+                            {tool === 'text' && textObj && (
+                                <>
+                                    <div className="ie-sizer">
+                                        <button className="ie-tool" onClick={() => bumpText(-4)} title="Smaller">A−</button>
+                                        <span className="ie-size-val">{Math.round(textObj.size)}</span>
+                                        <button className="ie-tool" onClick={() => bumpText(4)} title="Bigger">A+</button>
+                                    </div>
+                                    <button className="ie-tool primary" onClick={applyText} disabled={!textObj.value.trim()}>✓ Add text</button>
+                                    <button className="ie-tool" onClick={cancelText}>Cancel</button>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {tool === 'crop' && (
+                        <div className="ie-context">
+                            <button className="ie-tool primary" onClick={applyCrop}>✓ Apply crop</button>
+                            <button className="ie-tool" onClick={cancelCrop}>Cancel</button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="ie-canvas-wrap">
+                    {!ready && <div className="ie-loading"><Spinner /> Loading…</div>}
+                    <div ref={stageRef} className="ie-stage" style={{ display: ready ? 'inline-block' : 'none' }}>
+                        <canvas ref={viewRef} className="ie-canvas" style={{ cursor: tool === 'draw' || tool === 'text' ? 'crosshair' : 'default' }}
+                            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} />
+                        {tool === 'crop' && cropBox && (
+                            <div className="ie-crop" style={{ left: cropBox.left, top: cropBox.top, width: cropBox.width, height: cropBox.height }}
+                                onPointerDown={startDrag('move')} onPointerMove={onDragMove} onPointerUp={onDragEnd}>
+                                <span className="ie-grid" />
+                                {HANDLES.map((h) => (
+                                    <span key={h} className={`ie-h ie-h-${h}`} onPointerDown={startDrag(h)} onPointerMove={onDragMove} onPointerUp={onDragEnd} />
+                                ))}
+                            </div>
+                        )}
+                        {tool === 'text' && textObj && (
+                            <div className="ie-textbox" style={{ left: textObj.left, top: textObj.top }}>
+                                <span className="ie-tmove" title="Drag to move"
+                                    onPointerDown={startTextDrag} onPointerMove={onTextMove} onPointerUp={onTextEnd}>✥</span>
+                                <div ref={textAreaRef} className="ie-tinput" contentEditable suppressContentEditableWarning
+                                    style={{ color, fontSize: `${textObj.size}px` }}
+                                    onInput={(e) => { const v = e.currentTarget.innerText.replace(/\n$/, ''); setTextObj((t) => t && ({ ...t, value: v })); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyText(); } if (e.key === 'Escape') cancelText(); }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="ie-foot">
+                    <span className="ie-hint">{hint}</span>
+                    <div style={{ flex: 1 }} />
+                    <button className="ie-btn" onClick={onClose} disabled={saving}>Cancel</button>
+                    <button className="ie-btn primary" onClick={save} disabled={saving || !ready}>{saving ? 'Saving…' : 'Save edited photo'}</button>
+                </div>
+            </div>
+            <style jsx>{`
+                .ie-back { position: fixed; inset: 0; background: rgba(15,23,42,.62); z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+                .ie-modal { background: #fff; border-radius: 18px; width: min(920px, 96vw); max-height: 94vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+                .ie-head { display: flex; align-items: center; justify-content: space-between; padding: .9rem 1.2rem; border-bottom: 1px solid #eef0f4; }
+                .ie-head h2 { font-size: 1.05rem; font-weight: 800; color: #1a1f3a; margin: 0; }
+                .ie-x { border: none; background: none; font-size: 1.6rem; color: #9ca3af; cursor: pointer; line-height: 1; }
+                .ie-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; padding: .7rem 1.2rem; border-bottom: 1px solid #eef0f4; background: #fafbfc; }
+                .ie-group { display: inline-flex; gap: .3rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 3px; }
+                .ie-div { width: 1px; align-self: stretch; background: #e5e7eb; margin: 2px 2px; }
+                .ie-tool { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; border-radius: 7px; padding: .4rem .6rem; font-size: .8rem; font-weight: 700; color: #374151; cursor: pointer; transition: background .12s, color .12s; }
+                .ie-tool:hover:not(:disabled) { background: #f1f5f9; }
+                .ie-tool.on { background: #1a1f3a; color: #fff; }
+                .ie-tool.primary { background: #FDB813; color: #1a1f3a; }
+                .ie-tool.primary:hover { background: #f0ad00; }
+                .ie-tool:disabled { opacity: .4; cursor: not-allowed; }
+                .ie-i { font-size: 1rem; line-height: 1; }
+                .ie-context { display: inline-flex; align-items: center; gap: .6rem; margin-left: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 4px 8px; }
+                .ie-swatches { display: inline-flex; align-items: center; gap: 5px; }
+                .ie-sw { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; cursor: pointer; padding: 0; }
+                .ie-sw.on { box-shadow: 0 0 0 2px #1a1f3a; transform: scale(1.12); }
+                .ie-color { width: 26px; height: 24px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0; cursor: pointer; }
+                .ie-brush { display: inline-flex; align-items: center; gap: 7px; font-size: .76rem; font-weight: 700; color: #6b7280; }
+                .ie-brush input[type=range] { accent-color: #1a1f3a; }
+                .ie-dot { display: inline-block; border-radius: 50%; box-shadow: 0 0 0 1px #cbd5e1; }
+                .ie-canvas-wrap { flex: 1; min-height: 0; overflow: auto; background: #0f172a; display: flex; align-items: center; justify-content: center; padding: 1.1rem; }
+                .ie-stage { position: relative; line-height: 0; }
+                .ie-canvas { display: block; max-width: 100%; max-height: 58vh; border-radius: 8px; touch-action: none; box-shadow: 0 4px 22px rgba(0,0,0,.45); }
+                .ie-loading { color: #cbd5e1; display: flex; gap: 8px; align-items: center; }
+                .ie-crop { position: absolute; box-sizing: border-box; border: 1.5px solid #22d3ee; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); cursor: move; touch-action: none; }
+                .ie-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px); background-size: 33.33% 33.33%; pointer-events: none; }
+                .ie-h { position: absolute; width: 13px; height: 13px; background: #fff; border: 2px solid #22d3ee; border-radius: 50%; touch-action: none; }
+                .ie-h-nw { left: -7px; top: -7px; cursor: nwse-resize; }
+                .ie-h-n  { left: calc(50% - 7px); top: -7px; cursor: ns-resize; }
+                .ie-h-ne { right: -7px; top: -7px; cursor: nesw-resize; }
+                .ie-h-e  { right: -7px; top: calc(50% - 7px); cursor: ew-resize; }
+                .ie-h-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+                .ie-h-s  { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
+                .ie-h-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+                .ie-h-w  { left: -7px; top: calc(50% - 7px); cursor: ew-resize; }
+                .ie-textbox { position: absolute; display: inline-flex; align-items: flex-start; gap: 4px; }
+                .ie-tmove { flex: none; margin-top: 2px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; background: #22d3ee; color: #0f172a; border-radius: 6px; font-size: 12px; cursor: move; touch-action: none; box-shadow: 0 1px 4px rgba(0,0,0,.4); user-select: none; }
+                .ie-tinput { min-width: 24px; outline: none; font-weight: 800; line-height: 1.25; white-space: pre; padding: 2px 6px; border: 1px dashed rgba(34,211,238,.9); border-radius: 6px; background: rgba(15,23,42,.28); text-shadow: 0 1px 2px rgba(0,0,0,.5); cursor: text; }
+                .ie-tinput:empty:before { content: 'Type…'; opacity: .6; }
+                .ie-sizer { display: inline-flex; align-items: center; gap: 2px; }
+                .ie-size-val { font-size: .74rem; font-weight: 800; color: #6b7280; min-width: 26px; text-align: center; }
+                .ie-foot { display: flex; align-items: center; gap: .6rem; padding: .8rem 1.2rem; border-top: 1px solid #eef0f4; }
+                .ie-hint { font-size: .78rem; color: #6b7280; }
+                .ie-btn { border: 1px solid #e5e7eb; background: #fff; border-radius: 10px; padding: .55rem 1.1rem; font-size: .85rem; font-weight: 700; color: #374151; cursor: pointer; }
+                .ie-btn.primary { background: linear-gradient(135deg, #FDB813, #d4a000); border-color: #d4a000; color: #1a1f3a; }
+                .ie-btn:disabled { opacity: .6; cursor: not-allowed; }
+            `}</style>
+        </div>
+    );
+}
 const fmtDate = (iso) => {
     if (!iso) return '';
     try { return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }); }
@@ -133,6 +471,7 @@ export default function CompanyImages() {
     const [filters, setFilters] = useState({ source: '', posted: '', from: '', to: '', q: '' });
     const [showUpload, setShowUpload] = useState(false);
     const [lightbox, setLightbox] = useState(null);
+    const [editRow, setEditRow] = useState(null);   // Q3.10 in-browser photo editor
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -269,9 +608,14 @@ export default function CompanyImages() {
                             onApprove={(note) => approve(row, note)}
                             onRevise={() => revise(row)}
                             onDelete={() => remove(row)}
+                            onEdit={() => setEditRow(row)}
                         />
                     ))}
                 </div>
+            )}
+
+            {editRow && (
+                <ImageEditor row={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); load(); }} />
             )}
 
             {showUpload && (
@@ -318,7 +662,7 @@ export default function CompanyImages() {
     );
 }
 
-function ImageCard({ row, canApprove, onOpen, onTogglePosted, onToggleSub, onApprove, onRevise, onDelete }) {
+function ImageCard({ row, canApprove, onOpen, onTogglePosted, onToggleSub, onApprove, onRevise, onDelete, onEdit }) {
     const [editing, setEditing] = useState(false);
     const [noteDraft, setNoteDraft] = useState(row.ai_note || row.caption || '');
     // Per-action loading: only the control that was clicked shows a spinner.
@@ -414,6 +758,7 @@ function ImageCard({ row, canApprove, onOpen, onTogglePosted, onToggleSub, onApp
                             {canApprove && (
                                 <button className="cic-btn" disabled={busy} onClick={() => setEditing(true)}>Edit note</button>
                             )}
+                            <button className="cic-btn" disabled={busy} onClick={onEdit} title="Crop, rotate or annotate this photo">✏️ Edit photo</button>
                             {needsReview && !canApprove && <span className="cic-muted">Awaiting approver</span>}
                         </div>
                     </>
