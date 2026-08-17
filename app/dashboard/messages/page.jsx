@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 const Page = () => (
-    <Suspense fallback={<div style={{ padding: 24, color: '#6b7280' }}>Loading messages…</div>}>
+    <Suspense fallback={<div className="ck-load-block"><span className="ck-spinner" /><span>Loading messages…</span></div>}>
         <Messages />
     </Suspense>
 );

@@ -6,6 +6,7 @@ import {
     ChevronLeft, ChevronRight, Plus, MapPin, Phone, Check, XCircle, X, Clock, RefreshCw, Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Swal from 'sweetalert2';
 import axiosInstance from '@/lib/axiosInstance';
 import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
@@ -532,7 +533,7 @@ export default function Schedule() {
                         {/* Q3.5 — the day's stops as a map / route */}
                         <button className="cal-nav-btn" onClick={() => setShowDayMap(true)} title="Map the day's stops"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Day Map</button>
                         {/* Q3.14 — print a clean crew sheet of the current range */}
-                        <button className="cal-nav-btn" onClick={printSchedule} disabled={printing} title="Print this range as a crew sheet"><Printer size={14} style={{ verticalAlign: '-2px' }} /> {printing ? 'Preparing…' : 'Print'}</button>
+                        <button className="cal-nav-btn" onClick={printSchedule} disabled={printing} title="Print this range as a crew sheet"><Printer size={14} style={{ verticalAlign: '-2px' }} /> {printing ? <><span className="ck-spinner sm ck-btn-spin" />Preparing…</> : 'Print'}</button>
                         {/* Q3.15 — all upcoming jobs on one map */}
                         <button className="cal-nav-btn" onClick={() => setShowJobsMap(true)} title="All upcoming jobs on a map"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Jobs Map</button>
                         {/* §3.18 — tomorrow's unconfirmed appointments + one-tap confirm texts */}
@@ -703,7 +704,7 @@ function UnconfirmedModal({ onClose }) {
             <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '94vw' }}>
                 <div className="modal-header"><div className="modal-title">Unconfirmed — {data?.date || 'tomorrow'}</div><button className="modal-close" onClick={onClose}>×</button></div>
                 <div className="modal-body" style={{ padding: '0.5rem 0', maxHeight: '60vh', overflow: 'auto' }}>
-                    {data === null ? <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>Loading…</div>
+                    {data === null ? <div className="ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>
                         : !list.length ? <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>🎉 All appointments for this day are confirmed.</div>
                             : list.map((a) => (
                                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0.9rem', borderBottom: '1px solid #f1f5f9' }}>
@@ -713,7 +714,7 @@ function UnconfirmedModal({ onClose }) {
                                     </div>
                                     {done[a.id]
                                         ? <span style={{ color: '#16a34a', fontSize: '0.8rem', fontWeight: 700 }}>✓ Sent</span>
-                                        : <button className="cal-nav-btn" disabled={!a.confirmable || sending === a.id} onClick={() => confirm(a)} title={a.confirmable ? 'Text/email the client to confirm' : 'No linked client contact'}>{sending === a.id ? 'Sending…' : 'Send text'}</button>}
+                                        : <button className="cal-nav-btn" disabled={!a.confirmable || sending === a.id} onClick={() => confirm(a)} title={a.confirmable ? 'Text/email the client to confirm' : 'No linked client contact'}>{sending === a.id ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send text'}</button>}
                                 </div>
                             ))}
                 </div>
@@ -832,7 +833,7 @@ function DayMapModal({ date, onClose, onOpenRef }) {
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
-                    {loading ? <div className="today-empty">Loading map…</div> : points.length === 0 ? (
+                    {loading ? <div className="today-empty ck-load-block"><span className="ck-spinner" /><span>Loading map…</span></div> : points.length === 0 ? (
                         <div className="today-empty">No mappable stops for this day{data?.unlocated ? ` (${data.unlocated} had an address we couldn’t locate)` : ''}.</div>
                     ) : (
                         <>
@@ -963,7 +964,7 @@ function JobsMapModal({ onClose, onOpenJobs }) {
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
-                    {loading ? <div className="today-empty">Loading map…</div> : points.length === 0 ? (
+                    {loading ? <div className="today-empty ck-load-block"><span className="ck-spinner" /><span>Loading map…</span></div> : points.length === 0 ? (
                         <div className="today-empty">No upcoming scheduled jobs to map{data?.unlocated ? ` (${data.unlocated} couldn’t be located)` : ''}.</div>
                     ) : (
                         <>
@@ -1289,7 +1290,7 @@ function PersonSearch({ onPick }) {
                 <input placeholder="Address" value={nf.address} onChange={(e) => setNf((s) => ({ ...s, address: e.target.value }))} />
                 <div className="person-new-actions">
                     <button className="btn-link" onClick={() => setAdding(false)}>← Back to search</button>
-                    <button className="btn-primary sm" disabled={creating} onClick={createPerson}>{creating ? 'Adding…' : 'Add & select'}</button>
+                    <button className="btn-primary sm" disabled={creating} onClick={createPerson}>{creating ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add & select'}</button>
                 </div>
             </div>
         );
@@ -1643,7 +1644,7 @@ function CalendarSyncPanel({ onClose }) {
                 </div>
                 <div className="modal-body">
                     <p className="muted" style={{ marginTop: 0 }}>Connect your calendar so your outside events block booking here, and ClaimKing appointments show up on your calendar.</p>
-                    {loading ? <div className="today-empty">Loading…</div> : CAL_PROVIDERS.map((pr) => {
+                    {loading ? <div className="today-empty ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div> : CAL_PROVIDERS.map((pr) => {
                         const c = connOf(pr.key);
                         const conf = configured(pr.key);
                         return (
@@ -1667,7 +1668,7 @@ function CalendarSyncPanel({ onClose }) {
                                         </div>
                                     </>
                                 ) : conf ? (
-                                    <button className="btn btn-sm btn-primary" disabled={busy === pr.key} onClick={() => connect(pr.key)}>{busy === pr.key ? 'Opening…' : `Connect ${pr.label}`}</button>
+                                    <button className="btn btn-sm btn-primary" disabled={busy === pr.key} onClick={() => connect(pr.key)}>{busy === pr.key ? <><span className="ck-spinner sm ck-btn-spin" />Opening…</> : `Connect ${pr.label}`}</button>
                                 ) : (
                                     <div className="muted" style={{ fontSize: 12 }}>Not configured yet — your admin needs to set up the {pr.label} app credentials.</div>
                                 )}
@@ -1811,7 +1812,7 @@ function TypeCenterModal({ types, onClose, onChanged }) {
                             </div>
                         </div>
                         <div className="tc-actions">
-                            <button className="tc-save" disabled={adding === 'busy'} onClick={createType}>{adding === 'busy' ? 'Adding…' : 'Add'}</button>
+                            <button className="tc-save" disabled={adding === 'busy'} onClick={createType}>{adding === 'busy' ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add'}</button>
                             <button className="tc-del" onClick={() => { setAdding(false); setDraft(blankNew); }}>Cancel</button>
                         </div>
                     </div>
@@ -1940,7 +1941,7 @@ function AvailabilityPanel({ manageAll, workers, onClose, onChanged }) {
                             <label>Slot <select value={weekly.slot_minutes || 60} onChange={(e) => setWeekly((w) => ({ ...w, slot_minutes: Number(e.target.value) }))}>{[30, 45, 60, 90, 120].map((s) => <option key={s} value={s}>{s} min</option>)}</select></label>
                         </div>
                         <div className="avail-card-foot">
-                            <button className="btn-primary sm" disabled={saving} onClick={saveWeekly}>{saving ? 'Saving…' : 'Save working hours'}</button>
+                            <button className="btn-primary sm" disabled={saving} onClick={saveWeekly}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save working hours'}</button>
                         </div>
                     </div>
 
@@ -2060,7 +2061,7 @@ function BookingLinks({ manageAll, nameOf, onClose }) {
             </div>
 
             {/* Roster (manage-all) */}
-            {rows === null && <div className="bl-empty">Loading…</div>}
+            {rows === null && <div className="bl-empty ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>}
             {rows?.length > 0 && (
                 <div className="bl-list">
                     {rows.filter((r) => r.booking_slug).map((r) => {
@@ -2118,7 +2119,7 @@ function OnTheWayControl({ defaultTime, onSend }) {
             </div>
             <div className="otw-actions">
                 <button className="btn-secondary sm" onClick={() => setOpen(false)}>Cancel</button>
-                <button className="btn-primary sm" disabled={sending} onClick={send}>{sending ? 'Sending…' : 'Notify client'}</button>
+                <button className="btn-primary sm" disabled={sending} onClick={send}>{sending ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Notify client'}</button>
             </div>
         </div>
     );
@@ -2141,7 +2142,7 @@ function SmsComposer({ to, onSent }) {
     return (
         <div className="sms-composer">
             <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Text ${to}…`} rows={2} />
-            <button className="btn-primary sm" disabled={sending || !body.trim()} onClick={send}>{sending ? 'Sending…' : 'Send text'}</button>
+            <button className="btn-primary sm" disabled={sending || !body.trim()} onClick={send}>{sending ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send text'}</button>
         </div>
     );
 }
@@ -2161,22 +2162,26 @@ function ApptAuthedThumb({ url, alt }) {
             .catch(() => {});
         return () => { cancelled = true; };
     }, [url]);
-    if (!blob) return <div className="appt-photo-thumb appt-photo-loading">…</div>;
+    if (!blob) return <div className="appt-photo-thumb appt-photo-loading"><span className="ck-spinner sm" /></div>;
     // eslint-disable-next-line @next/next/no-img-element
     return <img className="appt-photo-thumb" src={blob} alt={alt || 'Photo'} />;
 }
 
 function ApptPhotos({ appointmentId, claimId }) {
     const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [deletingId, setDeletingId] = useState(null);
     const inputRef = useRef(null);
     const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
 
     const load = useCallback(async () => {
+        setLoading(true);
         try {
             const { data } = await axiosInstance.get('/job-images', { params: { appointment_id: appointmentId }, suppressErrorToast: true });
             setRows(Array.isArray(data?.data) ? data.data : []);
         } catch { setRows([]); }
+        finally { setLoading(false); }
     }, [appointmentId]);
     useEffect(() => { load(); }, [load]);
 
@@ -2196,17 +2201,64 @@ function ApptPhotos({ appointmentId, claimId }) {
         } finally { setBusy(false); }
     };
 
+    // Q3.10 — remove a wrongly-uploaded photo. Backend DELETE /job-images/:id also
+    // pulls it from Company Images + the client portal if it was posted.
+    const removePhoto = async (r) => {
+        if (deletingId) return;
+        const res = await Swal.fire({
+            icon: 'warning',
+            title: 'Delete this photo?',
+            html: r.posted_to_portal
+                ? 'It’s posted to the client portal — it will be removed <b>there and from Company Images</b>. This can’t be undone.'
+                : 'It will be permanently removed from Company Images. This can’t be undone.',
+            showCancelButton: true,
+            confirmButtonText: 'Delete photo',
+            cancelButtonText: 'Keep it',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            reverseButtons: true,
+            focusCancel: true,
+            // The appointment detail modal sits at z-index 10000; lift the
+            // SweetAlert container above it so the confirm isn't hidden behind.
+            didOpen: () => { const c = Swal.getContainer(); if (c) c.style.zIndex = '20000'; },
+        });
+        if (!res.isConfirmed) return;
+        setDeletingId(r.id);
+        // Keep the photo on screen with an overlay spinner while it deletes, then
+        // drop it on success (so the user sees it working, not a blank strip).
+        try {
+            await axiosInstance.delete(`/job-images/${r.id}`);
+            setRows((prev) => prev.filter((x) => x.id !== r.id));
+            toast.success('Photo deleted');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Delete failed');
+        } finally { setDeletingId(null); }
+    };
+
     return (
         <div className="appt-photos">
             <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
-            <button className="btn-secondary sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Uploading…' : '📷 Add photo'}</button>
+            <button className="btn-secondary sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? <><span className="ck-spinner sm ck-btn-spin" />Uploading…</> : '📷 Add photo'}</button>
             {!claimId && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>Link this appointment to a client to post photos to their portal.</div>}
-            {rows.length > 0 && (
+            {loading ? (
+                <div className="appt-photos-loading ck-load-inline" style={{ marginTop: 6 }}><span className="ck-spinner sm" />Loading photos…</div>
+            ) : rows.length > 0 && (
                 <div className="appt-photo-strip">
                     {rows.map((r) => (
-                        <div key={r.id} title={r.caption || r.ai_note || ''} style={{ position: 'relative' }}>
+                        <div key={r.id} className={`appt-photo-item${deletingId === r.id ? ' deleting' : ''}`} title={r.caption || r.ai_note || ''} style={{ position: 'relative' }}>
                             <ApptAuthedThumb url={r.s3_url ? `${apiOrigin}${r.s3_url}` : null} alt={r.caption} />
                             {r.posted_to_portal && <span className="appt-photo-badge">portal</span>}
+                            {deletingId === r.id && (
+                                <div className="appt-photo-overlay" aria-label="Deleting photo"><span className="ck-spinner" /></div>
+                            )}
+                            <button
+                                type="button"
+                                className="appt-photo-del"
+                                disabled={deletingId === r.id}
+                                title="Delete photo"
+                                aria-label="Delete photo"
+                                onClick={() => removePhoto(r)}
+                            >×</button>
                         </div>
                     ))}
                 </div>
@@ -2384,7 +2436,7 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                     {/* Q3.7 — Notes */}
                     <div className="sched-sec-title">Notes</div>
                     <textarea className="appt-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Access, gate codes, what to bring, context…" rows={2} />
-                    <button className="btn-secondary sm" disabled={savingNotes} onClick={saveNotes}>{savingNotes ? 'Saving…' : 'Save notes'}</button>
+                    <button className="btn-secondary sm" disabled={savingNotes} onClick={saveNotes}>{savingNotes ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save notes'}</button>
 
                     {/* Q3.10 — Photos: capture/upload at the appointment. The AI drafts
                         a note; approve + post to the client's portal from Company Images. */}
@@ -2432,11 +2484,13 @@ function DetailModal({ appt, team, manageAll, nameOf, onClose, onOutcome, onResc
                         </>
                     )}
 
-                    {/* Q3.7 — real send actions: invoice + review request to the client */}
-                    {client?.claim_id && (
+                    {/* Q3.7 — real send actions: invoice + review request to the client.
+                        Shown ONLY when the appointment is linked to an active job
+                        (spec: "When linked to an active job"), not merely a claim. */}
+                    {detail?.has_active_job && (
                         <div className="appt-joblinks">
-                            <button className="btn-secondary sm" disabled={!!sending37} onClick={sendInvoice} title="Email/text the client their final invoice">{sending37 === 'invoice' ? 'Sending…' : '📄 Send Final Invoice'}</button>
-                            <button className="btn-secondary sm" disabled={!!sending37} onClick={requestReview} title="Email/text the client your review link">{sending37 === 'review' ? 'Sending…' : '⭐ Request Review'}</button>
+                            <button className="btn-secondary sm" disabled={!!sending37} onClick={sendInvoice} title="Email/text the client their final invoice">{sending37 === 'invoice' ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : '📄 Send Final Invoice'}</button>
+                            <button className="btn-secondary sm" disabled={!!sending37} onClick={requestReview} title="Email/text the client your review link">{sending37 === 'review' ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : '⭐ Request Review'}</button>
                         </div>
                     )}
 

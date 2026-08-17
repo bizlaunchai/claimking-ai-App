@@ -165,7 +165,7 @@ const BuyCreditsPage = () => {
 
         // Show loading
         button.classList.add('btn-loading');
-        button.innerHTML = '<span class="loading-text">Processing...</span>';
+        button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Processing…';
 
         setTimeout(() => {
             button.classList.remove('btn-loading');
@@ -306,7 +306,7 @@ const BuyCreditsPage = () => {
         if (button) {
             const originalHTML = button.innerHTML;
             button.classList.add('btn-loading');
-            button.innerHTML = '<span class="loading-text">Processing Payment...</span>';
+            button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Processing Payment…';
             button.disabled = true;
 
             // Simulate payment processing
@@ -358,7 +358,7 @@ const BuyCreditsPage = () => {
         if (selected === '0') {
             // Show loading state
             button.classList.add('loading');
-            button.innerHTML = 'Cancelling...';
+            button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Cancelling…';
 
             // Simulate API call
             setTimeout(() => {
@@ -385,7 +385,7 @@ const BuyCreditsPage = () => {
 
             // Show loading state
             button.classList.add('loading');
-            button.innerHTML = 'Saving...';
+            button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Saving…';
 
             // Simulate payment processing
             setTimeout(() => {
@@ -410,7 +410,7 @@ const BuyCreditsPage = () => {
         // Show loading state
         if (button) {
             button.classList.add('loading');
-            button.innerHTML = 'Saving...';
+            button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Saving…';
         }
 
         // Simulate API call
@@ -590,7 +590,7 @@ const BuyCreditsPage = () => {
 
     function setDefaultPayment(id) {
         const button = event.target;
-        button.textContent = 'Setting...';
+        button.innerHTML = '<span class="ck-spinner sm ck-btn-spin"></span>Setting…';
 
         setTimeout(() => {
             // Remove default from all items

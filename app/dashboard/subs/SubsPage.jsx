@@ -101,7 +101,7 @@ function AddSubModal({ onClose, onSaved, toast }) {
                     <div className="field full"><label>Notes</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Internal notes (optional)" /></div>
                 </div>
             </div>
-            <div className="modal-foot"><button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Sending…' : 'Send Invite'}</button></div>
+            <div className="modal-foot"><button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send Invite'}</button></div>
         </div></div>
     );
 }
@@ -152,7 +152,7 @@ function ReviewDocModal({ subId, doc, onClose, onDone, toast }) {
                 <div className="field">
                     <label>Document</label>
                     {hasFile ? (
-                        <button type="button" className="btn btn-secondary btn-sm doc-view-btn" onClick={viewDoc} disabled={viewing}>{viewing ? 'Opening…' : '🔍 View uploaded document'}</button>
+                        <button type="button" className="btn btn-secondary btn-sm doc-view-btn" onClick={viewDoc} disabled={viewing}>{viewing ? <><span className="ck-spinner sm ck-btn-spin" />Opening…</> : '🔍 View uploaded document'}</button>
                     ) : (
                         <div className="hint">{isEsignStub ? 'E-signed agreement — no file to view yet.' : 'No file uploaded yet.'}</div>
                     )}
@@ -207,7 +207,7 @@ function RecordPaymentModal({ subId, jobs, onClose, onDone, toast }) {
                     <div className="field"><label>Memo</label><input type="text" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reference" /></div>
                 </div>
             </div>
-            <div className="modal-foot"><button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Record Payment'}</button></div>
+            <div className="modal-foot"><button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Record Payment'}</button></div>
         </div></div>
     );
 }
@@ -375,7 +375,7 @@ function SubDrawer({ subId, onClose, onChanged, toast }) {
                             <div className="drawer-actions">
                                 {data.status === 'active' && <button className="btn btn-ghost" onClick={() => setStatus('suspended')} disabled={busy === 'status'}>Suspend</button>}
                                 {data.status === 'suspended' && <button className="btn btn-success" onClick={() => setStatus('active')} disabled={busy === 'status'}>Reactivate</button>}
-                                {['invited', 'onboarding'].includes(data.status) && <button className="btn btn-secondary" onClick={resend} disabled={busy === 'resend'}>{busy === 'resend' ? 'Sending…' : 'Resend Invite'}</button>}
+                                {['invited', 'onboarding'].includes(data.status) && <button className="btn btn-secondary" onClick={resend} disabled={busy === 'resend'}>{busy === 'resend' ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Resend Invite'}</button>}
                             </div>
 
                             {/* Q2.11 — auto-accept: trusted subs skip the request/approval queue */}
@@ -682,7 +682,7 @@ function AgreementBuilderModal({ onClose, toast }) {
                             <button className="btn btn-ghost btn-sm" onClick={() => setShowPreview((v) => !v)}>{showPreview ? '✎ Edit' : '👁 Preview'}</button>
                             <div style={{ flex: 1 }} />
                             <button className="btn btn-ghost btn-sm" disabled={busy || isDefault} onClick={resetDefault}>Reset to default</button>
-                            <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save agreement'}</button>
+                            <button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? <><span className="ck-spinner sm ck-btn-spin" />Saving…</> : 'Save agreement'}</button>
                         </div>
                     </>
                 )}

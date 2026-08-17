@@ -599,7 +599,7 @@ const Messages = () => {
 
                     <div className="mi-threads">
                         {threadsLoading ? (
-                            <div className="mi-list-msg">Loading conversations…</div>
+                            <div className="mi-list-msg ck-load-block"><span className="ck-spinner" /><span>Loading conversations…</span></div>
                         ) : listError ? (
                             <div className="mi-list-msg mi-list-error">{listError}</div>
                         ) : threads.length === 0 ? (
@@ -674,7 +674,7 @@ const Messages = () => {
                                         <div className="mi-ch-name">
                                             {activeClient
                                                 ? `${activeClient.first_name ?? ''} ${activeClient.last_name ?? ''}`.trim() || 'Client'
-                                                : 'Loading…'}
+                                                : <span className="ck-skel" style={{ width: 90, height: 13, display: 'inline-block', verticalAlign: 'middle' }} />}
                                         </div>
                                         <div className="mi-ch-sub">
                                             {[
@@ -704,7 +704,7 @@ const Messages = () => {
 
                             <div className="mi-messages" ref={msgScrollRef}>
                                 {threadLoading ? (
-                                    <div className="mi-list-msg">Loading conversation…</div>
+                                    <div className="mi-list-msg ck-load-block"><span className="ck-spinner" /><span>Loading conversation…</span></div>
                                 ) : messages.length === 0 ? (
                                     <div className="mi-list-msg">
                                         No messages yet — send the first one below.
@@ -746,7 +746,7 @@ const Messages = () => {
                                     onClick={sendReply}
                                     disabled={sending || !draft.trim()}
                                 >
-                                    {sending ? 'Sending…' : 'Send'}
+                                    {sending ? <><span className="ck-spinner sm ck-btn-spin" />Sending…</> : 'Send'}
                                 </button>
                             </div>
                         </>

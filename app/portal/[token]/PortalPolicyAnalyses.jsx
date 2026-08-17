@@ -193,7 +193,7 @@ const PortalPolicyAnalyses = ({ clientId, analysisId, embedded = false }) => {
 
     const body = (
         <>
-            {loading && <p className="text-gray-500 text-sm">Loading analyses…</p>}
+            {loading && <div className="ck-load-block" style={{ padding: '1.5rem', minHeight: 0 }}><span className="ck-spinner" /><span>Loading analyses…</span></div>}
             {!loading && error && (
                 <p className="text-gray-700 bg-white border border-gray-200 rounded p-6 text-center">
                     {error === 'Not found'

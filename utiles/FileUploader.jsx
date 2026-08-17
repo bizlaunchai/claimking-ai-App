@@ -92,7 +92,7 @@ export default function FileUploader({
         }
     };
 
-    if (!token) return <div style={{ padding: 16, color: "#9ca3af", fontSize: 13 }}>Loading...</div>;
+    if (!token) return <div className="ck-load-inline" style={{ padding: 16 }}><span className="ck-spinner sm" />Loading…</div>;
 
     return (
         <Dropzone

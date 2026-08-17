@@ -68,7 +68,7 @@ export default function UnassignedLeads() {
                 <button className="unassigned-refresh" onClick={load}>Refresh</button>
             </div>
 
-            {loading && <div className="unassigned-empty">Loading…</div>}
+            {loading && <div className="unassigned-empty ck-load-block"><span className="ck-spinner" /><span>Loading…</span></div>}
             {!loading && leads.length === 0 && (
                 <div className="unassigned-empty">
                     No unassigned leads. Every recent call is matched to a client.
