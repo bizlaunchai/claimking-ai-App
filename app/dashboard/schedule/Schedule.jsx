@@ -170,6 +170,17 @@ const fmtInTz = (d, tz) => {
 };
 // Q3.5 — turn-by-turn navigation link. Prefers coordinates, falls back to the
 // typed address (Google geocodes it). Null when there's nothing to route to.
+// §3.18 — rough drive-time estimate (no routing API): straight-line miles at an
+// assumed 35 mph average. Used only to FLAG back-to-back appts that look too tight.
+const haversineMi = (a, b) => {
+    if (a?.lat == null || a?.lng == null || b?.lat == null || b?.lng == null) return null;
+    const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+};
+const estDriveMin = (a, b) => { const mi = haversineMi(a, b); return mi == null ? null : Math.round((mi / 35) * 60) + 5; };
+
 const navHref = (address, lat, lng) => {
     const dest = (lat != null && lng != null) ? `${lat},${lng}` : (address ? encodeURIComponent(address) : null);
     return dest ? `https://www.google.com/maps/dir/?api=1&destination=${dest}` : null;
@@ -222,6 +233,7 @@ export default function Schedule() {
     const [showJobsMap, setShowJobsMap] = useState(false);  // Q3.15 all-jobs map
     const [showCalendars, setShowCalendars] = useState(false); // Q3.13 external calendar sync
     const [showTypes, setShowTypes] = useState(false);      // Q3.6 appointment type center
+    const [showConfirm, setShowConfirm] = useState(false);  // §3.18 unconfirmed-tomorrow list
     const [apptTypes, setApptTypes] = useState([]);         // Q3.6 DB-driven types
     const [typesVersion, setTypesVersion] = useState(0);    // bump to re-render on type change
 
@@ -342,7 +354,18 @@ export default function Schedule() {
     const saveOutcome = async (appt, outcome) => {
         try {
             const res = await axiosInstance.post(`/appointments/${appt.id}/outcome`, { outcome });
-            toast.success(outcome === 'completed' ? 'Marked completed' : 'Marked no-show');
+            if (outcome === 'completed') {
+                toast.success('Marked completed');
+            } else {
+                // §3.18 — no-show follow-up: one-tap rebook (create prefilled with the same client).
+                toast('Marked no-show', {
+                    description: 'Rebook this client?',
+                    action: {
+                        label: 'Rebook',
+                        onClick: () => setModal({ mode: 'create', prefill: { lead_id: appt.lead_id || '', claim_id: appt.claim_id || '', address: appt.address || '', type: appt.type } }),
+                    },
+                });
+            }
             if (res.data?.prompt_send_estimate) {
                 toast('Estimate ready to send', {
                     description: 'This estimate appointment is complete — send the estimate from the claim.',
@@ -447,6 +470,31 @@ export default function Schedule() {
         return appts.filter((a) => sameDay(a._s, now)).sort((a, b) => a._s - b._s);
     }, [appts]);
 
+    // §3.18 — flag back-to-back appts whose est. drive time exceeds the gap.
+    const travelWarnings = useMemo(() => {
+        const byPerson = {};
+        for (const a of appts) {
+            if (!a.assigned_to || a.lat == null || a.lng == null) continue;
+            (byPerson[a.assigned_to] ||= []).push(a);
+        }
+        const out = [];
+        for (const list of Object.values(byPerson)) {
+            list.sort((x, y) => x._s - y._s);
+            for (let i = 1; i < list.length; i++) {
+                const prev = list[i - 1], cur = list[i];
+                if (!sameDay(prev._s, cur._s)) continue;
+                const gapMin = Math.round((cur._s - prev._e) / 60000);
+                if (gapMin < 0) continue;
+                const drive = estDriveMin(prev, cur);
+                if (drive != null && drive > gapMin) out.push({ id: cur.id, drive, gapMin, prev, cur });
+            }
+        }
+        return out;
+    }, [appts]);
+    const travelWarnText = travelWarnings.map((w) =>
+        `${w.cur._s.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${w.cur._s.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}: ~${w.drive} min drive but only ${w.gapMin} min gap`,
+    ).join('\n');
+
     // Only in-house workers can be an APPOINTMENT assignee (subs get jobs, not
     // appointments). The full `team` (workers + subs) drives the filter + lanes.
     const workers = useMemo(() => team.filter((m) => m.kind === 'worker'), [team]);
@@ -487,6 +535,16 @@ export default function Schedule() {
                         <button className="cal-nav-btn" onClick={printSchedule} disabled={printing} title="Print this range as a crew sheet"><Printer size={14} style={{ verticalAlign: '-2px' }} /> {printing ? 'Preparing…' : 'Print'}</button>
                         {/* Q3.15 — all upcoming jobs on one map */}
                         <button className="cal-nav-btn" onClick={() => setShowJobsMap(true)} title="All upcoming jobs on a map"><MapPin size={14} style={{ verticalAlign: '-2px' }} /> Jobs Map</button>
+                        {/* §3.18 — tomorrow's unconfirmed appointments + one-tap confirm texts */}
+                        <button className="cal-nav-btn" onClick={() => setShowConfirm(true)} title="Tomorrow's unconfirmed appointments">🔔 Confirm</button>
+                        {/* §3.18 — travel-time warning: tight back-to-back gaps */}
+                        {travelWarnings.length > 0 && (
+                            <button className="cal-nav-btn" style={{ color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
+                                title={`Tight drive-time gaps (est.):\n${travelWarnText}`}
+                                onClick={() => toast.warning(`${travelWarnings.length} tight gap(s) — hover for details`, { description: travelWarnText })}>
+                                ⚠ {travelWarnings.length} tight gap{travelWarnings.length > 1 ? 's' : ''}
+                            </button>
+                        )}
                         {/* Q3.3 — one picker for workers AND subs */}
                         {manageAll && (
                             <select className="sched-person" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} title="Filter by person">
@@ -521,6 +579,7 @@ export default function Schedule() {
 
                 {showCalendars && <CalendarSyncPanel onClose={() => setShowCalendars(false)} />}
                 {showTypes && <TypeCenterModal types={apptTypes} onClose={() => setShowTypes(false)} onChanged={loadTypes} />}
+                {showConfirm && <UnconfirmedModal onClose={() => setShowConfirm(false)} />}
                 {showAvail && <AvailabilityPanel manageAll={manageAll} workers={workers} onClose={() => setShowAvail(false)} onChanged={load} />}
                 {showLinks && <BookingLinks manageAll={manageAll} nameOf={nameOf} onClose={() => setShowLinks(false)} />}
 
@@ -616,6 +675,53 @@ export default function Schedule() {
 // Q3.2 — read-only detail for a synced Jobs Ready entry (manage the job itself
 // over in Jobs Ready — this calendar just mirrors + reschedules its date).
 // ==========================================================================
+// §3.18 — tomorrow's unconfirmed appointments with one-tap confirmation texts.
+function UnconfirmedModal({ onClose }) {
+    const [data, setData] = useState(null);
+    const [sending, setSending] = useState(null);
+    const [done, setDone] = useState({});
+    useEffect(() => {
+        let alive = true;
+        axiosInstance.get('/appointments/unconfirmed', { suppressErrorToast: true })
+            .then((r) => { if (alive) setData(r.data?.data || { appointments: [] }); })
+            .catch(() => { if (alive) setData({ appointments: [] }); });
+        return () => { alive = false; };
+    }, []);
+    const confirm = async (a) => {
+        setSending(a.id);
+        try {
+            const r = await axiosInstance.post(`/appointments/${a.id}/request-confirm`);
+            const n = r.data?.data?.notified;
+            if (n && (n.email || n.sms)) { toast.success('Confirmation sent'); setDone((d) => ({ ...d, [a.id]: true })); }
+            else toast.warning('No reachable contact for this client');
+        } catch (e) { toast.error(e?.response?.data?.message || 'Could not send'); }
+        finally { setSending(null); }
+    };
+    const list = data?.appointments || [];
+    return (
+        <div className="modal-backdrop active" onClick={onClose}>
+            <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '94vw' }}>
+                <div className="modal-header"><div className="modal-title">Unconfirmed — {data?.date || 'tomorrow'}</div><button className="modal-close" onClick={onClose}>×</button></div>
+                <div className="modal-body" style={{ padding: '0.5rem 0', maxHeight: '60vh', overflow: 'auto' }}>
+                    {data === null ? <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>Loading…</div>
+                        : !list.length ? <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>🎉 All appointments for this day are confirmed.</div>
+                            : list.map((a) => (
+                                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 0.9rem', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 700, color: '#1a1f3a', fontSize: '0.88rem' }}>{a.client_name}</div>
+                                        <div style={{ fontSize: '0.76rem', color: '#6b7280' }}>{new Date(a.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · {a.type}{a.address ? ` · ${a.address}` : ''}</div>
+                                    </div>
+                                    {done[a.id]
+                                        ? <span style={{ color: '#16a34a', fontSize: '0.8rem', fontWeight: 700 }}>✓ Sent</span>
+                                        : <button className="cal-nav-btn" disabled={!a.confirmable || sending === a.id} onClick={() => confirm(a)} title={a.confirmable ? 'Text/email the client to confirm' : 'No linked client contact'}>{sending === a.id ? 'Sending…' : 'Send text'}</button>}
+                                </div>
+                            ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function JobDetailModal({ appt, onClose }) {
     const router = useRouter();
     const when = new Date(appt._s).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
