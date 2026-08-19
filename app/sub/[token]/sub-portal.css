@@ -1,15 +1,28 @@
 /* =========================================================================
    Public contractor portal — mobile-first (task 3.9 Part C)
    ========================================================================= */
-.sub-portal { min-height: 100vh; background: #f5f6f8; color: #1f2937; font-family: inherit; }
+/* Dynamic company brand palette (sql/96 brand_colors, resolved server-side).
+   The component sets --sp-c1/--sp-c2 inline from the company's colours; these
+   are the ClaimKing-default fallbacks so a company with no palette still looks
+   right. c1 = primary (navy chrome), c2 = accent (gold CTAs). */
+.sub-portal { --sp-c1: #1a1f3a; --sp-c2: #FDB813; min-height: 100vh; background: #f5f6f8; color: #1f2937; font-family: inherit; }
 .sub-portal * { box-sizing: border-box; }
 
-.sub-portal .sp-loading, .sub-portal .sp-error { max-width: 480px; margin: 4rem auto; padding: 2rem; text-align: center; background: #fff; border-radius: 14px; color: #6b7280; }
-.sub-portal .sp-error { color: #b91c1c; }
+/* Full-view, cleanly centred loader — a branded ring + caption, no boxy card. */
+.sub-portal .sp-loading { min-height: 82vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 2rem; color: #6b7280; }
+.sub-portal .sp-spinner { width: 46px; height: 46px; border: 4px solid #e6e8ec; border-top-color: var(--sp-c2); border-radius: 50%; animation: docspin 0.7s linear infinite; }
+.sub-portal .sp-loading-txt { font-size: 0.9rem; font-weight: 600; letter-spacing: 0.2px; }
+.sub-portal .sp-error { max-width: 440px; margin: 6rem auto; padding: 2rem; text-align: center; background: #fff; border: 1px solid #eef0f4; border-radius: 16px; color: #b91c1c; box-shadow: 0 4px 20px rgba(15,23,42,0.06); }
 
-.sub-portal .sp-header { background: #1a1f3a; color: #fff; padding: 1rem 1.25rem; position: sticky; top: 0; z-index: 1100; }
-.sub-portal .sp-brand { font-size: 0.72rem; letter-spacing: 0.5px; text-transform: uppercase; color: #FDB813; font-weight: 700; }
-.sub-portal .sp-name { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+/* Light, elegant "Invited by <company>" lockup — not a heavy app header bar.
+   Scrolls away (not sticky); in the active portal the tab bar is the sticky
+   element. Branded via the dynamic palette. */
+.sub-portal .sp-header { background: transparent; padding: 1.6rem 1.25rem 1.1rem; display: flex; align-items: center; justify-content: center; gap: 0.85rem; }
+.sub-portal .sp-logo { width: 46px; height: 46px; border-radius: 11px; object-fit: cover; background: #fff; flex: none; box-shadow: 0 2px 8px rgba(15,23,42,0.14); }
+.sub-portal .sp-header-txt { min-width: 0; }
+.sub-portal .sp-invited { font-size: 0.62rem; letter-spacing: 0.9px; text-transform: uppercase; color: #9ca3af; font-weight: 700; }
+.sub-portal .sp-company { font-size: 1.2rem; font-weight: 800; color: var(--sp-c1); line-height: 1.15; display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-portal .sp-company-accent { display: block; height: 3px; width: 34px; border-radius: 2px; background: var(--sp-c2); margin-top: 6px; }
 .sub-portal .sp-suspended { font-size: 0.6rem; background: #dc2626; color: #fff; padding: 0.15rem 0.5rem; border-radius: 6px; text-transform: uppercase; }
 
 .sub-portal .sp-content { max-width: 1140px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
@@ -19,11 +32,15 @@
 .sub-portal .btn { border: none; border-radius: 10px; padding: 0.65rem 1.1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; font-family: inherit; transition: all 0.15s ease; }
 .sub-portal .btn-sm { padding: 0.45rem 0.8rem; font-size: 0.78rem; }
 .sub-portal .btn-block { width: 100%; margin-top: 0.75rem; }
-.sub-portal .btn-primary { background: linear-gradient(135deg, #FDB813, #d4a000); color: #1a1f3a; }
-.sub-portal .btn-secondary { background: #1a1f3a; color: #fff; }
+.sub-portal .btn-primary { background: var(--sp-c2); color: var(--sp-c1); }
+.sub-portal .btn-secondary { background: var(--sp-c1); color: #fff; }
 .sub-portal .btn-success { background: #16a34a; color: #fff; }
 .sub-portal .btn-ghost { background: #eef0f4; color: #1f2937; }
 .sub-portal .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* No dead buttons (§1.3.4): the blocked "submit" state reads as visibly
+   disabled — muted, not a live green bar — and carries a tooltip saying why. */
+.sub-portal .btn-blocked { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.sub-portal .btn-blocked:disabled { opacity: 1; }
 
 .sub-portal .card { background: #fff; border: 1px solid #eef0f4; border-radius: 14px; padding: 1.1rem; margin-bottom: 1rem; }
 .sub-portal .card h3 { font-size: 0.95rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.75rem; }
@@ -33,12 +50,12 @@
 .sub-portal .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
 .sub-portal .field label, .sub-portal .field-label { font-size: 0.78rem; font-weight: 700; color: #374151; }
 .sub-portal .field input { padding: 0.7rem 0.85rem; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 0.9rem; font-family: inherit; }
-.sub-portal .field input[type="range"] { padding: 0; accent-color: #FDB813; }
-.sub-portal .field input:focus { outline: none; border-color: #FDB813; box-shadow: 0 0 0 3px rgba(253,184,19,0.1); }
+.sub-portal .field input[type="range"] { padding: 0; accent-color: var(--sp-c2); }
+.sub-portal .field input:focus { outline: none; border-color: var(--sp-c2); box-shadow: 0 0 0 3px rgba(253,184,19,0.1); }
 
 .sub-portal .trade-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .sub-portal .trade-chip { padding: 0.4rem 0.8rem; border-radius: 16px; border: 2px solid #e5e7eb; background: #fff; font-size: 0.8rem; font-weight: 600; color: #6b7280; cursor: pointer; text-transform: capitalize; }
-.sub-portal .trade-chip.on { background: #1a1f3a; border-color: #1a1f3a; color: #fff; }
+.sub-portal .trade-chip.on { background: var(--sp-c1); border-color: var(--sp-c1); color: #fff; }
 
 /* position+z-index makes the map its own stacking context so Leaflet's internal
    z-indexes (zoom control = 1000, panes ≤700) stay INSIDE the map box and can't
@@ -82,7 +99,7 @@
 .sub-portal .btn-busy { min-width: 104px; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
 .sub-portal .btn-busy:disabled { opacity: 0.9; cursor: progress; }
 .sub-portal .doc-spin { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: docspin 0.6s linear infinite; flex: none; }
-.sub-portal .doc-spin.dark { border-color: rgba(26,31,58,0.3); border-top-color: #1a1f3a; }
+.sub-portal .doc-spin.dark { border-color: rgba(26,31,58,0.3); border-top-color: var(--sp-c1); }
 @keyframes docspin { to { transform: rotate(360deg); } }
 
 /* "Save your business details" block — a labeled card so the save action reads
@@ -100,7 +117,7 @@
 .sub-portal .wizard-col { display: flex; flex-direction: column; min-width: 0; }
 .sub-portal .col-head { display: flex; align-items: baseline; gap: 0.6rem; margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }
 .sub-portal .col-head h2 { font-size: 1.05rem; font-weight: 800; color: #1a1f3a; margin: 0; }
-.sub-portal .col-kicker { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #fff; background: #1a1f3a; padding: 0.2rem 0.5rem; border-radius: 6px; }
+.sub-portal .col-kicker { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #fff; background: var(--sp-c1); padding: 0.2rem 0.5rem; border-radius: 6px; }
 .sub-portal .col-count { margin-left: auto; font-size: 0.72rem; font-weight: 700; color: #6b7280; background: #eef0f4; padding: 0.2rem 0.55rem; border-radius: 999px; }
 /* on the desktop grid the submit button anchors to the bottom of the docs column */
 .sub-portal .wizard-col .btn-block { margin-top: auto; }
@@ -114,9 +131,9 @@
 .sub-portal .ds-red { background: #fee2e2; color: #991b1b; }
 
 /* tabs */
-.sub-portal .tab-bar { display: flex; background: #fff; border-radius: 12px; padding: 4px; margin-bottom: 1rem; position: sticky; top: 64px; z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.sub-portal .tab-bar { display: flex; background: #fff; border-radius: 12px; padding: 4px; margin-bottom: 1rem; position: sticky; top: 0.75rem; z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 .sub-portal .tab-bar button { flex: 1; border: none; background: transparent; padding: 0.55rem 0.3rem; border-radius: 8px; font-weight: 700; font-size: 0.78rem; color: #6b7280; cursor: pointer; }
-.sub-portal .tab-bar button.on { background: #1a1f3a; color: #FDB813; }
+.sub-portal .tab-bar button.on { background: var(--sp-c1); color: var(--sp-c2); }
 
 /* offers */
 .sub-portal .offer-card { background: #fff; border: 1px solid #eef0f4; border-radius: 14px; padding: 1rem; margin-bottom: 0.85rem; }
@@ -165,8 +182,8 @@
 .sub-portal .jc-img-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(26,31,58,0.75); color: #fff; font-size: 9px; font-weight: 700; text-align: center; padding: 1px 0; }
 
 /* payments */
-.sub-portal .ytd-card { background: #1a1f3a; color: #fff; border-radius: 14px; padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.85rem; }
-.sub-portal .ytd-card span { font-size: 1.5rem; font-weight: 800; color: #FDB813; }
+.sub-portal .ytd-card { background: var(--sp-c1); color: #fff; border-radius: 14px; padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.85rem; }
+.sub-portal .ytd-card span { font-size: 1.5rem; font-weight: 800; color: var(--sp-c2); }
 .sub-portal .pay-row { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; }
 
 /* ── subcontractor agreement e-sign modal ── */
