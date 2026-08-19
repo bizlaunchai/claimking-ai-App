@@ -302,10 +302,15 @@
     background: white; border-radius: 12px;
     max-width: 480px; width: 100%;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+    /* Cap height and let the body scroll so tall modals (e.g. the 10-field
+       New Lead form) never bleed past the viewport on short/laptop screens —
+       header + footer stay pinned, only the fields scroll. */
+    max-height: 92vh; display: flex; flex-direction: column;
 }
 .new-leads-page .modal-header {
     padding: 1.25rem 1.5rem; border-bottom: 1px solid #e5e7eb;
     display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
 }
 .new-leads-page .modal-title { font-size: 1.05rem; font-weight: 700; color: #1a1f3a; }
 .new-leads-page .modal-close {
@@ -313,7 +318,7 @@
     font-size: 1.5rem; line-height: 1;
     color: #6b7280; cursor: pointer; padding: 0;
 }
-.new-leads-page .modal-body { padding: 1.5rem; }
+.new-leads-page .modal-body { padding: 1.5rem; overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0; }
 .new-leads-page .modal-body label {
     display: block; font-size: 0.75rem; font-weight: 700;
     text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px;
@@ -345,6 +350,7 @@
 .new-leads-page .modal-footer {
     padding: 1rem 1.5rem; border-top: 1px solid #e5e7eb;
     display: flex; justify-content: flex-end; gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 /* Scheduling */
@@ -480,10 +486,25 @@
 /* =====================================================================
    RESPONSIVE — phone / tablet pass
    ===================================================================== */
+
+/* Small-laptop / large-tablet range (sidebar auto-collapses <1024). Trim the
+   generous 2rem gutters so the pipeline, stats and table get real width. */
+@media (max-width: 1024px) {
+    .new-leads-page .page-header { padding: 1.25rem 1.5rem; }
+    .new-leads-page .content { padding: 1.25rem 1.5rem; }
+    .new-leads-page .pipeline-nav { padding: 0 1.5rem; }
+}
+
 @media (max-width: 768px) {
     /* Tighten outer padding so cards get the width */
     .new-leads-page .page-header { padding: 1.25rem 1rem; }
     .new-leads-page .content { padding: 1rem; }
+    /* Keep the scrolling tab strip flush with the page gutter */
+    .new-leads-page .pipeline-nav { padding: 0 1rem; }
+    .new-leads-page .pipeline-tab { padding: 0.75rem 0.9rem; }
+
+    /* Title scales down a touch on phones */
+    .new-leads-page .page-title { font-size: 1.25rem; }
 
     /* Header buttons share the row full-width */
     .new-leads-page .header-right { width: 100%; }
@@ -519,8 +540,14 @@
 
 @media (max-width: 480px) {
     /* One stat card per row reads better than cramped halves */
-    .new-leads-page .stats-grid { grid-template-columns: 1fr; }
+    .new-leads-page .stats-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+    .new-leads-page .stat-card { padding: 1rem 1.1rem; }
     .new-leads-page .modal-box { width: 94%; }
+
+    /* Footer buttons go full-width & stack so they're easy tap targets */
+    .new-leads-page .modal-footer { flex-direction: column-reverse; }
+    .new-leads-page .modal-footer .btn-primary,
+    .new-leads-page .modal-footer .btn-secondary { width: 100%; justify-content: center; }
 }
 
 /* =====================================================================

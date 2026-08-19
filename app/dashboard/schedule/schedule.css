@@ -269,8 +269,20 @@
 .schedule-page .avail-ov-rm:hover { background: #fee2e2; }
 .schedule-page .avail-ov-add { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; padding-top: 0.75rem; border-top: 1px dashed #eef0f4; }
 .schedule-page .avail-ov-add input, .schedule-page .avail-ov-add select { padding: 0.45rem 0.5rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.82rem; }
+/* One shared height so every control + the Add button line up exactly */
+.schedule-page .avail-ov-add > input,
+.schedule-page .avail-ov-add > select,
+.schedule-page .avail-ov-add > .avail-ov-note-in,
+.schedule-page .avail-ov-add > .btn-secondary { height: 40px; }
 .schedule-page .avail-ov-add .avail-ov-note-in { flex: 1; min-width: 120px; }
 .schedule-page .avail-to { color: #9ca3af; }
+/* The "Add" action reads as a real button (solid dark), not a faint white
+   outline that disappears against the row */
+.schedule-page .avail-ov-add > .btn-secondary {
+    background: #1a1f3a; color: #fff; border: 1px solid #1a1f3a;
+    font-weight: 700; padding: 0 1.1rem; white-space: nowrap;
+}
+.schedule-page .avail-ov-add > .btn-secondary:hover { background: #2d3561; border-color: #2d3561; }
 
 /* Q3.8 — On the Way */
 .schedule-page .btn-otw { margin-top: 0.5rem; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.8rem; background: #1a1f3a; color: #FDB813; border: none; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
@@ -355,16 +367,122 @@
 .schedule-page .bl-copy { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.6rem; border: 1px solid #e5e7eb; border-radius: 6px; background: white; font-size: 0.76rem; font-weight: 600; color: #374151; cursor: pointer; }
 .schedule-page .bl-copy:hover { border-color: #FDB813; background: #fef9e6; }
 .schedule-page .bl-empty { color: #9ca3af; font-size: 0.85rem; padding: 0.4rem 0; }
+/* Availability header: vertically centre the clock icon with the title (the
+   inline verticalAlign hack left it sitting a touch low / misaligned) */
+.schedule-page .avail-panel .bl-head > span { display: inline-flex; align-items: center; }
+
+/* Booking Links: the "Accept public bookings" checkbox is a <label> inside
+   .bl-editor, so it was wrongly picking up the uppercase field-label style. */
+.schedule-page .bl-editor > label.bl-toggle {
+    text-transform: none; letter-spacing: normal;
+    font-weight: 600; font-size: 0.85rem; margin-bottom: 0;
+}
+/* "Save" reads as a real button (solid dark) and lines up with the input */
+.schedule-page .bl-editrow input,
+.schedule-page .bl-editrow > .btn-secondary { height: 40px; }
+.schedule-page .bl-editrow > .btn-secondary {
+    background: #1a1f3a; color: #fff; border: 1px solid #1a1f3a;
+    font-weight: 700; padding: 0 1.1rem;
+}
+.schedule-page .bl-editrow > .btn-secondary:hover { background: #2d3561; border-color: #2d3561; }
+
+/* Small-laptop / large-tablet: sidebar auto-collapses <1024, so trim the wide
+   2rem gutters to give the calendar and toolbar real width. */
+@media (max-width: 1024px) {
+    .schedule-page .page-header { padding: 1.25rem 1.5rem; }
+    .schedule-page .content { padding: 1.25rem 1.5rem; }
+}
 
 @media (max-width: 768px) {
     .schedule-page .page-header { padding: 1.25rem 1rem; }
     .schedule-page .content { padding: 1rem; }
-    .schedule-page .header-right { width: 100%; }
-    .schedule-page .header-right .btn-primary, .schedule-page .header-right .btn-secondary { flex: 1; justify-content: center; }
+    .schedule-page .page-title { font-size: 1.25rem; }
+
+    /* Six header actions in a tidy 2-up grid (base .header-right is a no-wrap
+       flex row that would cram them into one line). Equal widths, and the
+       primary "New Appointment" spans the full width as the main CTA. */
+    .schedule-page .header-right { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .schedule-page .header-right .btn-primary,
+    .schedule-page .header-right .btn-secondary { width: 100%; justify-content: center; }
+    .schedule-page .header-right .btn-primary { grid-column: 1 / -1; }
+
+    /* Toolbar stacks; its right cluster spreads full-width and wraps */
     .schedule-page .sched-toolbar { flex-direction: column; align-items: stretch; }
+    .schedule-page .sched-nav { flex-wrap: wrap; }
+    .schedule-page .sched-toolbar-right { width: 100%; justify-content: flex-start; }
+    .schedule-page .sched-person { max-width: none; flex: 1 1 160px; }
     .schedule-page .sched-views { width: 100%; }
     .schedule-page .sched-view-btn { flex: 1; }
     .schedule-page .grid2 { grid-template-columns: 1fr; }
+
+    /* Modals: footer buttons full-width for easy tapping */
+    .schedule-page .modal-footer { flex-wrap: wrap; }
+    .schedule-page .modal-footer.between { gap: 0.5rem; }
+
+    /* Availability + Booking Links: inline panels on desktop, but proper centered
+       modal cards with a dim backdrop on mobile. Desktop layout is untouched. */
+    .schedule-page .avail-panel,
+    .schedule-page .bl-modal {
+        position: fixed; inset: 0; margin: auto; z-index: 99999;
+        width: calc(100% - 2rem); max-width: 460px;
+        height: max-content; max-height: 88vh; overflow-y: auto;
+        border: 1px solid #e5e7eb; border-radius: 16px;
+        /* The huge spread ring paints a full-screen dim backdrop AROUND the card
+           without tinting the card interior; second shadow is the lift. */
+        box-shadow: 0 0 0 100vmax rgba(26,31,58,0.55), 0 24px 60px rgba(0,0,0,0.35);
+    }
+    .schedule-page .avail-panel .modal-close,
+    .schedule-page .bl-modal .modal-close { font-size: 1.75rem; }
+
+    /* Booking Links roster: rep + status on the first line, the URL on its own
+       full-width line, and Copy as a full-width button below — no cramped wrap. */
+    .schedule-page .bl-modal .bl-row { row-gap: 0.4rem; }
+    .schedule-page .bl-modal .bl-rep { min-width: 0; }
+    .schedule-page .bl-modal .bl-url { flex: 1 1 100%; min-width: 0; }
+    .schedule-page .bl-modal .bl-copy { flex: 1 1 100%; justify-content: center; height: 38px; }
+    /* Tighter card padding so controls get width */
+    .schedule-page .avail-panel .avail-card { padding: 0.85rem 0.9rem; }
+
+    /* "Editing availability for": stack label over a full-width select instead of
+       the cramped label-left / select-right row */
+    .schedule-page .avail-target { flex-direction: column; align-items: stretch; gap: 0.35rem; }
+    .schedule-page .avail-target select { width: 100%; }
+
+    /* Start / End / Slot: each control on its own full-width row, label above */
+    .schedule-page .avail-hours { flex-direction: column; gap: 0.6rem; }
+    .schedule-page .avail-hours label { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+    .schedule-page .avail-hours input,
+    .schedule-page .avail-hours select { width: 100%; }
+
+    /* Time-off adder: date + kind share a row, note + Add full-width below */
+    .schedule-page .avail-ov-add { gap: 0.5rem; }
+    .schedule-page .avail-ov-add > input[type="date"],
+    .schedule-page .avail-ov-add > select { flex: 1 1 45%; min-width: 0; }
+    .schedule-page .avail-ov-add .avail-ov-note-in { flex: 1 1 100%; }
+
+    /* Both card action buttons ("Save working hours" + "+ Add day off") share the
+       SAME look on mobile: full-width, same height, same primary colour, centred. */
+    .schedule-page .avail-panel .avail-card-foot { justify-content: stretch; }
+    .schedule-page .avail-panel .avail-card-foot .btn-primary,
+    .schedule-page .avail-panel .avail-ov-add > .btn-secondary {
+        flex: 1 1 100%; width: 100%; height: 44px; justify-content: center;
+        background: linear-gradient(135deg, #FDB813, #d4a000);
+        color: #1a1f3a; border: none; border-radius: 8px;
+        font-weight: 700; font-size: 0.85rem;
+    }
+    .schedule-page .avail-panel .avail-card-foot .btn-primary:hover,
+    .schedule-page .avail-panel .avail-ov-add > .btn-secondary:hover {
+        box-shadow: 0 4px 12px rgba(253,184,19,0.4);
+    }
+}
+
+@media (max-width: 480px) {
+    /* Header stays a tidy 2-up grid on phones (see ≤768 rule); just tighten the gap */
+    .schedule-page .header-right { gap: 0.4rem; }
+    .schedule-page .modal-footer .btn-primary,
+    .schedule-page .modal-footer .btn-secondary,
+    .schedule-page .modal-footer .btn-danger,
+    .schedule-page .modal-footer .btn-success { flex: 1 1 100%; justify-content: center; }
 }
 
 /* Q3.10 appointment photos */

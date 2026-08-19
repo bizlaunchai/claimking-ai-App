@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
     ChevronLeft, ChevronRight, Plus, MapPin, Phone, Check, XCircle, X, Clock, RefreshCw, Printer,
@@ -1765,9 +1766,22 @@ function TypeCenterModal({ types, onClose, onChanged }) {
         } catch (e) { toast.error(e?.response?.data?.message || 'Create failed'); setAdding(true); }
     };
 
-    return (
-        <div className="tc-overlay" onClick={onClose}>
-            <div className="tc-modal" onClick={(e) => e.stopPropagation()}>
+    if (typeof document === 'undefined') return null;
+    return createPortal(
+        <div
+            className="tc-overlay"
+            onClick={onClose}
+            style={{
+                position: 'fixed', inset: 0, zIndex: 10000,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(15,23,42,.5)', padding: '1rem',
+            }}
+        >
+            <div
+                className="tc-modal"
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxHeight: '90vh', overflow: 'auto', width: '100%', maxWidth: 640 }}
+            >
                 <div className="tc-head">
                     <div>
                         <div className="tc-title">Appointment Types</div>
@@ -1829,6 +1843,10 @@ function TypeCenterModal({ types, onClose, onChanged }) {
                     <button className="tc-add" onClick={() => setAdding(true)}>+ Add appointment type</button>
                 )}
 
+                <div className="tc-foot">
+                    <button className="tc-close-btn" onClick={onClose}>Close</button>
+                </div>
+
                 <style jsx>{`
                     .tc-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
                     .tc-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 640px; max-height: 90vh; overflow: auto; padding: 1.25rem 1.4rem; }
@@ -1854,9 +1872,23 @@ function TypeCenterModal({ types, onClose, onChanged }) {
                     .tc-del { background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 7px; padding: .35rem .8rem; font-size: 12px; font-weight: 700; cursor: pointer; }
                     .tc-save:disabled, .tc-del:disabled { opacity: .5; }
                     .tc-add { margin-top: .8rem; width: 100%; padding: .6rem; border: 1px dashed #cbd5e1; border-radius: 10px; background: #fafbfc; color: #1a1f3a; font-weight: 700; font-size: .85rem; cursor: pointer; }
+                    .tc-foot { position: sticky; bottom: -1.25rem; margin: 1rem -1.4rem -1.25rem; padding: .85rem 1.4rem; background: #fff; border-top: 1px solid #eef0f4; display: flex; justify-content: flex-end; }
+                    .tc-close-btn { background: #1a1f3a; color: #fff; border: none; border-radius: 8px; padding: .5rem 1.4rem; font-size: .85rem; font-weight: 700; cursor: pointer; }
+                    .tc-close-btn:hover { background: #2d3561; }
+                    @media (max-width: 560px) {
+                        .tc-modal { padding: 1rem; border-radius: 14px; }
+                        .tc-title { font-size: 1.05rem; }
+                        /* Stack the row: colour + name/controls on top, the
+                           Save/Hide actions drop to a full-width row below so
+                           nothing gets squeezed on a phone. */
+                        .tc-row { flex-wrap: wrap; }
+                        .tc-actions { flex: 1 1 100%; flex-direction: row; justify-content: flex-end; gap: .5rem; margin-top: .6rem; padding-top: .6rem; border-top: 1px solid #f1f5f9; }
+                        .tc-actions button { flex: 0 0 auto; padding: .35rem .8rem; font-size: 12px; }
+                    }
                 `}</style>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
 
@@ -1987,7 +2019,7 @@ function AvailabilityPanel({ manageAll, workers, onClose, onChanged }) {
                                 </>
                             )}
                             <input type="text" className="avail-ov-note-in" placeholder="Note (optional)" value={ov.note} onChange={(e) => setOv({ ...ov, note: e.target.value })} />
-                            <button className="btn-secondary sm" onClick={addOverride}>Add</button>
+                            <button className="btn-secondary sm avail-ov-add-btn" onClick={addOverride}>+ Add {ov.kind === 'custom' ? 'hours' : 'day off'}</button>
                         </div>
                     </div>
                 </>
@@ -2044,7 +2076,7 @@ function BookingLinks({ manageAll, nameOf, onClose }) {
     const copy = (url) => { try { navigator.clipboard.writeText(url); toast.success('Copied'); } catch { /* noop */ } };
 
     return (
-        <div className="bl-panel">
+        <div className="bl-panel bl-modal">
             <div className="bl-head">
                 <span>Public Booking Links</span>
                 <button className="modal-close" onClick={onClose}>&times;</button>

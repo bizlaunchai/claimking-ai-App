@@ -1047,6 +1047,17 @@
     font-weight: 500;
 }
 
+/* On mobile the content area can be far taller than the screen (stat cards,
+   tables), so an absolute overlay centres the spinner at the middle of the
+   CONTENT — which lands off-screen below the fold. Pin it to the viewport so
+   the spinner always sits in the centre of the visible mobile screen. */
+@media (max-width: 768px) {
+    .permissions-loading-overlay {
+        position: fixed;
+        inset: 0;
+    }
+}
+
 .dashboard-content-wrapper {
     position: relative;
     min-height: 100vh;
