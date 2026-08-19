@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import './book.css';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -205,7 +206,10 @@ export default function BookPage({ slug }) {
                     </div>
                     <div className="bk-hint">Add a phone number or email so we can confirm.</div>
                     <label htmlFor="bk-address">Property address</label>
-                    <input id="bk-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="123 Main St, City, ST" />
+                    <AddressAutocomplete id="bk-address" value={form.address}
+                        onChange={(v) => setForm({ ...form, address: v })}
+                        onSelect={(p) => setForm({ ...form, address: p.formatted || [p.address, p.city, p.state, p.zip].filter(Boolean).join(', ') })}
+                        placeholder="123 Main St, City, ST" />
                     <label htmlFor="bk-notes">Anything we should know?</label>
                     <textarea id="bk-notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} placeholder="e.g. Hail damage after last week's storm" />
                     {/* Honeypot — hidden from humans, bots tend to fill it. Not a real field. */}

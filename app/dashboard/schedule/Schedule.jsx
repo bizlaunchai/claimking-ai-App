@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import Swal from 'sweetalert2';
 import axiosInstance from '@/lib/axiosInstance';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import { Link2, Copy } from 'lucide-react';
@@ -1287,7 +1288,9 @@ function PersonSearch({ onPick }) {
                     <input placeholder="Phone" value={nf.phone} onChange={(e) => setNf((s) => ({ ...s, phone: e.target.value }))} />
                     <input placeholder="Email" value={nf.email} onChange={(e) => setNf((s) => ({ ...s, email: e.target.value }))} />
                 </div>
-                <input placeholder="Address" value={nf.address} onChange={(e) => setNf((s) => ({ ...s, address: e.target.value }))} />
+                <AddressAutocomplete placeholder="Address" value={nf.address}
+                    onChange={(v) => setNf((s) => ({ ...s, address: v }))}
+                    onSelect={(p) => setNf((s) => ({ ...s, address: p.formatted || [p.address, p.city, p.state, p.zip].filter(Boolean).join(', ') }))} />
                 <div className="person-new-actions">
                     <button className="btn-link" onClick={() => setAdding(false)}>← Back to search</button>
                     <button className="btn-primary sm" disabled={creating} onClick={createPerson}>{creating ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add & select'}</button>
@@ -1519,7 +1522,13 @@ function AppointmentModal({ prefill, team, manageAll, defaultDate, onClose, onSa
                     )}
 
                     <label>Address</label>
-                    <input type="text" value={address} placeholder="Job site address" onChange={(e) => setAddress(e.target.value)} />
+                    {/* Single-field address → store the full formatted string (there
+                        are no separate city/state/zip fields on an appointment). */}
+                    <AddressAutocomplete
+                        value={address}
+                        placeholder="Job site address"
+                        onChange={setAddress}
+                        onSelect={(p) => setAddress(p.formatted || [p.address, p.city, p.state, p.zip].filter(Boolean).join(', '))} />
 
                     {/* Q3.16 — repeat rule */}
                     <label>Repeat</label>

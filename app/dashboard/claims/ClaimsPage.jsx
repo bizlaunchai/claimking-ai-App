@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import axiosInstance from '@/lib/axiosInstance';
+import AddressAutocomplete from '@/components/common/AddressAutocomplete';
 import { createClient } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/PermissionsContext';
 import { fetchStages, allStages, stageLabel } from '@/lib/stages';
@@ -2000,10 +2001,12 @@ const ClaimsManagement = () => {
                                     </div>
                                     <div className={`${ncFieldCls} sm:col-span-2`}>
                                         <label className={ncLabelCls} htmlFor="ncAddress">Property Address <span className="text-red-600 ml-0.5">*</span></label>
-                                        <input type="text" id="ncAddress"
+                                        <AddressAutocomplete id="ncAddress"
                                             className={ncInput(ncErrors.address)}
                                             placeholder="Street, City, State ZIP"
-                                            value={ncForm.address} onChange={(e) => ncUpdate('address', e.target.value)} />
+                                            value={ncForm.address}
+                                            onChange={(v) => ncUpdate('address', v)}
+                                            onSelect={(p) => ncUpdate('address', p.formatted || [p.address, p.city, p.state, p.zip].filter(Boolean).join(', '))} />
                                     </div>
                                 </div>
                             </div>
