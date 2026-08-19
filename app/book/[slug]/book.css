@@ -1,5 +1,14 @@
 /* Public booking page — self-contained, mobile-first. Scoped under .book-page. */
 .book-page {
+    /* Contractor brand palette (sql/96). Set as inline vars on .bk-card once the
+       landing payload loads; these are the legacy ClaimKing defaults used until
+       then and for any company without a custom palette.
+         --bk-c1 = primary (header text, headings)   navy
+         --bk-c2 = accent  (header bg, CTAs, hovers)  gold  */
+    --bk-c1: #1a1f3a;
+    --bk-c2: #FDB813;
+    /* Light tint of the accent, derived so it tracks any brand colour. */
+    --bk-c2-tint: color-mix(in srgb, var(--bk-c2) 12%, #ffffff);
     min-height: 100vh; background: linear-gradient(160deg, #1a1f3a 0%, #2d3561 100%);
     display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem 1rem 3rem;
     color: #1f2937; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -10,7 +19,8 @@
     box-shadow: 0 24px 60px rgba(0,0,0,0.35); overflow: hidden; margin-top: 2rem;
 }
 .book-page .bk-header {
-    background: linear-gradient(135deg, #FDB813, #d4a000); color: #1a1f3a; padding: 1.5rem;
+    background: linear-gradient(135deg, var(--bk-c2), color-mix(in srgb, var(--bk-c2) 78%, #000));
+    color: var(--bk-c1); padding: 1.5rem;
     text-align: center;
 }
 .book-page .bk-logo {
@@ -19,9 +29,36 @@
     background: white; border-radius: 8px; padding: 6px 10px;
 }
 .book-page .bk-brand { font-size: 1.4rem; font-weight: 800; }
+/* Shown in place of the company name while the landing payload loads — a
+   branded shimmer on the gold header, never a default "ClaimKing" label. */
+.book-page .bk-brand-skeleton {
+    height: 1.4rem; width: 60%; max-width: 220px; margin: 0.15rem auto; border-radius: 6px;
+    /* currentColor = header text (--bk-c1), so the shimmer tracks the brand. */
+    color: var(--bk-c1);
+    background: linear-gradient(90deg,
+        color-mix(in srgb, currentColor 12%, transparent) 25%,
+        color-mix(in srgb, currentColor 24%, transparent) 37%,
+        color-mix(in srgb, currentColor 12%, transparent) 63%);
+    background-size: 400% 100%;
+    animation: bk-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes bk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .book-page .bk-brand-skeleton { animation: none; } }
 .book-page .bk-sub { font-size: 0.9rem; font-weight: 600; margin-top: 0.25rem; opacity: 0.85; }
 .book-page .bk-body { padding: 1.25rem 1.25rem 1.5rem; }
-.book-page .bk-footer { padding: 0.75rem; text-align: center; font-size: 0.7rem; color: #9ca3af; border-top: 1px solid #f3f4f6; }
+/* Loading spinners on this page follow the contractor's accent, not global gold. */
+.book-page .ck-load-block .ck-spinner, .book-page .ck-load-inline .ck-spinner { color: var(--bk-c2); }
+
+/* Before the landing payload loads we know NO brand colour yet, so paint a
+   neutral grey placeholder — never the gold default, which would flash a wrong
+   brand and then flip to the real colour. Once `info` arrives the class drops
+   and the contractor's palette (above) takes over. */
+.book-page .bk-card--loading .bk-header {
+    background: #e9edf3; color: #94a3b8;
+}
+.book-page .bk-card--loading .bk-brand-skeleton { color: #94a3b8; }
+.book-page .bk-card--loading .ck-load-block .ck-spinner,
+.book-page .bk-card--loading .ck-load-inline .ck-spinner { color: #cbd5e1; }
 
 .book-page .bk-center { text-align: center; padding: 2rem 1rem; }
 .book-page .bk-center h2 { font-size: 1.15rem; font-weight: 700; color: #1a1f3a; margin-bottom: 0.5rem; }
@@ -34,7 +71,7 @@
     flex: 1; min-width: 120px; padding: 0.6rem; border: 2px solid #e5e7eb; border-radius: 10px;
     background: white; font-weight: 600; font-size: 0.85rem; color: #374151; cursor: pointer;
 }
-.book-page .bk-type.active { border-color: #FDB813; background: #fef9e6; color: #1a1f3a; }
+.book-page .bk-type.active { border-color: var(--bk-c2); background: var(--bk-c2-tint); color: var(--bk-c1); }
 
 /* Day nav */
 .book-page .bk-daynav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.875rem; }
@@ -43,7 +80,7 @@
     font-size: 1.2rem; color: #1a1f3a; cursor: pointer;
 }
 .book-page .bk-daybtn:disabled { opacity: 0.4; cursor: default; }
-.book-page .bk-daylabel { font-size: 1rem; font-weight: 700; color: #1a1f3a; }
+.book-page .bk-daylabel { font-size: 1rem; font-weight: 700; color: var(--bk-c1); }
 
 /* Slots */
 .book-page .bk-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
@@ -51,14 +88,14 @@
     padding: 0.7rem 0.4rem; border: 1px solid #e5e7eb; border-radius: 10px; background: white;
     font-weight: 700; font-size: 0.9rem; color: #1a1f3a; cursor: pointer;
 }
-.book-page .bk-slot:hover { border-color: #FDB813; background: #fef9e6; }
+.book-page .bk-slot:hover { border-color: var(--bk-c2); background: var(--bk-c2-tint); }
 /* Full-width messages inside the slot grid (loading / empty / error) */
 .book-page .bk-slots-msg { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 1.25rem 0.5rem; text-align: center; }
 .book-page .bk-retry {
     padding: 0.5rem 1rem; border: 1px solid #e5e7eb; border-radius: 10px; background: white;
     font-weight: 700; font-size: 0.85rem; color: #1a1f3a; cursor: pointer;
 }
-.book-page .bk-retry:hover { border-color: #FDB813; background: #fef9e6; }
+.book-page .bk-retry:hover { border-color: var(--bk-c2); background: var(--bk-c2-tint); }
 
 /* Form */
 .book-page .bk-form { display: flex; flex-direction: column; }
@@ -73,7 +110,7 @@
     width: 100%; padding: 0.7rem 0.8rem; border: 1px solid #e5e7eb; border-radius: 10px;
     font-size: 1rem; font-family: inherit; background: white;
 }
-.book-page .bk-form input:focus, .book-page .bk-form textarea:focus { outline: none; border-color: #FDB813; }
+.book-page .bk-form input:focus, .book-page .bk-form textarea:focus { outline: none; border-color: var(--bk-c2); }
 /* Beats the app-wide `input { … !important }` block in globals.css — must use !important + higher specificity. */
 .book-page .bk-form input.invalid { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
 .book-page .bk-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 0.35rem; }
@@ -82,7 +119,8 @@
 .book-page .bk-err { color: #b91c1c; font-size: 0.82rem; font-weight: 600; margin-top: 0.75rem; }
 .book-page .bk-submit {
     margin-top: 1.25rem; padding: 0.85rem; border: none; border-radius: 12px;
-    background: linear-gradient(135deg, #FDB813, #d4a000); color: #1a1f3a;
+    background: linear-gradient(135deg, var(--bk-c2), color-mix(in srgb, var(--bk-c2) 78%, #000));
+    color: var(--bk-c1);
     font-size: 1rem; font-weight: 800; cursor: pointer;
 }
 .book-page .bk-submit:disabled { opacity: 0.6; cursor: default; }
