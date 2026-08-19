@@ -81,7 +81,7 @@
 .subs-page .trade-chip.on { background: #1a1f3a; border-color: #1a1f3a; color: #fff; }
 
 /* ── modals ── */
-.subs-page .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.subs-page .modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; }
 .subs-page .modal-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.55); }
 .subs-page .modal-content { position: relative; background: #fff; border-radius: 16px; width: min(640px, 94vw); max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
 .subs-page .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 1.25rem 1.5rem; border-bottom: 1px solid #eef0f4; }
@@ -101,7 +101,7 @@
 .subs-page .field textarea { min-height: 70px; resize: vertical; }
 
 /* ── drawer ── */
-.subs-page .drawer-wrap { position: fixed; inset: 0; z-index: 1000; }
+.subs-page .drawer-wrap { position: fixed; inset: 0; z-index: 10000; }
 .subs-page .drawer-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.5); }
 .subs-page .drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(560px, 96vw); background: #fff; box-shadow: -10px 0 40px rgba(0,0,0,0.25); display: flex; flex-direction: column; animation: drawer-in 0.2s ease; }
 @keyframes drawer-in { from { transform: translateX(30px); opacity: 0.6; } to { transform: translateX(0); opacity: 1; } }
@@ -169,4 +169,20 @@
 @media (max-width: 640px) {
     .subs-page .form-grid, .subs-page .kv-grid { grid-template-columns: 1fr; }
     .subs-page .header-section, .subs-page .content { padding: 1rem; }
+
+    /* Sub detail drawer: keep a visible dim strip so it still reads as a modal
+       (full-width made it look like a plain page), just tighter chrome */
+    .subs-page .drawer { width: 92vw; max-width: 460px; }
+    .subs-page .drawer-head { padding: 1rem 1.1rem; }
+    .subs-page .drawer-body { padding: 1rem 1.1rem; }
+
+    /* Auto-accept: stack the copy over a full-width toggle button so neither
+       gets squeezed on a phone */
+    .subs-page .auto-accept-row { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+    .subs-page .auto-accept-row .btn { width: 100%; }
+    .subs-page .aa-help { max-width: none; }
+
+    /* Long job / payment lines wrap instead of overflowing their row */
+    .subs-page .mini-row { flex-wrap: wrap; }
+    .subs-page .mini-row > span:first-child { min-width: 0; word-break: break-word; }
 }

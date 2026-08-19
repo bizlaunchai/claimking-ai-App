@@ -557,9 +557,9 @@ function TradeManagerModal({ onClose, onChanged, toast }) {
                     .tm-label { flex: 1; font-weight: 600; color: #1a1f3a; font-size: .88rem; }
                     .tm-label-input { flex: 1; border: 1px solid transparent; border-radius: 6px; padding: .35rem .5rem; font-size: .88rem; font-weight: 600; color: #1a1f3a; background: #f9fafb; }
                     .tm-label-input:focus { border-color: #cbd5e1; background: #fff; outline: none; }
-                    .tm-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; background: #f3f4f6; border-radius: 999px; padding: 2px 7px; }
+                    .tm-tag { flex: none; white-space: nowrap; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6b7280; background: #f3f4f6; border-radius: 999px; padding: 2px 7px; }
                     .tm-actions { display: flex; gap: .35rem; }
-                    .tm-del { background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 7px; padding: .3rem .7rem; font-size: 12px; font-weight: 700; cursor: pointer; }
+                    .tm-del { flex: none; white-space: nowrap; background: #fff; color: #b91c1c; border: 1px solid #fecaca; border-radius: 7px; padding: .3rem .7rem; font-size: 12px; font-weight: 700; cursor: pointer; }
                 `}</style>
             </div>
         </div>
@@ -698,6 +698,14 @@ function AgreementBuilderModal({ onClose, toast }) {
                     .ab-preview p { margin: 0 0 .8rem; }
                     .ab-hint { font-size: .75rem; color: #9ca3af; margin: .6rem 0 0; }
                     .ab-foot { align-items: center; gap: .5rem; }
+                    .ab-foot .btn { white-space: nowrap; }
+                    @media (max-width: 560px) {
+                        /* Stack footer actions full-width so "Reset to default"
+                           stops wrapping to three lines */
+                        .ab-foot { flex-wrap: wrap; }
+                        .ab-foot > div { display: none; }
+                        .ab-foot .btn { flex: 1 1 100%; justify-content: center; }
+                    }
                 `}</style>
             </div>
         </div>
@@ -776,8 +784,8 @@ export default function SubsPage() {
                         <div className="page-subtitle">Network roster, compliance review, and payouts</div>
                     </div>
                     <div className="header-actions">
-                        <button className="btn btn-secondary" onClick={() => setShowAgreement(true)}>📄 Agreement</button>
-                        <button className="btn btn-secondary" onClick={() => setShowTrades(true)}>🧰 Trades</button>
+                        <button className="btn btn-secondary" onClick={() => setShowAgreement(true)}>Agreement</button>
+                        <button className="btn btn-secondary" onClick={() => setShowTrades(true)}>Trades</button>
                         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Invite Sub</button>
                     </div>
                 </div>

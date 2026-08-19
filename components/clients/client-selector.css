@@ -140,6 +140,17 @@
 .cs-action-btn{background:#FDB813;border-color:#FDB813;color:#1a1f3a}
 .cs-action-btn:hover{background:#e5a800;border-color:#e5a800;color:#1a1f3a}
 
+/* ── Narrow screens: the option row (inside modals it's doubly padded) can't
+   fit the info + "Select Client" button side by side, so the button was being
+   clipped on the right. Let the row wrap and drop the button full-width below. */
+@media (max-width:600px){
+    .cs-card{padding:1rem}
+    .cs-tab-btn{padding:.75rem 1rem}
+    .cs-search-input{padding:.7rem .8rem}
+    .cs-option > div.cs-option-inner{flex-wrap:wrap}
+    .cs-option > div.cs-option-inner > .cs-btn-outline{width:100%;justify-content:center}
+}
+
 /* ── Narrow screens ────────────────────────────────────────────────── */
 @media (max-width:768px){
     /* Column layout: stack tightly at the top. Without overriding these two,

@@ -445,7 +445,7 @@ const ClaimDetail = ({ id }) => {
                     {/* Documents */}
                     <div className="current-stage-info" style={{ marginBottom: 0 }}>
                         <h3 className="current-stage-title">Documents ({uploads.length})</h3>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '0.75rem 0 1rem' }}>
+                        <div className="doc-upload-actions">
                             {UPLOAD_TYPES.map(t => (
                                 <div key={t.key}>
                                     <input type="file" ref={fileRefs[t.key]} style={{ display: 'none' }} accept={t.accept} multiple={!!t.multiple}
@@ -491,7 +491,7 @@ const ClaimDetail = ({ id }) => {
                         on their portal. Contractor logs what was sent to /
                         received from the carrier, calls, and notes. */}
                     <div className="current-stage-info" style={{ marginBottom: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div className="cd-sec-head">
                             <h3 className="current-stage-title" style={{ marginBottom: 0 }}>Insurance Communication ({comms.length})</h3>
                             <button className="show-more-btn" style={{ padding: '0.5rem 1rem' }} onClick={openCommModal}>+ Add Entry</button>
                         </div>
@@ -598,25 +598,27 @@ const ClaimDetail = ({ id }) => {
             {commModalOpen && (
                 <div
                     onClick={() => !commSubmitting && setCommModalOpen(false)}
-                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 10000 }}
                 >
                     <div
+                        className="comm-modal-box"
                         onClick={(e) => e.stopPropagation()}
-                        style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 12, padding: '1.5rem', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}
+                        style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 14, padding: '1.5rem', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}
                     >
                         <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.25rem' }}>Add Communication Entry</h3>
                         <p style={{ fontSize: '0.78rem', color: '#6b7280', marginBottom: '1rem' }}>This appears on the client's portal feed.</p>
 
                         <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Type</label>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
+                        <div className="comm-type-row" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
                             {COMM_TYPES.map(t => {
                                 const active = commForm.type === t.key;
                                 return (
                                     <button
                                         key={t.key}
                                         type="button"
+                                        className="comm-type-btn"
                                         onClick={() => setCommForm(f => ({ ...f, type: t.key }))}
-                                        style={{ padding: '0.4rem 0.8rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: active ? '2px solid #1a1f3a' : '1px solid #d1d5db', background: active ? t.badge.bg : '#fff', color: active ? t.badge.fg : '#374151' }}
+                                        style={{ padding: '0.5rem 0.8rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: active ? '2px solid #1a1f3a' : '1px solid #d1d5db', background: active ? t.badge.bg : '#fff', color: active ? t.badge.fg : '#374151' }}
                                     >
                                         {t.label}
                                     </button>
@@ -645,7 +647,7 @@ const ClaimDetail = ({ id }) => {
                         <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Attachment <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span></label>
                         <input ref={commFileRef} type="file" style={{ display: 'none' }}
                             onChange={(e) => setCommFile(e.target.files?.[0] || null)} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem' }}>
+                        <div className="comm-attach-row" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem' }}>
                             <button type="button" className="show-more-btn" style={{ padding: '0.45rem 0.9rem' }} onClick={() => commFileRef.current?.click()}>
                                 Choose file
                             </button>
@@ -657,7 +659,7 @@ const ClaimDetail = ({ id }) => {
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <div className="comm-modal-foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                             <button type="button" className="table-action-btn" disabled={commSubmitting} onClick={() => setCommModalOpen(false)}>Cancel</button>
                             <button type="button" className="table-action-btn primary" disabled={commSubmitting} onClick={submitComm}>
                                 {commSubmitting ? <><span className="ck-spinner sm ck-btn-spin" />Adding…</> : 'Add Entry'}
@@ -733,13 +735,13 @@ function ClientPackages({ clientId, canManage }) {
                 )}
 
             {canManage && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                <div className="pkg-actions">
                     <select className="stage-selector" style={{ minWidth: 200 }} value={pick} onChange={(e) => setPick(e.target.value)}>
                         <option value="">Sell a package…</option>
                         {defs.map((d) => <option key={d.id} value={d.id}>{d.name} — {money(d.price_cents)}{d.total_uses ? ` · ${d.total_uses} sessions` : ''}</option>)}
                     </select>
                     <button className="show-more-btn" disabled={!pick || !!selling} onClick={() => sell('manual')}>Record sale</button>
-                    <button className="show-more-btn" disabled={!pick || !!selling} onClick={() => sell('stripe')}>Charge via Stripe</button>
+                    <button className="show-more-btn pkg-stripe" disabled={!pick || !!selling} onClick={() => sell('stripe')}>Charge via Stripe</button>
                 </div>
             )}
         </div>

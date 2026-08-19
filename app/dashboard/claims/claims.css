@@ -1036,6 +1036,16 @@
     border-color: #FDB813;
 }
 
+/* Documents — upload buttons row */
+.doc-upload-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0 1rem; }
+
+/* Packages & Memberships action row */
+.pkg-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.pkg-actions .show-more-btn { padding: 0.6rem 1.1rem; font-size: 0.85rem; display: inline-flex; align-items: center; justify-content: center; }
+/* "Charge via Stripe" is the primary sell action — give it the solid navy */
+.pkg-actions .pkg-stripe { background: #1a1f3a; color: #fff; border-color: #1a1f3a; }
+.pkg-actions .pkg-stripe:hover:not(:disabled) { background: #2b3358; border-color: #2b3358; }
+
 /* List View Table */
 .list-view-table {
     background: white;
@@ -1657,12 +1667,14 @@
     /* Search section mobile */
     .search-section {
         flex-direction: column;
+        align-items: stretch;   /* was inheriting center → the box didn't fill the row */
         padding: 1rem;
         gap: 0.75rem;
     }
 
     .search-box {
         max-width: 100%;
+        width: 100%;
     }
 
     .quick-actions {
@@ -1685,17 +1697,23 @@
     /* Stats grid mobile */
     .stats-overview {
         grid-template-columns: repeat(2, 1fr);
-        gap: 0.75rem;
+        gap: 0.6rem;
         padding: 1rem;
     }
 
+    /* Give each stat a real tile so they don't float as lonely centred text */
     .stat-item {
-        padding: 0.75rem;
+        padding: 0.85rem 0.6rem;
+        background: #f9fafb;
+        border: 1px solid #eef0f4;
+        border-radius: 12px;
     }
 
     .stat-value {
-        font-size: 1.25rem;
+        font-size: 1.35rem;
     }
+    .stat-label { font-size: 0.62rem; letter-spacing: 0.4px; }
+    .stat-change { font-size: 0.68rem; }
 
     /* Pipeline tabs mobile */
     .pipeline-tabs {
@@ -1722,21 +1740,43 @@
         font-size: 0.875rem;
     }
 
-    /* View controls mobile */
+    /* View controls mobile — three clean full-width rows:
+       Employee filter · segmented view toggle · items-per-page. */
     .view-controls {
         flex-direction: column;
-        gap: 0.75rem;
+        align-items: stretch;          /* was inheriting center → everything floated */
+        gap: 0.6rem;
         padding: 0.75rem 1rem;
     }
 
-    .view-toggle-container {
-        width: 100%;
+    .employee-filter { display: flex; align-items: center; gap: 0.5rem; }
+    .employee-filter .stage-selector { flex: 1; min-width: 0; }
+
+    /* Equal-width segmented buttons that fill the row, single-line labels */
+    .view-toggle-container { width: 100%; gap: 0.4rem; }
+    .view-toggle-btn {
+        flex: 1;
         justify-content: center;
+        padding: 0.6rem 0.4rem;
+        font-size: 0.8rem;
+        white-space: nowrap;
     }
 
-    .items-per-page {
-        width: 100%;
-        justify-content: center;
+    .items-per-page { width: 100%; justify-content: space-between; gap: 0.5rem; }
+    .items-per-page select { flex: 1; min-width: 0; }
+
+    /* "All Claims" summary: turn the 3 plain grey lines into tidy pill tags
+       that wrap neatly — reads as a designed stat strip, not loose text */
+    .current-stage-stats { flex-direction: row; flex-wrap: wrap; gap: 0.4rem; }
+    .current-stage-stats span {
+        background: #f9fafb;
+        border: 1px solid #eef0f4;
+        border-radius: 999px;
+        padding: 0.3rem 0.7rem;
+        font-size: 0.76rem;
+        font-weight: 600;
+        color: #374151;
+        white-space: nowrap;
     }
 
     /* Pipeline content mobile. The claim-detail page sets a 2-column grid
@@ -1854,9 +1894,10 @@
 }
 
 @media (max-width: 480px) {
-    /* Extra small screens */
+    /* Extra small screens — keep stats 2-up (a single tall column read sparse
+       and ugly) */
     .stats-overview {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .analytics-btn {
@@ -1966,6 +2007,84 @@
 .cd-field-value a { color: #2563eb; text-decoration: none; }
 .cd-field-value a:hover { text-decoration: underline; }
 .cd-notes { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px dashed #e5e7eb; font-size: 0.85rem; color: #374151; line-height: 1.5; }
+
+/* Section header with a title + action button (e.g. Insurance Communication) */
+.cd-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+
+/* Claim detail card — mobile: the 200px stage select was crowding / overlapping
+   the "Claim details" title. Stack the title over a full-width control row. */
+@media (max-width: 640px) {
+    .cd-card { padding: 1rem 1.1rem; }
+    .cd-card-title { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+    .cd-card-title > div { width: 100%; }
+    .cd-card-title .stage-selector { min-width: 0 !important; width: 100%; flex: 1; }
+    .cd-info-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+
+    /* Title takes its own line so it stops wrapping into a cramped column
+       beside the button; the button drops just below it, left-aligned. */
+    .cd-sec-head { flex-wrap: wrap; }
+    .cd-sec-head .current-stage-title { flex: 1 1 100%; }
+
+    /* ── Beautify the section cards on phones ──────────────────────────────
+       They were sparse: 2rem side padding wasted width, and each card carried
+       BOTH a margin-bottom AND the column's 1.5rem flex gap → ~3rem voids.  */
+    .current-stage-info {
+        padding: 1.1rem 1.15rem;
+        margin-bottom: 0;              /* the column's flex gap does the spacing */
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 6px 16px rgba(16,24,40,.04);
+    }
+    .current-stage-title { font-size: 1.05rem; line-height: 1.3; }
+    .cd-card {
+        border-radius: 14px;
+        box-shadow: 0 1px 2px rgba(16,24,40,.04), 0 6px 16px rgba(16,24,40,.04);
+    }
+
+    /* Money-at-a-glance: neat 2-up tiles, tighter and lighter */
+    .cd-stats { gap: 0.6rem; margin-bottom: 0; }
+    .cd-stat { padding: 0.8rem 0.9rem; border-radius: 12px; }
+    .cd-stat-label { font-size: 0.62rem; }
+    .cd-stat-value { font-size: 1.25rem; margin-top: 0.2rem; }
+
+    /* Claim-details fields → a tidy key/value list: label left, value right,
+       hairline dividers between. Reads far cleaner than the sparse stacked
+       column full of lonely "—" dashes. */
+    .cd-info-grid { display: block; }
+    .cd-field {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 1rem;
+        padding: 0.7rem 0;
+        border-bottom: 1px solid #f1f2f4;
+    }
+    .cd-field:last-child { border-bottom: none; }
+    .cd-field-label { flex: none; font-size: 0.64rem; color: #374151; }
+    .cd-field-value { text-align: right; font-size: 0.9rem; word-break: break-word; }
+    .cd-field-value a { font-weight: 600; }
+
+    /* Section action buttons read as real buttons, comfy tap size */
+    .show-more-btn { border-radius: 9px; }
+
+    /* Packages: dropdown gets its own full-width row, then the two actions
+       split the next row 50/50 — no lonely left-aligned boxes */
+    .pkg-actions .stage-selector { min-width: 0 !important; flex: 1 1 100%; width: 100%; }
+    .pkg-actions .show-more-btn { flex: 1 1 0; }
+
+    /* Documents: uniform full-width upload buttons instead of ragged, half-empty
+       left-aligned boxes */
+    .doc-upload-actions > div { flex: 1 1 100%; }
+    .doc-upload-actions .show-more-btn { width: 100%; text-align: center; }
+
+    /* Add Communication Entry modal */
+    .comm-modal-box { padding: 1.15rem !important; }
+    /* Type = tidy segmented row of equal-width chips (wraps 2×2 if tight) */
+    .comm-type-row .comm-type-btn { flex: 1 1 60px; text-align: center; }
+    /* Attachment: let a long filename + Remove wrap under the button */
+    .comm-attach-row { flex-wrap: wrap; }
+    /* Footer: full-width 50/50 Cancel / Add Entry with a comfy tap height */
+    .comm-modal-foot .table-action-btn { flex: 1 1 0; justify-content: center; padding: 0.65rem 1rem; }
+}
 
 /* Light-background variant of the stepper for the claim quick-view modal. */
 .cd-progress.light .cd-progress-seg { background: #e5e7eb; }
