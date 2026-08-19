@@ -429,6 +429,13 @@
     .subjobs .header-content { flex-direction: column; align-items: stretch; }
     .subjobs .content { padding: 1rem; }
     .subjobs .header-section { padding: 1rem; }
+
+    /* Stats read better 2-up than a tall single column of 5 */
+    .subjobs .stats-row { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+
+    /* Modal footer: full-width stacked action buttons */
+    .subjobs .modal-foot { flex-direction: column-reverse; }
+    .subjobs .modal-foot .btn { width: 100%; justify-content: center; }
 }
 
 /* =========================================================================
@@ -494,6 +501,15 @@
     .subjobs .modal-content { max-width: 96vw; }
     .subjobs .detail-grid { grid-template-columns: 1fr 1fr; }
     .subjobs .dispatch-map { height: 240px; }
+
+    /* Add Job modal: tighter chrome + full-width "Existing / Standalone" toggle */
+    .subjobs .modal { padding: 0.5rem; }
+    .subjobs .modal-content { max-width: 100%; }
+    .subjobs .modal-head { padding: 1rem 1.1rem; }
+    .subjobs .modal-body { padding: 1.1rem; }
+    .subjobs .modal-foot { padding: 1rem 1.1rem; }
+    .jobsrc-toggle { display: flex; width: 100%; }
+    .jobsrc-btn { flex: 1; text-align: center; }
 }
 
 /* Drag-to-Completed (Q2.10) */

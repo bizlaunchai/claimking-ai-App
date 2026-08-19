@@ -645,6 +645,15 @@ export default function CompanyImages() {
                 .ci-empty { padding: 3rem 1rem; text-align: center; color: #6b7280; background: #fafafa; border: 1px dashed #e5e7eb; border-radius: 12px; }
                 .ci-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
                 .ci-lightbox { position: fixed; inset: 0; background: rgba(15,23,42,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 24px; cursor: zoom-out; }
+                @media (max-width: 600px) {
+                    .ci-wrap { padding: 1rem; }
+                    .ci-head { align-items: stretch; }
+                    .ci-head .ci-btn-primary { width: 100%; }
+                    .ci-filters { gap: 0.5rem; margin: 1rem 0; }
+                    .ci-filters .ci-input, .ci-filters .ci-date { flex: 1 1 100%; width: 100%; }
+                    .ci-date .ci-input { flex: 1 1 auto; }
+                    .ci-grid { grid-template-columns: 1fr; }
+                }
             `}</style>
 
             {/* Global so the shimmer/spinner apply inside AuthedImage, SkeletonCard,
@@ -902,6 +911,14 @@ function UploadModal({ onClose, onUploaded }) {
                 .um-btn { border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
                 .um-btn-primary { background: #1a1f3a; color: #fff; border-color: #1a1f3a; }
                 .um-btn:disabled { opacity: 0.5; }
+                @media (max-width: 600px) {
+                    .um-back { padding: 0.5rem; align-items: flex-start; }
+                    .um-modal { padding: 1.1rem; max-height: 92vh; margin-top: 0.5rem; }
+                    .um-title { font-size: 1.1rem; }
+                    /* Full-width, stacked action buttons for easy tapping */
+                    .um-actions { flex-direction: column-reverse; }
+                    .um-actions .um-btn { width: 100%; text-align: center; justify-content: center; }
+                }
             `}</style>
         </div>
     );
