@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import AddressAutocomplete from "@/components/common/AddressAutocomplete";
 import { createClient } from "@/lib/supabase/client";
 import {
     MapPin,
@@ -158,12 +159,12 @@ export default function OnboardingModal() {
                                         <label className="text-sm font-bold flex items-center gap-2 text-gray-700 ml-1">
                                             <MapPin className="w-4 h-4 text-yellow-600" /> Business Address
                                         </label>
-                                        <input
-                                            type="text"
+                                        <AddressAutocomplete
                                             placeholder="123 AI Way, Tech City"
                                             required
                                             value={address}
-                                            onChange={(e) => setAddress(e.target.value)}
+                                            onChange={setAddress}
+                                            onSelect={(p) => setAddress(p.formatted || [p.address, p.city, p.state, p.zip].filter(Boolean).join(', '))}
                                             className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all text-gray-900"
                                         />
                                     </div>

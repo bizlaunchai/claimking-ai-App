@@ -83,6 +83,14 @@ function loadGoogleMaps() {
     return mapsPromise;
 }
 
+// Warm the loader the moment this module reaches the client, so the Places lib
+// finishes loading BEFORE any modal mounts. Without this, the first modal open
+// races the ~0.5–1s script download: the user types while Autocomplete hasn't
+// attached yet, sees nothing, and it only "works" on reopen (script now cached).
+if (typeof window !== 'undefined' && GOOGLE_KEY) {
+    loadGoogleMaps().catch(() => { /* stays a plain input */ });
+}
+
 // Google address_components → the flat shape every ClaimKing form uses.
 function parsePlace(place) {
     const comps = place?.address_components || [];
