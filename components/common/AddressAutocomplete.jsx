@@ -34,11 +34,30 @@ function loadGoogleMaps() {
     if (mapsPromise) return mapsPromise;
 
     mapsPromise = new Promise((resolve, reject) => {
+        // With loading=async the script's onload fires as soon as the bootstrap
+        // downloads — BEFORE google.maps.places is actually ready. Resolving here
+        // makes the FIRST Autocomplete attach fail (places is still undefined),
+        // which only succeeds on a later reopen once the lib finished loading in
+        // the background. Gate resolve on importLibrary('places') so the promise
+        // settles only when Places is truly usable.
+        const fail = (e) => { mapsPromise = null; reject(e); };
+        const ready = () => {
+            const g = window.google;
+            if (g?.maps?.importLibrary) {
+                g.maps.importLibrary('places').then(() => resolve(g)).catch(fail);
+            } else if (g?.maps?.places) {
+                resolve(g); // legacy loader — places already attached
+            } else {
+                fail(new Error('google maps places unavailable'));
+            }
+        };
+
         // Reuse an existing tag if one is already on the page.
         const existing = document.getElementById('ck-google-maps');
         if (existing) {
-            existing.addEventListener('load', () => resolve(window.google));
-            existing.addEventListener('error', reject);
+            if (window.google?.maps) { ready(); return; }
+            existing.addEventListener('load', ready);
+            existing.addEventListener('error', () => fail(new Error('google maps failed to load')));
             return;
         }
         const s = document.createElement('script');
@@ -48,8 +67,8 @@ function loadGoogleMaps() {
         s.src =
             `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_KEY)}` +
             `&libraries=places&loading=async`;
-        s.onload = () => resolve(window.google);
-        s.onerror = () => { mapsPromise = null; reject(new Error('google maps failed to load')); };
+        s.onload = ready;
+        s.onerror = () => fail(new Error('google maps failed to load'));
         document.head.appendChild(s);
     });
 
