@@ -169,7 +169,7 @@ function ServicePinsEditor({ pins, setPins, mapId }) {
                 {(pins || []).map((p, i) => (
                     <div className="pin-item" key={p.id || i}>
                         <div className="pin-item-head">
-                            <span className="pin-item-badge">📍 {i + 1}</span>
+                            <span className="pin-item-badge">Pin {i + 1}</span>
                             <input className="pin-item-label" value={p.label || ''} onChange={(e) => updPin(i, 'label', e.target.value)} placeholder={`Location ${i + 1} (e.g. Akron)`} />
                             <button type="button" className="btn btn-xs btn-ghost" onClick={() => rmPin(i)} title="Remove pin">✕</button>
                         </div>
@@ -294,7 +294,7 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
                             <iframe title="Sign agreement" src={embeddedUrl} className="esign-frame" allow="camera; microphone" />
                         </div>
                         <div className="sign-modal-foot">
-                            <span className="esign-secure">🔒 Secure e-signature by SignWell — this window closes automatically once you finish.</span>
+                            <span className="esign-secure">Secure e-signature by SignWell — this window closes automatically once you finish.</span>
                             <a className="btn btn-ghost" href={embeddedUrl} target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
                             <button className="btn btn-ghost" onClick={onClose}>Close</button>
                         </div>
@@ -322,7 +322,7 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
                         </div>
                         <div className="sign-modal-foot">
                             <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-                            <button className="btn btn-primary btn-busy" onClick={sign} disabled={busy || !name.trim() || !agreed || empty}>{busy ? <><span className="doc-spin dark" />Signing…</> : '✍ Sign Agreement'}</button>
+                            <button className="btn btn-primary btn-busy" onClick={sign} disabled={busy || !name.trim() || !agreed || empty}>{busy ? <><span className="doc-spin dark" />Signing…</> : 'Sign Agreement'}</button>
                         </div>
                     </>
                 )}
@@ -422,7 +422,7 @@ function DocRow({ token, doc, onUploaded, profile }) {
             ) : isBank ? (
                 <div className="doc-actions doc-actions-bank">
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
-                    <button className="btn btn-sm btn-primary btn-busy" disabled={busy} onClick={connectBank}>{busy ? <><span className="doc-spin dark" />Connecting…</> : (bankConnected ? '🏦 Reconnect' : '🏦 Connect bank')}</button>
+                    <button className="btn btn-sm btn-primary btn-busy" disabled={busy} onClick={connectBank}>{busy ? <><span className="doc-spin dark" />Connecting…</> : (bankConnected ? 'Reconnect' : 'Connect bank')}</button>
                     <button className="link-btn" disabled={busy} onClick={() => inputRef.current?.click()}>or upload a voided check</button>
                 </div>
             ) : (
@@ -539,7 +539,7 @@ function Wizard({ token, portal, reload }) {
     if (portal.status === 'pending_review') {
         return (
             <div className="wizard">
-                <div className="review-banner">⏳ Your application is under review. We’ll notify you once you’re approved to receive job offers.</div>
+                <div className="review-banner">Your application is under review. We’ll notify you once you’re approved to receive job offers.</div>
                 <div className="card">
                     <h3>Your Documents</h3>
                     <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} profile={portal.profile} />)}</div>
@@ -595,7 +595,7 @@ function Wizard({ token, portal, reload }) {
                             </div>
                             <p className="muted">Your progress saves automatically as you type — you can close this and come back to your emailed link anytime. Hit Save to finish this step, then upload documents before submitting.</p>
                         </div>
-                        <button className="btn btn-primary btn-busy" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? <><span className="doc-spin dark" />Saving…</> : '💾 Save details'}</button>
+                        <button className="btn btn-primary btn-busy" onClick={saveInfo} disabled={savingInfo}>{savingInfo ? <><span className="doc-spin dark" />Saving…</> : 'Save details'}</button>
                     </div>
                 </section>
 
@@ -608,8 +608,13 @@ function Wizard({ token, portal, reload }) {
                         <div className="doc-list">{(portal.documents || []).map((d) => <DocRow key={d.doc_type} token={token} doc={d} onUploaded={reload} profile={portal.profile} />)}</div>
                     </div>
 
-                    <button className="btn btn-success btn-block" onClick={submit} disabled={submitting || !portal.ready_to_submit}>
-                        {submitting ? 'Submitting…' : portal.ready_to_submit ? 'Submit for Review' : 'Upload all required docs first'}
+                    <button
+                        className={`btn btn-block btn-busy ${portal.ready_to_submit ? 'btn-success' : 'btn-blocked'}`}
+                        onClick={submit}
+                        disabled={submitting || !portal.ready_to_submit}
+                        title={portal.ready_to_submit ? undefined : `Upload all required documents first — ${docsDone}/${docsTotal} done`}
+                    >
+                        {submitting ? <><span className="doc-spin" />Submitting…</> : portal.ready_to_submit ? 'Submit for Review' : 'Upload all required docs first'}
                     </button>
                 </section>
             </div>
@@ -664,16 +669,16 @@ function OfferCard({ token, offer, onResponded }) {
             {open && detail && (
                 <div className="offer-detail">
                     <div className="offer-scope">{detail.scope_summary}</div>
-                    {(detail.photos || []).length > 0 && <div className="muted">📷 {detail.photos.length} photo(s) attached</div>}
+                    {(detail.photos || []).length > 0 && <div className="muted">{detail.photos.length} photo(s) attached</div>}
                     {requested && (
                         <div className="reveal reveal-pending">
-                            <div className="reveal-title">⏳ Request submitted — pending approval</div>
+                            <div className="reveal-title">Request submitted — pending approval</div>
                             <div className="muted">The full address and client details unlock once our team approves your request. We’ll notify you.</div>
                         </div>
                     )}
                     {accepted && (
                         <div className="reveal">
-                            <div className="reveal-title">✓ You accepted — full details:</div>
+                            <div className="reveal-title">You accepted — full details:</div>
                             <div><strong>Address:</strong> {detail.address || '—'}</div>
                             <div><strong>Client:</strong> {detail.client_name || '—'} · {detail.client_phone || '—'}</div>
                             {detail.access_notes && <div><strong>Access:</strong> {detail.access_notes}</div>}
@@ -684,11 +689,11 @@ function OfferCard({ token, offer, onResponded }) {
             )}
             <div className="offer-actions">
                 <button className="btn btn-sm btn-ghost" onClick={view}>{open ? 'Hide' : 'View'}</button>
-                {requested && <span className="offer-pending-chip">⏳ Awaiting approval</span>}
+                {requested && <span className="offer-pending-chip">Awaiting approval</span>}
                 {!accepted && !requested && (
                     <>
-                        <button className="btn btn-sm btn-ghost" onClick={() => respond('decline')} disabled={!!busy}>{busy === 'decline' ? '…' : 'Decline'}</button>
-                        <button className="btn btn-sm btn-success" onClick={() => respond('accept')} disabled={!!busy}>{busy === 'accept' ? '…' : 'Accept'}</button>
+                        <button className="btn btn-sm btn-ghost" onClick={() => respond('decline')} disabled={!!busy}>{busy === 'decline' ? <span className="doc-spin dark" /> : 'Decline'}</button>
+                        <button className="btn btn-sm btn-success" onClick={() => respond('accept')} disabled={!!busy}>{busy === 'accept' ? <span className="doc-spin" /> : 'Accept'}</button>
                     </>
                 )}
             </div>
@@ -802,7 +807,7 @@ function JobCard({ token, job, reload }) {
                 <div className="jc-num">{job.job_number}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="jc-state">{(job.readiness_state || '').replace(/_/g, ' ')}</span>
-                    <button className="btn btn-sm btn-ghost" onClick={printJob} title="Print this job">🖨 Print</button>
+                    <button className="btn btn-sm btn-ghost" onClick={printJob} title="Print this job">Print</button>
                 </div>
             </div>
             <div className="jc-addr">{job.address || '—'}</div>
@@ -814,25 +819,25 @@ function JobCard({ token, job, reload }) {
                     <div className="jc-windows">
                         <div className="jc-sched-label">You must work within:</div>
                         {windows.map((w, i) => (
-                            <div className="jc-window" key={i}>📆 {fmtDay(w.start)}{w.end && w.end !== w.start ? ` – ${fmtDay(w.end)}` : ''}{w.note ? <span className="jc-window-note"> — {w.note}</span> : null}</div>
+                            <div className="jc-window" key={i}>{fmtDay(w.start)}{w.end && w.end !== w.start ? ` – ${fmtDay(w.end)}` : ''}{w.note ? <span className="jc-window-note"> — {w.note}</span> : null}</div>
                         ))}
                     </div>
                 )}
-                {job.complete_by && <div className="jc-deadline">⏳ Complete by <strong>{fmtDay(job.complete_by)}</strong></div>}
+                {job.complete_by && <div className="jc-deadline">Complete by <strong>{fmtDay(job.complete_by)}</strong></div>}
                 <div className="jc-setdate">
                     <label className="jc-sched-label">{job.scheduled_start ? 'Your scheduled date' : 'Set your date'}</label>
                     <div className="jc-setdate-row">
                         <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} disabled={busy === 'date'} />
-                        <button className="btn btn-sm btn-success" disabled={busy === 'date' || !dateVal} onClick={saveDate}>{busy === 'date' ? 'Saving…' : (job.scheduled_start ? 'Update date' : 'Set date')}</button>
+                        <button className="btn btn-sm btn-success btn-busy" disabled={busy === 'date' || !dateVal} onClick={saveDate}>{busy === 'date' ? <><span className="doc-spin" />Saving…</> : (job.scheduled_start ? 'Update date' : 'Set date')}</button>
                     </div>
-                    {job.scheduled_start && <div className="muted">📅 Currently: {fmtDay(job.scheduled_start)}</div>}
+                    {job.scheduled_start && <div className="muted">Currently: {fmtDay(job.scheduled_start)}</div>}
                 </div>
             </div>
 
             {/* Q3.8 — On the Way: notify the client with an arrival window */}
             <div className="jc-otw">
                 {!otwOpen ? (
-                    <button className="btn btn-sm btn-secondary" onClick={() => setOtwOpen(true)}>🚗 On the Way</button>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setOtwOpen(true)}>On the Way</button>
                 ) : (
                     <div className="jc-otw-box">
                         <div className="jc-sched-label">Client will be told you arrive: <strong>{otwPreview}</strong></div>
@@ -842,7 +847,7 @@ function JobCard({ token, job, reload }) {
                                 {[10, 15, 20, 30, 45, 60].map((b) => <option key={b} value={b}>± {b}m</option>)}
                             </select>
                             <button className="btn btn-sm btn-ghost" onClick={() => setOtwOpen(false)}>Cancel</button>
-                            <button className="btn btn-sm btn-success" disabled={busy === 'otw'} onClick={sendOtw}>{busy === 'otw' ? 'Sending…' : 'Notify'}</button>
+                            <button className="btn btn-sm btn-success btn-busy" disabled={busy === 'otw'} onClick={sendOtw}>{busy === 'otw' ? <><span className="doc-spin" />Sending…</> : 'Notify'}</button>
                         </div>
                     </div>
                 )}
@@ -857,7 +862,7 @@ function JobCard({ token, job, reload }) {
             <div className="jc-photos">
                 <div className="muted">Completion photos ({photos.length}) — required before marking complete.</div>
                 <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
-                <button className="btn btn-sm btn-ghost" disabled={busy === 'photo'} onClick={() => inputRef.current?.click()}>{busy === 'photo' ? 'Uploading…' : '📷 Add Photo'}</button>
+                <button className="btn btn-sm btn-ghost btn-busy" disabled={busy === 'photo'} onClick={() => inputRef.current?.click()}>{busy === 'photo' ? <><span className="doc-spin dark" />Uploading…</> : 'Add Photo'}</button>
             </div>
 
             {/* Q3.10 — images visible to this sub: their own + office-shared */}
@@ -961,7 +966,7 @@ function ProfileTab({ token, portal, reload }) {
                 {tradeOptions.map((t) => <button key={t.key} type="button" className={`trade-chip ${trades.includes(t.key) ? 'on' : ''}`} onClick={() => toggleTrade(t.key)}>{t.label}</button>)}
                 {customChips.map((t) => <button key={t} type="button" className="trade-chip on" onClick={() => toggleTrade(t)}>{tradeLabel(t)} ✕</button>)}
             </div></div>
-            <button className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Profile'}</button>
+            <button className="btn btn-primary btn-block btn-busy" style={{ marginTop: '1rem' }} onClick={save} disabled={saving}>{saving ? <><span className="doc-spin dark" />Saving…</> : 'Save Profile'}</button>
         </div>
     );
 }
@@ -977,15 +982,30 @@ export default function SubPortal({ token }) {
     }, [token]);
     useEffect(() => { load(); }, [load]);
 
-    if (portal === undefined) return <div className="sub-portal"><div className="sp-loading ck-load-block"><span className="ck-spinner" /><span>Loading your portal…</span></div></div>;
+    if (portal === undefined) return <div className="sub-portal"><div className="sp-loading"><span className="sp-spinner" /><span className="sp-loading-txt">Loading your portal…</span></div></div>;
     if (portal === null) return <div className="sub-portal"><div className="sp-error">This link is invalid or has expired. Please contact the company that invited you.</div></div>;
 
     const name = portal.profile?.business_name || 'Contractor';
+    // Company branding (dynamic, from Settings → Company & Profile). Apply the
+    // palette as CSS variables; fall back to the ClaimKing default in CSS.
+    const company = portal.company || {};
+    const brand = company.brand || {};
+    const brandStyle = {};
+    if (brand.c1) brandStyle['--sp-c1'] = brand.c1;
+    if (brand.c2) brandStyle['--sp-c2'] = brand.c2;
+    const hasCompany = !!(company.name && company.name !== 'our team');
+    const companyName = hasCompany ? company.name : 'Contractor Portal';
     return (
-        <div className="sub-portal">
+        <div className="sub-portal" style={brandStyle}>
+            {/* Elegant "Invited by <company>" lockup — shows who invited the sub
+                without a heavy app header; branded via the dynamic palette. */}
             <div className="sp-header">
-                <div className="sp-brand">👷 Contractor Portal</div>
-                <div className="sp-name">{name}{portal.status === 'suspended' && <span className="sp-suspended">Suspended</span>}</div>
+                {company.logo_url && <img className="sp-logo" src={company.logo_url} alt={companyName} />}
+                <div className="sp-header-txt">
+                    {hasCompany && <div className="sp-invited">Invited by</div>}
+                    <div className="sp-company">{companyName}{portal.status === 'suspended' && <span className="sp-suspended">Suspended</span>}</div>
+                    <span className="sp-company-accent" />
+                </div>
             </div>
             <div className="sp-content">
                 {portal.status === 'active'
