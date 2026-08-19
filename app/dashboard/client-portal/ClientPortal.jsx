@@ -5,6 +5,7 @@ import dynamic from "next/dynamic.js";
 import Link from "next/link";
 import { Check, X, Users, Activity, DollarSign } from "lucide-react";
 import axiosInstance from "@/lib/axiosInstance";
+import AddressAutocomplete from "@/components/common/AddressAutocomplete";
 import { toast } from "sonner";
 import Can from "@/lib/permissions/Can";
 import { createClient } from "@/lib/supabase/client";
@@ -1104,7 +1105,10 @@ const AddClientModal = ({ isOpen, onClose, onSaved }) => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className={`${fieldGroup} col-span-2`}>
                                     <label className={labelReq}>Property Address</label>
-                                    <input type="text" className={inputCls(errors.address)} placeholder="123 Main Street" name="address" value={formData.address} onChange={handleInputChange} />
+                                    <AddressAutocomplete className={inputCls(errors.address)} placeholder="123 Main Street"
+                                        value={formData.address}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, address: v }))}
+                                        onSelect={(p) => setFormData(prev => ({ ...prev, address: p.address || prev.address, city: p.city || prev.city, state: p.state || prev.state, zip_code: p.zip || prev.zip_code }))} />
                                     {errors.address && <span className={fieldErrCls}>{errors.address}</span>}
                                 </div>
                                 <div className={fieldGroup}>
@@ -1333,7 +1337,10 @@ const EditClientModal = ({ client, onClose, onSaved }) => {
                             <div className="form-grid">
                                 <div className="form-group full-width">
                                     <label className="form-label required">Property Address</label>
-                                    <input type="text" className={`form-input ${errors.address ? 'input-error' : ''}`} name="address" value={formData.address} onChange={handleInputChange} />
+                                    <AddressAutocomplete className={`form-input ${errors.address ? 'input-error' : ''}`}
+                                        value={formData.address}
+                                        onChange={(v) => setFormData(prev => ({ ...prev, address: v }))}
+                                        onSelect={(p) => setFormData(prev => ({ ...prev, address: p.address || prev.address, city: p.city || prev.city, state: p.state || prev.state, zip_code: p.zip || prev.zip_code }))} />
                                     {errors.address && <span className="field-error">{errors.address}</span>}
                                 </div>
                                 <div className="form-group">
