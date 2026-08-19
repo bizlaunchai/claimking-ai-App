@@ -230,9 +230,18 @@ export default function BookPage({ slug }) {
 }
 
 function Shell({ info, children }) {
+    // Drive the whole card off the contractor's brand palette (sql/96) via CSS
+    // variables — but ONLY once `info` has loaded. Before that we deliberately
+    // apply NO brand colour: showing the legacy gold default here would flash a
+    // wrong brand and then flip to the real colour once the payload lands. While
+    // loading, `bk-card--loading` paints a neutral grey placeholder instead.
+    const loading = !info;
+    const brandVars = info?.brand
+        ? { '--bk-c1': info.brand.c1, '--bk-c2': info.brand.c2 }
+        : undefined;
     return (
         <div className="book-page">
-            <div className="bk-card">
+            <div className={`bk-card${loading ? ' bk-card--loading' : ''}`} style={brandVars}>
                 <div className="bk-header">
                     {info?.has_logo && info?.company_id && (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -243,11 +252,16 @@ function Shell({ info, children }) {
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                     )}
-                    <div className="bk-brand">{info?.company_name || 'ClaimKing'}</div>
+                    {/* While the landing payload is still loading `info` is null.
+                        Never show a hard-coded default company name here — render a
+                        branded skeleton placeholder instead so the homeowner only ever
+                        sees the real contractor's name once it arrives. */}
+                    {info
+                        ? <div className="bk-brand">{info.company_name}</div>
+                        : <div className="bk-brand-skeleton" aria-hidden="true" />}
                     {info?.rep_name && <div className="bk-sub">Book with {info.rep_name}</div>}
                 </div>
                 <div className="bk-body">{children}</div>
-                <div className="bk-footer">Powered by ClaimKing.AI</div>
             </div>
         </div>
     );
