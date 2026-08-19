@@ -389,11 +389,12 @@ function DocRow({ token, doc, onUploaded, profile }) {
                         const info = c.data?.data || {};
                         toast(`Bank connected${info.mask ? ` (••${info.mask})` : ''}.`, 'success');
                         onUploaded();
-                    } catch { /* interceptor shows the error */ } finally { setBusy(false); }
+                    } catch { /* interceptor shows the error */ } finally { setBusy(false); handler.destroy(); }
                 },
-                onExit: () => setBusy(false),
+                // Tear down the iframe on exit so a second click can't stack a
+                // duplicate Plaid overlay; keep the button disabled while it's open.
+                onExit: () => { setBusy(false); handler.destroy(); },
             });
-            setBusy(false);
             handler.open();
         } catch {
             toast('Could not start bank connect. Please upload a voided check instead.', 'error');
