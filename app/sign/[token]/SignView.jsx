@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import axiosInstance from '@/lib/axiosInstance';
 import SignaturePad from '@/components/signature/SignaturePad';
+import { loadSignWellEmbed } from '@/lib/signwellEmbed';
 import './sign.css';
 
 const money = (n, cur = 'usd') =>
@@ -77,6 +78,11 @@ const SignView = () => {
 
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    // True while we finalize a SignWell signature after the redirect-back, so we
+    // show a "completing your signature" screen instead of the sign flow again.
+    // Set in the effect below (NOT the initializer) so SSR and the first client
+    // render agree — reading the URL during render would break hydration.
+    const [finalizing, setFinalizing] = useState(false);
     // Inline submit error (replaces native alert() on the Confirm step).
     const [submitError, setSubmitError] = useState('');
 
@@ -97,6 +103,7 @@ const SignView = () => {
     const [atBottom, setAtBottom] = useState(false);
 
     const padRef = useRef(null);
+    const embedRef = useRef(null); // SignWell embed instance
     // Invisible marker at the very end of the current step's scrollable content.
     // The reached-the-bottom gate below watches it (CK-13).
     const bottomRef = useRef(null);
@@ -122,6 +129,36 @@ const SignView = () => {
             }
         })();
         return () => { cancelled = true; };
+    }, [token]);
+
+    // After SignWell signing, the vendor redirects the WHOLE page back here with
+    // ?document_status=completed — tearing down the in-page poll before it can
+    // finalize. So on that redirect we hit the status endpoint (which pulls the
+    // signed PDF + finalizes), retrying since the completed PDF can take a moment,
+    // then show the confirmation (or head to deposit checkout) and clean the URL.
+    useEffect(() => {
+        if (typeof window === 'undefined' || !token) return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('document_status') !== 'completed') return;
+        let alive = true;
+        setFinalizing(true);
+        (async () => {
+            for (let i = 0; i < 5 && alive; i++) {
+                try {
+                    const res = await axiosInstance.get(`/sign-public/${token}/status`, { suppressErrorToast: true });
+                    const s = res.data?.data || {};
+                    if (s.esign_status === 'completed') {
+                        if (s.deposit_checkout_url) { window.location.href = s.deposit_checkout_url; return; }
+                        if (alive) setSubmitted(true);
+                        break;
+                    }
+                } catch { /* ignore, retry */ }
+                await new Promise((r) => setTimeout(r, 2000));
+            }
+            if (alive) window.history.replaceState({}, '', window.location.pathname);
+            if (alive) setFinalizing(false);
+        })();
+        return () => { alive = false; };
     }, [token]);
 
     // ── CK-13 · reached-the-bottom gate (IntersectionObserver) ──────────
@@ -287,7 +324,48 @@ const SignView = () => {
         return () => clearInterval(id);
     }, [esignUrl, token]);
 
+    // Mount the SignWell embed via their SDK. A raw <iframe src> is blocked by
+    // SignWell's X-Frame-Options ("refused to connect"); the SDK mounts the
+    // signing iframe into our container. Completion is finalized by the poll above.
+    useEffect(() => {
+        if (!esignUrl) return;
+        let alive = true;
+        loadSignWellEmbed()
+            .then((SignWellEmbed) => {
+                if (!alive || !SignWellEmbed) return;
+                const embed = new SignWellEmbed({
+                    url: esignUrl,
+                    containerId: 'sv-signwell-embed-container',
+                    events: {
+                        declined: () => { if (alive) { setEsignUrl(null); setSubmitError('Signing was declined. You can try again.'); } },
+                        error: () => { if (alive) setSubmitError('The e-signature failed to load.'); },
+                    },
+                });
+                embed.open();
+                embedRef.current = embed;
+            })
+            .catch(() => { if (alive) setSubmitError('Could not load the e-signature.'); });
+        return () => {
+            alive = false;
+            try { embedRef.current?.close?.(); } catch { /* noop */ }
+            embedRef.current = null;
+        };
+    }, [esignUrl]);
+
     // ─────────────────────────── Render ────────────────────────────────
+    // After the SignWell redirect we finalize in the background — show progress
+    // (takes priority over the initial estimate load) until it resolves.
+    if (finalizing) {
+        return (
+            <div className="sv-shell sv-shell--center">
+                <div className="sv-card sv-status">
+                    <div className="sv-loader" aria-label="Completing"><span className="sv-loader-ring" /></div>
+                    <h2>Completing your signature…</h2>
+                    <p className="sv-sub">Saving your signed estimate. This only takes a moment.</p>
+                </div>
+            </div>
+        );
+    }
     if (loading) {
         return (
             <div className="sv-shell sv-shell--center">
@@ -367,7 +445,7 @@ const SignView = () => {
                         <h1 className="sv-h1">Review &amp; sign your estimate</h1>
                         <p className="sv-help">Sign securely below. This page updates automatically once you finish.</p>
                         <div className="sv-esign-frame-wrap">
-                            <iframe title="Sign estimate" src={esignUrl} className="sv-esign-frame" allow="camera; microphone" />
+                            <div id="sv-signwell-embed-container" className="sv-esign-frame" />
                         </div>
                         <div className="sv-esign-foot">
                             <span className="sv-esign-secure">🔒 Secure e-signature by SignWell</span>
