@@ -476,6 +476,8 @@
 .sv-esign-cta { width: 100%; }
 .sv-esign-alt { display: block; margin: 12px auto 0; background: none; border: none; color: #64748b; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .sv-esign-frame-wrap { margin: 10px 0; }
-.sv-esign-frame { width: 100%; height: 70vh; border: 1px solid #eef0f4; border-radius: 12px; background: #fff; }
+.sv-esign-frame { width: 100%; height: 70vh; border: 1px solid #eef0f4; border-radius: 12px; background: #fff; overflow: hidden; }
+/* SignWell SDK injects its own iframe into the container — make it fill. */
+#sv-signwell-embed-container iframe { width: 100%; height: 100%; border: 0; display: block; }
 .sv-esign-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .sv-esign-secure { font-size: 13px; color: #64748b; }

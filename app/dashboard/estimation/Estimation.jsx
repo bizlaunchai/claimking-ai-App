@@ -61,6 +61,36 @@ function AuthedPhotoThumb({ src, imgStyle }) {
     return <img src={url} alt="" style={style} />;
 }
 
+// SignWell stores the completed signature as a PDF (not a PNG), so it can't be
+// shown in an <img>. Fetch it through the authed /s3/file endpoint (a plain <a>
+// won't carry the JWT) and open the blob in a new tab.
+const isPdfKey = (k) => /\.pdf(\?|$)/i.test(String(k || ''));
+function AuthedPdfLink({ srcKey, label = 'View signed PDF' }) {
+    const [busy, setBusy] = useState(false);
+    const open = async () => {
+        setBusy(true);
+        try {
+            const res = await axiosInstance.get(`/s3/file?key=${encodeURIComponent(srcKey)}`, { responseType: 'blob', suppressErrorToast: true });
+            const u = URL.createObjectURL(res.data);
+            window.open(u, '_blank', 'noopener');
+            setTimeout(() => URL.revokeObjectURL(u), 60000);
+        } catch {
+            swalError('Could not open the signed PDF.');
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <button type="button" onClick={open} disabled={busy} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, cursor: busy ? 'default' : 'pointer',
+            background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px',
+            fontSize: 11.5, fontWeight: 600, color: '#1a1f3a',
+        }}>
+            {busy ? 'Opening…' : label}
+        </button>
+    );
+}
+
 // ====================== STATIC DATA ======================
 const INITIAL_ITEM_LIBRARY = {
     roofing: [
@@ -5385,10 +5415,14 @@ const Estimation = () => {
                                                                         padding: 4, minHeight: 60, display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                                         filter: isSuperseded ? 'grayscale(1)' : 'none',
                                                                     }}>
-                                                                        <AuthedPhotoThumb
-                                                                            src={`/s3/file?key=${encodeURIComponent(s.signature_image_key)}`}
-                                                                            imgStyle={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain', display: 'block' }}
-                                                                        />
+                                                                        {isPdfKey(s.signature_image_key) ? (
+                                                                            <AuthedPdfLink srcKey={s.signature_image_key} label="📄 View signed PDF (SignWell)" />
+                                                                        ) : (
+                                                                            <AuthedPhotoThumb
+                                                                                src={`/s3/file?key=${encodeURIComponent(s.signature_image_key)}`}
+                                                                                imgStyle={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain', display: 'block' }}
+                                                                            />
+                                                                        )}
                                                                     </div>
                                                                 ) : (
                                                                     <div style={{ color: '#9ca3af', fontSize: 10.5, fontStyle: 'italic', padding: '6px 4px' }}>

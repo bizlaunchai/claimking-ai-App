@@ -5,6 +5,7 @@ import { toast as sonner } from 'sonner';
 import 'leaflet/dist/leaflet.css';
 import axiosInstance from '@/lib/axiosInstance';
 import SignaturePad from '@/components/signature/SignaturePad';
+import { loadSignWellEmbed } from '@/lib/signwellEmbed';
 import './sub-portal.css';
 
 /* =========================================================================
@@ -205,14 +206,23 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
     const [mode, setMode] = useState('loading'); // loading | inapp | signwell
     const [embeddedUrl, setEmbeddedUrl] = useState('');
     const [clauses, setClauses] = useState(null); // in-app preview only
+    const embedRef = useRef(null); // SignWell embed instance
+    const startedRef = useRef(false); // guard: create exactly ONE envelope
 
     useEffect(() => {
-        let alive = true;
+        // React StrictMode (Next dev) runs this effect twice on mount. Without a
+        // guard we'd create TWO SignWell documents and, due to a request race, the
+        // one stored in the DB could differ from the one shown in the embed — the
+        // user signs A, we finalize B → the doc never flips to uploaded.
+        // NOTE: no `alive`/cleanup gating here — the guard already ensures this
+        // runs exactly once, and StrictMode's fake-unmount cleanup would otherwise
+        // discard the single response and leave us stuck on "loading".
+        if (startedRef.current) return;
+        startedRef.current = true;
         (async () => {
             try {
                 const res = await axiosInstance.post(`/sub-portal/${token}/sign-agreement/start`);
                 const d = res.data?.data || {};
-                if (!alive) return;
                 if (d.mode === 'signwell' && d.embedded_url) {
                     setEmbeddedUrl(d.embedded_url);
                     setMode('signwell');
@@ -220,10 +230,9 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
                 }
                 setMode('inapp');
             } catch {
-                if (alive) setMode('inapp'); // degrade to in-app on any error
+                setMode('inapp'); // degrade to in-app on any error
             }
         })();
-        return () => { alive = false; };
     }, [token]);
 
     // In-app mode: fetch the company's current agreement text for the preview.
@@ -258,6 +267,35 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
         return () => { alive = false; clearInterval(id); };
     }, [mode, token, onSigned, toast]);
 
+    // SignWell mode: mount the vendor embed. A raw <iframe src> is blocked by
+    // SignWell's X-Frame-Options ("refused to connect"), so we use their SDK,
+    // which mounts the signing iframe into our container. Server-side finalize
+    // still happens via the status poll above (completed event is just UX).
+    useEffect(() => {
+        if (mode !== 'signwell' || !embeddedUrl) return;
+        let alive = true;
+        loadSignWellEmbed()
+            .then((SignWellEmbed) => {
+                if (!alive || !SignWellEmbed) return;
+                const embed = new SignWellEmbed({
+                    url: embeddedUrl,
+                    containerId: 'signwell-embed-container',
+                    events: {
+                        declined: () => { if (alive) { toast('Signing was declined.', 'error'); onClose(); } },
+                        error: () => { if (alive) toast('The e-signature failed to load.', 'error'); },
+                    },
+                });
+                embed.open();
+                embedRef.current = embed;
+            })
+            .catch(() => { if (alive) toast('Could not load the e-signature.', 'error'); });
+        return () => {
+            alive = false;
+            try { embedRef.current?.close?.(); } catch { /* noop */ }
+            embedRef.current = null;
+        };
+    }, [mode, embeddedUrl, toast, onClose]);
+
     const shown = (Array.isArray(clauses) && clauses.length) ? clauses : AGREEMENT_PREVIEW;
 
     const sign = async () => {
@@ -291,7 +329,7 @@ function SignAgreementModal({ token, onClose, onSigned, toast }) {
                 {mode === 'signwell' && (
                     <>
                         <div className="esign-frame-wrap">
-                            <iframe title="Sign agreement" src={embeddedUrl} className="esign-frame" allow="camera; microphone" />
+                            <div id="signwell-embed-container" className="esign-frame" />
                         </div>
                         <div className="sign-modal-foot">
                             <span className="esign-secure">Secure e-signature by SignWell — this window closes automatically once you finish.</span>
@@ -367,6 +405,21 @@ function DocRow({ token, doc, onUploaded, profile }) {
         } catch { /* */ } finally { setBusy(false); }
     };
 
+    // Open the uploaded file (or signed agreement PDF) in a new tab. Fetched as a
+    // blob so it works regardless of the API origin / content type.
+    const view = async () => {
+        setBusy(true);
+        try {
+            const res = await axiosInstance.get(`/sub-portal/${token}/documents/${doc.doc_type}/file`, { responseType: 'blob', suppressErrorToast: true });
+            const u = URL.createObjectURL(res.data);
+            window.open(u, '_blank', 'noopener');
+            setTimeout(() => URL.revokeObjectURL(u), 60000);
+        } catch {
+            toast('Could not open this document.', 'error');
+        } finally { setBusy(false); }
+    };
+    const canView = ['uploaded', 'approved', 'rejected', 'expired'].includes(doc.status);
+
     // Q2.6 — Plaid bank-connect for the payout account.
     const connectBank = async () => {
         setBusy(true);
@@ -417,17 +470,20 @@ function DocRow({ token, doc, onUploaded, profile }) {
             <span className={`doc-status ${cls}`}>{label}</span>
             {isAgreement ? (
                 <div className="doc-actions">
+                    {canView && <button className="btn btn-sm btn-ghost" disabled={busy} onClick={view}>View</button>}
                     <button className="btn btn-sm btn-secondary" onClick={() => setShowSign(true)}>{['approved', 'uploaded'].includes(doc.status) ? 'Re-sign' : 'E-Sign'}</button>
                 </div>
             ) : isBank ? (
                 <div className="doc-actions doc-actions-bank">
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
+                    {canView && <button className="btn btn-sm btn-ghost" disabled={busy} onClick={view}>View</button>}
                     <button className="btn btn-sm btn-primary btn-busy" disabled={busy} onClick={connectBank}>{busy ? <><span className="doc-spin dark" />Connecting…</> : (bankConnected ? 'Reconnect' : 'Connect bank')}</button>
                     <button className="link-btn" disabled={busy} onClick={() => inputRef.current?.click()}>or upload a voided check</button>
                 </div>
             ) : (
                 <div className="doc-actions">
                     <input ref={inputRef} type="file" style={{ display: 'none' }} disabled={busy} onChange={(e) => upload(e.target.files?.[0])} accept="image/*,application/pdf" />
+                    {canView && <button className="btn btn-sm btn-ghost" disabled={busy} onClick={view}>View</button>}
                     <button className="btn btn-sm btn-secondary btn-busy" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? <><span className="doc-spin" />Uploading…</> : (doc.status === 'missing' ? 'Upload' : 'Replace')}</button>
                 </div>
             )}
@@ -976,11 +1032,44 @@ function ProfileTab({ token, portal, reload }) {
    ========================================================================= */
 export default function SubPortal({ token }) {
     const [portal, setPortal] = useState(undefined); // undefined=loading, null=not found
+    // True while we finalize a SignWell signature after the redirect-back, so we
+    // can show a "completing your signature" overlay instead of stale content.
+    // Set in the effect below (NOT the initializer) so SSR and the first client
+    // render agree — reading the URL during render would break hydration.
+    const [finalizing, setFinalizing] = useState(false);
     const load = useCallback(async () => {
         try { const res = await axiosInstance.get(`/sub-portal/${token}`, { suppressErrorToast: true }); setPortal(res.data?.data); }
         catch { setPortal(null); }
     }, [token]);
     useEffect(() => { load(); }, [load]);
+
+    // After SignWell signing, the vendor redirects the WHOLE page back here with
+    // ?document_status=completed — which tears down the in-modal poll before it
+    // can finalize. So on that redirect we hit the status endpoint (which pulls
+    // the signed PDF + marks the doc uploaded), retrying a few times because the
+    // completed PDF can take a moment to be ready, then refresh + clean the URL.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('document_status') !== 'completed') return;
+        let alive = true;
+        setFinalizing(true);
+        (async () => {
+            for (let i = 0; i < 5 && alive; i++) {
+                try {
+                    const res = await axiosInstance.get(`/sub-portal/${token}/sign-agreement/status`, { suppressErrorToast: true });
+                    if ((res.data?.data || {}).status === 'uploaded') break;
+                } catch { /* ignore, retry */ }
+                await new Promise((r) => setTimeout(r, 2000));
+            }
+            if (!alive) return;
+            await load();
+            // Strip the SignWell query params so a manual refresh doesn't re-run this.
+            window.history.replaceState({}, '', window.location.pathname);
+            if (alive) setFinalizing(false);
+        })();
+        return () => { alive = false; };
+    }, [token, load]);
 
     if (portal === undefined) return <div className="sub-portal"><div className="sp-loading"><span className="sp-spinner" /><span className="sp-loading-txt">Loading your portal…</span></div></div>;
     if (portal === null) return <div className="sub-portal"><div className="sp-error">This link is invalid or has expired. Please contact the company that invited you.</div></div>;
@@ -997,6 +1086,15 @@ export default function SubPortal({ token }) {
     const companyName = hasCompany ? company.name : 'Contractor Portal';
     return (
         <div className="sub-portal" style={brandStyle}>
+            {finalizing && (
+                <div className="sp-finalizing-overlay" role="status" aria-live="polite">
+                    <div className="sp-finalizing-card">
+                        <span className="sp-spinner" />
+                        <div className="sp-finalizing-title">Completing your signature…</div>
+                        <div className="sp-finalizing-sub">Saving your signed agreement. This only takes a moment.</div>
+                    </div>
+                </div>
+            )}
             {/* Elegant "Invited by <company>" lockup — shows who invited the sub
                 without a heavy app header; branded via the dynamic palette. */}
             <div className="sp-header">
