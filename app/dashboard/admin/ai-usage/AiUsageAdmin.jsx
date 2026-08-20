@@ -308,11 +308,11 @@ function Overview({ status, cpf, daily, rangeLabel }) {
                             <div style={{ fontWeight: 600 }}>{featureLabel(f.feature)}</div>
                             <div className="aiu-mono" style={{ fontSize: 11, color: '#9ca3af' }}>{f.feature}</div>
                         </div>
-                        <div>{num(f.requests)}</div>
-                        <div style={{ color: f.errors ? '#b91c1c' : '#6b7280' }}>{num(f.errors)}</div>
-                        <div>{num(f.input_tokens)}</div>
-                        <div>{num(f.output_tokens)}{f.images ? ` · ${num(f.images)} img` : ''}</div>
-                        <div style={{ textAlign: 'right', fontWeight: 700 }}>{money(f.cost_usd)}</div>
+                        <div data-label="Requests">{num(f.requests)}</div>
+                        <div data-label="Errors" style={{ color: f.errors ? '#b91c1c' : '#6b7280' }}>{num(f.errors)}</div>
+                        <div data-label="Input tok">{num(f.input_tokens)}</div>
+                        <div data-label="Output tok">{num(f.output_tokens)}{f.images ? ` · ${num(f.images)} img` : ''}</div>
+                        <div data-label="Cost" style={{ textAlign: 'right', fontWeight: 700 }}>{money(f.cost_usd)}</div>
                     </div>
                 ))}
             </div>
@@ -616,23 +616,23 @@ function RecentTab() {
             {rows.map((r) => (
                 <div key={r.id} className="aiu-trow aiu-recent">
                     <div style={{ color: '#6b7280', fontSize: 12 }}>{new Date(r.created_at).toLocaleString()}</div>
-                    <div>
+                    <div data-label="Feature">
                         <div style={{ fontSize: 12.5 }}>{featureLabel(r.feature)}{r.is_background ? ' ·bg' : ''}</div>
                         <div className="aiu-mono" style={{ fontSize: 10.5, color: '#9ca3af' }}>{r.feature}</div>
                     </div>
-                    <div className="aiu-mono" style={{ fontSize: 11.5 }}>{r.provider} / {r.model ?? '—'}</div>
-                    <div style={{ fontSize: 12 }}>
+                    <div data-label="Provider / model" className="aiu-mono" style={{ fontSize: 11.5 }}>{r.provider} / {r.model ?? '—'}</div>
+                    <div data-label="Tokens" style={{ fontSize: 12 }}>
                         {num(r.input_tokens)}→{num(r.output_tokens)}{r.image_count ? ` ·${r.image_count}img` : ''}
                         {r.cache_read_tokens > 0 && (
                             <span title={`${num(r.cache_read_tokens)} tokens served from cache`} style={{ marginLeft: 4, color: '#059669', fontWeight: 600 }}>·cached</span>
                         )}
                     </div>
-                    <div>
+                    <div data-label="Status">
                         {r.status === 'success' && <span className="aiu-pill on">ok</span>}
                         {r.status === 'error' && <span className="aiu-pill off" title={r.error_message ?? ''}>error</span>}
                         {r.status === 'blocked' && <span className="aiu-pill warn" title={r.error_message ?? ''}>blocked</span>}
                     </div>
-                    <div style={{ textAlign: 'right', fontWeight: 600 }}>{money(r.cost_usd)}</div>
+                    <div data-label="Cost" style={{ textAlign: 'right', fontWeight: 600 }}>{money(r.cost_usd)}</div>
                 </div>
             ))}
 
@@ -686,8 +686,9 @@ const styles = `
 .aiu-btn-danger:hover:not(:disabled) { background: #b91c1c; }
 .aiu-kill { background: #fff; border: 1px solid #e5e7eb; border-left: 4px solid #059669; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .aiu-kill.on { border-left-color: #dc2626; background: #fef2f2; }
-.aiu-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; }
-.aiu-tab { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; background: none; border: none; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; }
+.aiu-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.aiu-tabs::-webkit-scrollbar { display: none; }
+.aiu-tab { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; background: none; border: none; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 .aiu-tab.active { color: #4f46e5; border-bottom-color: #4f46e5; }
 .aiu-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .aiu-stat { padding: 16px 18px; }
@@ -715,7 +716,33 @@ const styles = `
 .aiu-pager .aiu-btn { padding: 6px 10px; font-size: 12px; }
 .aiu-note { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; padding: 12px 14px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; }
 @media (max-width: 760px) {
-  .aiu-trow, .aiu-trow.aiu-recent { grid-template-columns: 1fr 1fr; }
   .aiu-trow-head { display: none; }
+  /* Each row becomes a stacked card; every value cell shows its column label. */
+  .aiu-trow, .aiu-trow.aiu-recent { grid-template-columns: 1fr; gap: 6px; padding: 14px 16px; }
+  .aiu-trow > div:first-child { margin-bottom: 2px; }
+  .aiu-trow > div[data-label] {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; text-align: right;
+  }
+  .aiu-trow > div[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto; text-align: left;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: #9ca3af;
+  }
+}
+@media (max-width: 640px) {
+  .aiu-wrap { padding: 18px 14px 48px; }
+  .aiu-title { font-size: 19px; }
+  .aiu-sub { font-size: 12.5px; }
+  .aiu-head { flex-direction: column; align-items: stretch; }
+  .aiu-head > div:last-child { justify-content: stretch !important; width: 100%; }
+  .aiu-head select.aiu-input,
+  .aiu-head .aiu-btn { width: 100% !important; flex: 1 1 auto; }
+  .aiu-head input.aiu-input { width: 100% !important; }
+  .aiu-kill { flex-direction: column; align-items: stretch; }
+  .aiu-kill .aiu-btn { width: 100%; justify-content: center; }
+  .aiu-pager { flex-direction: column; align-items: stretch; }
+  .aiu-pager > div { flex-wrap: wrap; justify-content: center; }
 }
 `;

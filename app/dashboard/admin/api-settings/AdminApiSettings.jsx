@@ -23,6 +23,7 @@ const styles = `
     box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03); }
   .card-head { display: flex; align-items: center; gap: 12px; padding: 14px 22px;
     border-bottom: 1px solid #f3f4f6; background: #fafafa; }
+  .card-body { padding: 24px 32px; }
   .accent { width: 3px; height: 28px; border-radius: 2px; flex-shrink: 0; }
   .icon-wrap { width: 32px; height: 32px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -45,6 +46,15 @@ const styles = `
   .grid-simple { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 1024px) { .grid-3 { grid-template-columns: 1fr; } .grid-3 .divider-v { display: none; } }
   @media (max-width: 768px) { .grid-simple { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .admin-int { padding: 24px 12px !important; }
+    .admin-int h1 { font-size: 21px !important; }
+    .card-body { padding: 18px 16px; }
+    .card-head { padding: 12px 14px; }
+  }
+  /* Disable/Remove (ghost) stay left; the primary Update/Save is pushed to the right. */
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn-row .btn-indigo, .btn-row .btn-rose { order: 2; margin-left: auto; }
   .divider-v { width: 1px; background: #f3f4f6; align-self: stretch; }
   .status-pill { display: inline-flex; align-items: center; gap: 5px;
     font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
@@ -122,7 +132,7 @@ const Card = ({ accent, iconBg, icon: Icon, title, badge, children }) => (
             <span style={{ fontSize: 15, fontWeight: 600, color: '#111827', flex: 1 }}>{title}</span>
             {badge}
         </div>
-        <div style={{ padding: '24px 32px' }}>{children}</div>
+        <div className="card-body">{children}</div>
     </div>
 );
 
@@ -394,7 +404,7 @@ export default function AdminApiSettings() {
                                     disabled={isEnvOnly || busy === 'aws_s3'} />
                             </F>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <div className="btn-row">
                             <button className="btn btn-rose" onClick={saveAws}
                                 disabled={isEnvOnly || busy === 'aws_s3'}>
                                 {busy === 'aws_s3' && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
@@ -526,7 +536,7 @@ function OAuthAppEditor({
                 </F>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <div className="btn-row" style={{ marginTop: 12 }}>
                 <button className="btn btn-indigo" onClick={onSave} disabled={disabled}>
                     {busy && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
                     {status.configured ? 'Update' : 'Save'}
@@ -572,7 +582,7 @@ function ProviderEditor({ meta, status, value, onChange, onSave, onClear, onTogg
                         onChange={(e) => onChange(e.target.value)}
                         disabled={disabled}
                     />
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="btn-row">
                         <button className="btn btn-indigo" onClick={onSave} disabled={disabled}>
                             {busy && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
                             {status.configured ? 'Update' : 'Save'}
