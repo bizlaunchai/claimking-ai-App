@@ -95,7 +95,8 @@ export default function AdminCompanyDetail() {
     const isSuspended = company.status === 'suspended';
 
     return (
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px 60px' }}>
+        <div className="ackd-detail" style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px 60px' }}>
+            <style>{ACKD_RESPONSIVE_CSS}</style>
             {/* ── Header ─────────────────────────────────────────────────── */}
             <Link
                 href="/dashboard/admin/companies"
@@ -104,11 +105,11 @@ export default function AdminCompanyDetail() {
                 <ArrowLeft size={14} /> Back to companies
             </Link>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div className="ackd-header" style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
                 <div style={{ flex: 1, minWidth: 240 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div className="ackd-title-row" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                         <Building2 size={22} color="#0d9488" />
-                        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>{company.name}</h1>
+                        <h1 className="ackd-title" style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827' }}>{company.name}</h1>
                         <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.04, background: compStyle.bg, color: compStyle.color }}>
                             {compStyle.label}
                         </span>
@@ -125,14 +126,16 @@ export default function AdminCompanyDetail() {
                 {isSuspended ? (
                     <button
                         onClick={() => setActionTarget('unsuspend')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: '#047857', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                        className="ackd-action-btn"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 16px', background: '#047857', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                     >
                         <PlayCircle size={14} /> Unsuspend company
                     </button>
                 ) : (
                     <button
                         onClick={() => setActionTarget('suspend')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                        className="ackd-action-btn"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 16px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                     >
                         <Ban size={14} /> Suspend company
                     </button>
@@ -201,7 +204,8 @@ export default function AdminCompanyDetail() {
             </SectionTitle>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden', marginBottom: 28 }}>
                 {company.team?.length ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                    <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                                 <th style={th}>Member</th>
@@ -235,6 +239,7 @@ export default function AdminCompanyDetail() {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 ) : (
                     <div style={{ padding: 30, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
                         No team members yet.
@@ -248,7 +253,8 @@ export default function AdminCompanyDetail() {
             </SectionTitle>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, overflow: 'hidden' }}>
                 {company.recent_credit_tx?.length ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                    <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                                 <th style={th}>When</th>
@@ -276,6 +282,7 @@ export default function AdminCompanyDetail() {
                             })}
                         </tbody>
                     </table>
+                    </div>
                 ) : (
                     <div style={{ padding: 30, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
                         No credit activity yet.
@@ -321,6 +328,19 @@ function SectionTitle({ icon, children }) {
 
 const th = { padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.04 };
 const td = { padding: '14px 16px', fontSize: 13, color: '#1f2937', verticalAlign: 'middle' };
+
+// Mobile responsiveness — the base layout is inline-styled, so a scoped <style>
+// block carries the phone/tablet overrides.
+const ACKD_RESPONSIVE_CSS = `
+@media (max-width: 640px) {
+    .ackd-detail { padding: 20px 14px 48px !important; }
+    .ackd-title { font-size: 20px !important; }
+    .ackd-title-row { flex-wrap: wrap; gap: 8px !important; }
+    .ackd-header { flex-direction: column; gap: 14px !important; }
+    .ackd-header > div { min-width: 0 !important; width: 100%; }
+    .ackd-action-btn { width: 100%; padding: 12px 16px !important; }
+}
+`;
 
 // Detail-page suspend modal — same backend call as the list-page one.
 function SuspendModal({ company, mode, onClose, onDone }) {
